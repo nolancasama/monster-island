@@ -1,0 +1,24 @@
+export interface Vec2 {
+  x: number;
+  z: number;
+}
+
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export type MonsterId = "leafy" | "bubbo" | "ember" | "puff";
+export type FoodId = "apples" | "bananas" | "fish" | "berries" | "meat";
+export type ColorId = "green" | "blue" | "orange" | "purple";
+/** Answers to "Can you ___?". `help` is not an ability: it means "the ability this obstacle needs". */
+export type AbilityId = "swim" | "fly" | "jump" | "grow" | "fire";
+export type ObstacleId = "fallenPalm" | "river";
+
+export type Bag = Partial<Record<FoodId, number>>;
+
+export interface Text {
+  en: string;
+  ja?: string;
+}

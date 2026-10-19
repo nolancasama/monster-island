@@ -1,0 +1,52 @@
+import { MONSTERS } from "../data/monsters";
+import { setActive } from "../logic/progress";
+import { getGame, setGame, toast, updateProgress } from "../store";
+import { effect, rt } from "../runtime";
+import { nearestWalkable } from "../world/collision";
+import { audio } from "../../audio/audio";
+import type { MonsterId } from "../types";
+
+/** Teleport a monster with a little poof (far switches, getting unstuck, going home). */
+export function poofTo(id: MonsterId, x: number, z: number) {
+  const m = rt.monsters[id];
+  const def = MONSTERS[id];
+  effect("poof", m.x, 0.6, m.z);
+  const p = nearestWalkable(x, z, def.radius, { solved: getGame().progress.solved }, def.can.includes("swim"));
+  m.x = p.x;
+  m.z = p.z;
+  m.poofT0 = rt.time;
+  effect("poof", m.x, 0.6, m.z);
+}
+
+/** A spot beside the player (behind and to the right of where they face). */
+export function besidePlayer(back = 1.5, side = 1.1): { x: number; z: number } {
+  const p = rt.player;
+  const fx = Math.sin(p.yaw);
+  const fz = Math.cos(p.yaw);
+  return { x: p.x - fx * back - fz * side, z: p.z - fz * back + fx * side };
+}
+
+/** Make a friend the companion. Immediate: a far-away friend poofs over. */
+export function switchTo(id: MonsterId, quiet = false) {
+  const g = getGame();
+  const before = g.progress.active;
+  if (!g.progress.monsters[id].friend || before === id) return;
+  updateProgress((p) => setActive(p, id));
+  if (before) {
+    const old = rt.monsters[before];
+    old.mode = "wander";
+    old.target = null;
+    const home = MONSTERS[before].home;
+    if (Math.hypot(old.x - home.x, old.z - home.z) > 8) poofTo(before, home.x, home.z);
+  }
+  const m = rt.monsters[id];
+  m.mode = "follow";
+  m.target = null;
+  const spot = besidePlayer();
+  if (Math.hypot(m.x - rt.player.x, m.z - rt.player.z) > 9) poofTo(id, spot.x, spot.z);
+  m.anim = { kind: "hop", t0: rt.time };
+  audio.play("switch");
+  audio.voice(id, "hello");
+  if (getGame().hint === "switch") setGame({ hint: null });
+  if (!quiet) toast({ en: `${MONSTERS[id].name} is with you!`, ja: `${MONSTERS[id].name}が いっしょに いるよ`, icon: id, tone: "good" });
+}
