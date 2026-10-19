@@ -15,6 +15,10 @@ removed. Visuals checked by eye in `node scripts/shots.mjs` playthroughs at
 1366×768 (speech), 1366×768 touch, 1280×800 and 844×390 touch tap
 (`.tmp/shots/<size>/`). ~99 draw calls, ~82k triangles.
 
+**Published 2026-10-20:** public repo https://github.com/nolancasama/monster-island,
+GitHub Pages https://nolancasama.github.io/monster-island/ (every push to `main`
+runs the unit tests, builds and deploys).
+
 ## What Exists
 - **Data:** `game/data/monsters.ts` (Leafy, Bubbo live; Puff, Ember are journal
   silhouettes with Phase 2/3 data), `game/data/foods.ts`.
