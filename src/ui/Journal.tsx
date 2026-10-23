@@ -1,7 +1,9 @@
 import { setGame, useGame } from "../game/store";
 import { COLOR_HEX, MONSTERS, MONSTER_ORDER, LIVE_MONSTERS } from "../game/data/monsters";
 import { FOODS, ISLAND_FOODS } from "../game/data/foods";
-import { favoriteKnown } from "../game/logic/progress";
+import { favoriteKnown, optionalLines } from "../game/logic/progress";
+import { PHRASES } from "../game/logic/english";
+import { linePhrase, writeLine } from "../game/flow/encounter";
 import { openJournal } from "../game/flow/input";
 import { switchTo } from "../game/flow/companion";
 import { speak } from "../game/flow/ask";
@@ -29,8 +31,8 @@ function Page({ id }: { id: MonsterId }) {
         <Portrait id={id} size={150} silhouette />
         <h2>???</h2>
         <p className="j-hint">
-          {live ? "Find this monster on the beach!" : "Not found yet."}
-          <Ja>{live ? "はまべで さがそう!" : "まだ みつけていない。この しまの どこかに いるよ"}</Ja>
+          {live ? `Find this monster! (${def.habitat.en})` : "Not found yet."}
+          <Ja>{live ? `${def.habitat.ja}で さがそう!` : "まだ みつけていない。この しまの どこかに いるよ"}</Ja>
         </p>
       </div>
     );
@@ -48,6 +50,32 @@ function Page({ id }: { id: MonsterId }) {
           <button className="j-line" onClick={() => hear(id, `It's ${def.color}.`)} style={{ borderColor: COLOR_HEX[def.color] }}>
             <Icon id="speaker" size={18} /> It's {def.color}.
           </button>
+          {(["size", "part"] as const).map((line) => {
+            if (line === "part" && !def.part) return null;
+            const en = PHRASES[linePhrase(id, line)].en;
+            if (r.described[line])
+              return (
+                <button key={line} className="j-line" onClick={() => hear(id, en)} data-testid={`j-line-${line}`}>
+                  <Icon id="speaker" size={18} /> {en}
+                </button>
+              );
+            // Phase 1 pages get an optional size line once the forest is open.
+            if (!optionalLines(progress, id).includes(line)) return null;
+            return (
+              <button
+                key={line}
+                className="j-line j-line-empty"
+                onClick={() => {
+                  openJournal(false);
+                  void writeLine(id, line);
+                }}
+                data-testid={`j-write-${line}`}
+              >
+                <Icon id="mic" size={18} /> Big or small?
+                <Ja>おおきい? ちいさい? いって かこう</Ja>
+              </button>
+            );
+          })}
           <p className="j-habitat">
             <b>Home:</b> {def.habitat.en} <Ja>{def.habitat.ja}</Ja>
           </p>

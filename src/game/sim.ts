@@ -3,7 +3,7 @@ import { objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { animate, rt, type MonsterRt } from "./runtime";
 import { keyboardMove } from "../input/keyboard";
-import { PLAYER_R, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
+import { PLAYER_R, gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
 import { MONSTER_STONE, RIVER, shoreZ } from "./world/island";
 import { findFocus } from "./flow/focus";
 import { talkTo } from "./flow/encounter";
@@ -40,6 +40,9 @@ export function tick(dt: number) {
     else if (m.mode === "talk" || m.mode === "script") faceLook(m, dt);
     else homeLife(m, dt);
     m.lift = 0;
+    // Fliers hover a little above the ground (scenes may set other heights).
+    if (MONSTERS[id].can.includes("fly") && (m.mode === "follow" || m.mode === "talk") && m.airTarget < 0.3) m.airTarget = 0.35;
+    m.air += (m.airTarget - m.air) * Math.min(1, dt * 2.5);
   }
 
   // Food grows back.
@@ -52,6 +55,8 @@ export function tick(dt: number) {
   // World animations ease toward their targets.
   rt.palm += (rt.palmTarget - rt.palm) * Math.min(1, dt * 1.6);
   rt.stones += (rt.stonesTarget - rt.stones) * Math.min(1, dt * 1.2);
+  rt.bridge += (rt.bridgeTarget - rt.bridge) * Math.min(1, dt * 1.2);
+  rt.bramble += (rt.brambleTarget - rt.bramble) * Math.min(1, dt * 0.9);
 
   // Idle time on the same objective (the ★ marker, Maple's nudges).
   const o = JSON.stringify(objective(g.progress));
@@ -112,7 +117,7 @@ function movePlayer(dt: number, canMove: boolean) {
   if (!p.frozen && (p.vx || p.vz)) {
     const nx = p.x + p.vx * dt;
     const nz = p.z + p.vz * dt;
-    const q = moveCircle(p.x, p.z, nx, nz, PLAYER_R, { solved: getGame().progress.solved }, false, monsterObstacles());
+    const q = moveCircle(p.x, p.z, nx, nz, PLAYER_R, gatesOf(getGame().progress), false, monsterObstacles());
     p.vx = (q.x - p.x) / dt;
     p.vz = (q.z - p.z) / dt;
     p.x = q.x;
@@ -128,6 +133,7 @@ function movePlayer(dt: number, canMove: boolean) {
   }
   p.y = standY(p.x, p.z, getGame().progress.solved);
   if (p.riding) p.y = -0.05;
+  if (p.climbY !== null) p.y = p.climbY;
 }
 
 // ------------------------------------------------------------ monsters
@@ -154,7 +160,7 @@ function walkTo(m: MonsterRt, x: number, z: number, speed: number, dt: number): 
   }
   const def = MONSTERS[m.id];
   const step = Math.min(d, speed * dt);
-  const q = moveCircle(m.x, m.z, m.x + (dx / d) * step, m.z + (dz / d) * step, def.radius, { solved: getGame().progress.solved }, def.can.includes("swim"));
+  const q = moveCircle(m.x, m.z, m.x + (dx / d) * step, m.z + (dz / d) * step, def.radius, gatesOf(getGame().progress), def.can.includes("swim"));
   const moved = Math.hypot(q.x - m.x, q.z - m.z);
   m.x = q.x;
   m.z = q.z;
@@ -176,6 +182,24 @@ function homeLife(m: MonsterRt, dt: number) {
   const rec = g.progress.monsters[m.id];
   const p = rt.player;
   const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
+
+  // A shy flier waits up on its perch until it is called down ("Come here!").
+  if (def.perch && !rec.discovered) {
+    m.x = def.perch.x;
+    m.z = def.perch.z;
+    m.speed = 0;
+    m.mode = "idle";
+    m.airTarget = def.perch.y + (m.noticed ? 0.45 : 0);
+    if (g.screen === "game" && !m.noticed && dPlayer < 7) {
+      // Noticed: it flutters higher and hides its face.
+      m.noticed = true;
+      animate(m.id, "hide");
+      audio.voice(m.id, "surprised");
+    }
+    if (dPlayer < 9) turn(m, Math.atan2(p.x - m.x, p.z - m.z), dt, 3);
+    return;
+  }
+  if (def.can.includes("fly")) m.airTarget = m.mode === "sleep" ? 0.05 : 0.35;
 
   // First approach: a reaction (shy ones hide their face, curious ones come closer).
   if (g.screen === "game" && !rec.discovered && !m.noticed && dPlayer < 7) {
@@ -257,7 +281,7 @@ function follow(m: MonsterRt, dt: number) {
   const speed = Math.min(6.2, 1.5 + dSpot * 1.6);
   const stuck = walkTo(m, spot.x, spot.z, speed, dt);
   followStuck = stuck && dPlayer > 3 ? followStuck + dt : 0;
-  if (followStuck > 1.5 && isWalkable(spot.x, spot.z, { solved: getGame().progress.solved }, MONSTERS[m.id].radius)) {
+  if (followStuck > 1.5 && isWalkable(spot.x, spot.z, gatesOf(getGame().progress), MONSTERS[m.id].radius)) {
     poofTo(m.id, spot.x, spot.z);
     followStuck = 0;
   }
@@ -277,7 +301,7 @@ function autoTriggers() {
       return;
     }
   }
-  if (g.progress.solved.includes("river") && !g.progress.finished && Math.hypot(p.x - MONSTER_STONE.x, p.z - MONSTER_STONE.z) < 4.2) {
+  if (g.progress.solved.includes("river") && g.progress.endings < 1 && Math.hypot(p.x - MONSTER_STONE.x, p.z - MONSTER_STONE.z) < 4.2) {
     void stoneEnding();
   }
 }

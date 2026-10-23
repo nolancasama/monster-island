@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MONSTERS, LIVE_MONSTERS, MONSTER_ORDER } from "../data/monsters";
+import { MONSTERS, LIVE_MONSTERS, MONSTER_ORDER, monstersOfPhase } from "../data/monsters";
 import { ISLAND_FOODS } from "../data/foods";
 import {
   answerCan,
@@ -7,10 +7,14 @@ import {
   askAtObstacle,
   befriend,
   canOffer,
+  describeLine,
   discover,
   dislikedKnown,
   favoriteKnown,
   friends,
+  missingLines,
+  neededLine,
+  optionalLines,
   newProgress,
   objective,
   pickUp,
@@ -21,9 +25,10 @@ import {
 } from "./progress";
 import type { FoodId, MonsterId } from "../types";
 
-/** Play the encounter loop for one monster: discover, ask until yes, fetch, give. */
+/** Play the encounter loop for one monster: discover (and describe), ask until yes, fetch, give. */
 function makeFriend(p: Progress, id: MonsterId): Progress {
   p = discover(p, id);
+  for (const line of missingLines(p, id)) if (MONSTERS[id].phase >= 2) p = describeLine(p, id, line);
   for (const food of ISLAND_FOODS) {
     p = recordLike(p, id, food);
     if (favoriteKnown(p, id)) break;
@@ -41,7 +46,7 @@ describe("food preferences", () => {
     }
   });
 
-  it("Phase 1 monsters like a food that exists on the beach", () => {
+  it("live monsters like a food that exists on the island", () => {
     for (const id of LIVE_MONSTERS) expect(ISLAND_FOODS).toContain(MONSTERS[id].favorite);
   });
 
@@ -150,8 +155,21 @@ describe("ability gating", () => {
   });
 
   it("an obstacle cannot be solved before the one in front of it", () => {
-    const p = solve(newProgress(), "river");
-    expect(p.solved).toEqual([]);
+    expect(solve(newProgress(), "river").solved).toEqual([]);
+    expect(solve(newProgress(), "bridge").solved).toEqual([]);
+    expect(solve(solve(solve(newProgress(), "fallenPalm"), "river"), "cliff").solved).toEqual(["fallenPalm", "river"]);
+  });
+
+  it("only Puff flies up the cliff; 'Can you help me?' there means fly", () => {
+    let p = { ...newProgress(), metMaple: true };
+    p = solve(makeFriend(p, "leafy"), "fallenPalm");
+    p = solve(solve(makeFriend(p, "bubbo"), "river"), "bridge");
+    expect(askAtObstacle(p, "cliff", "fly")).toMatchObject({ monster: "leafy", yes: false, solves: false });
+    p = setActive(makeFriend(p, "puff"), "puff");
+    expect(askAtObstacle(p, "cliff", "fly")).toMatchObject({ yes: true, solves: true });
+    expect(askAtObstacle(p, "cliff", "help")).toMatchObject({ yes: true, solves: true, ability: "fly" });
+    expect(askAtObstacle(p, "cliff", "jump")).toMatchObject({ yes: false, solves: false });
+    expect(askAtObstacle(p, "cliff", "swim")).toMatchObject({ yes: false, solves: false });
   });
 
   it("a solved obstacle is never asked again", () => {
@@ -182,7 +200,47 @@ describe("objective and puzzle completion", () => {
     expect(objective(p)).toEqual({ id: "obstacle", obstacle: "river", helper: "bubbo" });
     p = solve(p, "river");
     expect(objective(p).id).toBe("stone");
-    p = { ...p, finished: true };
+    p = { ...p, endings: 1 };
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "bridge", helper: "leafy" });
+  });
+
+  it("never mentions the forest before the Phase 1 ending", () => {
+    let p = { ...newProgress(), metMaple: true };
+    p = solve(makeFriend(p, "leafy"), "fallenPalm");
+    p = solve(makeFriend(p, "bubbo"), "river");
+    expect(objective(p).id).toBe("stone");
+    // Puff is live, but its guard is not on the path yet.
+    expect(monstersOfPhase(2)).toEqual(["puff"]);
+  });
+
+  it("walks the whole Phase 2 loop without a dead end", () => {
+    let p = { ...newProgress(), metMaple: true };
+    p = solve(makeFriend(p, "leafy"), "fallenPalm");
+    p = setActive(solve(makeFriend(p, "bubbo"), "river"), "bubbo");
+    p = { ...p, endings: 1 };
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "bridge", helper: "leafy" });
+    // Bubbo is following: the bridge needs a switch back to Leafy.
+    expect(askAtObstacle(p, "bridge", "help")).toMatchObject({ yes: false, solves: false });
+    p = setActive(p, "leafy");
+    expect(askAtObstacle(p, "bridge", "help")).toMatchObject({ yes: true, solves: true, ability: "grow" });
+    p = solve(p, "bridge");
+    expect(objective(p)).toEqual({ id: "findMonster", monster: "puff" });
+    p = discover(p, "puff");
+    expect(objective(p)).toEqual({ id: "describe", monster: "puff", line: "size" });
+    p = describeLine(p, "puff", "size");
+    expect(objective(p)).toEqual({ id: "describe", monster: "puff", line: "part" });
+    p = describeLine(p, "puff", "part");
+    expect(objective(p)).toEqual({ id: "askFood", monster: "puff" });
+    p = recordLike(p, "puff", "berries");
+    expect(objective(p)).toEqual({ id: "getFood", monster: "puff", food: "berries" });
+    p = pickUp(p, "berries");
+    expect(objective(p)).toEqual({ id: "giveFood", monster: "puff", food: "berries" });
+    p = befriend(p, "puff");
+    expect(p.monsters.puff.friend).toBe(true);
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "cliff", helper: "puff" });
+    p = solve(p, "cliff");
+    expect(objective(p).id).toBe("cliffTop");
+    p = { ...p, endings: 2 };
     expect(objective(p).id).toBe("explore");
   });
 
@@ -190,5 +248,32 @@ describe("objective and puzzle completion", () => {
     let p = { ...newProgress(), metMaple: true };
     p = pickUp(p, "fish");
     expect(objective(p).id).toBe("findMonster");
+  });
+});
+
+describe("journal lines", () => {
+  it("Puff's page needs size and body part; Phase 1 pages only an optional size", () => {
+    let p = newProgress();
+    expect(missingLines(p, "puff")).toEqual([]);
+    p = discover(discover(p, "puff"), "leafy");
+    expect(missingLines(p, "puff")).toEqual(["size", "part"]);
+    expect(neededLine(p, "puff")).toBe("size");
+    expect(missingLines(p, "leafy")).toEqual(["size"]);
+    expect(neededLine(p, "leafy")).toBeNull();
+    expect(optionalLines(p, "leafy")).toEqual([]);
+    expect(optionalLines({ ...p, endings: 1 }, "leafy")).toEqual(["size"]);
+    p = describeLine(p, "leafy", "part");
+    expect(p.monsters.leafy.described).toEqual({});
+    p = describeLine(describeLine(p, "puff", "part"), "puff", "size");
+    expect(neededLine(p, "puff")).toBeNull();
+  });
+
+  it("an undiscovered monster cannot be described", () => {
+    expect(describeLine(newProgress(), "puff", "size").monsters.puff.described).toEqual({});
+  });
+
+  it("sizes and parts match the models", () => {
+    expect([MONSTERS.leafy.size, MONSTERS.bubbo.size, MONSTERS.puff.size]).toEqual(["small", "big", "small"]);
+    expect(MONSTERS.puff.part).toBe("wings");
   });
 });

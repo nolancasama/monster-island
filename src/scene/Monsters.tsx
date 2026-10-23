@@ -7,13 +7,13 @@ import { LIVE_MONSTERS } from "../game/data/monsters";
 import { RIVER_Y } from "../game/world/island";
 import { standY } from "../game/world/collision";
 import { smoothMat, shadowMaterial } from "./materials";
-import { bubboParts, leafyParts, type MonsterParts } from "./models/monsters";
+import { bubboParts, leafyParts, puffParts, type MonsterParts } from "./models/monsters";
 import type { MonsterId } from "../game/types";
 
-const BUILD: Partial<Record<MonsterId, () => MonsterParts>> = { leafy: leafyParts, bubbo: bubboParts };
+const BUILD: Partial<Record<MonsterId, () => MonsterParts>> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts };
 
 /** How long each one-shot animation lasts (s). */
-const DUR: Record<string, number> = { yes: 0.9, no: 1.0, spin: 1.1, eat: 1.3, hop: 0.5, friend: 2.6, power: 2.4, hide: 2.4, notice: 0.8 };
+const DUR: Record<string, number> = { yes: 0.9, no: 1.0, spin: 1.1, eat: 1.3, hop: 0.5, friend: 2.6, power: 2.4, hide: 2.4, notice: 0.8, tilt: 1.3 };
 
 const sm = (t: number) => {
   const c = Math.max(0, Math.min(1, t));
@@ -29,11 +29,12 @@ interface Pose {
   armsUp: number;
   cover: number;
   eyes: number;
+  tilt: number;
 }
 
 /** The shared body language every monster speaks: bounce = yes, shake = no, spin = favourite. */
 function basePose(m: MonsterRt, t: number): Pose {
-  const p: Pose = { bounce: 0, squash: 1 + Math.sin(t * 2.4 + m.x) * 0.03, spin: 0, shake: 0, lean: 0, armsUp: 0, cover: 0, eyes: 1 };
+  const p: Pose = { bounce: 0, squash: 1 + Math.sin(t * 2.4 + m.x) * 0.03, spin: 0, shake: 0, lean: 0, armsUp: 0, cover: 0, eyes: 1, tilt: 0 };
   const a = m.anim;
   const at = a ? rt.time - a.t0 : 99;
   if (a && at > (DUR[a.kind] ?? 1)) m.anim = null;
@@ -76,6 +77,9 @@ function basePose(m: MonsterRt, t: number): Pose {
         p.squash = 1 + Math.sin(at * 22) * 0.05;
         p.lean = -0.12;
         break;
+      case "tilt":
+        p.tilt = Math.sin(Math.PI * Math.min(1, k * 1.3)) * 0.42;
+        break;
       case "hide":
         p.cover = k < 0.7 ? sm(k / 0.15) : 1 - sm((k - 0.7) / 0.3);
         p.squash = 0.86 + (1 - p.cover) * 0.14;
@@ -110,7 +114,9 @@ function MonsterBody({ id }: { id: MonsterId }) {
     const solved = getGame().progress.solved;
     const ground = standY(m.x, m.z, solved);
     const water = m.swimming ? RIVER_Y - (id === "bubbo" ? 0.32 : 0.1) + Math.sin(t * 3) * 0.04 : -Infinity;
-    const baseY = Math.max(ground, water);
+    // Fliers hover (a gentle bob); a perched flier sits up in its tree.
+    const hover = m.air > 0.05 ? m.air + Math.sin(t * 2.6 + m.x) * 0.06 : 0;
+    const baseY = Math.max(ground, water) + hover;
     const pose = basePose(m, t);
     const moving = m.speed > 0.2;
     const step = m.step;
@@ -124,12 +130,12 @@ function MonsterBody({ id }: { id: MonsterId }) {
     r.position.y = pose.bounce + walkHop + (m.talking ? Math.abs(Math.sin(t * 8)) * 0.03 : 0);
     r.scale.set(1 / Math.sqrt(pose.squash), pose.squash, 1 / Math.sqrt(pose.squash));
     r.rotation.x = pose.lean;
-    r.rotation.z = walkRock;
+    r.rotation.z = walkRock + pose.tilt;
     if (eyes.current) eyes.current.scale.y = pose.eyes;
     if (shadowRef.current) {
       shadowRef.current.position.y = ground - baseY - m.lift + 0.03;
       shadowRef.current.visible = !m.swimming;
-      const s = 1 - Math.min(0.5, pose.bounce);
+      const s = (1 - Math.min(0.5, pose.bounce)) * (1 - Math.min(0.55, hover * 0.15));
       shadowRef.current.scale.set(s, s, s);
     }
     const n = named.current;
@@ -176,6 +182,24 @@ function MonsterBody({ id }: { id: MonsterId }) {
       if (n.gillsL) n.gillsL.rotation.z = flap;
       if (n.gillsR) n.gillsR.rotation.z = -flap;
       if (n.tail) n.tail.rotation.y = Math.sin(t * (moving || m.swimming ? 7 : 2.2)) * (m.anim?.kind === "power" ? 0.9 : 0.35);
+    } else if (id === "puff") {
+      // Wings beat fast in the air, fold and twitch when perched or resting.
+      const flying = hover > 0.05;
+      const rate = m.anim?.kind === "power" ? 26 : moving ? 20 : 13;
+      const beat = flying ? Math.sin(t * rate) * 0.75 + 0.15 : Math.sin(t * 1.5) * 0.08 - 0.5 - pose.cover * 0.6;
+      const up = pose.armsUp * 0.4;
+      if (n.wingL) {
+        n.wingL.rotation.z = beat + up;
+        n.wingL.rotation.y = pose.cover * 1.2;
+      }
+      if (n.wingR) {
+        n.wingR.rotation.z = -beat - up;
+        n.wingR.rotation.y = -pose.cover * 1.2;
+      }
+      const dangle = flying ? Math.sin(t * 3 + 1) * 0.25 : 0;
+      if (n.footL) n.footL.rotation.x = dangle + swing * 0.5;
+      if (n.footR) n.footR.rotation.x = -dangle - swing * 0.5;
+      if (n.tuft) n.tuft.rotation.z = Math.sin(t * 2.2) * 0.2 + (flying ? Math.sin(t * rate) * 0.08 : 0);
     }
   });
 
@@ -217,5 +241,5 @@ export function Monsters() {
 
 /** Height of a monster's head (effects, bubbles). */
 export function monsterTop(id: MonsterId): number {
-  return id === "leafy" ? 1.45 : 1.2;
+  return (id === "leafy" ? 1.45 : id === "puff" ? 1.05 : 1.2) + rt.monsters[id].air;
 }

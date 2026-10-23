@@ -1,17 +1,30 @@
 import { MONSTERS } from "../data/monsters";
 import { FOODS, ISLAND_FOODS } from "../data/foods";
-import { COLOR_PHRASE, LIKE_PHRASE, foodOfPhrase, type PhraseId } from "../logic/english";
-import { answerLike, befriend, discover, dislikedKnown, favoriteKnown, has, recordLike } from "../logic/progress";
+import { COLOR_PHRASE, LIKE_PHRASE, PART_PHRASE, PHRASES, SIZE_PHRASE, foodOfPhrase, type PhraseId } from "../logic/english";
+import {
+  answerLike,
+  befriend,
+  describeLine,
+  discover,
+  dislikedKnown,
+  favoriteKnown,
+  has,
+  neededLine,
+  recordLike,
+  type DescribeLine
+} from "../logic/progress";
 import { getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { ask, say, wait } from "./ask";
-import { facePlayer, frameTwo, run } from "./script";
+import { facePlayer, frameTwo, run, shot } from "./script";
 import { switchTo } from "./companion";
+import { nearestWalkable, gatesOf } from "../world/collision";
+import { groundY } from "../world/island";
 import { audio } from "../../audio/audio";
 import type { MonsterId } from "../types";
 
 /**
- * One monster encounter: discover (describe it for the journal), communicate
+ * One monster encounter: discover (call a shy flier down, describe it for the journal), communicate
  * ("Do you like ___?" until it says yes), befriend (give the food; it asks
  * back), then it joins. Every step is saved as it happens, so walking away
  * mid-way resumes at the same step.
@@ -47,10 +60,20 @@ export function talkTo(id: MonsterId): Promise<void> {
   const p = getGame().progress;
   if (p.monsters[id].friend) return friendChat(id);
   return run(async () => {
-    beginTalk(id);
     try {
+      if (perched(id)) {
+        const ok = await callDown(id);
+        if (!ok) return;
+      }
+      beginTalk(id);
       if (!getGame().progress.monsters[id].discovered) {
         const ok = await describe(id);
+        if (!ok) return;
+      } else if (neededLine(getGame().progress, id)) {
+        // Walked away mid-page: finish writing it.
+        setGame({ discovering: { monster: id, colored: true, lines: writtenLines(id) } });
+        const ok = await describeLines(id);
+        setGame({ discovering: null });
         if (!ok) return;
       }
       if (!favoriteKnown(getGame().progress, id)) {
@@ -68,6 +91,104 @@ export function talkTo(id: MonsterId): Promise<void> {
 
 // ------------------------------------------------------------ discover
 
+/** A shy flier still waiting up in its tree. */
+function perched(id: MonsterId): boolean {
+  return Boolean(MONSTERS[id].perch) && !getGame().progress.monsters[id].discovered;
+}
+
+/** "Come here!": the shy flier comes down from its perch to the player. */
+async function callDown(id: MonsterId): Promise<boolean> {
+  const m = rt.monsters[id];
+  const def = MONSTERS[id];
+  const perch = def.perch!;
+  facePlayer(perch);
+  // Over the player's shoulder, looking up into the tree.
+  const p = rt.player;
+  const dx = perch.x - p.x;
+  const dz = perch.z - p.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const gy = groundY(p.x, p.z);
+  shot(
+    { x: p.x - (dx / len) * 3.6 + (dz / len) * 1.6, y: gy + 1.5, z: p.z - (dz / len) * 3.6 - (dx / len) * 1.6 },
+    { x: perch.x, y: groundY(perch.x, perch.z) + perch.y * 0.75, z: perch.z }
+  );
+  m.mode = "script";
+  m.look = { x: p.x, z: p.z };
+  animate(id, "hide");
+  audio.voice(id, "surprised");
+  const said = await ask({
+    kind: "command",
+    options: ["comeHere"],
+    question: { en: "A shy monster! Call it.", by: "game" },
+    help: "はずかしがりやの モンスター。えいごで よんでみよう",
+    readQuestion: true,
+    readSentence: true,
+    onWrong: () => {
+      animate(id, "tilt");
+      audio.voice(id, "surprised");
+    }
+  });
+  if (!said) return false;
+  // It flutters down and lands in front of the player.
+  animate(id, "hop");
+  audio.voice(id, "happy");
+  const spot = nearestWalkable(p.x + (dx / len) * 1.7, p.z + (dz / len) * 1.7, def.radius, gatesOf(getGame().progress));
+  const from = { x: m.x, z: m.z };
+  m.airTarget = 0.35;
+  const t0 = rt.time;
+  while (rt.time - t0 < 1.3) {
+    const k = Math.min(1, (rt.time - t0) / 1.3);
+    const s = k * k * (3 - 2 * k);
+    m.x = from.x + (spot.x - from.x) * s;
+    m.z = from.z + (spot.z - from.z) * s;
+    m.yaw = Math.atan2(p.x - m.x, p.z - m.z);
+    await wait(30);
+  }
+  m.look = { x: p.x, z: p.z };
+  return true;
+}
+
+/** Lines already written on the page (the discovery card shows them). */
+function writtenLines(id: MonsterId): DescribeLine[] {
+  const d = getGame().progress.monsters[id].described;
+  return (["size", "part"] as DescribeLine[]).filter((l) => d[l]);
+}
+
+/** The phrase for one journal line about a monster ("It's small.", "It has wings."). */
+export function linePhrase(id: MonsterId, line: DescribeLine): PhraseId {
+  const def = MONSTERS[id];
+  return line === "size" ? SIZE_PHRASE[def.size] : PART_PHRASE[def.part!];
+}
+
+const LINE_ASK: Record<DescribeLine, { en: string; ja: string }> = {
+  size: { en: "Is it big or small?", ja: "おおきい? ちいさい? えいごで いおう" },
+  part: { en: "Look! What does it have?", ja: "からだの とくちょうを えいごで いおう" }
+};
+
+/** From Phase 2 on a new page also needs its size and body part ("It's small." "It has wings."). */
+async function describeLines(id: MonsterId): Promise<boolean> {
+  for (;;) {
+    const line = neededLine(getGame().progress, id);
+    if (!line) return true;
+    const said = await ask({
+      kind: "command",
+      options: [linePhrase(id, line)],
+      question: { en: LINE_ASK[line].en, by: "game" },
+      help: LINE_ASK[line].ja,
+      readQuestion: true,
+      readSentence: true
+    });
+    if (!said) return false;
+    updateProgress((p) => describeLine(p, id, line));
+    const d = getGame().discovering;
+    if (d) setGame({ discovering: { ...d, lines: [...(d.lines ?? []), line] }, journalPulse: true });
+    audio.play("journal");
+    animate(id, line === "part" ? "power" : "hop");
+    audio.voice(id, "happy");
+    await wait(900);
+  }
+}
+
 /** "New monster!": describe it to write its journal page. */
 async function describe(id: MonsterId): Promise<boolean> {
   const def = MONSTERS[id];
@@ -75,7 +196,7 @@ async function describe(id: MonsterId): Promise<boolean> {
   animate(id, def.temper === "shy" ? "hide" : "notice");
   audio.play("discover");
   audio.voice(id, "surprised");
-  setGame({ discovering: { monster: id, colored: false } });
+  setGame({ discovering: { monster: id, colored: false, lines: [] } });
   await wait(700);
   const said = await ask({
     kind: "command",
@@ -90,14 +211,37 @@ async function describe(id: MonsterId): Promise<boolean> {
     return false;
   }
   updateProgress((p) => discover(p, id));
-  setGame({ discovering: { monster: id, colored: true }, journalPulse: true });
+  setGame({ discovering: { monster: id, colored: true, lines: [] }, journalPulse: true });
   audio.play("journal");
   await wait(900);
   animate(id, "hop");
   audio.voice(id, "hello");
   await say(id, `Hi! I'm ${def.name}!`, undefined, { target: true });
+  const ok = await describeLines(id);
   setGame({ discovering: null });
-  return true;
+  return ok;
+}
+
+/** From the journal: say an optional line about a friend from the beach ("It's small."). */
+export function writeLine(id: MonsterId, line: DescribeLine): Promise<void> {
+  return run(async () => {
+    const def = MONSTERS[id];
+    const said = await ask({
+      kind: "command",
+      options: [linePhrase(id, line)],
+      question: { en: `${def.name}: is it big or small?`, by: "game" },
+      help: `${def.name}は おおきい? ちいさい? えいごで いおう`,
+      picture: id,
+      readQuestion: true,
+      readSentence: true,
+      cancellable: true
+    });
+    if (!said) return;
+    updateProgress((p) => describeLine(p, id, line));
+    audio.play("journal");
+    setGame({ journalPulse: true });
+    toast({ en: PHRASES[said].en, ja: "ずかんに かいたよ", icon: id, tone: "good" });
+  });
 }
 
 // ------------------------------------------------------------ communicate
@@ -203,6 +347,27 @@ async function feed(id: MonsterId) {
   setGame({ friendCard: id, journalPulse: true });
   await say("game", `${def.name} is your friend!`, `${def.name}と ともだちに なった!`);
   setGame({ friendCard: null });
+  if (def.phase >= 2) {
+    // From Phase 2 on the student invites the new friend along.
+    await ask({
+      kind: "command",
+      options: ["letsGo"],
+      question: { en: `Take ${def.name} with you!`, by: "game" },
+      help: `${def.name}を さそおう`,
+      readQuestion: true,
+      readSentence: true,
+      onWrong: () => animate(id, "tilt")
+    });
+    switchTo(id, true);
+    m.mode = "talk";
+    m.talking = true;
+    animate(id, "yes");
+    audio.voice(id, "excited");
+    await say(id, "OK! Let's go!", undefined, { target: true, tone: "yes" });
+    m.talking = false;
+    m.mode = "follow";
+    return;
+  }
   const p = getGame().progress;
   if (p.active === id) {
     m.mode = "follow";

@@ -8,10 +8,15 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
  * Versioned save. A save of an unknown version, or one that does not parse,
  * is discarded whole, never half-loaded. Every field is re-validated, so an
  * edited or corrupted save cannot unlock something out of order.
+ *
+ * v1 (Phase 1 builds) migrates: classes that finished the beach continue into
+ * the forest. It had `finished: boolean` where v2 has `endings` and no
+ * journal size/part lines.
  */
 
-export const SAVE_KEY = "mi.save.v1";
-const VERSION = 1;
+export const SAVE_KEY = "mi.save.v2";
+export const SAVE_KEY_V1 = "mi.save.v1";
+const VERSION = 2;
 
 export interface SaveData {
   v: number;
@@ -36,7 +41,12 @@ function readRecord(raw: unknown): MonsterRecord {
   const canKnown: MonsterRecord["canKnown"] = {};
   if (isObj(r.canKnown)) for (const a of Object.keys(r.canKnown)) if (typeof r.canKnown[a] === "boolean") canKnown[a as keyof typeof canKnown] = r.canKnown[a] as boolean;
   const discovered = r.discovered === true;
-  return { discovered, asked, friend: discovered && r.friend === true, canKnown };
+  const described: MonsterRecord["described"] = {};
+  if (discovered && isObj(r.described)) {
+    if (r.described.size === true) described.size = true;
+    if (r.described.part === true) described.part = true;
+  }
+  return { discovered, asked, friend: discovered && r.friend === true, canKnown, described };
 }
 
 export function decodeSave(text: string | null): SaveData | null {
@@ -47,7 +57,7 @@ export function decodeSave(text: string | null): SaveData | null {
   } catch {
     return null;
   }
-  if (!isObj(raw) || raw.v !== VERSION || !isObj(raw.progress)) return null;
+  if (!isObj(raw) || (raw.v !== VERSION && raw.v !== 1) || !isObj(raw.progress)) return null;
   const src = raw.progress;
   const p = newProgress();
   const monsters = isObj(src.monsters) ? src.monsters : {};
@@ -64,7 +74,9 @@ export function decodeSave(text: string | null): SaveData | null {
     if (solved.includes(id) && OBSTACLES[id].after.every((o) => p.solved.includes(o))) p.solved.push(id);
   }
   p.metMaple = src.metMaple === true;
-  p.finished = src.finished === true && p.solved.includes("river");
+  const endings = raw.v === 1 ? (src.finished === true ? 1 : 0) : Math.floor(num(src.endings, 0));
+  // An ending stands only on the obstacle that leads to it.
+  p.endings = endings >= 2 && p.solved.includes("cliff") ? 2 : endings >= 1 && p.solved.includes("river") ? 1 : 0;
   p.said = Array.isArray(src.said) ? (src.said as unknown[]).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES) : [];
   const pl = isObj(raw.player) ? raw.player : {};
   return {
@@ -77,7 +89,7 @@ export function decodeSave(text: string | null): SaveData | null {
 
 export function readSave(): SaveData | null {
   try {
-    return decodeSave(localStorage.getItem(SAVE_KEY));
+    return decodeSave(localStorage.getItem(SAVE_KEY)) ?? decodeSave(localStorage.getItem(SAVE_KEY_V1));
   } catch {
     return null;
   }
@@ -94,6 +106,7 @@ export function writeSave(text: string) {
 export function clearSave() {
   try {
     localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(SAVE_KEY_V1);
   } catch {
     /* ignore */
   }

@@ -84,6 +84,70 @@ export function leafyParts(): MonsterParts {
   };
 }
 
+// ------------------------------------------------------------------ Puff
+
+/**
+ * Puff: a small, round, fluffy flier with two big feathered wings, little
+ * feet and a curly tuft (no tail, so "It has wings." is the only body-part
+ * answer). It hovers; its feet dangle.
+ */
+export function puffParts(): MonsterParts {
+  const body = new PartBuilder(0);
+  // Fluffy ball: a core plus tufts around it.
+  body.sphere(0.3, 0, 0.42, 0, "#a070e0", [1, 0.95, 0.95], 16);
+  const rand = (i: number) => Math.sin(i * 47.3) * 0.5 + 0.5;
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const y = 0.42 + (rand(i) - 0.5) * 0.36;
+    body.sphere(0.09, Math.cos(a) * 0.24, y, Math.sin(a) * 0.24 - 0.03, i % 2 ? "#9a66dc" : "#ad80ea", [1, 0.9, 1], 8);
+  }
+  body.sphere(0.2, 0, 0.36, 0.14, "#e6d4ff", [1, 1, 0.6], 12);
+  // Tiny beak and cheeks.
+  body.add(new THREE.ConeGeometry(0.045, 0.1, 6), "#ffb347", [0, 0.44, 0.31], [Math.PI / 2, 0, 0]);
+  body.sphere(0.04, -0.15, 0.42, 0.25, "#ff9ec0", [1, 0.6, 0.4], 8);
+  body.sphere(0.04, 0.15, 0.42, 0.25, "#ff9ec0", [1, 0.6, 0.4], 8);
+  // Little stick feet.
+  const foot = () => {
+    const f = new PartBuilder(0);
+    between(f, [0, 0, 0], [0, -0.14, 0.02], 0.018, 0.018, "#ffb347", 4);
+    for (const a of [-0.5, 0, 0.5]) between(f, [0, -0.14, 0.02], [Math.sin(a) * 0.06, -0.16, 0.02 + Math.cos(a) * 0.06], 0.014, 0.012, "#ffb347", 4);
+    return f.build();
+  };
+  // A wing: three feathers fanned out from the shoulder (pivot), pointing sideways.
+  const wing = (side: number) => {
+    const w = new PartBuilder(0);
+    const feathers: Array<[number, number, string]> = [
+      [0.25, 0.36, "#c9a6ff"],
+      [-0.05, 0.42, "#b48cf5"],
+      [-0.35, 0.34, "#9f74e8"]
+    ];
+    for (const [a, len, c] of feathers) {
+      w.add(new THREE.SphereGeometry(0.12, 8, 5), c, [side * Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55, -0.02], [0, 0, side * a], [len * 4.2, 0.85, 0.28]);
+    }
+    w.sphere(0.07, side * 0.04, 0, 0, "#ad80ea", [1, 1, 0.6], 8);
+    return w.build();
+  };
+  const tuft = new PartBuilder(0);
+  between(tuft, [0, 0, 0], [0.04, 0.14, 0], 0.02, 0.016, "#7f4fcc", 4);
+  tuft.add(new THREE.TorusGeometry(0.05, 0.016, 4, 10, Math.PI * 1.5), "#7f4fcc", [0.08, 0.17, 0], [0, 0, -0.5]);
+  const eyes = new PartBuilder(0);
+  eyePair(eyes, 0.1, 0, 0.24, 0.075);
+  return {
+    body: body.build(),
+    eyes: eyes.build(),
+    eyeY: 0.52,
+    parts: [
+      { name: "footL", geo: foot(), pivot: [-0.09, 0.16, 0.02] },
+      { name: "footR", geo: foot(), pivot: [0.09, 0.16, 0.02] },
+      { name: "wingL", geo: wing(-1), pivot: [-0.3, 0.5, -0.04] },
+      { name: "wingR", geo: wing(1), pivot: [0.3, 0.5, -0.04] },
+      { name: "tuft", geo: tuft.build(), pivot: [0, 0.72, 0] }
+    ],
+    shadow: 0.75,
+    top: 1.05
+  };
+}
+
 // ------------------------------------------------------------------ Bubbo
 
 export function bubboParts(): MonsterParts {

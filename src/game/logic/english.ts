@@ -1,4 +1,4 @@
-import type { AbilityId, ColorId, FoodId } from "../types";
+import type { AbilityId, ColorId, FoodId, PartId, SizeId } from "../types";
 
 /**
  * Every sentence the student says or taps. `keys` are the content words that
@@ -33,7 +33,14 @@ export type PhraseId =
   | "canSwim"
   | "canFly"
   | "canJump"
-  | "canHelp";
+  | "canHelp"
+  | "comeHere"
+  | "letsGo"
+  | "thankYou"
+  | "itsSmall"
+  | "itsBig"
+  | "hasWings"
+  | "hasTail";
 
 const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
 const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
@@ -63,6 +70,27 @@ const ABILITY_WORDS: Record<AbilityId | "help", string[]> = {
   grow: ["grow", "grows", "glow", "go"],
   fire: ["fire", "fires", "fired", "far", "fight", "fia"]
 };
+
+// Requests (Phase 2). Each needs both of its words, so "Let's go" never
+// passes as "Come here" and the other way round.
+const COME = ["come", "comes", "came", "kamu", "kam", "cum", "calm", "comb", "kom", "gum", "commie", "comma"];
+const HERE = ["here", "hear", "hia", "hiya", "hir", "hee", "heer", "near", "ear", "hair", "hii", "comehere", "kamuhia", "commie", "comma"];
+const LETS = ["let's", "lets", "let", "letsu", "rettsu", "rets", "ret's", "less", "lad's", "lots", "lex", "letsgo", "letsugo", "lego"];
+const GO = ["go", "goes", "going", "gou", "goh", "goal", "gold", "goat", "coat", "ago", "letsgo", "letsugo", "lego"];
+const THANK = ["thank", "thanks", "thankyou", "sank", "sankyu", "sankyou", "senkyu", "tenkyu", "tank", "tanks", "think", "thing", "fank", "sanku", "sankyuu", "sake"];
+
+const SIZE_WORDS: Record<SizeId, string[]> = {
+  small: ["small", "smaller", "smol", "smoru", "sumoru", "smore", "smalls", "mall", "small's", "smoll", "snow", "smile"],
+  big: ["big", "bigger", "biggu", "bigu", "pig", "bick", "beg", "bigs", "bid", "dig", "vig"]
+};
+
+const PART_WORDS: Record<PartId, string[]> = {
+  wings: ["wing", "wings", "wingu", "wingsu", "ring", "rings", "wink", "winks", "weeks", "wins", "win", "swings", "wingz"],
+  tail: ["tail", "tails", "tale", "tales", "teru", "teiru", "tell", "towel", "dale", "taylor", "teal"]
+};
+
+export const SIZE_PHRASE: Record<SizeId, PhraseId> = { small: "itsSmall", big: "itsBig" };
+export const PART_PHRASE: Record<PartId, PhraseId> = { wings: "hasWings", tail: "hasTail" };
 
 export const LIKE_PHRASE: Record<FoodId, PhraseId> = {
   apples: "likeApples",
@@ -114,7 +142,15 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   canSwim: can("canSwim", "swim", "Can you swim?"),
   canFly: can("canFly", "fly", "Can you fly?"),
   canJump: can("canJump", "jump", "Can you jump?"),
-  canHelp: can("canHelp", "help", "Can you help me?")
+  canHelp: can("canHelp", "help", "Can you help me?"),
+  comeHere: { id: "comeHere", en: "Come here!", keys: [COME, HERE], distractors: ["letsGo", "thankYou"] },
+  letsGo: { id: "letsGo", en: "Let's go!", keys: [LETS, GO], distractors: ["comeHere", "thankYou"] },
+  thankYou: { id: "thankYou", en: "Thank you!", keys: [THANK], distractors: ["comeHere", "letsGo"] },
+  itsSmall: { id: "itsSmall", en: "It's small.", keys: [SIZE_WORDS.small], forbid: SIZE_WORDS.big, distractors: ["itsBig"] },
+  itsBig: { id: "itsBig", en: "It's big.", keys: [SIZE_WORDS.big], forbid: SIZE_WORDS.small, distractors: ["itsSmall"] },
+  // "has" is not judged: "It wings" from a beginner still names the right part.
+  hasWings: { id: "hasWings", en: "It has wings.", keys: [PART_WORDS.wings], distractors: ["hasTail"] },
+  hasTail: { id: "hasTail", en: "It has a tail.", keys: [PART_WORDS.tail], distractors: ["hasWings"] }
 };
 
 export const PHRASE_IDS = Object.keys(PHRASES) as PhraseId[];

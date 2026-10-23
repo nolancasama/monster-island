@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { FoodId, MonsterId } from "./types";
 import type { PhraseId } from "./logic/english";
-import { newProgress, type Progress } from "./logic/progress";
+import { newProgress, type DescribeLine, type Progress } from "./logic/progress";
 
 export type Screen = "title" | "game" | "results";
 
@@ -80,7 +80,7 @@ export interface Line {
 
 export interface Focus {
   id: string;
-  kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign";
+  kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign" | "rope";
   verb: string;
   noun: string;
   x: number;
@@ -117,7 +117,7 @@ export interface GameState {
   toasts: Toast[];
   hint: HintKey;
   /** The "New monster!" journal card while it is being described. */
-  discovering: { monster: MonsterId; colored: boolean } | null;
+  discovering: { monster: MonsterId; colored: boolean; lines?: DescribeLine[] } | null;
   /** The "is your friend!" card. */
   friendCard: MonsterId | null;
   /** The journal button glows (something new was written). */

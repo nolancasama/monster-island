@@ -15,7 +15,6 @@ import {
   MONSTER_STONE,
   PIER,
   STEPPING_STONES,
-  Z_NORTH,
   groundY
 } from "../game/world/island";
 import { MONSTER_ORDER } from "../game/data/monsters";
@@ -39,7 +38,6 @@ import {
   steppingStoneGeometry,
   tableGeometry,
   tentGeometry,
-  vineWallGeometry,
   vinesGeometry
 } from "./models/props";
 
@@ -277,9 +275,9 @@ function signTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** The forest sign (the bramble behind it is part of the forest). */
 function ForestGate() {
   const post = useMemo(signPostGeometry, []);
-  const wall = useMemo(vineWallGeometry, []);
   const tex = useMemo(signTexture, []);
   return (
     <group>
@@ -290,7 +288,6 @@ function ForestGate() {
           <meshBasicMaterial map={tex} />
         </mesh>
       </group>
-      <mesh geometry={wall} material={flatMat} position={at(FOREST_SIGN.x + 2.8, Z_NORTH - 1.4)} />
     </group>
   );
 }

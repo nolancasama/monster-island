@@ -6,12 +6,12 @@ export interface MiState {
   mode: string;
   micState: string;
   progress: {
-    monsters: Record<string, { discovered: boolean; asked: Record<string, boolean>; friend: boolean; canKnown: Record<string, boolean> }>;
+    monsters: Record<string, { discovered: boolean; asked: Record<string, boolean>; friend: boolean; canKnown: Record<string, boolean>; described: { size?: boolean; part?: boolean } }>;
     active: string | null;
     bag: Record<string, number>;
     solved: string[];
     metMaple: boolean;
-    finished: boolean;
+    endings: number;
     said: string[];
   };
   objective: { id: string; [k: string]: unknown };
@@ -30,10 +30,14 @@ export interface MiState {
     question: string | null;
   } | null;
   line: { by: string; en: string } | null;
-  player: { x: number; z: number; y: number; riding: boolean };
-  monsters: Record<string, { x: number; z: number; mode: string }>;
+  player: { x: number; z: number; y: number; riding: boolean; climbing: boolean };
+  monsters: Record<string, { x: number; z: number; mode: string; air: number }>;
   palm: number;
   stones: number;
+  bridge: number;
+  rope: number;
+  bramble: number;
+  stoneGlow: Record<string, number>;
   perf: { calls: number; triangles: number; fps: number };
 }
 

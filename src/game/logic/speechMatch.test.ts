@@ -28,6 +28,36 @@ describe("English response matching", () => {
     expect(judgeSpeech(["can you health me"], P(["canHelp"]))).toMatchObject({ id: "canHelp" });
   });
 
+  it("Phase 2 requests are told apart", () => {
+    const req = P(["comeHere", "letsGo", "thankYou"]);
+    expect(judgeSpeech(["come here"], req)).toMatchObject({ id: "comeHere" });
+    expect(judgeSpeech(["kamu hia"], req)).toMatchObject({ id: "comeHere" });
+    expect(judgeSpeech(["come hear"], req)).toMatchObject({ id: "comeHere" });
+    expect(judgeSpeech(["let's go"], req)).toMatchObject({ id: "letsGo" });
+    expect(judgeSpeech(["letsu go"], req)).toMatchObject({ id: "letsGo" });
+    expect(judgeSpeech(["lets go"], req)).toMatchObject({ id: "letsGo" });
+    expect(judgeSpeech(["thank you"], req)).toMatchObject({ id: "thankYou" });
+    expect(judgeSpeech(["sankyu"], req)).toMatchObject({ id: "thankYou" });
+    expect(judgeSpeech(["tenkyu"], req)).toMatchObject({ id: "thankYou" });
+    // One word of a request is not the request.
+    expect(judgeSpeech(["come"], req).kind).toBe("none");
+    expect(judgeSpeech(["go"], req).kind).toBe("none");
+  });
+
+  it("sizes and body parts", () => {
+    const size = P(["itsSmall", "itsBig"]);
+    expect(judgeSpeech(["it's small"], size)).toMatchObject({ id: "itsSmall" });
+    expect(judgeSpeech(["it's sumoru"], size)).toMatchObject({ id: "itsSmall" });
+    expect(judgeSpeech(["it's big"], size)).toMatchObject({ id: "itsBig" });
+    expect(judgeSpeech(["biggu"], size)).toMatchObject({ id: "itsBig" });
+    expect(judgeSpeech(["small big"], size).kind).not.toBe("match");
+    const part = P(["hasWings", "hasTail"]);
+    expect(judgeSpeech(["it has wings"], part)).toMatchObject({ id: "hasWings" });
+    expect(judgeSpeech(["it has wing"], part)).toMatchObject({ id: "hasWings" });
+    expect(judgeSpeech(["it has wingu"], part)).toMatchObject({ id: "hasWings" });
+    expect(judgeSpeech(["it has a tail"], part)).toMatchObject({ id: "hasTail" });
+  });
+
   it("the question needs both the pattern word and the food", () => {
     expect(judgeSpeech(["apples"], LIKE_OPTIONS).kind).toBe("none");
     expect(judgeSpeech(["do you like"], LIKE_OPTIONS).kind).toBe("none");

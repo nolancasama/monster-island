@@ -60,6 +60,8 @@ export function PromptPanel() {
       {p.question && (
         <div className="prompt-question">
           {p.question.by !== "game" && <SpeakerFace by={p.question.by} size={52} />}
+          {/* A picture of what the question is about (a friend described from the journal). */}
+          {p.picture && <Icon id={p.picture} size={52} />}
           <div className="q-text">
             {p.question.by !== "game" && <span className="who">{speakerName(p.question.by)}</span>}
             <span className="q-en" data-testid="prompt-question">

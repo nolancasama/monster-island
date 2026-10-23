@@ -2,8 +2,8 @@ import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { objective } from "./logic/progress";
-import { PLAYER_R, nearestWalkable } from "./world/collision";
-import { CROSSING, FALLEN_PALM, FOOD_SOURCES, MAPLE, MONSTER_STONE } from "./world/island";
+import { PLAYER_R, gatesOf, nearestWalkable } from "./world/collision";
+import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
@@ -16,7 +16,7 @@ import * as THREE from "three";
 export function installE2eHook(seed: number) {
   seedChoices(seed);
   const place = (x: number, z: number, faceX: number, faceZ: number) => {
-    const p = nearestWalkable(x, z, PLAYER_R, { solved: getGame().progress.solved });
+    const p = nearestWalkable(x, z, PLAYER_R, gatesOf(getGame().progress));
     rt.player.x = p.x;
     rt.player.z = p.z;
     rt.player.vx = rt.player.vz = 0;
@@ -29,6 +29,10 @@ export function installE2eHook(seed: number) {
     if (name === "palm") return { x: FALLEN_PALM.x - 1, z: FALLEN_PALM.z };
     if (name === "river") return CROSSING.west;
     if (name === "stone") return MONSTER_STONE;
+    if (name === "sign") return FOREST_SIGN;
+    if (name === "bridge") return { x: BRIDGE.x, z: BRIDGE.z1 + 0.6 };
+    if (name === "cliff" || name === "rope") return { x: ROPE.x, z: ROPE.z + 0.2 };
+    if (name === "cliffTop") return CLIFF_TOP_SPOT;
     if ((LIVE_MONSTERS as string[]).includes(name)) return rt.monsters[name as keyof typeof rt.monsters];
     const src = FOOD_SOURCES.find((s) => s.id === name || s.food === name);
     return src ?? null;
@@ -59,10 +63,16 @@ export function installE2eHook(seed: number) {
             }
           : null,
         line: g.line ? { by: g.line.by, en: g.line.en } : null,
-        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, riding: rt.player.riding },
-        monsters: Object.fromEntries(LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode }])),
+        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, riding: rt.player.riding, climbing: rt.player.climbY !== null },
+        monsters: Object.fromEntries(
+          LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, air: rt.monsters[id].air }])
+        ),
         palm: rt.palm,
         stones: rt.stones,
+        bridge: rt.bridge,
+        rope: rt.rope,
+        bramble: rt.bramble,
+        stoneGlow: { ...rt.stoneGlow },
         perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped }
       };
     },
@@ -71,7 +81,13 @@ export function installE2eHook(seed: number) {
       const t = target(name);
       if (!t) throw new Error(`no target ${name}`);
       const a = Math.atan2(rt.player.x - t.x, rt.player.z - t.z);
-      const near = name === "river" ? { x: t.x - 0.2, z: t.z } : { x: t.x + Math.sin(a) * dist, z: t.z + Math.cos(a) * dist };
+      // Obstacles are approached from the side the player arrives on.
+      const near =
+        name === "river"
+          ? { x: t.x - 0.2, z: t.z }
+          : name === "bridge" || name === "cliff" || name === "rope"
+            ? { x: t.x, z: t.z + dist * 0.6 }
+            : { x: t.x + Math.sin(a) * dist, z: t.z + Math.cos(a) * dist };
       return place(near.x, near.z, name === "river" ? CROSSING.east.x : t.x, name === "river" ? CROSSING.east.z : t.z);
     },
     teleport(x: number, z: number, yaw = 0) {

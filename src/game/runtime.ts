@@ -23,7 +23,9 @@ export type MonsterAnim =
   /** Shy: hides its face, then peeks. */
   | "hide"
   /** "!" surprise when it notices the player. */
-  | "notice";
+  | "notice"
+  /** Puzzled head tilt (a request it does not understand). */
+  | "tilt";
 
 export interface MonsterRt {
   id: MonsterId;
@@ -50,6 +52,9 @@ export interface MonsterRt {
   poofT0: number;
   /** In water (swims instead of walking). */
   swimming: boolean;
+  /** Fliers: height above the ground (eases toward airTarget). */
+  air: number;
+  airTarget: number;
 }
 
 export interface CameraShot {
@@ -84,7 +89,9 @@ function monsterStart(id: MonsterId): MonsterRt {
     talking: false,
     noticed: false,
     poofT0: -10,
-    swimming: false
+    swimming: false,
+    air: 0,
+    airTarget: 0
   };
 }
 
@@ -106,6 +113,8 @@ export const rt = {
     frozen: false,
     /** Riding Bubbo across the river. */
     riding: false,
+    /** Climbing the cliff rope: the height the player hangs at (null = on the ground). */
+    climbY: null as number | null,
     /** Short gesture: give food, cheer. */
     action: null as null | { kind: "give" | "cheer" | "pick"; t0: number }
   },
@@ -133,6 +142,14 @@ export const rt = {
   /** Stepping stones: 0 = under water, 1 = risen. */
   stones: 0,
   stonesTarget: 0,
+  /** Leafy's vines across the broken bridge (0..1). */
+  bridge: 0,
+  bridgeTarget: 0,
+  /** The cliff rope: 0 = coiled at the foot, 1 = hanging from the top. */
+  rope: 0,
+  /** The bramble on the forest path: 1 = closed, 0 = gone. */
+  bramble: 1,
+  brambleTarget: 1,
   /** Monster Stone symbols lit (0..1 per symbol). */
   stoneGlow: { leafy: 0, bubbo: 0, puff: 0, ember: 0 } as Record<MonsterId, number>,
   effects: [] as Effect[],
@@ -160,6 +177,7 @@ export function resetRuntime() {
   p.vx = p.vz = p.speed = 0;
   p.frozen = false;
   p.riding = false;
+  p.climbY = null;
   p.action = null;
   rt.joy.x = rt.joy.y = 0;
   rt.camera.mode = "follow";
@@ -173,6 +191,9 @@ export function resetRuntime() {
   rt.palm = rt.palmTarget = 0;
   rt.vines = 0;
   rt.stones = rt.stonesTarget = 0;
+  rt.bridge = rt.bridgeTarget = 0;
+  rt.rope = 0;
+  rt.bramble = rt.brambleTarget = 1;
   for (const id of MONSTER_ORDER) rt.stoneGlow[id] = 0;
   rt.effects = [];
   rt.idle = 0;

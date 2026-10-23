@@ -43,6 +43,8 @@ export interface AskRequest {
   readQuestion?: boolean;
   /** Read the target sentence aloud when the prompt opens (speech mode, commands). */
   readSentence?: boolean;
+  /** A wrong sentence was tapped (mic-free): the listener can react (a puzzled tilt). */
+  onWrong?: (id: PhraseId) => void;
 }
 
 interface Active {
@@ -275,6 +277,7 @@ export function choose(id: PhraseId) {
   }
   audio.play("error");
   update({ status: "wrong", wrongId: id });
+  a.req.onWrong?.(id);
   window.setTimeout(() => {
     const now = getGame().prompt;
     if (now && now.id === p.id && now.wrongId === id) update({ wrongId: null, status: "ready" });

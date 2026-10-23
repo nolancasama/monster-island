@@ -171,3 +171,121 @@ Pages.
   ways, and the river never asks again.
 - Rejected: a capture/fade-in "summon" for companion switching (switching is
   immediate; a far-away friend poofs over).
+
+## 2026-10-23 — Phase 2 (Forest) design, frozen
+
+Follows the frozen chain above: Leafy repairs the broken bridge, Puff lives on
+the forest hills, Puff flies the rope up the high cliff. New English, in order
+of first use: "Come here!", "It's small. / It's big.", "It has wings.",
+"Let's go!", "Thank you!".
+
+**Route.** The forest path opens behind the Forest sign on the far bank once
+the Phase 1 ending has played (before that the sign says "Not yet!" and a
+bramble blocks it). Beach → forest path → **ravine with the broken bridge**
+→ the hills (Puff, berry bushes) → **the high cliff** with the rope hanging
+from the top. The cliff top shows the volcano smoking in the distance; the way
+on is closed in this build (a rockfall with Maple's "Next time!").
+
+**Obstacles (data, same rules as Phase 1).**
+- `bridge`: needs `grow`, question "Can you help me?", others "Can you swim?" /
+  "Can you fly?", after `river`. Leafy's vines weave the missing planks; the
+  bridge stays fixed. Bubbo is usually active after the river, so this forces a
+  switch back to Leafy — the switch is part of the lesson.
+- `cliff`: needs `fly`, question "Can you fly?", others "Can you jump?" /
+  "Can you swim?", after `bridge`. Spoken "Can you help me?" still works here
+  (help = the obstacle's need, as in Phase 1). Puff carries
+  the rope end up and ties it; the player climbs (short scripted climb).
+
+**Puff (shy, discovery uses "Come here!").** Puff is first seen in a tree on
+the hills. Approaching makes it flutter higher. The discovery prompt is "Come
+here!" — Puff floats down, then the journal opens. Mic-free choices: "Come
+here!" / "Let's go!" / "Thank you!" (only the first works; the others get a
+puzzled tilt, no penalty). Leafy and Bubbo's discovery is unchanged.
+
+**Describing grows to three lines for Puff:** colour ("It's purple."), size
+("It's small."), body part ("It has wings."), one prompt each, each filling a
+part of the silhouette. Distractors: "It's big.", "It has a tail.". Leafy and
+Bubbo's pages gain a size line ("It's small." / "It's big.") the student fills
+by opening the journal on that page and pressing speak — optional, shown as a
+dotted line, never on the objective path (rejected: forcing a re-describe of
+old friends; it repeats without new meaning).
+
+**"Do you like ___?" is unchanged.** Same four foods, same ≤3 "No"s, Puff
+likes berries and lives beside berry bushes (the contextual hint). Berries also
+grow in the forest so the student need not walk back to the beach.
+
+**"Let's go!" ends befriending from Phase 2 on.** After the "is your friend!"
+card the student says "Let's go!" and the new friend becomes the companion
+(Phase 1's automatic first companion is kept for Leafy). It is also the
+request at the bottom of the rope before climbing.
+
+**"Thank you!" after every ability use from Phase 2 on** (bridge, cliff, and
+the Phase 1 obstacles are already solved so they never ask). The companion
+answers with a happy spin. A miss here never blocks: after the ladder the
+choice is tappable as always.
+
+**Companion switching stays immediate** via chips / number keys (Phase 1
+decision). "Come here!" is not required to switch; rejected because it turns
+every switch into a chore and the bridge already makes switching needed.
+
+**Phase 2 ending.** At the cliff top: camera shows the volcano, Maple (by
+radio portrait, she stays at camp) says one more monster lives there, the
+Monster Stone's third symbol (wing) lights (seen on the beach afterwards),
+results card for Phase 2, then free exploration. Ember stays a journal
+silhouette.
+
+**Save.** `mi.save.v2`. A valid v1 save migrates (Phase 1 progress kept,
+`finished` becomes "Phase 1 ending played") instead of being discarded, so
+classes that played Phase 1 continue into the forest. Unknown versions are
+still discarded.
+
+**Budget.** Same Chromebook budget per view (~100 draw calls; triangles may
+rise to ~120k). Forest trees are instanced/merged; areas out of view
+(beach vs forest) are hidden by region, not drawn at once. Fog hides the
+transitions.
+
+## 2026-10-23 — Phase 2 decisions made while building
+
+- **`endings` replaces `finished`** in the save (the highest phase whose
+  ending has played) and each monster record gains `described` (size / part
+  lines). Save key `mi.save.v2`; a v1 save is migrated on load (`finished` →
+  `endings: 1`) and an ending never stands without the obstacle that leads to
+  it. The objective walks Phase 1 completely, ending included, before Puff or
+  the bridge can appear, even though Puff is live data from the start.
+- **Shy fliers are data:** `MonsterDef.perch` (Puff's nest on its tree's south
+  branch). Until discovered the monster sits there; noticing the player makes
+  it flutter a little higher and hide its face. Walking under it starts the
+  "Come here!" prompt; it flies down and the usual discovery follows. A wrong
+  mic-free request gets a puzzled head tilt (`onWrong` on `ask`), no penalty.
+- **Puff's page order:** colour → "Hi! I'm Puff!" → size → wings, all on the
+  same "New monster!" card, which fills in line by line. Walking away
+  mid-page resumes at the missing line.
+- **Puff has no tail** (wings, tuft, little feet), so "It has wings." is the
+  only body-part answer; "It has a tail." is the distractor. Bubbo's page has
+  no part line at all (only a size line).
+- **The optional size lines** for Leafy and Bubbo are a dashed "Big or small?"
+  line on their journal page once the forest is open; tapping it closes the
+  journal and opens a cancellable prompt with the friend's portrait (they may
+  be far away).
+- **Thanks get a reply:** after "Thank you!" the monster spins and says
+  "You're welcome!" (heard, not produced).
+- **The stone ending opens the forest on screen:** a shot of the bramble
+  withering, then "The forest path is open now!". The bramble replaced the
+  old decorative vine wall at the same place.
+- **The rope works both ways** once Puff has tied it (E at the foot: Climb;
+  at the top: Climb down). The climb is a short scripted rise; a save is
+  never written mid-climb (it resumes at the foot of the rope).
+- **The cliff-top ending** is staged from the south-west corner of the cliff
+  top: the group in front, the smoking volcano beyond, then a two-shot while
+  Maple speaks "by radio" (she stays at camp). Puff's stone symbol lights
+  remotely and is seen on the beach afterwards.
+- **The volcano moved further away** (70, -112) and became a truncated cone:
+  seen from the cliff top the old one was too close and its crater sat on a
+  point like a mushroom. A corridor of the jungle toward it has no trees, and
+  three ridges sit on the rising jungle to close the view north.
+- **The ravine has a creek:** its floor lies below sea level, so the sea plane
+  shows there as water. It reads as a stream under the bridge; kept.
+- **Budget measured** (SwiftShader, 1366×768): forest 39–73 draw calls,
+  ~80–90k triangles; beach with the forest behind it 68 calls, ~106k. Hiding
+  areas by region (planned in the frozen design) was not needed: merged and
+  instanced geometry plus frustum culling stay inside the budget.

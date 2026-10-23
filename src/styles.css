@@ -1080,6 +1080,19 @@ kbd {
   font-size: 1.05rem;
 }
 
+/* An optional journal line not written yet: a dotted blank to say aloud. */
+.j-line-empty {
+  display: flex;
+  background: transparent;
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+
+.discover-card .line-chip {
+  background: #8a6fd0;
+  animation: pop-plain 0.35s cubic-bezier(0.3, 1.6, 0.6, 1);
+}
+
 .j-choose {
   align-self: flex-start;
   margin-top: 6px;

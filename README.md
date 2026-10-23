@@ -4,8 +4,12 @@ A 3D English adventure for Japanese elementary school students (grades 3–6,
 beginners). Explore a tropical island, find monsters, ask them what they like,
 make friends, and use their powers to open the way.
 
-**Phase 1 (this build): the Beach.** Professor Maple, the Monster Journal,
-Leafy and Bubbo, two obstacles and the Monster Stone ending.
+**Phase 1: the Beach.** Professor Maple, the Monster Journal, Leafy and
+Bubbo, two obstacles and the Monster Stone ending, which opens the forest.
+
+**Phase 2: the Forest.** The broken bridge (Leafy), Puff the shy flier on the
+hills, the high cliff (Puff flies the rope up) and the cliff-top ending with
+the volcano in view.
 
 English used in Phase 1:
 
@@ -15,11 +19,19 @@ English used in Phase 1:
 - "Can you help me?" / "Can you swim?" — ask a monster friend for help
 - "Yes, I can." / "No, I can't."
 
+Added in Phase 2:
+
+- "Come here!" — call the shy monster down from its tree
+- "It's small." / "It's big." / "It has wings." — finish a journal page
+- "Let's go!" — invite a new friend along; start the climb
+- "Thank you!" — after a friend's power has helped
+- "Can you fly?"
+
 ## Play
 
 - **Move:** WASD / arrow keys (touch: the stick). **Look:** drag. **Zoom:** wheel.
 - **Use / talk:** E (touch: the yellow button, or tap the label).
-- **Speak:** Space or 🎤 — one press listens once. **Journal:** M. **Companion:** 1 / 2 or the chips.
+- **Speak:** Space or 🎤 — one press listens once. **Journal:** M. **Companion:** 1 / 2 / 3 or the chips.
 - **Speak or Tap** on the title screen is a teacher setting: Tap mode never uses the microphone.
   If the microphone is blocked, the game switches to tapping by itself.
 
@@ -36,7 +48,8 @@ npm install
 npm run dev        # http://localhost:5173
 npm test           # unit tests (rules, matching, save, reachability)
 npm run e2e        # build + Playwright: the whole loop, speech, save
-node scripts/shots.mjs http://127.0.0.1:5173/ 1366x768 [--touch] [--tap]   # screenshot playthrough → .tmp/shots
+node scripts/shots.mjs http://127.0.0.1:5173/ 1366x768 [--touch] [--tap]          # beach playthrough → .tmp/shots
+node scripts/shots-forest.mjs http://127.0.0.1:5173/ 1366x768 [--touch] [--tap]   # forest playthrough from a seeded save
 ```
 
 Add `?e2e=1` for the test hook (`window.__mi`), `&fast=1` to skip pauses.

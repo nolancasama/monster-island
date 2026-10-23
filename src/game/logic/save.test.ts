@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decodeSave, encodeSave } from "./save";
-import { befriend, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
+import { befriend, describeLine, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
 
 function midGame() {
   let p = { ...newProgress(), metMaple: true };
@@ -20,6 +20,44 @@ describe("save / load", () => {
     expect(back?.progress).toEqual(p);
     expect(back?.player).toEqual({ x: 3.5, z: 2, yaw: 1 });
     expect(back?.seconds).toBe(321);
+  });
+
+  it("round-trips Phase 2 progress (endings, journal lines)", () => {
+    let p = { ...midGame(), endings: 1 };
+    p = solve(solve(p, "river"), "bridge");
+    p = describeLine(discover(p, "puff"), "puff", "size");
+    const back = decodeSave(encodeSave(p, { x: 37, z: -30, yaw: 0 }, 900));
+    expect(back?.progress).toEqual(p);
+    expect(back?.v).toBe(2);
+  });
+
+  it("migrates a Phase 1 (v1) save instead of discarding it", () => {
+    const v1 = (finished: boolean) => {
+      const { endings: _e, ...rest } = solve(midGame(), "river");
+      const monsters = Object.fromEntries(
+        Object.entries(rest.monsters).map(([id, r]) => {
+          const { described: _d, ...old } = r;
+          return [id, old];
+        })
+      );
+      return JSON.stringify({ v: 1, progress: { ...rest, monsters, finished }, player: { x: 30, z: -2, yaw: 1 }, seconds: 640 });
+    };
+    const done = decodeSave(v1(true))!;
+    expect(done.progress.endings).toBe(1);
+    expect(done.progress.solved).toEqual(["fallenPalm", "river"]);
+    expect(done.progress.monsters.leafy.friend).toBe(true);
+    expect(done.progress.monsters.leafy.described).toEqual({});
+    expect(done.seconds).toBe(640);
+    expect(decodeSave(v1(false))!.progress.endings).toBe(0);
+  });
+
+  it("an ending never stands without its obstacle", () => {
+    const forged = (endings: number, solved: string[]) =>
+      decodeSave(JSON.stringify({ v: 2, progress: { ...newProgress(), solved, endings }, player: {} }))!.progress.endings;
+    expect(forged(2, ["fallenPalm", "river"])).toBe(1);
+    expect(forged(1, ["fallenPalm"])).toBe(0);
+    expect(forged(2, ["fallenPalm", "river", "bridge", "cliff"])).toBe(2);
+    expect(forged(9, ["fallenPalm", "river", "bridge", "cliff"])).toBe(2);
   });
 
   it("discards unknown versions and broken text", () => {
@@ -45,7 +83,7 @@ describe("save / load", () => {
     expect(s.progress.monsters.bubbo.friend).toBe(false);
     expect(s.progress.active).toBe("leafy");
     expect(s.progress.solved).toEqual([]);
-    expect(s.progress.finished).toBe(false);
+    expect(s.progress.endings).toBe(0);
     expect(s.progress.bag).toEqual({ apples: 3 });
     expect(s.progress.said).toEqual(["likeApples"]);
     expect(Number.isNaN(s.player.x)).toBe(true);

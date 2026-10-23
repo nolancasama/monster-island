@@ -1,4 +1,5 @@
-import type { AbilityId, ColorId, FoodId, MonsterId, Text, Vec2 } from "../types";
+import type { AbilityId, ColorId, FoodId, MonsterId, PartId, SizeId, Text, Vec2 } from "../types";
+import { PUFF_PERCH, PUFF_TREE, FOREST_BERRY_BUSHES } from "../world/island";
 
 /**
  * Every monster is data. Adding one means a definition here, a model in
@@ -9,6 +10,10 @@ export interface MonsterDef {
   id: MonsterId;
   name: string;
   color: ColorId;
+  /** "It's small." / "It's big." on its journal page. */
+  size: SizeId;
+  /** "It has wings." — the body-part line its journal page asks for (null: none). */
+  part: PartId | null;
   favorite: FoodId;
   /** Truthful answers to "Can you ___?" (everything else is "No, I can't."). */
   can: AbilityId[];
@@ -29,12 +34,16 @@ export interface MonsterDef {
   temper: "shy" | "curious";
   /** Collision and follow radius (m). */
   radius: number;
+  /** Shy fliers wait up here (y = height above the ground) until called down with "Come here!". */
+  perch?: Vec2 & { y: number };
 }
 
 export const MONSTERS: Record<MonsterId, MonsterDef> = {
   leafy: {
     id: "leafy",
     name: "Leafy",
+    size: "small",
+    part: null,
     color: "green",
     favorite: "apples",
     can: ["grow", "jump"],
@@ -51,6 +60,8 @@ export const MONSTERS: Record<MonsterId, MonsterDef> = {
   bubbo: {
     id: "bubbo",
     name: "Bubbo",
+    size: "big",
+    part: null,
     color: "blue",
     favorite: "fish",
     can: ["swim", "jump"],
@@ -67,22 +78,27 @@ export const MONSTERS: Record<MonsterId, MonsterDef> = {
   puff: {
     id: "puff",
     name: "Puff",
+    size: "small",
+    part: "wings",
     color: "purple",
     favorite: "berries",
     can: ["fly"],
     power: "fly",
     powerLine: { en: "I can fly!", ja: "とべるよ" },
     habitat: { en: "Forest: hills", ja: "もり・おか" },
-    home: { x: 40, z: -30, r: 3 },
-    foodSpot: { x: 40, z: -30 },
+    home: { x: PUFF_TREE.x, z: PUFF_TREE.z + 2.2, r: 2.6 },
+    foodSpot: FOREST_BERRY_BUSHES[0],
     phase: 2,
     voice: { pitch: 1.4, rate: 0.95 },
     temper: "shy",
-    radius: 0.45
+    radius: 0.4,
+    perch: PUFF_PERCH
   },
   ember: {
     id: "ember",
     name: "Ember",
+    size: "big",
+    part: "tail",
     color: "orange",
     favorite: "meat",
     can: ["fire", "jump"],
@@ -102,8 +118,9 @@ export const MONSTERS: Record<MonsterId, MonsterDef> = {
 export const MONSTER_ORDER: MonsterId[] = ["leafy", "bubbo", "puff", "ember"];
 
 /** Monsters that exist in the world in this build. */
-export const BUILT_PHASE = 1;
+export const BUILT_PHASE = 2;
 export const LIVE_MONSTERS: MonsterId[] = MONSTER_ORDER.filter((id) => MONSTERS[id].phase <= BUILT_PHASE);
+export const monstersOfPhase = (phase: number): MonsterId[] => MONSTER_ORDER.filter((id) => MONSTERS[id].phase === phase);
 
 export const COLOR_WORD: Record<ColorId, string> = { green: "green", blue: "blue", orange: "orange", purple: "purple" };
 export const COLOR_HEX: Record<ColorId, string> = { green: "#5cc24a", blue: "#3f9fe8", orange: "#ff8a2a", purple: "#a070e0" };

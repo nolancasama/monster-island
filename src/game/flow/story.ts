@@ -2,19 +2,21 @@ import { MONSTERS, LIVE_MONSTERS } from "../data/monsters";
 import { FOODS } from "../data/foods";
 import { friends, newProgress, objective, type Progress } from "../logic/progress";
 import { clearSave, encodeSave, readSave, writeSave } from "../logic/save";
-import { getGame, setGame, useGame } from "../store";
+import { getGame, setGame, toast, useGame } from "../store";
 import { animate, effect, resetRuntime, rt } from "../runtime";
-import { CROSSING, MAPLE, MONSTER_STONE, SPAWN, groundY } from "../world/island";
-import { PLAYER_R, isWalkable, nearestWalkable } from "../world/collision";
+import { BRAMBLE, CLIFF_TOP_SPOT, CROSSING, MAPLE, MONSTER_STONE, ROPE, SPAWN, VOLCANO, groundY } from "../world/island";
+import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { say, wait } from "./ask";
 import { fadeThrough, frameTwo, run, shot } from "./script";
+import { poofTo, besidePlayer } from "./companion";
 import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
 
 /**
  * Starting, continuing, saving, the intro with Professor Maple, Maple's
- * hints and the Phase 1 ending at the Monster Stone.
+ * hints, the Phase 1 ending at the Monster Stone (which opens the forest)
+ * and the Phase 2 ending on the cliff top.
  */
 
 // ------------------------------------------------------------ save
@@ -25,8 +27,8 @@ export function saveNow() {
   const g = getGame();
   if (g.screen === "title") return;
   const p = rt.player;
-  // Never save mid-ride: resume at the bank instead.
-  const at = p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : { x: p.x, z: p.z };
+  // Never save mid-ride or mid-climb: resume at the bank or the foot of the rope instead.
+  const at = p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? { x: ROPE.x, z: ROPE.z + 1.4 } : { x: p.x, z: p.z };
   const text = encodeSave(g.progress, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
   if (text === lastSaved) return;
   lastSaved = text;
@@ -51,19 +53,23 @@ export function hasSaved(): boolean {
 
 // ------------------------------------------------------------ start
 
-/** Put the world in line with saved progress (palm moved, stones up, companion beside you). */
+/** Put the world in line with saved progress (palm moved, stones up, bridge fixed, rope up, companion beside you). */
 function applyWorld(p: Progress) {
   rt.palm = rt.palmTarget = p.solved.includes("fallenPalm") ? 1 : 0;
   rt.vines = rt.palm;
   rt.stones = rt.stonesTarget = p.solved.includes("river") ? 1 : 0;
+  rt.bridge = rt.bridgeTarget = p.solved.includes("bridge") ? 1 : 0;
+  rt.rope = p.solved.includes("cliff") ? 1 : 0;
+  rt.bramble = rt.brambleTarget = p.endings >= 1 ? 0 : 1;
   for (const id of LIVE_MONSTERS) {
     rt.monsters[id].noticed = p.monsters[id].discovered;
-    rt.stoneGlow[id] = p.finished && p.monsters[id].friend ? 1 : 0;
+    // A symbol lights at its phase's ending.
+    rt.stoneGlow[id] = p.endings >= MONSTERS[id].phase && p.monsters[id].friend ? 1 : 0;
   }
   if (p.active) {
     const m = rt.monsters[p.active];
     m.mode = "follow";
-    const spot = nearestWalkable(rt.player.x - 1.4, rt.player.z + 0.6, MONSTERS[p.active].radius, { solved: p.solved });
+    const spot = nearestWalkable(rt.player.x - 1.4, rt.player.z + 0.6, MONSTERS[p.active].radius, gatesOf(p));
     m.x = spot.x;
     m.z = spot.z;
   }
@@ -114,7 +120,7 @@ export async function continueGame() {
   if (!save) return newGame();
   resetRuntime();
   const p = save.progress;
-  const gates = { solved: p.solved };
+  const gates = gatesOf(p);
   const spot = Number.isFinite(save.player.x) && isWalkable(save.player.x, save.player.z, gates, PLAYER_R) ? save.player : SPAWN;
   const safe = nearestWalkable(spot.x, spot.z, PLAYER_R, gates);
   rt.player.x = safe.x;
@@ -168,7 +174,11 @@ export function talkToMaple(): Promise<void> {
     switch (o.id) {
       case "findMonster":
         if (o.monster === "leafy") await say("maple", "Monsters like food. Look near the apple trees!", "モンスターは たべものが すき。りんごの木の ちかくを さがしてみて!");
-        else await say("maple", "A water monster lives by the river!", "かわの ちかくに みずの モンスターが いるよ!");
+        else if (o.monster === "bubbo") await say("maple", "A water monster lives by the river!", "かわの ちかくに みずの モンスターが いるよ!");
+        else await say("maple", "A shy monster lives on the forest hills. Look up in the trees!", "もりの おかに はずかしがりやの モンスターが いるよ。木の 上を みてみて!");
+        break;
+      case "describe":
+        await say("maple", `Tell me about ${name(o.monster)}! Look at it.`, `${name(o.monster)}の ことを えいごで ずかんに かこう!`);
         break;
       case "askFood":
         await say("maple", `Ask ${name(o.monster)}: "Do you like ...?"`, `${name(o.monster)}に「Do you like ...?」と きいてみよう!`);
@@ -181,14 +191,24 @@ export function talkToMaple(): Promise<void> {
         break;
       case "obstacle":
         if (o.obstacle === "fallenPalm") await say("maple", "A palm tree fell on the path. Ask your monster friend!", "みちに ヤシの木が たおれている。モンスターに「Can you help me?」と きいてみよう!");
-        else if (o.helper && p.active !== o.helper) await say("maple", `Who can swim? Choose ${name(o.helper)} in your journal!`, `およげるのは だれ? ずかんで ${name(o.helper)}を えらぼう!`);
-        else await say("maple", "Go to the river and ask!", "かわへ いって きいてみよう!");
+        else if (o.obstacle === "river") {
+          if (o.helper && p.active !== o.helper) await say("maple", `Who can swim? Choose ${name(o.helper)} in your journal!`, `およげるのは だれ? ずかんで ${name(o.helper)}を えらぼう!`);
+          else await say("maple", "Go to the river and ask!", "かわへ いって きいてみよう!");
+        } else if (o.obstacle === "bridge") {
+          if (o.helper && p.active !== o.helper) await say("maple", `The forest bridge is broken. Who can help? Choose ${name(o.helper)}!`, `もりの はしが こわれている。ずかんで ${name(o.helper)}を えらぼう!`);
+          else await say("maple", "Go into the forest. The bridge is broken. Ask your friend!", "もりへ いこう。こわれた はしで「Can you help me?」と きいてみよう!");
+        } else if (o.helper && p.active !== o.helper) await say("maple", `Who can fly? Choose ${name(o.helper)} in your journal!`, `とべるのは だれ? ずかんで ${name(o.helper)}を えらぼう!`);
+        else await say("maple", "The cliff is very high. Who can fly?", "がけが たかい! とべる モンスターに きいてみよう!");
         break;
       case "stone":
         await say("maple", "What is that old stone across the river?", "かわの むこうの ふるい いしは なんだろう?");
         break;
+      case "cliffTop":
+        await say("maple", "Climb the rope! What can you see?", "ロープを のぼろう! なにが みえるかな?");
+        break;
       default:
-        await say("maple", "Two more monsters live on this island!", "この しまには あと 2ひき モンスターが いるよ!");
+        if (p.endings >= 2) await say("maple", "One more monster lives on the volcano!", "かざんに あと 1ぴき モンスターが いるよ!");
+        else await say("maple", "Two more monsters live on this island!", "この しまには あと 2ひき モンスターが いるよ!");
     }
     m.talking = false;
   });
@@ -196,7 +216,8 @@ export function talkToMaple(): Promise<void> {
 
 export function readSign(): Promise<void> {
   return run(async () => {
-    await say("self", "The forest! Let's explore it next time.", "もりだ! つぎは ここを たんけんしよう。");
+    if (getGame().progress.endings >= 1) await say("self", "The forest! The path is open.", "もりだ! みちが ひらいている。");
+    else await say("self", "The forest! The path is closed. Not yet!", "もりだ! でも みちが ふさがっている。まだ いけないみたい。");
   });
 }
 
@@ -257,12 +278,71 @@ export function stoneEnding(): Promise<void> {
     await say("maple", "Wow! You did it!", "すごい! やったね!");
     await say("maple", `${names.join(" and ")} are your friends!`, `${names.join("と ")}は きみの ともだち!`);
     await say("maple", "Look! Two lights are still dark.", "みて! まだ 2つ ひかって いないよ。");
-    await say("maple", "Two more monsters live on this island. Let's find them next time!", "この しまには あと 2ひき モンスターが いる。つぎは その モンスターを さがそう!");
+    await say("maple", "Two more monsters live on this island. One lives in the forest!", "この しまには あと 2ひき モンスターが いる。1ぴきは もりに いるよ!");
     rt.maple.talking = false;
-    setGame((g) => ({ progress: { ...g.progress, finished: true } }));
+    // The bramble on the forest path withers away.
+    await fadeThrough(() => {
+      const by = groundY(BRAMBLE.x, BRAMBLE.z);
+      shot({ x: BRAMBLE.x - 2.5, y: by + 2.6, z: BRAMBLE.z + 8.5 }, { x: BRAMBLE.x, y: by + 1, z: BRAMBLE.z - 1 });
+    });
+    rt.brambleTarget = 0;
+    audio.play("vines");
+    await wait(1600);
+    await say("maple", "The forest path is open now!", "もりへの みちが ひらいたよ!");
+    setGame((g) => ({ progress: { ...g.progress, endings: Math.max(g.progress.endings, 1) } }));
     saveNow();
     setGame({ screen: "results", seconds: Math.round(rt.playTime) });
   });
+}
+
+/** The cliff top: the volcano in the distance, the third light, the Phase 2 ending. */
+export async function cliffTopEnding(): Promise<void> {
+  const p = getGame().progress;
+  // Further back from the edge than where the rope arrives, so the camera stands on the cliff top too.
+  const top = { x: CLIFF_TOP_SPOT.x + 1, z: CLIFF_TOP_SPOT.z - 2 };
+  const gy = groundY(top.x, top.z);
+  rt.player.frozen = true;
+  const toV = Math.atan2(VOLCANO.x - top.x, VOLCANO.z - top.z);
+  await fadeThrough(() => {
+    rt.player.x = top.x;
+    rt.player.z = top.z;
+    rt.player.vx = rt.player.vz = 0;
+    rt.player.yaw = toV;
+    friends(p).forEach((id, i) => {
+      const m = rt.monsters[id];
+      m.mode = "script";
+      const side = i === 0 ? -1.4 : i === 1 ? 1.4 : 0;
+      m.x = top.x + side + Math.sin(toV) * (i === 2 ? -1.2 : 0.2);
+      m.z = top.z + Math.cos(toV) * (i === 2 ? -1.2 : 0.2) + (i === 2 ? 0 : 0.6);
+      m.look = { x: VOLCANO.x, z: VOLCANO.z };
+      m.yaw = toV;
+    });
+    // From the south-west corner of the cliff top: the group on the right, the smoking volcano beyond.
+    shot({ x: top.x - 4, y: gy + 2.2, z: top.z + 3 }, { x: top.x + Math.sin(toV) * 30, y: gy + 6, z: top.z + Math.cos(toV) * 30 });
+  }, 300);
+  audio.startMusic("celebrate");
+  await wait(1400);
+  for (const id of friends(p)) {
+    animate(id, "yes");
+    audio.voice(id, "excited");
+    await wait(300);
+  }
+  await say("self", "Wow! A volcano!", "わあ! かざんだ!");
+  // Maple calls on the radio: the player and the companion listen.
+  const listener = p.active ? rt.monsters[p.active] : null;
+  if (listener) {
+    listener.look = { x: rt.player.x, z: rt.player.z };
+    frameTwo(rt.player, listener);
+  }
+  await say("maple", "Can you hear me? This is Maple!", "きこえる? メイプルだよ!");
+  await say("maple", "The Monster Stone has a new light!", "モンスターストーンに あたらしい ひかりが ついたよ!");
+  // The stone back on the beach lights Puff's symbol (seen there afterwards).
+  for (const id of friends(p)) if (MONSTERS[id].phase === 2) rt.stoneGlow[id] = 1;
+  toast({ en: "A new light on the Monster Stone!", ja: "モンスターストーンが ひかった!", icon: "star", tone: "good" });
+  await say("maple", "One more monster lives on the volcano. Let's find it next time!", "かざんに あと 1ぴき モンスターが いる。つぎは その モンスターを さがそう!");
+  setGame((g) => ({ progress: { ...g.progress, endings: 2 } }));
+  saveNow();
+  setGame({ screen: "results", seconds: Math.round(rt.playTime) });
 }
 
 /** "Keep exploring" from the results card. */
@@ -275,6 +355,13 @@ export function keepExploring() {
     const m = rt.monsters[id];
     m.look = null;
     m.mode = id === active ? "follow" : "wander";
+    // Friends gathered for an ending go home, except the one following.
+    const home = MONSTERS[id].home;
+    if (id !== active && Math.hypot(m.x - home.x, m.z - home.z) > 8) poofTo(id, home.x, home.z);
+  }
+  if (active) {
+    const spot = besidePlayer();
+    if (Math.hypot(rt.monsters[active].x - spot.x, rt.monsters[active].z - spot.z) > 4) poofTo(active, spot.x, spot.z);
   }
   audio.startMusic("island");
   rt.camera.snap = true;

@@ -3,7 +3,7 @@ import { FOODS } from "../data/foods";
 import { isSolved, objective } from "../logic/progress";
 import { getGame, type Focus } from "../store";
 import { rt } from "../runtime";
-import { CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, INTERACT_RANGE, MONSTER_STONE } from "../world/island";
+import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, INTERACT_RANGE, MONSTER_STONE, ROPE } from "../world/island";
 import type { Vec2 } from "../types";
 
 /**
@@ -28,7 +28,8 @@ function candidates(): Candidate[] {
     const m = rt.monsters[id];
     const r = p.monsters[id];
     const name = r.discovered ? MONSTERS[id].name : "???";
-    add({ id, kind: "monster", verb: r.friend ? "Choose" : "Talk to", noun: name, x: m.x, z: m.z }, 2.7);
+    // A flier still up in its tree is reached from below it.
+    add({ id, kind: "monster", verb: r.friend ? "Choose" : "Talk to", noun: name, x: m.x, z: m.z }, MONSTERS[id].perch && !r.discovered ? 3.2 : 2.7);
   }
   for (const s of FOOD_SOURCES) {
     if (rt.taken.has(s.id)) continue;
@@ -37,7 +38,13 @@ function candidates(): Candidate[] {
   }
   if (!isSolved(p, "fallenPalm")) add({ id: "fallenPalm", kind: "obstacle", verb: "Look at", noun: "the tree", x: FALLEN_PALM.x - 1, z: FALLEN_PALM.z }, 2.9);
   else if (!isSolved(p, "river")) add({ id: "river", kind: "obstacle", verb: "Cross", noun: "the river", x: CROSSING.west.x, z: CROSSING.west.z }, 2.6);
-  if (isSolved(p, "river")) add({ id: "stone", kind: "stone", verb: "Look at", noun: "the stone", x: MONSTER_STONE.x, z: MONSTER_STONE.z }, 3);
+  if (isSolved(p, "river") && p.endings < 1) add({ id: "stone", kind: "stone", verb: "Look at", noun: "the stone", x: MONSTER_STONE.x, z: MONSTER_STONE.z }, 3);
+  if (p.endings >= 1 && isSolved(p, "river") && !isSolved(p, "bridge")) add({ id: "bridge", kind: "obstacle", verb: "Look at", noun: "the bridge", x: BRIDGE.x, z: BRIDGE.z1 + 0.6 }, 2.6);
+  if (isSolved(p, "bridge") && !isSolved(p, "cliff")) add({ id: "cliff", kind: "obstacle", verb: "Look at", noun: "the cliff", x: ROPE.x, z: ROPE.z + 0.2 }, 2.8);
+  if (isSolved(p, "cliff")) {
+    add({ id: "ropeUp", kind: "rope", verb: "Climb", noun: "the rope", x: ROPE.x, z: ROPE.z + 0.2 }, 2.4);
+    add({ id: "ropeDown", kind: "rope", verb: "Climb down", noun: "the rope", x: CLIFF_TOP_SPOT.x, z: CLIFF_TOP_SPOT.z + 0.8 }, 2.2);
+  }
   add({ id: "sign", kind: "sign", verb: "Read", noun: "the sign", x: FOREST_SIGN.x, z: FOREST_SIGN.z }, 2);
   return out;
 }
@@ -76,10 +83,11 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
     case "findMonster":
       // Discovery is the fun part: the star appears only if the student wanders a while.
       if (rt.idle < 20) return null;
-      return { x: rt.monsters[o.monster].x, z: rt.monsters[o.monster].z, y: 1.9 };
+      return { x: rt.monsters[o.monster].x, z: rt.monsters[o.monster].z, y: 1.9 + rt.monsters[o.monster].air };
+    case "describe":
     case "askFood":
     case "giveFood":
-      return { x: rt.monsters[o.monster].x, z: rt.monsters[o.monster].z, y: 1.9 };
+      return { x: rt.monsters[o.monster].x, z: rt.monsters[o.monster].z, y: 1.9 + rt.monsters[o.monster].air };
     case "getFood": {
       const sources = FOOD_SOURCES.filter((s) => s.food === o.food);
       let best = sources[0];
@@ -87,9 +95,14 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       return { x: best.x, z: best.z, y: o.food === "fish" ? 1.6 : 1.4 };
     }
     case "obstacle":
-      return o.obstacle === "fallenPalm" ? { x: FALLEN_PALM.x, z: FALLEN_PALM.z, y: 2.6 } : { x: CROSSING.west.x + 0.4, z: CROSSING.west.z, y: 1.8 };
+      if (o.obstacle === "fallenPalm") return { x: FALLEN_PALM.x, z: FALLEN_PALM.z, y: 2.6 };
+      if (o.obstacle === "river") return { x: CROSSING.west.x + 0.4, z: CROSSING.west.z, y: 1.8 };
+      if (o.obstacle === "bridge") return { x: BRIDGE.x, z: BRIDGE.z1 + 0.4, y: 1.8 };
+      return { x: ROPE.x, z: ROPE.z, y: 2.4 };
     case "stone":
       return { x: MONSTER_STONE.x, z: MONSTER_STONE.z, y: 3.6 };
+    case "cliffTop":
+      return { x: ROPE.x, z: ROPE.z, y: 2.4 };
     default:
       return null;
   }

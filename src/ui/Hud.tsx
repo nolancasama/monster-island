@@ -12,6 +12,11 @@ import { Icon } from "./icons";
 import { Portrait } from "./Portraits";
 import { Ja } from "./Talk";
 import { UI, objectiveText } from "./i18n";
+import { rt } from "../game/runtime";
+import type { MonsterId } from "../game/types";
+
+/** How high a monster floats (a flier up in its tree carries its label with it). */
+const rtAir = (id: string) => rt.monsters[id as MonsterId]?.air ?? 0;
 
 /** Shown while exploring: during a scene the next goal would give the story away. */
 function ObjectiveCard() {
@@ -137,7 +142,8 @@ function FocusLabel() {
       const f = getGame().focus;
       const cam = cameraRef.current;
       if (!el || !f || !cam) return;
-      const h = f.kind === "monster" ? 1.7 : f.kind === "maple" ? 2.2 : f.kind === "stone" ? 4.2 : 1.3;
+      const air = f.kind === "monster" ? rtAir(f.id) : 0;
+      const h = (f.kind === "monster" ? 1.7 : f.kind === "maple" ? 2.2 : f.kind === "stone" ? 4.2 : f.kind === "rope" ? 1.9 : 1.3) + air;
       v.set(f.x, standY(f.x, f.z, getGame().progress.solved) + h, f.z).project(cam);
       el.style.transform = `translate(-50%, -100%) translate(${((v.x + 1) / 2) * window.innerWidth}px, ${((1 - v.y) / 2) * window.innerHeight}px)`;
       el.style.visibility = v.z < 1 ? "visible" : "hidden";
@@ -172,6 +178,16 @@ function DiscoverCard() {
           {d.colored && (
             <span className="color-chip" style={{ background: COLOR_HEX[def.color] }}>
               It's {def.color}.
+            </span>
+          )}
+          {d.lines?.includes("size") && (
+            <span className="color-chip line-chip" data-testid="discover-size">
+              It's {def.size}.
+            </span>
+          )}
+          {d.lines?.includes("part") && def.part && (
+            <span className="color-chip line-chip" data-testid="discover-part">
+              {def.part === "wings" ? "It has wings." : "It has a tail."}
             </span>
           )}
         </div>

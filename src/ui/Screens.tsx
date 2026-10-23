@@ -86,9 +86,15 @@ export function ResultsScreen() {
   return (
     <div className="results ui" data-testid="results">
       <div className="results-card panel">
-        <h1>
-          Beach Adventure: Clear! <Ja>はまべの ぼうけん クリア!</Ja>
-        </h1>
+        {progress.endings >= 2 ? (
+          <h1>
+            Forest Adventure: Clear! <Ja>もりの ぼうけん クリア!</Ja>
+          </h1>
+        ) : (
+          <h1>
+            Beach Adventure: Clear! <Ja>はまべの ぼうけん クリア!</Ja>
+          </h1>
+        )}
         <div className="results-friends">
           {MONSTER_ORDER.map((id) => {
             const f = friends.includes(id);

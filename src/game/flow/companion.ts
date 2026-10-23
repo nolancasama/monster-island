@@ -2,7 +2,7 @@ import { MONSTERS } from "../data/monsters";
 import { setActive } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress } from "../store";
 import { effect, rt } from "../runtime";
-import { nearestWalkable } from "../world/collision";
+import { gatesOf, nearestWalkable } from "../world/collision";
 import { audio } from "../../audio/audio";
 import type { MonsterId } from "../types";
 
@@ -11,7 +11,7 @@ export function poofTo(id: MonsterId, x: number, z: number) {
   const m = rt.monsters[id];
   const def = MONSTERS[id];
   effect("poof", m.x, 0.6, m.z);
-  const p = nearestWalkable(x, z, def.radius, { solved: getGame().progress.solved }, def.can.includes("swim"));
+  const p = nearestWalkable(x, z, def.radius, gatesOf(getGame().progress), def.can.includes("swim"));
   m.x = p.x;
   m.z = p.z;
   m.poofT0 = rt.time;

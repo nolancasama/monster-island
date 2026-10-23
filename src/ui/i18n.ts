@@ -30,6 +30,8 @@ export function objectiveText(o: Objective): Text {
       return { en: "Meet Professor Maple", ja: "メイプルはかせに あおう" };
     case "findMonster":
       return { en: "Find a monster!", ja: "モンスターを さがそう!" };
+    case "describe":
+      return { en: `Write about ${name(o.monster)}`, ja: `${name(o.monster)}の ことを ずかんに かこう` };
     case "askFood":
       return { en: `What does ${name(o.monster)} like?`, ja: `${name(o.monster)}の すきな たべものを きこう` };
     case "getFood":
@@ -37,12 +39,15 @@ export function objectiveText(o: Objective): Text {
     case "giveFood":
       return { en: `Give ${FOODS[o.food].word} to ${name(o.monster)}`, ja: `${name(o.monster)}に あげよう` };
     case "obstacle":
-      return o.obstacle === "fallenPalm"
-        ? { en: "A tree is in the way!", ja: "木が みちを ふさいでいる!" }
-        : { en: "Cross the river!", ja: "かわを わたろう!" };
+      if (o.obstacle === "fallenPalm") return { en: "A tree is in the way!", ja: "木が みちを ふさいでいる!" };
+      if (o.obstacle === "river") return { en: "Cross the river!", ja: "かわを わたろう!" };
+      if (o.obstacle === "bridge") return { en: "Go into the forest!", ja: "もりへ いこう! こわれた はしが あるよ" };
+      return { en: "Climb the high cliff!", ja: "たかい がけを のぼろう!" };
     case "stone":
       return { en: "Look at the old stone", ja: "ふるい いしを しらべよう" };
+    case "cliffTop":
+      return { en: "Climb the rope!", ja: "ロープを のぼろう!" };
     default:
-      return { en: "Explore the beach!", ja: "はまべを たんけんしよう!" };
+      return { en: "Explore the island!", ja: "しまを たんけんしよう!" };
   }
 }

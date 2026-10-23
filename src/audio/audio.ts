@@ -33,7 +33,8 @@ export type SfxName =
   | "stone"
   | "poof"
   | "switch"
-  | "bump";
+  | "bump"
+  | "whoosh";
 
 /** Monster moods for vocalisations (the English itself is TTS). */
 export type Mood = "hello" | "happy" | "sad" | "excited" | "sleepy" | "surprised";
@@ -276,6 +277,11 @@ class AudioEngine {
       case "bump":
         this.tone(140, t, { to: 90, peak: 0.12, decay: 0.12, type: "triangle" });
         break;
+      case "whoosh":
+        // Wing beats rising into a rush of air.
+        for (let i = 0; i < 6; i++) this.noiseBurst(t + i * 0.1, { filter: "bandpass", freq: 700 + i * 120, q: 1.4, peak: 0.07, attack: 0.02, decay: 0.07 });
+        this.noiseBurst(t + 0.5, { filter: "bandpass", freq: 500, to: 2600, q: 0.7, peak: 0.12, attack: 0.15, decay: 0.6 });
+        break;
     }
   }
 
@@ -300,7 +306,13 @@ class AudioEngine {
         this.tone(f * 3.2, t + i * 0.11, { to: f * 1.6, peak: 0.03, attack: 0.004, decay: 0.05 });
       }
     } else if (id === "puff") {
-      for (let i = 0; i < 3; i++) this.tone(midi(91 + i * 2), t + i * 0.12, { peak: 0.05, attack: 0.03, decay: 0.2 });
+      // Puff: soft cooing trills, rising when happy, falling when sad.
+      const n = mood === "excited" ? 5 : mood === "sad" ? 2 : 3;
+      for (let i = 0; i < n; i++) {
+        const f = midi((up ? 88 : 84) + (up ? i * 3 : -i * 3));
+        this.tone(f, t + i * 0.13, { to: f * (up ? 1.12 : 0.88), peak: 0.06, attack: 0.03, decay: 0.16, type: "triangle" });
+        this.tone(f * 2, t + i * 0.13 + 0.03, { peak: 0.015, attack: 0.02, decay: 0.1 });
+      }
     } else {
       for (let i = 0; i < 3; i++) this.tone(midi(55 + i * 4), t + i * 0.1, { to: midi(60 + i * 4), peak: 0.1, decay: 0.1, type: "sawtooth" });
     }

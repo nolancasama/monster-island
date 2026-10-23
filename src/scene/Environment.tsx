@@ -12,9 +12,14 @@ import {
   X_EAST,
   X_WEST,
   Z_NORTH,
+  CLIFF_Z,
+  VOLCANO,
+  forestMask,
   groundY,
+  ravineDepth,
   shoreZ
 } from "../game/world/island";
+import { trailDistance } from "./Forest";
 import { makeRng } from "../game/logic/rng";
 import { flatMat, occluderMat, smoothMat } from "./materials";
 import { bouldersGeometry, bushGeometry, jungleTreeGeometry, palmsGeometry, rockGeometry } from "./models/nature";
@@ -98,6 +103,9 @@ const GRASS = new THREE.Color("#93c464");
 const JUNGLE = new THREE.Color("#4f8f45");
 const MUD = new THREE.Color("#a58a5c");
 const PATH = new THREE.Color("#e2c78f");
+const MOSS = new THREE.Color("#6da64e");
+const TRAIL_DIRT = new THREE.Color("#b89a66");
+const ROCK = new THREE.Color("#8a7c6a");
 
 /** The walking path that ties the beach together (camp → grove → pass → pier → river → stone). */
 export const PATH_POINTS: Array<[number, number]> = [
@@ -127,9 +135,10 @@ function pathDistance(x: number, z: number): number {
 }
 
 function terrainGeometry(): THREE.BufferGeometry {
-  const g = new THREE.PlaneGeometry(150, 70, 150, 70);
+  // From the sea (z 19) to well beyond the cliff top (z -91), 1 m cells.
+  const g = new THREE.PlaneGeometry(150, 110, 150, 110);
   g.rotateX(-Math.PI / 2);
-  g.translate(0, 0, -16);
+  g.translate(0, 0, -36);
   const p = g.attributes.position;
   const colors = new Float32Array(p.count * 3);
   const c = new THREE.Color();
@@ -147,6 +156,13 @@ function terrainGeometry(): THREE.BufferGeometry {
     const r = Math.min(x - RIVER.x0, RIVER.x1 - x);
     c.lerp(MUD, sstep(-1.6, 0.2, r));
     if (r < -1.2 && z > Z_NORTH) c.lerp(PATH, (1 - sstep(0.9, 1.7, pathDistance(x, z))) * 0.9);
+    // The forest: mossy floor, a trodden trail, bare rock in the ravine and on the cliff.
+    const f = forestMask(x, z);
+    if (f > 0) {
+      c.lerp(MOSS, f);
+      c.lerp(TRAIL_DIRT, f * (1 - sstep(0.7, 1.5, trailDistance(x, z))) * 0.85);
+      c.lerp(ROCK, f * Math.max(sstep(0.3, 1.2, ravineDepth(z)), z < CLIFF_Z + 0.2 && z > CLIFF_Z - 1.2 ? 1 : 0));
+    }
     const k = 0.95 + rand() * 0.07;
     colors[i * 3] = c.r * k;
     colors[i * 3 + 1] = c.g * k;
@@ -322,6 +338,8 @@ function jungleSpots(): { trees: Spot[]; bushes: Spot[] } {
       const px = x + (rand() - 0.5) * 1.4;
       const pz = Z_NORTH - 2.6 - row * 3.4 - rand() * 1.4;
       if (riverGap(px)) continue;
+      // The forest path cuts through the wall.
+      if (forestMask(px, pz) > 0.02) continue;
       trees.push({ x: px, z: pz, s: 0.95 + rand() * 0.55 + row * 0.08, r: rand() * 6.28, tint: 0.85 + rand() * 0.25 });
     }
   }
@@ -336,7 +354,7 @@ function jungleSpots(): { trees: Spot[]; bushes: Spot[] } {
   // Undergrowth along the jungle edge.
   for (let x = X_WEST - 6; x < X_EAST + 6; x += 1.8 + rand() * 2.2) {
     if (riverGap(x)) continue;
-    if (Math.abs(x - FOREST_SIGN.x) < 1.2) continue;
+    if (Math.abs(x - FOREST_SIGN.x) < 1.2 || forestMask(x, Z_NORTH - 1.2) > 0.02) continue;
     bushes.push({ x, z: Z_NORTH - 0.9 - rand() * 0.8, s: 0.7 + rand() * 0.6, r: rand() * 6, tint: 0.85 + rand() * 0.3 });
   }
   return { trees, bushes };
@@ -440,17 +458,26 @@ export function FarLand() {
     const hills: Array<[number, number, number, number, string]> = [
       [-60, -48, 26, 16, "#4f8f4a"],
       [-22, -58, 30, 20, "#457f42"],
-      [14, -62, 28, 22, "#4a8a45"],
-      [40, -50, 22, 18, "#518f49"],
+      [4, -72, 28, 22, "#4a8a45"],
+      [52, -64, 16, 14, "#518f49"],
       [-78, -20, 22, 10, "#5a9a52"],
       [80, -24, 22, 10, "#5a9a52"]
     ];
     hills.forEach(([x, z, r, h, c], i) => b.add(rockGeometry(r, h, 20 + i, 1), c, [x, -1, z]));
+    // Ridges beyond the forest, sitting on the rising jungle: they close the view north from the cliff top.
+    const ridges: Array<[number, number, number, number, string]> = [
+      [8, -84, 26, 16, "#4a8a45"],
+      [-26, -80, 30, 14, "#457f42"],
+      [-56, -70, 26, 12, "#4f8f4a"]
+    ];
+    ridges.forEach(([x, z, r, h, c], i) => b.add(rockGeometry(r, h, 40 + i, 1), c, [x, groundY(x, z) - 3, z]));
     // The volcano (Phase 3), north-east.
-    b.add(new THREE.ConeGeometry(30, 46, 9, 1, true), "#7a5a4a", [64, 20, -88]);
-    b.add(new THREE.CylinderGeometry(7.5, 9, 3, 9), "#5a4038", [64, 42.5, -88]);
-    b.add(new THREE.CylinderGeometry(6.8, 6.8, 0.6, 9), "#ff7a2a", [64, 44, -88]);
-    b.add(rockGeometry(18, 10, 31, 1), "#6f9a4a", [40, 2, -76]);
+    const v = VOLCANO;
+    // A truncated cone, so the crater rim sits on its top seen from the cliff too.
+    b.add(new THREE.CylinderGeometry(8.2, 30, 46, 9, 1, true), "#7a5a4a", [v.x, 20, v.z]);
+    b.add(new THREE.CylinderGeometry(7.5, 9, 3, 9), "#5a4038", [v.x, 42.5, v.z]);
+    b.add(new THREE.CylinderGeometry(6.8, 6.8, 0.6, 9), "#ff7a2a", [v.x, 44, v.z]);
+    b.add(rockGeometry(18, 10, 31, 1), "#6f9a4a", [40, 2, -78]);
     // Headlands at both ends.
     b.add(rockGeometry(9, 6, 50, 1), "#8f8a7f", [X_WEST - 8, -1, 9]);
     b.add(rockGeometry(9, 6, 52, 1), "#8f8a7f", [X_EAST + 9, -1, 10]);
@@ -474,7 +501,7 @@ function Smoke() {
     if (!m) return;
     for (let i = 0; i < 6; i++) {
       const k = (rt.time * 0.05 + i / 6) % 1;
-      o.position.set(64 + k * 18, 46 + k * 30, -88 + k * 6);
+      o.position.set(VOLCANO.x + k * 18, 46 + k * 30, VOLCANO.z + k * 6);
       o.scale.setScalar(3 + k * 9);
       o.updateMatrix();
       m.setMatrixAt(i, o.matrix);

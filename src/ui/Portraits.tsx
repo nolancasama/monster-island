@@ -86,16 +86,34 @@ function Puff({ dark }: { dark?: string }) {
   const c = (x: string) => dark ?? x;
   return (
     <g>
-      <path d="M28 50 C10 30 4 40 8 52 C14 50 20 52 28 58z" fill={c("#c49aff")} />
-      <path d="M72 50 C90 30 96 40 92 52 C86 50 80 52 72 58z" fill={c("#c49aff")} />
-      <circle cx="36" cy="56" r="16" fill={c("#a070e0")} />
-      <circle cx="64" cy="56" r="16" fill={c("#a070e0")} />
-      <circle cx="50" cy="46" r="20" fill={c("#a070e0")} />
-      <circle cx="50" cy="64" r="16" fill={c("#a070e0")} />
+      {/* Two big feathered wings, a fluffy round body, a curly tuft and little feet: no tail. */}
+      {[-1, 1].map((s) =>
+        [0, 1, 2].map((i) => (
+          <ellipse
+            key={`${s}${i}`}
+            cx={50 + s * (30 + i * 2)}
+            cy={44 + i * 8}
+            rx="15"
+            ry="6"
+            transform={`rotate(${s * (-28 + i * 22)} ${50 + s * (30 + i * 2)} ${44 + i * 8})`}
+            fill={c(["#c9a6ff", "#b48cf5", "#9f74e8"][i])}
+          />
+        ))
+      )}
+      <path d="M50 26 Q48 16 54 14 Q60 14 58 20" stroke={c("#7f4fcc")} strokeWidth="3" fill="none" strokeLinecap="round" />
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+        const a = (i / 8) * Math.PI * 2;
+        return <circle key={i} cx={50 + Math.cos(a) * 21} cy={54 + Math.sin(a) * 21} r="8" fill={c(i % 2 ? "#9a66dc" : "#ad80ea")} />;
+      })}
+      <circle cx="50" cy="54" r="24" fill={c("#a070e0")} />
+      <path d="M44 80 L42 90 M56 80 L58 90" stroke={c("#ffb347")} strokeWidth="2.5" strokeLinecap="round" />
       {!dark && (
         <>
-          <Eyes y={50} dx={9} />
-          <path d="M46 62 Q50 66 54 62" stroke="#4a2a7a" strokeWidth="2" fill="none" />
+          <ellipse cx="50" cy="62" rx="15" ry="13" fill="#e6d4ff" />
+          <Eyes y={48} dx={9} r={6} />
+          <path d="M47 57 L53 57 L50 62z" fill="#ffb347" />
+          <ellipse cx="35" cy="57" rx="4" ry="2.5" fill="#ff9ec0" />
+          <ellipse cx="65" cy="57" rx="4" ry="2.5" fill="#ff9ec0" />
         </>
       )}
     </g>

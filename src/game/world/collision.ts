@@ -20,6 +20,18 @@ import {
   BERRY_BUSH,
   MAPLE,
   FOREST_SIGN,
+  BRAMBLE,
+  BRIDGE,
+  CLIFF_TOP,
+  FOREST_BERRY_BUSHES,
+  FOREST_PATH,
+  FOREST_TREES,
+  GLADE,
+  HILLS,
+  PUFF_TREE,
+  ROPE,
+  forestBase,
+  inRavine,
   inRiver,
   groundY,
   shoreZ
@@ -58,7 +70,11 @@ export const STATIC_OBSTACLES: Obstacles = {
     { x: FISH_BASKET.x, z: FISH_BASKET.z, r: 0.42 },
     { x: MONSTER_STONE.x, z: MONSTER_STONE.z, r: 1 },
     { x: MAPLE.x, z: MAPLE.z, r: 0.4 },
-    { x: FOREST_SIGN.x, z: FOREST_SIGN.z, r: 0.25 }
+    { x: FOREST_SIGN.x, z: FOREST_SIGN.z, r: 0.25 },
+    ...FOREST_TREES.map((t) => ({ x: t.x, z: t.z, r: 0.55 * t.s })),
+    { x: PUFF_TREE.x, z: PUFF_TREE.z, r: 0.75 },
+    ...FOREST_BERRY_BUSHES.map((b) => ({ x: b.x, z: b.z, r: 0.75 })),
+    { x: ROPE.x, z: ROPE.z - 0.5, r: 0.3 }
   ],
   boxes: [
     { x0: CAMP.tent.x - 1.9, x1: CAMP.tent.x + 1.9, z0: CAMP.tent.z - 1.6, z1: CAMP.tent.z + 1.6 },
@@ -71,12 +87,25 @@ export const PALM_BLOCK: Box = { x0: FALLEN_PALM.x - 0.55, x1: FALLEN_PALM.x + 0
 
 export interface Gates {
   solved: readonly ObstacleId[];
+  /** The Phase 1 ending has played: the bramble is gone and the forest path is open. */
+  forest?: boolean;
 }
 
 export const CLOSED: Gates = { solved: [] };
 
+/** The gates a saved game has opened. */
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number }): Gates {
+  return { solved: p.solved, forest: p.endings >= 1 };
+}
+
+/** The bramble across the forest path while it is closed. */
+export const BRAMBLE_BLOCK: Box = { x0: FOREST_PATH.x0 - 1, x1: FOREST_PATH.x1 + 1, z0: BRAMBLE.z - 0.5, z1: BRAMBLE.z + 0.5 };
+
 export function obstaclesFor(gates: Gates): Obstacles[] {
-  return gates.solved.includes("fallenPalm") ? [STATIC_OBSTACLES] : [STATIC_OBSTACLES, { circles: [], boxes: [PALM_BLOCK] }];
+  const boxes: Box[] = [];
+  if (!gates.solved.includes("fallenPalm")) boxes.push(PALM_BLOCK);
+  if (!gates.forest) boxes.push(BRAMBLE_BLOCK);
+  return boxes.length ? [STATIC_OBSTACLES, { circles: [], boxes }] : [STATIC_OBSTACLES];
 }
 
 const inBox = (x: number, z: number, b: Box, m: number) => x >= b.x0 + m && x <= b.x1 - m && z >= b.z0 + m && z <= b.z1 - m;
@@ -90,10 +119,14 @@ const EAST: Box = { x0: RIDGE.x1 - 1, x1: RIVER.x0, z0: Z_NORTH, z1: 99 };
 const FAR: Box = { x0: RIVER.x1, x1: X_EAST, z0: Z_NORTH, z1: 99 };
 const STONES: Box = { x0: RIVER.x0 - 1.5, x1: RIVER.x1 + 1.5, z0: CROSSING.z - CROSSING.half, z1: CROSSING.z + CROSSING.half };
 
-/** Which part of the beach a point is in (for checkpoints and the camera). */
-export type Region = "west" | "east" | "far";
-export function regionAt(x: number): Region {
-  return x < (RIDGE.x0 + RIDGE.x1) / 2 ? "west" : x < (RIVER.x0 + RIVER.x1) / 2 ? "east" : "far";
+/** On the bridge deck (no margin along it, so it joins the land at both ends). */
+export function onBridge(x: number, z: number, m = 0): boolean {
+  return Math.abs(x - BRIDGE.x) <= BRIDGE.half - m && z >= BRIDGE.z0 && z <= BRIDGE.z1;
+}
+
+/** In the forest (north of the beach): the camera and ambience treat it as its own place. */
+export function inForest(x: number, z: number): boolean {
+  return x > FOREST_PATH.x0 - 6 && z < FOREST_PATH.z1 - 1.5;
 }
 
 /**
@@ -110,7 +143,15 @@ export function isWalkable(x: number, z: number, gates: Gates = CLOSED, m = 0, s
   }
   if (swimmer && inRiver(x, z, 0.2) && z > Z_NORTH + m) return true;
   if (gates.solved.includes("river") && inBox(x, z, STONES, m)) return true;
-  return false;
+  return gates.forest === true && forestWalkable(x, z, gates, m);
+}
+
+/** The forest: path, glade, (bridge), hills. The cliff top joins nothing: only the rope leads there. */
+function forestWalkable(x: number, z: number, gates: Gates, m: number): boolean {
+  if (gates.solved.includes("bridge") && onBridge(x, z, m)) return true;
+  if (inRavine(z, m)) return false;
+  if (inBox(x, z, FOREST_PATH, m) || inBox(x, z, GLADE, m) || inBox(x, z, HILLS, m)) return true;
+  return gates.solved.includes("cliff") && inBox(x, z, CLIFF_TOP, m);
 }
 
 /** Push a circle out of obstacles. */
@@ -210,7 +251,16 @@ export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED):
 export function standY(x: number, z: number, solved: readonly ObstacleId[]): number {
   const y = groundY(x, z);
   if (solved.includes("river") && inBox(x, z, STONES, -0.3)) return Math.max(y, STONE_TOP);
+  if (solved.includes("bridge") && onBridge(x, z, -0.3)) return Math.max(y, bridgeDeckY(z));
   return y;
+}
+
+/** The bridge deck: a straight span between the two lips of the ravine. */
+export function bridgeDeckY(z: number): number {
+  const a = forestBase(BRIDGE.x, BRIDGE.z0);
+  const b = forestBase(BRIDGE.x, BRIDGE.z1);
+  const t = Math.max(0, Math.min(1, (z - BRIDGE.z0) / (BRIDGE.z1 - BRIDGE.z0)));
+  return a + (b - a) * t + 0.12;
 }
 
 /** Top of a risen stepping stone (the river surface is at -0.3). */

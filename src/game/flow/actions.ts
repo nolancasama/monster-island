@@ -4,12 +4,12 @@ import { pickUp } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { effect, rt } from "../runtime";
 import { talkTo } from "./encounter";
-import { useObstacle } from "./obstacles";
-import { readSign, stoneEnding, talkToMaple } from "./story";
+import { climbRope, useObstacle } from "./obstacles";
+import { cliffTopEnding, readSign, stoneEnding, talkToMaple } from "./story";
 import { switchTo } from "./companion";
-import { isRunning } from "./script";
+import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
-import type { MonsterId } from "../types";
+import type { MonsterId, ObstacleId } from "../types";
 import { MONSTER_ORDER } from "../data/monsters";
 
 /** E / Enter / the touch action button. */
@@ -28,10 +28,17 @@ export function interact(f: Focus | null = getGame().focus) {
       void talkToMaple();
       return;
     case "obstacle":
-      void useObstacle(f.id as "fallenPalm" | "river");
+      void useObstacle(f.id as ObstacleId);
+      return;
+    case "rope":
+      void run(async () => {
+        const up = f.id === "ropeUp";
+        await climbRope(up);
+        if (up && getGame().progress.endings < 2) await cliffTopEnding();
+      });
       return;
     case "stone":
-      if (!getGame().progress.finished) void stoneEnding();
+      if (getGame().progress.endings < 1) void stoneEnding();
       return;
     case "sign":
       void readSign();

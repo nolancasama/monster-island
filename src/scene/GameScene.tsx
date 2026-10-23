@@ -4,6 +4,7 @@ import { rt } from "../game/runtime";
 import { tick } from "../game/sim";
 import { FarLand, River, Rocks, Sea, SkyAndLights, Terrain, Vegetation } from "./Environment";
 import { Props } from "./Props";
+import { Forest } from "./Forest";
 import { Maple, Player } from "./Characters";
 import { Monsters } from "./Monsters";
 import { Effects } from "./Effects";
@@ -75,6 +76,7 @@ export function GameScene() {
       <Vegetation />
       <FarLand />
       <Props />
+      <Forest />
       <Player />
       <Maple />
       <Monsters />

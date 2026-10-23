@@ -65,6 +65,9 @@ export function groundY(x: number, z: number): number {
   const dunes = 0.14 * Math.sin(x * 0.23 + z * 0.11) + 0.08 * Math.sin(x * 0.07 - z * 0.31 + 1.3);
   y += dunes * (1 - smooth((d + 9) / 6));
   if (z < Z_NORTH + 2) y += (Z_NORTH + 2 - z) * 0.22;
+  // The forest floor replaces the jungle slope where the forest is open land.
+  const f = forestMask(x, z);
+  if (f > 0) y = y * (1 - f) + forestFloor(x, z) * f;
   // The river channel.
   const r = riverDepth(x);
   if (r > -0.2) {
@@ -90,6 +93,88 @@ export const FISH_BASKET = { x: 13.6, z: 6.4 };
 export const MONSTER_STONE = { x: 33.6, z: -3.2 };
 export const FOREST_SIGN = { x: 31, z: -7.6 };
 
+// ------------------------------------------------------------------ forest (Phase 2)
+//
+//   far bank → path (bramble until the Phase 1 ending) → glade → |ravine + bridge| → hills (Puff) → |cliff + rope| → cliff top
+//
+// The forest lies north of the far bank, east of the river.
+
+/** The bramble that closes the forest path until the Phase 1 ending. */
+export const BRAMBLE = { x: 33.8, z: -10.4 };
+export const FOREST_PATH = { x0: 32.1, x1: 35.5, z0: -17.5, z1: -8 };
+export const GLADE = { x0: 29, x1: 46, z0: -25, z1: -16.5 };
+/** The ravine across the whole forest; the bridge spans it. */
+export const RAVINE = { z0: -28.4, z1: -24.6 };
+export const BRIDGE = { x: 37, half: 0.85, z0: RAVINE.z0 - 0.4, z1: RAVINE.z1 + 0.4 };
+export const HILLS = { x0: 29, x1: 47, z0: -45, z1: -27.6 };
+export const PUFF_TREE = { x: 41.5, z: -36.5 };
+/** Puff's nest on the tree's south branch (height above the ground). */
+export const PUFF_PERCH = { x: PUFF_TREE.x + 0.36, z: PUFF_TREE.z + 1.42, y: 2.45 };
+export const FOREST_BERRY_BUSHES: Vec2[] = [
+  { x: 38.2, z: -37.4 },
+  { x: 44.6, z: -33.2 }
+];
+/** Big forest trees standing in the open land (solid). */
+export const FOREST_TREES: Array<Vec2 & { s: number }> = [
+  { x: 34.2, z: -19.6, s: 1.15 },
+  { x: 42.6, z: -20.8, s: 1.3 },
+  { x: 30.6, z: -22.8, s: 1 },
+  { x: 45, z: -17.8, s: 1.1 },
+  { x: 32, z: -31.2, s: 1.2 },
+  { x: 46, z: -29.6, s: 1 },
+  { x: 39.2, z: -42.4, s: 1.25 },
+  { x: 45.4, z: -41.8, s: 1.1 },
+  { x: 30.4, z: -37.8, s: 1 }
+];
+/** The high cliff at the north edge of the hills; the rope hangs at ROPE. */
+export const CLIFF_Z = -45.4;
+export const ROPE = { x: 34, z: CLIFF_Z + 0.9 };
+export const CLIFF_HEIGHT = 6.5;
+/** The cliff top (reached only by the rope). */
+export const CLIFF_TOP = { x0: 29.5, x1: 40, z0: -52, z1: CLIFF_Z - 0.6 };
+export const CLIFF_TOP_SPOT = { x: 34, z: CLIFF_Z - 2.2 };
+/** Far away to the north-east: where Phase 3 goes. */
+export const VOLCANO = { x: 70, z: -112 };
+
+type Area = { x0: number; x1: number; z0: number; z1: number };
+/** Open forest land (the bridge deck is not ground). */
+export const FOREST_AREAS: Area[] = [FOREST_PATH, GLADE, HILLS, CLIFF_TOP];
+
+const outside = (x: number, z: number, b: Area) => Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
+
+/** 1 on open forest land, fading to 0 three metres into the jungle around it. */
+export function forestMask(x: number, z: number): number {
+  if (z > -4 || x < 24 || x > 52) return 0;
+  let d = Infinity;
+  for (const a of FOREST_AREAS) d = Math.min(d, outside(x, z, a));
+  // The ravine walls run the whole width of the forest.
+  if (z < RAVINE.z1 + 1 && z > RAVINE.z0 - 1 && x > GLADE.x0 && x < GLADE.x1) d = 0;
+  return 1 - smooth(d / 3);
+}
+
+/** Depth carved by the ravine (0 outside it). */
+export function ravineDepth(z: number): number {
+  const r = Math.min(z - RAVINE.z0, RAVINE.z1 - z);
+  return r > -0.4 ? 3.4 * smooth((r + 0.4) / 1.3) : 0;
+}
+
+export function inRavine(z: number, margin = 0): boolean {
+  return z > RAVINE.z0 - margin && z < RAVINE.z1 + margin;
+}
+
+/** The forest floor without the ravine (the bridge deck sits at this height). */
+export function forestBase(x: number, z: number): number {
+  const climb = 0.8 + Math.max(0, -9 - z) * 0.05;
+  const hills = smooth((RAVINE.z0 - z) / 4) * (0.45 * Math.sin(x * 0.35 + 1.1) * Math.sin(z * 0.3) + 0.35 * Math.sin(x * 0.13 - z * 0.21));
+  const bumps = 0.12 * Math.sin(x * 0.5 + z * 0.37) + 0.08 * Math.sin(x * 0.21 - z * 0.6);
+  const top = CLIFF_HEIGHT * smooth((CLIFF_Z - z) / 0.9);
+  return climb + hills + bumps + top;
+}
+
+export function forestFloor(x: number, z: number): number {
+  return forestBase(x, z) - ravineDepth(z);
+}
+
 export interface FoodSource {
   id: string;
   food: FoodId;
@@ -105,7 +190,9 @@ export const FOOD_SOURCES: FoodSource[] = [
   { id: "apple2", food: "apples", x: -12.1, z: -5.6, regrow: 6 },
   { id: "banana", food: "bananas", x: -31.4, z: 2.6, regrow: 6 },
   { id: "berry", food: "berries", x: -7.4, z: -4.3, regrow: 6 },
-  { id: "fish", food: "fish", x: FISH_BASKET.x, z: FISH_BASKET.z, regrow: 4 }
+  { id: "fish", food: "fish", x: FISH_BASKET.x, z: FISH_BASKET.z, regrow: 4 },
+  { id: "berry2", food: "berries", x: 38.2, z: -36.2, regrow: 6 },
+  { id: "berry3", food: "berries", x: 44.6, z: -32, regrow: 6 }
 ];
 
 export const INTERACT_RANGE = 2.2;

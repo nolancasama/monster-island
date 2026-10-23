@@ -96,10 +96,12 @@ test("discover, befriend and use both monsters to reach the Monster Stone (mic-f
   // ---- The Monster Stone ending.
   await hook(page, "teleport", 31, -0.5, 0.5);
   s = await waitFor(page, (x) => x.screen === "results", 60_000, "results");
-  expect(s.progress.finished).toBe(true);
+  expect(s.progress.endings).toBe(1);
   await expect(page.getByTestId("results-said")).toContainText("Do you like apples?");
   await expect(page.getByTestId("results-said")).toContainText("Can you swim?");
   await page.getByTestId("btn-explore").click();
   await waitFor(page, (x) => x.screen === "game" && x.mode === "explore", 5_000, "free play");
+  // The ending opened the forest path.
+  await waitFor(page, (x) => x.bramble < 0.2, 10_000, "bramble gone");
   expect(errors).toEqual([]);
 });

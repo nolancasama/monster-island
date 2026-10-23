@@ -1,4 +1,4 @@
-import { MONSTERS, LIVE_MONSTERS, MONSTER_ORDER, type MonsterDef } from "../data/monsters";
+import { MONSTERS, MONSTER_ORDER, monstersOfPhase, type MonsterDef } from "../data/monsters";
 import { BAG_MAX, FOODS } from "../data/foods";
 import type { AbilityId, Bag, FoodId, MonsterId, ObstacleId } from "../types";
 import type { PhraseId } from "./english";
@@ -16,6 +16,8 @@ export interface MonsterRecord {
   friend: boolean;
   /** "Can you ___?" answers heard from this monster. */
   canKnown: Partial<Record<AbilityId, boolean>>;
+  /** Journal lines said beyond the colour: "It's small." (size), "It has wings." (part). */
+  described: { size?: boolean; part?: boolean };
 }
 
 export interface Progress {
@@ -25,18 +27,18 @@ export interface Progress {
   bag: Bag;
   solved: ObstacleId[];
   metMaple: boolean;
-  /** The Phase 1 ending (the Monster Stone) has played. */
-  finished: boolean;
+  /** The highest phase whose ending has played (1: the Monster Stone, 2: the cliff top). */
+  endings: number;
   /** Every sentence produced at least once. */
   said: PhraseId[];
 }
 
-const emptyRecord = (): MonsterRecord => ({ discovered: false, asked: {}, friend: false, canKnown: {} });
+const emptyRecord = (): MonsterRecord => ({ discovered: false, asked: {}, friend: false, canKnown: {}, described: {} });
 
 export function newProgress(): Progress {
   const monsters = {} as Record<MonsterId, MonsterRecord>;
   for (const id of MONSTER_ORDER) monsters[id] = emptyRecord();
-  return { monsters, active: null, bag: {}, solved: [], metMaple: false, finished: false, said: [] };
+  return { monsters, active: null, bag: {}, solved: [], metMaple: false, endings: 0, said: [] };
 }
 
 // ------------------------------------------------------------ monster answers
@@ -76,6 +78,39 @@ export function discover(p: Progress, id: MonsterId): Progress {
 export function recordLike(p: Progress, id: MonsterId, food: FoodId): Progress {
   const yes = likes(MONSTERS[id], food);
   return withMonster(p, id, { asked: { ...p.monsters[id].asked, [food]: yes } });
+}
+
+export type DescribeLine = "size" | "part";
+
+/** Records a journal line said about a monster (size or body part). */
+export function describeLine(p: Progress, id: MonsterId, line: DescribeLine): Progress {
+  const r = p.monsters[id];
+  if (!r.discovered || (line === "part" && !MONSTERS[id].part)) return p;
+  return withMonster(p, id, { described: { ...r.described, [line]: true } });
+}
+
+/** Lines this monster's journal page has but the student has not said yet, in order. */
+export function missingLines(p: Progress, id: MonsterId): DescribeLine[] {
+  const r = p.monsters[id];
+  if (!r.discovered) return [];
+  const out: DescribeLine[] = [];
+  if (!r.described.size) out.push("size");
+  if (MONSTERS[id].part && !r.described.part) out.push("part");
+  return out;
+}
+
+/**
+ * The next line that is part of the story: from Phase 2 on, a new monster's
+ * page is written in full (colour, size, body part). Phase 1 monsters' size
+ * lines are optional extras (see optionalLines) and never block anything.
+ */
+export function neededLine(p: Progress, id: MonsterId): DescribeLine | null {
+  return MONSTERS[id].phase >= 2 ? (missingLines(p, id)[0] ?? null) : null;
+}
+
+/** Optional journal lines (Phase 1 monsters' sizes), once the forest is open. */
+export function optionalLines(p: Progress, id: MonsterId): DescribeLine[] {
+  return MONSTERS[id].phase < 2 && p.endings >= 1 ? missingLines(p, id) : [];
 }
 
 export function recordCan(p: Progress, id: MonsterId, ability: AbilityId): Progress {
@@ -147,7 +182,9 @@ export interface ObstacleDef {
 
 export const OBSTACLES: Record<ObstacleId, ObstacleDef> = {
   fallenPalm: { id: "fallenPalm", needs: "grow", question: "canHelp", others: ["canSwim", "canJump"], after: [] },
-  river: { id: "river", needs: "swim", question: "canSwim", others: ["canFly", "canJump"], after: ["fallenPalm"] }
+  river: { id: "river", needs: "swim", question: "canSwim", others: ["canFly", "canJump"], after: ["fallenPalm"] },
+  bridge: { id: "bridge", needs: "grow", question: "canHelp", others: ["canSwim", "canFly"], after: ["river"] },
+  cliff: { id: "cliff", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["bridge"] }
 };
 
 export function isSolved(p: Progress, id: ObstacleId): boolean {
@@ -188,31 +225,52 @@ export function helperFor(p: Progress, id: ObstacleId): MonsterId | null {
 export type Objective =
   | { id: "meetMaple" }
   | { id: "findMonster"; monster: MonsterId }
+  | { id: "describe"; monster: MonsterId; line: DescribeLine }
   | { id: "askFood"; monster: MonsterId }
   | { id: "getFood"; monster: MonsterId; food: FoodId }
   | { id: "giveFood"; monster: MonsterId; food: FoodId }
   | { id: "obstacle"; obstacle: ObstacleId; helper: MonsterId | null }
+  /** The Phase 1 ending. */
   | { id: "stone" }
+  /** The Phase 2 ending. */
+  | { id: "cliffTop" }
   | { id: "explore" };
 
 /** Where each live monster can be reached from (the obstacle that guards it). */
-export const GUARDED_BY: Partial<Record<MonsterId, ObstacleId>> = { bubbo: "fallenPalm" };
+export const GUARDED_BY: Partial<Record<MonsterId, ObstacleId>> = { bubbo: "fallenPalm", puff: "bridge" };
 
-/** The one next thing to do (HUD card, Maple's hint, the star marker). */
+/** The next step toward befriending one monster, or null once it is a friend. */
+function befriendStep(p: Progress, id: MonsterId): Objective | null {
+  const r = p.monsters[id];
+  if (r.friend) return null;
+  const guard = GUARDED_BY[id];
+  if (guard && !isSolved(p, guard)) return { id: "obstacle", obstacle: guard, helper: helperFor(p, guard) };
+  if (!r.discovered) return { id: "findMonster", monster: id };
+  const line = neededLine(p, id);
+  if (line) return { id: "describe", monster: id, line };
+  const food = MONSTERS[id].favorite;
+  if (!favoriteKnown(p, id)) return { id: "askFood", monster: id };
+  if (!has(p, food)) return { id: "getFood", monster: id, food };
+  return { id: "giveFood", monster: id, food };
+}
+
+/**
+ * The one next thing to do (HUD card, Maple's hint, the star marker).
+ * Each phase is finished, ending included, before the next one is mentioned.
+ */
 export function objective(p: Progress): Objective {
   if (!p.metMaple) return { id: "meetMaple" };
-  for (const id of LIVE_MONSTERS) {
-    const r = p.monsters[id];
-    if (r.friend) continue;
-    const guard = GUARDED_BY[id];
-    if (guard && !isSolved(p, guard)) return { id: "obstacle", obstacle: guard, helper: helperFor(p, guard) };
-    if (!r.discovered) return { id: "findMonster", monster: id };
-    const food = MONSTERS[id].favorite;
-    if (!favoriteKnown(p, id)) return { id: "askFood", monster: id };
-    if (!has(p, food)) return { id: "getFood", monster: id, food };
-    return { id: "giveFood", monster: id, food };
+  for (const id of monstersOfPhase(1)) {
+    const step = befriendStep(p, id);
+    if (step) return step;
   }
   if (!isSolved(p, "river")) return { id: "obstacle", obstacle: "river", helper: helperFor(p, "river") };
-  if (!p.finished) return { id: "stone" };
+  if (p.endings < 1) return { id: "stone" };
+  for (const id of monstersOfPhase(2)) {
+    const step = befriendStep(p, id);
+    if (step) return step;
+  }
+  if (!isSolved(p, "cliff")) return { id: "obstacle", obstacle: "cliff", helper: helperFor(p, "cliff") };
+  if (p.endings < 2) return { id: "cliffTop" };
   return { id: "explore" };
 }
