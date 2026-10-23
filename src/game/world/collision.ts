@@ -30,6 +30,14 @@ import {
   HILLS,
   PUFF_TREE,
   ROPE,
+  LAVA,
+  CAVE,
+  CAVE_PASSAGE,
+  EMBER_SLOPE,
+  GATE_PILLARS,
+  SANCTUARY,
+  SANCTUARY_GATE,
+  VOLCANO_PATH,
   forestBase,
   inRavine,
   inRiver,
@@ -74,7 +82,8 @@ export const STATIC_OBSTACLES: Obstacles = {
     ...FOREST_TREES.map((t) => ({ x: t.x, z: t.z, r: 0.55 * t.s })),
     { x: PUFF_TREE.x, z: PUFF_TREE.z, r: 0.75 },
     ...FOREST_BERRY_BUSHES.map((b) => ({ x: b.x, z: b.z, r: 0.75 })),
-    { x: ROPE.x, z: ROPE.z - 0.5, r: 0.3 }
+    { x: ROPE.x, z: ROPE.z - 0.5, r: 0.3 },
+    ...Object.values(GATE_PILLARS).map((p) => ({ ...p, r: 0.68 }))
   ],
   boxes: [
     { x0: CAMP.tent.x - 1.9, x1: CAMP.tent.x + 1.9, z0: CAMP.tent.z - 1.6, z1: CAMP.tent.z + 1.6 },
@@ -89,13 +98,15 @@ export interface Gates {
   solved: readonly ObstacleId[];
   /** The Phase 1 ending has played: the bramble is gone and the forest path is open. */
   forest?: boolean;
+  /** The Phase 2 ending has played: the volcano route is available. */
+  volcano?: boolean;
 }
 
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
 export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number }): Gates {
-  return { solved: p.solved, forest: p.endings >= 1 };
+  return { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2 };
 }
 
 /** The bramble across the forest path while it is closed. */
@@ -129,6 +140,14 @@ export function inForest(x: number, z: number): boolean {
   return x > FOREST_PATH.x0 - 6 && z < FOREST_PATH.z1 - 1.5;
 }
 
+export function inVolcano(_x: number, z: number): boolean {
+  return z < LAVA.z1;
+}
+
+export function inSanctuary(_x: number, z: number): boolean {
+  return z < CAVE_PASSAGE.z0 + 2;
+}
+
 /**
  * True when a circle of radius `m` fits the currently reachable land.
  * Swimmers (Bubbo) may also use the river.
@@ -151,7 +170,28 @@ function forestWalkable(x: number, z: number, gates: Gates, m: number): boolean 
   if (gates.solved.includes("bridge") && onBridge(x, z, m)) return true;
   if (inRavine(z, m)) return false;
   if (inBox(x, z, FOREST_PATH, m) || inBox(x, z, GLADE, m) || inBox(x, z, HILLS, m)) return true;
-  return gates.solved.includes("cliff") && inBox(x, z, CLIFF_TOP, m);
+  if (!gates.solved.includes("cliff")) return false;
+  // The stream cuts all the way across the cliff top; there is no route around it.
+  if (z < LAVA.z1 + m && !gates.solved.includes("lava")) return false;
+  if (inBox(x, z, CLIFF_TOP, m)) return true;
+  return gates.volcano === true && volcanoWalkable(x, z, gates, m);
+}
+
+function volcanoWalkable(x: number, z: number, gates: Gates, m: number): boolean {
+  if (!gates.solved.includes("lava")) return false;
+  if (VOLCANO_PATH.some((a) => inBox(x, z, a, m)) || inBox(x, z, EMBER_SLOPE, m)) {
+    if (z < CAVE.z + 0.4 + m && !gates.solved.includes("cave")) return false;
+    return true;
+  }
+  if (!gates.solved.includes("cave")) return false;
+  if (inBox(x, z, CAVE_PASSAGE, m)) return true;
+  if (!inBox(x, z, SANCTUARY, m)) return false;
+  const opened = Object.keys(GATE_PILLARS).every((id) => gates.solved.includes(id as ObstacleId));
+  // The wall closes the entire garden; when open its central doorway is the only crossing.
+  if (Math.abs(z - SANCTUARY_GATE.z) < 0.45 + m) {
+    return opened && Math.abs(x - SANCTUARY_GATE.x) < SANCTUARY_GATE.half - m;
+  }
+  return z > SANCTUARY_GATE.z || opened;
 }
 
 /** Push a circle out of obstacles. */

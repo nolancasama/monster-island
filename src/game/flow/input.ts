@@ -34,7 +34,7 @@ export function onKey(code: string) {
       else if (code === "Escape") cancelAsk();
       else if (code.startsWith("Digit") || code.startsWith("Numpad")) {
         const n = Number(code.replace(/\D/g, ""));
-        if (n >= 1 && n <= 4) chooseIndex(n - 1);
+        if (n >= 1 && n <= 5) chooseIndex(n - 1);
       }
       return;
     }

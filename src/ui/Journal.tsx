@@ -1,6 +1,6 @@
 import { setGame, useGame } from "../game/store";
 import { COLOR_HEX, MONSTERS, MONSTER_ORDER, LIVE_MONSTERS } from "../game/data/monsters";
-import { FOODS, ISLAND_FOODS } from "../game/data/foods";
+import { FOODS, islandFoods } from "../game/data/foods";
 import { favoriteKnown, optionalLines } from "../game/logic/progress";
 import { PHRASES } from "../game/logic/english";
 import { linePhrase, writeLine } from "../game/flow/encounter";
@@ -45,8 +45,13 @@ function Page({ id }: { id: MonsterId }) {
         <Portrait id={id} size={150} />
         <div>
           <h2>
-            {def.name} {r.friend && <Icon id="heart" size={28} />}
+            {id === "lumo" && !r.described.name ? "???" : def.name} {r.friend && <Icon id="heart" size={28} />}
           </h2>
+          {id === "lumo" && r.described.name && (
+            <button className="j-line" onClick={() => hear(id, "I'm Lumo!")} data-testid="j-line-name">
+              <Icon id="speaker" size={18} /> I'm Lumo!
+            </button>
+          )}
           <button className="j-line" onClick={() => hear(id, `It's ${def.color}.`)} style={{ borderColor: COLOR_HEX[def.color] }}>
             <Icon id="speaker" size={18} /> It's {def.color}.
           </button>
@@ -85,12 +90,12 @@ function Page({ id }: { id: MonsterId }) {
           </p>
         </div>
       </div>
-      <section>
+      {id !== "lumo" && <section>
         <h3>
           Food <Ja>たべもの</Ja>
         </h3>
         <div className="j-foods">
-          {ISLAND_FOODS.map((f) => {
+          {islandFoods(progress).map((f) => {
             const a = r.asked[f];
             return (
               <span key={f} className={`j-food ${a === true ? "yes" : a === false ? "no" : "unknown"}`} data-testid={`j-food-${f}`}>
@@ -108,13 +113,13 @@ function Page({ id }: { id: MonsterId }) {
             <Icon id="speaker" size={18} /> {likeLine}
           </button>
         )}
-      </section>
-      <section>
+      </section>}
+      {id !== "lumo" && <section>
         <h3>
           Can <Ja>できること</Ja>
         </h3>
         <div className="j-foods">
-          {[def.power, ...ABILITIES.filter((a) => a !== def.power)].map((a) => {
+          {[...(def.power ? [def.power] : []), ...[...ABILITIES, ...(progress.endings >= 2 ? ["fire" as const] : [])].filter((a) => a !== def.power)].map((a) => {
             const k = r.canKnown[a];
             const label = a === "grow" ? "grow plants" : a === "fire" ? "make fire" : a;
             return (
@@ -133,8 +138,13 @@ function Page({ id }: { id: MonsterId }) {
             <Icon id="speaker" size={18} /> {def.powerLine.en}
           </button>
         )}
-      </section>
-      {r.friend && (
+      </section>}
+      {id === "lumo" && r.friend && (
+        <button className="j-line" onClick={() => hear(id, "I like monsters!")}>
+          <Icon id="speaker" size={18} /> I like monsters!
+        </button>
+      )}
+      {r.friend && def.companion !== false && (
         <button
           className={`primary j-choose ${progress.active === id ? "chosen" : ""}`}
           disabled={progress.active === id}
@@ -175,7 +185,7 @@ export function Journal() {
             return (
               <button key={id} className={`j-tab ${page === id ? "on" : ""}`} onClick={() => setGame({ journalPage: id })} data-testid={`journal-tab-${id}`}>
                 <Portrait id={id} size={54} silhouette={!r.discovered} />
-                <span>{r.discovered ? MONSTERS[id].name : "???"}</span>
+                <span>{r.discovered && (id !== "lumo" || r.described.name) ? MONSTERS[id].name : "???"}</span>
                 {r.friend && <Icon id="heart" size={16} />}
                 {progress.active === id && <em>with you</em>}
               </button>

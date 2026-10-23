@@ -224,7 +224,8 @@ export const SOCKETS: Array<[number, number]> = [
   [-0.38, 2.55],
   [0.38, 2.55],
   [-0.38, 1.55],
-  [0.38, 1.55]
+  [0.38, 1.55],
+  [0, 2.05]
 ];
 
 export function signPostGeometry(): THREE.BufferGeometry {

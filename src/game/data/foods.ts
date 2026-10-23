@@ -20,6 +20,11 @@ export const FOODS: Record<FoodId, FoodDef> = {
 /** Foods on the island in this build, in the order the question cards show them. */
 export const ISLAND_FOODS: FoodId[] = ["apples", "bananas", "fish", "berries"];
 
+/** Meat question cards unlock with the volcano route, after the Phase 2 ending. */
+export function islandFoods(p: { endings: number }): FoodId[] {
+  return p.endings >= 2 ? [...ISLAND_FOODS, "meat"] : [...ISLAND_FOODS];
+}
+
 /** How many of one food fit in the bag. */
 export const BAG_MAX = 3;
 

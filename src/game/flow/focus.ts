@@ -1,10 +1,11 @@
 import { MONSTERS, LIVE_MONSTERS } from "../data/monsters";
 import { FOODS } from "../data/foods";
-import { isSolved, objective } from "../logic/progress";
+import { gateOpen, isSolved, objective } from "../logic/progress";
 import { getGame, type Focus } from "../store";
 import { rt } from "../runtime";
 import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, INTERACT_RANGE, MONSTER_STONE, ROPE } from "../world/island";
 import type { Vec2 } from "../types";
+import { PHASE3_PLACE } from "./obstacles";
 
 /**
  * What E (or the touch action button) would use right now: the nearest usable
@@ -25,11 +26,13 @@ function candidates(): Candidate[] {
   for (const id of LIVE_MONSTERS) {
     // The companion is always close by: it never takes E from anything else (its HUD chip chats).
     if (p.active === id) continue;
+    if (id === "ember" && !isSolved(p, "lava")) continue;
+    if (id === "lumo" && !gateOpen(p)) continue;
     const m = rt.monsters[id];
     const r = p.monsters[id];
-    const name = r.discovered ? MONSTERS[id].name : "???";
+    const name = r.discovered && (id !== "lumo" || r.described.name) ? MONSTERS[id].name : "???";
     // A flier still up in its tree is reached from below it.
-    add({ id, kind: "monster", verb: r.friend ? "Choose" : "Talk to", noun: name, x: m.x, z: m.z }, MONSTERS[id].perch && !r.discovered ? 3.2 : 2.7);
+    add({ id, kind: "monster", verb: r.friend && id !== "lumo" ? "Choose" : "Talk to", noun: name, x: m.x, z: m.z }, MONSTERS[id].perch && !r.discovered ? 3.2 : 2.7);
   }
   for (const s of FOOD_SOURCES) {
     if (rt.taken.has(s.id)) continue;
@@ -44,6 +47,14 @@ function candidates(): Candidate[] {
   if (isSolved(p, "cliff")) {
     add({ id: "ropeUp", kind: "rope", verb: "Climb", noun: "the rope", x: ROPE.x, z: ROPE.z + 0.2 }, 2.4);
     add({ id: "ropeDown", kind: "rope", verb: "Climb down", noun: "the rope", x: CLIFF_TOP_SPOT.x, z: CLIFF_TOP_SPOT.z + 0.8 }, 2.2);
+  }
+  if (p.endings >= 2) {
+    for (const [id, place] of Object.entries(PHASE3_PLACE)) {
+      if (p.solved.includes(id as keyof typeof PHASE3_PLACE)) continue;
+      if (id !== "lava" && !isSolved(p, "lava")) continue;
+      if (id.startsWith("gate") && !isSolved(p, "cave")) continue;
+      add({ id, kind: "obstacle", verb: "Look at", noun: id === "lava" ? "the lava" : id === "cave" ? "the cave" : `the ${id === "gateLeaf" ? "leaf" : id === "gateDrop" ? "drop" : id === "gateWing" ? "wing" : "flame"} pillar`, x: place.x, z: place.z }, 2.7);
+    }
   }
   add({ id: "sign", kind: "sign", verb: "Read", noun: "the sign", x: FOREST_SIGN.x, z: FOREST_SIGN.z }, 2);
   return out;
@@ -87,6 +98,8 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
     case "describe":
     case "askFood":
     case "giveFood":
+    case "letsGo":
+    case "askBack":
       return { x: rt.monsters[o.monster].x, z: rt.monsters[o.monster].z, y: 1.9 + rt.monsters[o.monster].air };
     case "getFood": {
       const sources = FOOD_SOURCES.filter((s) => s.food === o.food);
@@ -95,6 +108,7 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       return { x: best.x, z: best.z, y: o.food === "fish" ? 1.6 : 1.4 };
     }
     case "obstacle":
+      if (o.obstacle in PHASE3_PLACE) return { ...PHASE3_PLACE[o.obstacle as keyof typeof PHASE3_PLACE], y: 2.5 };
       if (o.obstacle === "fallenPalm") return { x: FALLEN_PALM.x, z: FALLEN_PALM.z, y: 2.6 };
       if (o.obstacle === "river") return { x: CROSSING.west.x + 0.4, z: CROSSING.west.z, y: 1.8 };
       if (o.obstacle === "bridge") return { x: BRIDGE.x, z: BRIDGE.z1 + 0.4, y: 1.8 };
@@ -103,6 +117,8 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       return { x: MONSTER_STONE.x, z: MONSTER_STONE.z, y: 3.6 };
     case "cliffTop":
       return { x: ROPE.x, z: ROPE.z, y: 2.4 };
+    case "finale":
+      return { x: rt.monsters.lumo.x, z: rt.monsters.lumo.z, y: 3 };
     default:
       return null;
   }

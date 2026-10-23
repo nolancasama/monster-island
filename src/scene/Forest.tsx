@@ -6,7 +6,6 @@ import {
   BRAMBLE,
   BRIDGE,
   CLIFF_HEIGHT,
-  CLIFF_TOP,
   CLIFF_TOP_SPOT,
   CLIFF_Z,
   FOREST_AREAS,
@@ -20,7 +19,8 @@ import {
   VOLCANO,
   forestBase,
   forestMask,
-  groundY
+  groundY,
+  volcanoMask
 } from "../game/world/island";
 import { makeRng } from "../game/logic/rng";
 import { flatMat, occluderMat, smoothMat } from "./materials";
@@ -34,7 +34,6 @@ import {
   forestTreeGeometry,
   puffTreeGeometry,
   rockWallGeometry,
-  rockfallGeometry,
   ropeCoilGeometry,
   ropeHangingGeometry
 } from "./models/forest";
@@ -91,6 +90,7 @@ function forestSpots(): { edge: Spot[]; ferns: Spot[] } {
       if (pz > -13 && (px < 30 || px > 38)) continue;
       const f = forestMask(px, pz);
       if (f > 0.02) continue;
+      if (volcanoMask(px, pz) > 0.01) continue;
       if (inVista(px, pz)) continue;
       edge.push({ x: px, z: pz, s: 0.95 + rand() * 0.6, r: rand() * 6.28, tint: 0.8 + rand() * 0.25 });
     }
@@ -211,7 +211,6 @@ function Cliff() {
   const wall = useMemo(() => rockWallGeometry(26, CLIFF_HEIGHT + 4, 1.2, 160, ["#8f8578", "#7d7468", "#9a9082"]), []);
   const coil = useMemo(ropeCoilGeometry, []);
   const hang = useMemo(() => ropeHangingGeometry(CLIFF_HEIGHT + 0.4), []);
-  const fall = useMemo(rockfallGeometry, []);
   const coilRef = useRef<THREE.Mesh>(null);
   const hangRef = useRef<THREE.Mesh>(null);
   useFrame(() => {
@@ -230,9 +229,6 @@ function Cliff() {
       <mesh geometry={wall} material={flatMat} position={[24, baseY - 1, CLIFF_Z - 0.5]} />
       <mesh ref={coilRef} geometry={coil} material={smoothMat} position={at(ROPE.x + 0.9, ROPE.z + 0.4)} />
       <mesh ref={hangRef} geometry={hang} material={smoothMat} position={[ROPE.x, groundY(ROPE.x, ROPE.z), ROPE.z - 0.25]} />
-      {/* The way on (Phase 3) is closed by fallen rocks at the back of the cliff top, clear of the view to the volcano. */}
-      <mesh geometry={fall} material={flatMat} position={at(30.2, CLIFF_TOP.z0 + 0.4)} rotation={[0, 0.9, 0]} scale={0.8} />
-      <mesh geometry={fall} material={flatMat} position={at(40, CLIFF_TOP.z0 + 0.4)} rotation={[0, 1.4, 0]} scale={0.7} />
     </group>
   );
 }

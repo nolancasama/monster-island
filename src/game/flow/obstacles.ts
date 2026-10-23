@@ -1,12 +1,12 @@
 import { MONSTERS } from "../data/monsters";
 import { CAN_QUESTION, PHRASES } from "../logic/english";
-import { OBSTACLES, askAtObstacle, helperFor, isSolved, recordCan, solve } from "../logic/progress";
+import { OBSTACLES, askAtObstacle, gateOpen, helperFor, isSolved, obstacleAvailable, recordCan, solve } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
-import { BRIDGE, CLIFF_HEIGHT, CLIFF_TOP_SPOT, CLIFF_Z, CROSSING, FALLEN_PALM, ROPE, groundY } from "../world/island";
+import { BRIDGE, CAVE, CLIFF_HEIGHT, CLIFF_TOP_SPOT, CLIFF_Z, CROSSING, FALLEN_PALM, GATE_PILLARS, LAVA, ROPE, SANCTUARY_GATE, groundY } from "../world/island";
 import { ask, say, wait } from "./ask";
 import { facePlayer, fadeThrough, frameTwo, run, shot } from "./script";
-import { besidePlayer, poofTo } from "./companion";
+import { companionSpot, poofTo } from "./companion";
 import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
 import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
@@ -17,9 +17,21 @@ import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
  * right monster solves it, and a solved obstacle stays open for good.
  */
 
-const ICON: Record<string, string> = { canSwim: "swim", canFly: "fly", canJump: "jump", canHelp: "help" };
+const ICON: Record<string, string> = { canSwim: "swim", canFly: "fly", canJump: "jump", canHelp: "help", canFire: "fire" };
+
+const closedGate = { en: "The gate is closed!", ja: "とびらが しまっている!" };
+/** Real approach positions on the route, shared with focus and test navigation. */
+export const PHASE3_PLACE = {
+  lava: { x: LAVA.x, z: LAVA.z + 1.8, alone: { en: "It's hot!", ja: "あつい!" } },
+  cave: { x: CAVE.x, z: CAVE.z + 2.2, alone: { en: "It's dark!", ja: "くらい!" } },
+  gateLeaf: { ...GATE_PILLARS.gateLeaf, alone: closedGate },
+  gateDrop: { ...GATE_PILLARS.gateDrop, alone: closedGate },
+  gateWing: { ...GATE_PILLARS.gateWing, alone: closedGate },
+  gateFlame: { ...GATE_PILLARS.gateFlame, alone: closedGate }
+};
 
 const PLACE: Record<ObstacleId, { x: number; z: number; alone: { en: string; ja: string } }> = {
+  ...PHASE3_PLACE,
   bridge: {
     x: BRIDGE.x,
     z: BRIDGE.z1 + 1.2,
@@ -44,12 +56,18 @@ const PLACE: Record<ObstacleId, { x: number; z: number; alone: { en: string; ja:
 
 /** What the player faces at each obstacle, and the point the shot frames. */
 const FACE: Record<ObstacleId, Vec2> = {
+  ...PHASE3_PLACE,
+  lava: LAVA,
+  cave: CAVE,
   fallenPalm: FALLEN_PALM,
   river: CROSSING.east,
   bridge: { x: BRIDGE.x, z: BRIDGE.z0 },
   cliff: { x: ROPE.x, z: CLIFF_Z - 2 }
 };
 const FRAME: Record<ObstacleId, Vec2> = {
+  ...PHASE3_PLACE,
+  lava: LAVA,
+  cave: CAVE,
   fallenPalm: FALLEN_PALM,
   river: { x: (CROSSING.west.x + CROSSING.east.x) / 2, z: CROSSING.z },
   bridge: { x: BRIDGE.x, z: (BRIDGE.z0 + BRIDGE.z1) / 2 },
@@ -57,13 +75,14 @@ const FRAME: Record<ObstacleId, Vec2> = {
 };
 
 /** From Phase 2 on the student thanks the monster after its power has worked. */
-const THANKS = new Set<ObstacleId>(["bridge", "cliff"]);
+const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"]);
 
 /** How the hint names an ability ("Who can help?", "とべる モンスター"). */
 const NEED_WORD: Partial<Record<AbilityId, { en: string; ja: string }>> = {
   grow: { en: "help", ja: "たすけて くれる" },
   swim: { en: "swim", ja: "およげる" },
-  fly: { en: "fly", ja: "とべる" }
+  fly: { en: "fly", ja: "とべる" },
+  fire: { en: "make fire", ja: "ひを つけられる" }
 };
 
 /**
@@ -73,7 +92,7 @@ const NEED_WORD: Partial<Record<AbilityId, { en: string; ja: string }>> = {
  */
 async function companionCloser(id: MonsterId) {
   const m = rt.monsters[id];
-  const spot = besidePlayer(1.5, 1.1 * rt.followSide);
+  const spot = companionSpot(id);
   if (Math.hypot(m.x - spot.x, m.z - spot.z) > 6) poofTo(id, spot.x, spot.z);
   m.mode = "follow";
   const t0 = rt.time;
@@ -88,7 +107,19 @@ export function useObstacle(id: ObstacleId): Promise<void> {
     const o = OBSTACLES[id];
     const place = PLACE[id];
     if (isSolved(getGame().progress, id)) return;
+    if (!obstacleAvailable(getGame().progress, id)) {
+      await say("self", place.alone.en, place.alone.ja);
+      return;
+    }
     facePlayer(FACE[id]);
+    if (id === "lava") {
+      frameTwo(rt.player, FRAME[id], 1.1);
+      await say("maple", "It's hot!", "あつい! ともだちに たすけて もらおう!");
+    }
+    if (id === "cave") {
+      frameTwo(rt.player, FRAME[id], 1.1);
+      await say("self", "It's dark!", "くらい! ひが ひつようだね");
+    }
     const active = getGame().progress.active;
     if (!active) {
       await say("self", place.alone.en, place.alone.ja);
@@ -103,6 +134,9 @@ export function useObstacle(id: ObstacleId): Promise<void> {
         const said = await ask({
           kind: "choice",
           options: [o.question, ...o.others],
+          // Help means this obstacle's need. Lava also accepts Bubbo's
+          // familiar direct question, without changing the three tap cards.
+          speechAliases: ["canHelp", "canSwim"],
           show: [o.question],
           icons: Object.fromEntries([o.question, ...o.others].map((q) => [q, ICON[q]])),
           shuffle: true,
@@ -143,6 +177,16 @@ export function useObstacle(id: ObstacleId): Promise<void> {
   });
 }
 
+/** Touching the black cave mouth stops walking and names what is missing. */
+export function lookIntoDarkCave(): Promise<void> {
+  return run(async () => {
+    facePlayer(CAVE);
+    frameTwo(rt.player, CAVE, 1.1);
+    const line = PLACE.cave.alone;
+    await say("self", line.en, line.ja);
+  });
+}
+
 async function notThisOne(id: ObstacleId, active: MonsterId) {
   const helper = helperFor(getGame().progress, id);
   const need = OBSTACLES[id].needs;
@@ -160,7 +204,63 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   if (id === "fallenPalm") await growVines(monster);
   else if (id === "river") await ferry(monster);
   else if (id === "bridge") await weaveBridge(monster);
-  else await flyRope(monster);
+  else if (id === "cliff") await flyRope(monster);
+  else await phase3Power(id, monster);
+}
+
+/** A visible, permanent use of each power, followed by the shared thanks prompt. */
+async function phase3Power(id: ObstacleId, monster: MonsterId) {
+  const target = FACE[id];
+  const m = rt.monsters[monster];
+  const gy = groundY(target.x, target.z);
+  m.mode = "script";
+  m.look = target;
+  // The companion and the whole obstacle remain in the shot throughout its action.
+  m.x = target.x - 2.7;
+  m.z = target.z + 0.4;
+  m.yaw = Math.atan2(target.x - m.x, target.z - m.z);
+  shot({ x: target.x + 7, y: gy + 3.3, z: target.z + 8.5 }, { x: target.x, y: gy + 1.1, z: target.z });
+  animate(monster, "power");
+  const drop = id === "lava" || id === "gateDrop";
+  const leaf = id === "gateLeaf";
+  audio.play(drop ? "splash" : leaf ? "vines" : id === "gateWing" ? "sparkle" : "whoosh");
+  if (id === "gateWing") await glide(monster, target, 3.5, 1.2);
+  const t0 = rt.time;
+  let burst = -1;
+  for (;;) {
+    const k = Math.min(1, (rt.time - t0) / 2.2);
+    if (id === "lava") rt.lava = k;
+    else if (id === "cave") rt.cave = k;
+    else rt.pillars[id] = k;
+    if (Math.floor(k * 5) > burst) {
+      burst = Math.floor(k * 5);
+      effect(drop ? "splash" : leaf ? "leaves" : id === "gateWing" ? "notes" : "sparkle", target.x, gy + (id === "gateWing" ? 3.6 : 0.7), target.z);
+    }
+    if (k === 1) break;
+    await wait(30);
+  }
+  updateProgress((p) => solve(p, id));
+  if (id === "gateWing") {
+    audio.play("stone");
+    await glide(monster, { x: target.x - 2.7, z: target.z + 0.4 }, 0.35, 1);
+  }
+  if (gateOpen(getGame().progress) && rt.gate < 1) {
+    const s = SANCTUARY_GATE;
+    shot({ x: s.x + 9, y: groundY(s.x, s.z) + 5.5, z: s.z + 13 }, { x: s.x, y: groundY(s.x, s.z) + 1.6, z: s.z - 3 });
+    audio.play("stones");
+    const start = rt.time;
+    while (rt.gate < 1) {
+      rt.gate = Math.min(1, (rt.time - start) / 2);
+      await wait(30);
+    }
+    rt.monsters.lumo.mode = "idle";
+    animate("lumo", "notice");
+    effect("sparkle", rt.monsters.lumo.x, groundY(rt.monsters.lumo.x, rt.monsters.lumo.z) + 1.5, rt.monsters.lumo.z);
+    await say("self", "Look! A monster!", "みて! モンスターが おきたよ!");
+  }
+  animate(monster, "friend");
+  audio.voice(monster, "excited");
+  toast({ en: id === "lava" ? "The lava is cool!" : id === "cave" ? "The cave is lit!" : "A pillar is shining!", ja: id === "lava" ? "ようがんが かたまった!" : id === "cave" ? "どうくつが あかるくなった!" : "はしらが ひかった!", icon: "star", tone: "good" });
 }
 
 /** "Thank you!": the student thanks the friend whose power just worked. */

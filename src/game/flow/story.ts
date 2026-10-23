@@ -1,6 +1,6 @@
 import { MONSTERS, LIVE_MONSTERS } from "../data/monsters";
 import { FOODS } from "../data/foods";
-import { friends, newProgress, objective, type Progress } from "../logic/progress";
+import { companions, friends, gateOpen, GATES, newProgress, objective, type Progress } from "../logic/progress";
 import { clearSave, encodeSave, readSave, writeSave } from "../logic/save";
 import { getGame, setGame, toast, useGame } from "../store";
 import { animate, effect, resetRuntime, rt } from "../runtime";
@@ -61,6 +61,13 @@ function applyWorld(p: Progress) {
   rt.bridge = rt.bridgeTarget = p.solved.includes("bridge") ? 1 : 0;
   rt.rope = p.solved.includes("cliff") ? 1 : 0;
   rt.bramble = rt.brambleTarget = p.endings >= 1 ? 0 : 1;
+  rt.lava = p.solved.includes("lava") ? 1 : 0;
+  rt.cave = p.solved.includes("cave") ? 1 : 0;
+  for (const id of GATES) rt.pillars[id] = p.solved.includes(id) ? 1 : 0;
+  rt.gate = gateOpen(p) ? 1 : 0;
+  rt.starGlow = p.endings >= 3 ? 1 : 0;
+  rt.finale = p.endings >= 3 ? "complete" : "idle";
+  rt.monsters.lumo.mode = gateOpen(p) ? "idle" : "sleep";
   for (const id of LIVE_MONSTERS) {
     rt.monsters[id].noticed = p.monsters[id].discovered;
     // A symbol lights at its phase's ending.
@@ -171,6 +178,28 @@ export function talkToMaple(): Promise<void> {
       return;
     }
     const name = (id: keyof typeof MONSTERS) => MONSTERS[id].name;
+    // The final phase's short hints also work when Maple is reached by radio.
+    let phase3Hint: [string, string] | undefined;
+    if (o.id === "obstacle") phase3Hint = ({
+      lava: ["It's hot! Who can help cool the lava?", "あつい! みずを だせる ともだちは だれ?"],
+      cave: ["It's dark! Who can make fire?", "くらい! ひを つけられる ともだちは だれ?"],
+      gateLeaf: ["A leaf! Ask a friend to help it grow.", "はっぱだ! しょくぶつを そだてる ともだちに きこう"],
+      gateDrop: ["A drop! Who can swim? Fill the basin!", "しずくだ! およげる ともだちに みずを いれてもらおう"],
+      gateWing: ["Wings! Who can fly to the bell?", "つばさだ! かねまで とべる ともだちは だれ?"],
+      gateFlame: ["A flame! Who can make fire?", "ほのおだ! ひを つけられる ともだちは だれ?"]
+    } as Record<string, [string, string]>)[o.obstacle];
+    else if (o.id === "findMonster" && o.monster === "ember") phase3Hint = ["Look by the hot rocks. A monster likes meat!", "あつい いわの ちかくを みて! おにくが すきな モンスターだよ"];
+    else if (o.id === "findMonster" && o.monster === "lumo") phase3Hint = ["A gentle monster is awake in the garden!", "にわで やさしい モンスターが おきたよ!"];
+    else if (o.id === "describe" && o.line === "name") phase3Hint = ["Ask: What's your name?", "なまえを きいてみよう!"];
+    else if (o.id === "letsGo") phase3Hint = ["Say: Let's go! Ember will come with you.", "エンバーに いっしょに いこうと いってみよう!"];
+    else if (o.id === "askBack") phase3Hint = ["Do you like monsters? Tell your new friend!", "モンスターが すき? きみの こたえを いってみよう!"];
+    else if (o.id === "finale") phase3Hint = ["Look! Lumo is shining!", "みて! ルモが ひかっているよ!"];
+    else if (o.id === "explore" && p.endings >= 3) phase3Hint = ["You are a Monster Friend! Enjoy the island!", "モンスターフレンドだね! しまを たんけんしよう!"];
+    if (phase3Hint) {
+      await say("maple", ...phase3Hint);
+      m.talking = false;
+      return;
+    }
     switch (o.id) {
       case "findMonster":
         if (o.monster === "leafy") await say("maple", "Monsters like food. Look near the apple trees!", "モンスターは たべものが すき。りんごの木の ちかくを さがしてみて!");
@@ -339,10 +368,85 @@ export async function cliffTopEnding(): Promise<void> {
   // The stone back on the beach lights Puff's symbol (seen there afterwards).
   for (const id of friends(p)) if (MONSTERS[id].phase === 2) rt.stoneGlow[id] = 1;
   toast({ en: "A new light on the Monster Stone!", ja: "モンスターストーンが ひかった!", icon: "star", tone: "good" });
-  await say("maple", "One more monster lives on the volcano. Let's find it next time!", "かざんに あと 1ぴき モンスターが いる。つぎは その モンスターを さがそう!");
+  await say("maple", "One more monster lives on the volcano. Let's find it!", "かざんに あと 1ぴき モンスターが いる。その モンスターを さがそう!");
   setGame((g) => ({ progress: { ...g.progress, endings: 2 } }));
   saveNow();
   setGame({ screen: "results", seconds: Math.round(rt.playTime) });
+}
+
+/** The final ending stays in the sanctuary, including the results backdrop. */
+export function finaleEnding(): Promise<void> {
+  return run(async () => {
+    if (objective(getGame().progress).id !== "finale") return;
+    const h = MONSTERS.lumo.home;
+    const gy = groundY(h.x, h.z);
+    const lumo = rt.monsters.lumo;
+    rt.player.frozen = true;
+    await fadeThrough(() => {
+      rt.player.x = h.x;
+      rt.player.z = h.z + 5;
+      rt.player.vx = rt.player.vz = 0;
+      rt.player.yaw = Math.PI;
+      companions(getGame().progress).forEach((id, i) => {
+        const m = rt.monsters[id];
+        m.mode = "script";
+        m.x = h.x - 3.6 + i * 2.4;
+        m.z = h.z + 5.5;
+        m.look = h;
+      });
+      lumo.mode = "script";
+      lumo.x = h.x;
+      lumo.z = h.z;
+      lumo.yaw = 0;
+      shot({ x: h.x + 8, y: gy + 5.3, z: h.z + 6 }, { x: h.x, y: gy + 3.8, z: h.z + 0.8 });
+    }, 300);
+    rt.finale = "rise";
+    audio.startMusic("celebrate");
+    audio.play("stone");
+    animate("lumo", "power");
+    const t0 = rt.time;
+    let burst = 0;
+    while (rt.time - t0 < 3) {
+      const k = Math.min(1, (rt.time - t0) / 3);
+      lumo.air = lumo.airTarget = k * 5;
+      rt.stoneGlow.ember = k;
+      rt.starGlow = k;
+      if (k > burst * 0.2) {
+        burst++;
+        effect("sparkle", h.x, gy + 2 + lumo.air, h.z);
+        audio.play("sparkle");
+      }
+      await wait(30);
+    }
+    rt.stoneGlow.ember = rt.starGlow = 1;
+    await say("lumo", "Thank you, my friend!", "ありがとう、ともだち!");
+    await fadeThrough(() => {
+      rt.maple.x = h.x - 2.5;
+      rt.maple.z = h.z + 3.5;
+      rt.maple.yaw = Math.atan2(rt.player.x - rt.maple.x, rt.player.z - rt.maple.z);
+      rt.player.yaw = Math.atan2(rt.maple.x - rt.player.x, rt.maple.z - rt.player.z);
+      // The camera and the speaking group are inside the gate. Friends move
+      // behind the two-shot so the closest big monster cannot cover Maple.
+      companions(getGame().progress).forEach((id, i) => {
+        const m = rt.monsters[id];
+        m.x = h.x - 4 + i * 2.6;
+        m.z = h.z + 0.7;
+        m.look = rt.maple;
+      });
+      shot({ x: h.x + 4.5, y: gy + 3, z: h.z + 6.8 }, { x: h.x - 1, y: gy + 1.2, z: h.z + 3.8 });
+    });
+    rt.finale = "maple";
+    rt.maple.talking = true;
+    rt.maple.wave = rt.time;
+    await say("maple", "The island is safe!", "しまは もう だいじょうぶ!");
+    await say("maple", "You are a Monster Friend!", "きみは モンスターフレンドだよ!");
+    await say("maple", "All five monsters are your friends!", "5ひき みんなが きみの ともだち!");
+    rt.maple.talking = false;
+    setGame((g) => ({ progress: { ...g.progress, endings: 3 } }));
+    rt.finale = "complete";
+    saveNow();
+    setGame({ screen: "results", seconds: Math.round(rt.playTime) });
+  });
 }
 
 /** "Keep exploring" from the results card. */
@@ -354,6 +458,7 @@ export function keepExploring() {
   for (const id of LIVE_MONSTERS) {
     const m = rt.monsters[id];
     m.look = null;
+    m.air = m.airTarget = 0;
     m.mode = id === active ? "follow" : "wander";
     // Friends gathered for an ending go home, except the one following.
     const home = MONSTERS[id].home;

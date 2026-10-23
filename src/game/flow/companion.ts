@@ -5,6 +5,7 @@ import { effect, rt } from "../runtime";
 import { gatesOf, nearestWalkable } from "../world/collision";
 import { audio } from "../../audio/audio";
 import type { MonsterId } from "../types";
+import { LAVA } from "../world/island";
 
 /** Teleport a monster with a little poof (far switches, getting unstuck, going home). */
 export function poofTo(id: MonsterId, x: number, z: number) {
@@ -26,11 +27,24 @@ export function besidePlayer(back = 1.5, side = 1.1): { x: number; z: number } {
   return { x: p.x - fx * back - fz * side, z: p.z - fz * back + fx * side };
 }
 
+/** Phase 3 obstacle shots need room for big companions on the far shoulder. */
+export function companionSpot(id: MonsterId): { x: number; z: number } {
+  const p = rt.player;
+  const shot = rt.camera.mode === "shot" ? rt.camera.shot : null;
+  if (!shot || p.z > LAVA.z1 + 4) return besidePlayer(1.5, 1.1 * rt.followSide);
+  const lateralX = -Math.cos(p.yaw);
+  const lateralZ = Math.sin(p.yaw);
+  const cameraSide = lateralX * (shot.pos.x - p.x) + lateralZ * (shot.pos.z - p.z);
+  const side = (MONSTERS[id].size === "big" ? 2.7 : 2) * (cameraSide >= 0 ? -1 : 1);
+  // Stay alongside rather than behind: the old back offset put Ember in the lens.
+  return besidePlayer(0, side);
+}
+
 /** Make a friend the companion. Immediate: a far-away friend poofs over. */
 export function switchTo(id: MonsterId, quiet = false) {
   const g = getGame();
   const before = g.progress.active;
-  if (!g.progress.monsters[id].friend || before === id) return;
+  if (MONSTERS[id].companion === false || !g.progress.monsters[id].friend || before === id) return;
   updateProgress((p) => setActive(p, id));
   if (before) {
     const old = rt.monsters[before];

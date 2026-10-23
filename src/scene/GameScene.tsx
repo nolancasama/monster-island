@@ -5,6 +5,7 @@ import { tick } from "../game/sim";
 import { FarLand, River, Rocks, Sea, SkyAndLights, Terrain, Vegetation } from "./Environment";
 import { Props } from "./Props";
 import { Forest } from "./Forest";
+import { Volcano } from "./Volcano";
 import { Maple, Player } from "./Characters";
 import { Monsters } from "./Monsters";
 import { Effects } from "./Effects";
@@ -77,6 +78,7 @@ export function GameScene() {
       <FarLand />
       <Props />
       <Forest />
+      <Volcano />
       <Player />
       <Maple />
       <Monsters />

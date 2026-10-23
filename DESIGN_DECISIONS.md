@@ -289,3 +289,130 @@ transitions.
   ~80–90k triangles; beach with the forest behind it 68 calls, ~106k. Hiding
   areas by region (planned in the frozen design) was not needed: merged and
   instanced geometry plus frustum culling stay inside the budget.
+
+## 2026-10-24 — Phase 3 (Volcano + Sanctuary) design, frozen
+
+Follows the frozen chain: the volcano is reached from the cliff top, Ember
+lives there (meat), Ember's fire lights the dark cave, the sanctuary behind
+it has a gate needing all four abilities and the legendary monster. This is
+the last phase: it ends the story. New English, in order of first use:
+"It's hot!" (heard), "It has a tail." (first real use), "Can you make
+fire?", "It's yellow.", "What's your name?".
+
+**Route.** Cliff top → **lava stream** (replaces the rockfall placeholder at
+the same place) → the volcano slopes (Ember, a meat rack beside its hot
+rocks) → **the dark cave** in the volcano's flank → the sanctuary, a green
+crater garden on the far side → **the sanctuary gate** → the legendary
+monster. Before Phase 2's ending has played the lava stream does not ask.
+
+**Obstacles (data, same rules as Phases 1–2; "Thank you!" after each).**
+- `lava`: needs `swim`, question "Can you help me?", others "Can you fly?" /
+  "Can you jump?", after `cliff`. Maple (radio): "It's hot!". Bubbo sprays
+  water; the lava cools to dark stepping rock for good. Spoken "Can you
+  swim?" also solves (help = the obstacle's need). Puff is active after the
+  cliff, so this forces a switch to Bubbo. Rejected: Leafy's vines pulling
+  the rockfall aside (a third "Leafy helps" in a row; Bubbo would then never
+  be used after Phase 1).
+- `cave`: needs `fire`, question "Can you make fire?" (new phrase), others
+  "Can you fly?" / "Can you swim?", after `lava` and Ember's friendship.
+  Ember lights the torches along the cave wall; the cave stays lit. The
+  player carries nothing (rejected: a carried torch — a new held-item
+  mechanic for one obstacle). Before it is lit the cave mouth is black and
+  walking in says "It's dark!" and stops.
+- **The sanctuary gate is four obstacles**, `gateLeaf`, `gateDrop`,
+  `gateWing`, `gateFlame`, one pillar each with the Monster Stone's symbols,
+  all after `cave`, in any order: leaf "Can you help me?" (Leafy grows a
+  flower vine), drop "Can you swim?" (Bubbo fills the basin), wing "Can you
+  fly?" (Puff rings the bell on top), flame "Can you make fire?" (Ember
+  lights the brazier). Each pillar's others are two of the other three
+  questions. Each lit pillar stays lit; the gate opens when all four are.
+  This is the review of the whole game: four switches, four questions.
+
+**Ember (big, a little grumpy, kind).** Normal discovery on approach (it
+huffs smoke at 7 m instead of hiding). Its page has three lines like Puff's:
+"It's orange." → "Hi! I'm Ember!" → "It's big." → "It has a tail."
+(distractors as defined: "It's small.", "It has wings."). "Do you like ___?"
+is unchanged in rules (≤3 "No"s, each a journal fact); meat joins the
+question cards from Phase 3 on and is found only on the meat rack by Ember's
+hot rocks (the contextual hint). Ember asks back "Do you like meat?", then
+"Let's go!" makes it the companion.
+
+**The legendary monster: Lumo** (yellow, big, wings; gentle, glowing). It
+sleeps in the sanctuary garden behind the gate. Opening the gate wakes it.
+Its page is the only one where the student asks the name: "It's yellow." →
+"What's your name?" → "I'm Lumo!" → "It's big." → "It has wings." (the
+name line stays blank until asked; distractor for the name prompt: "Do you
+like ___?" / "Thank you!"). Then Lumo asks "Do you like monsters?" — either
+answer gets a warm reply — and Lumo becomes a friend. Lumo does **not** join
+as a companion (rejected: no obstacle is left to use it on; a fifth chip for
+nothing); in free play it stays in the sanctuary and chats.
+
+**Phase 3 ending = the game's ending.** Lumo rises over the crater; on the
+beach the Monster Stone's fourth symbol (flame) and a new centre star light;
+Maple, in person at the sanctuary this time, says the island is safe and the
+student is a Monster Friend. Results card "The End" with all five journal
+pages, then free exploration of the whole island.
+
+**Save.** `mi.save.v3`; v2 (and v1 through v2) migrate, `endings` reaches 3.
+New obstacle ids join the solved set; Lumo is a monster record like the
+others (`phase: 3`, no `can`, not selectable as companion).
+
+**Budget.** Same per-view budget (~100 draw calls, ≤~120k triangles). The
+volcano and sanctuary are new geometry far from the beach; hide regions out
+of view if measurement shows the need (not needed in Phase 2).
+
+## 2026-10-24 — Phase 3 rules decisions
+
+- Ember's home is (58, -92), with the meat rack hint at (55, -90), on the volcano's south-west slope. Lumo's provisional garden home is (78, -136). Slice 2 may adjust these coordinates.
+- `islandFoods(p)` adds meat after `endings >= 2`, when the volcano route opens. `ISLAND_FOODS` remains the four Phase 1–2 foods for existing callers; slice 2 should use `questionFoods(p, id)` for cards. After three recorded No answers it offers only the favourite, preserving truthful answers and the three-No limit with five foods.
+- Ember's `invited` flag records its post-friendship “Let's go!” separately; `invite` selects Ember and the cave requires this completed encounter. Earlier phases retain their existing rules.
+- Lumo records the name prompt in `described.name`; `befriendLumo` accepts either existing yes/no answer after the complete page and open gate. `friends` includes Lumo, while `companions` and `setActive` exclude it. Its unused favourite/foodSpot fields retain the shared definition shape; `power: null` and an empty power line mean no ability.
+- Gate objectives use leaf, drop, wing, flame order while permanent unlocks allow any order. Gate distractors are two of the other gate questions, never "Can you help me?" outside the leaf pillar (help means the obstacle's need, so it would solve wing or flame too). `finale` represents the final ending, and `endings: 3` records its completion.
+
+## 2026-10-24 — Phase 3 decisions made while building
+
+- The lava stream replaces the cliff-top rockfall at (34.5, -51.3), where the
+  actual Phase 2 route ends. A winding southwest trail climbs to Ember at
+  (58, -92), beside the meat rack (55, -90). The cave mouth is (64, -102).
+  The garden lies beyond a narrow open-topped cave passage; its four pillars
+  stand at x=60/65/75/80, z=-130, before the gate at (70, -133). Lumo's home
+  moved to (70, -141), with space for the finale group and garden camera.
+- Lumo's journal omits Food and Can sections and the companion button. Its
+  name remains blank until asked. This reflects the actual encounter and
+  avoids implying an unused food or ability puzzle.
+- The centre star is a fifth socket between the Monster Stone's four symbols.
+  It and the flame light remotely as Lumo rises. Phase 3 results orbit the
+  sanctuary rather than the beach and show five compact journal page summaries.
+  Unwritten optional beach size lines stay unknown, as in the real journal.
+- The cave is an open-topped rock passage with an arch and a black mouth before
+  lighting. This keeps the existing third-person camera unobstructed. Torches
+  remain visible after Ember lights them; the player carries no new item.
+- Detailed volcano scenery hides when both player and scripted camera target
+  are south of the cliff. The distant smoking cone stays visible in earlier
+  phases. Merged geometry and fixed lights retain the Chromebook render budget.
+- Food questions support number key 5 once meat joins the cards; companion
+  shortcuts remain keys 1–4. Lumo never adds a fifth companion chip.
+- The final cutscene exposes a read-only semantic stage through the existing
+  opt-in test hook (`idle`, `rise`, `maple`, `complete`) along with permanent
+  unlock animation values and camera coordinates, so captures wait on state.
+- Inside the sanctuary, its local rock rim replaces the distant volcano shell.
+  The garden floor ends at that rim, with rocks resting on the flat plateau.
+  This removes the distant cone's cut edge and the tall jungle terrain fringe
+  from the gate/finale cameras. Finale cameras stand inside the gate; friends
+  gather behind the player and Maple when she speaks in person.
+- Equivalent spoken ability questions are accepted separately from the three
+  tap cards. In particular, lava accepts "Can you swim?", and contextual
+  "Can you help me?" works at the rope and pillars, using the unchanged pure
+  obstacle rules. This preserves the frozen tap distractors and speech ladder.
+- Correction pass: the open-topped cave is replaced by an opaque roofed tunnel
+  with a continuous near-black lining and an opaque rear wall. The eastern
+  side exit joins the garden on the existing walkable passage; no collision or ability rules
+  change. A low follow camera stays beneath the roof inside the tunnel. The
+  rock shell does not use camera transparency, so sky/garden cannot show
+  through it. Ember warms the lining with vertex colours and lights ten wall
+  flames with additive glow sprites, without extra lights or shadows.
+- Phase 3 obstacle shots give big companions more room on the player's far
+  shoulder; arrival captures wait for their physical walk and camera position.
+  Lava uses yellow-white fissures, pulsing emissive colour and six instanced
+  steam puffs. Lumo's undiscovered objective names the legendary monster in
+  English and Japanese using the existing objective state.

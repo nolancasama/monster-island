@@ -7,10 +7,10 @@ import { LIVE_MONSTERS } from "../game/data/monsters";
 import { RIVER_Y } from "../game/world/island";
 import { standY } from "../game/world/collision";
 import { smoothMat, shadowMaterial } from "./materials";
-import { bubboParts, leafyParts, puffParts, type MonsterParts } from "./models/monsters";
+import { bubboParts, emberParts, leafyParts, lumoParts, puffParts, type MonsterParts } from "./models/monsters";
 import type { MonsterId } from "../game/types";
 
-const BUILD: Partial<Record<MonsterId, () => MonsterParts>> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts };
+const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
 /** How long each one-shot animation lasts (s). */
 const DUR: Record<string, number> = { yes: 0.9, no: 1.0, spin: 1.1, eat: 1.3, hop: 0.5, friend: 2.6, power: 2.4, hide: 2.4, notice: 0.8, tilt: 1.3 };
@@ -91,7 +91,9 @@ function basePose(m: MonsterRt, t: number): Pose {
     p.squash = 0.9 + Math.sin(t * 1.2) * 0.04;
   }
   // Blink every few seconds.
-  const blink = (t + m.z * 1.7) % 3.6;
+  // JavaScript remainders can be negative: northern homes must still blink
+  // briefly rather than keeping their eyes shut for the whole first visit.
+  const blink = ((t + m.z * 1.7) % 3.6 + 3.6) % 3.6;
   if (blink < 0.12) p.eyes = Math.min(p.eyes, 0.1);
   return p;
 }
@@ -103,6 +105,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
   const rig = useRef<THREE.Group>(null);
   const eyes = useRef<THREE.Group>(null);
   const shadowRef = useRef<THREE.Mesh>(null);
+  const glowRef = useRef<THREE.Mesh>(null);
   const named = useRef<Record<string, THREE.Group | null>>({});
 
   useFrame(() => {
@@ -139,6 +142,10 @@ function MonsterBody({ id }: { id: MonsterId }) {
       shadowRef.current.scale.set(s, s, s);
     }
     const n = named.current;
+    if (glowRef.current) {
+      const glow = 1 + Math.sin(t * 1.8) * 0.035;
+      glowRef.current.scale.set(glow, glow * 1.05, glow);
+    }
     const swing = moving ? Math.sin(step * Math.PI) : 0;
     if (id === "leafy") {
       if (n.footL) n.footL.rotation.x = swing * 0.7;
@@ -182,6 +189,24 @@ function MonsterBody({ id }: { id: MonsterId }) {
       if (n.gillsL) n.gillsL.rotation.z = flap;
       if (n.gillsR) n.gillsR.rotation.z = -flap;
       if (n.tail) n.tail.rotation.y = Math.sin(t * (moving || m.swimming ? 7 : 2.2)) * (m.anim?.kind === "power" ? 0.9 : 0.35);
+    } else if (id === "ember") {
+      if (n.footL) n.footL.rotation.x = swing * 0.45;
+      if (n.footR) n.footR.rotation.x = -swing * 0.45;
+      if (n.tail) n.tail.rotation.y = Math.sin(t * 2.1) * 0.18;
+      if (n.smoke) {
+        const a = m.anim;
+        const huff = a?.kind === "notice" || a?.kind === "power";
+        const age = a ? t - a.t0 : 99;
+        n.smoke.visible = huff && age < 1.1;
+        n.smoke.position.y = 1.24 + age * 0.25;
+        n.smoke.position.z = 0.48 + age * 0.3;
+        n.smoke.scale.setScalar(0.3 + Math.min(1, age) * 0.8);
+      }
+    } else if (id === "lumo") {
+      const asleep = m.mode === "sleep";
+      const beat = asleep ? -0.55 : Math.sin(t * (hover > 0.1 ? 3.2 : 1.4)) * 0.16 + pose.armsUp * 0.45;
+      if (n.wingL) n.wingL.rotation.z = beat;
+      if (n.wingR) n.wingR.rotation.z = -beat;
     } else if (id === "puff") {
       // Wings beat fast in the air, fold and twitch when perched or resting.
       const flying = hover > 0.05;
@@ -206,6 +231,12 @@ function MonsterBody({ id }: { id: MonsterId }) {
   return (
     <group ref={root}>
       <group ref={rig}>
+        {id === "lumo" && (
+          <mesh ref={glowRef} position={[0, 1.03, -0.05]}>
+            <sphereGeometry args={[0.86, 16, 10]} />
+            <meshBasicMaterial color="#ffe895" transparent opacity={0.1} depthWrite={false} />
+          </mesh>
+        )}
         <mesh geometry={parts.body} material={smoothMat} />
         <group ref={eyes} position={[0, parts.eyeY, 0]}>
           <mesh geometry={parts.eyes} material={smoothMat} />
@@ -241,5 +272,5 @@ export function Monsters() {
 
 /** Height of a monster's head (effects, bubbles). */
 export function monsterTop(id: MonsterId): number {
-  return (id === "leafy" ? 1.45 : id === "puff" ? 1.05 : 1.2) + rt.monsters[id].air;
+  return (id === "leafy" ? 1.45 : id === "puff" ? 1.05 : id === "ember" ? 1.85 : id === "lumo" ? 2.1 : 1.2) + rt.monsters[id].air;
 }

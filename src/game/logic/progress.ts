@@ -1,5 +1,5 @@
 import { MONSTERS, MONSTER_ORDER, monstersOfPhase, type MonsterDef } from "../data/monsters";
-import { BAG_MAX, FOODS } from "../data/foods";
+import { BAG_MAX, FOODS, islandFoods } from "../data/foods";
 import type { AbilityId, Bag, FoodId, MonsterId, ObstacleId } from "../types";
 import type { PhraseId } from "./english";
 
@@ -17,7 +17,9 @@ export interface MonsterRecord {
   /** "Can you ___?" answers heard from this monster. */
   canKnown: Partial<Record<AbilityId, boolean>>;
   /** Journal lines said beyond the colour: "It's small." (size), "It has wings." (part). */
-  described: { size?: boolean; part?: boolean };
+  described: { name?: boolean; size?: boolean; part?: boolean };
+  /** Ember's post-friendship "Let's go!" has been said. */
+  invited?: boolean;
 }
 
 export interface Progress {
@@ -80,12 +82,13 @@ export function recordLike(p: Progress, id: MonsterId, food: FoodId): Progress {
   return withMonster(p, id, { asked: { ...p.monsters[id].asked, [food]: yes } });
 }
 
-export type DescribeLine = "size" | "part";
+export type DescribeLine = "name" | "size" | "part";
 
 /** Records a journal line said about a monster (size or body part). */
 export function describeLine(p: Progress, id: MonsterId, line: DescribeLine): Progress {
   const r = p.monsters[id];
   if (!r.discovered || (line === "part" && !MONSTERS[id].part)) return p;
+  if (line === "name" && id !== "lumo") return p;
   return withMonster(p, id, { described: { ...r.described, [line]: true } });
 }
 
@@ -94,6 +97,7 @@ export function missingLines(p: Progress, id: MonsterId): DescribeLine[] {
   const r = p.monsters[id];
   if (!r.discovered) return [];
   const out: DescribeLine[] = [];
+  if (id === "lumo" && !r.described.name) out.push("name");
   if (!r.described.size) out.push("size");
   if (MONSTERS[id].part && !r.described.part) out.push("part");
   return out;
@@ -128,6 +132,12 @@ export function dislikedKnown(p: Progress, id: MonsterId): FoodId[] {
   return (Object.keys(asked) as FoodId[]).filter((f) => asked[f] === false);
 }
 
+/** After three No answers, offer only the favourite; every answer stays truthful. */
+export function questionFoods(p: Progress, id: MonsterId): FoodId[] {
+  if (MONSTERS[id].companion === false) return [];
+  return dislikedKnown(p, id).length >= 3 ? [MONSTERS[id].favorite] : islandFoods(p);
+}
+
 export function has(p: Progress, food: FoodId): boolean {
   return (p.bag[food] ?? 0) > 0;
 }
@@ -135,7 +145,7 @@ export function has(p: Progress, food: FoodId): boolean {
 /** Food can be offered only after the monster said "I like ___" (English gates friendship). */
 export function canOffer(p: Progress, id: MonsterId): boolean {
   const r = p.monsters[id];
-  return r.discovered && !r.friend && favoriteKnown(p, id) && has(p, MONSTERS[id].favorite);
+  return MONSTERS[id].companion !== false && r.discovered && !r.friend && favoriteKnown(p, id) && has(p, MONSTERS[id].favorite);
 }
 
 /** Eat the favourite food and become friends. The first friend becomes the companion. */
@@ -150,9 +160,28 @@ export function friends(p: Progress): MonsterId[] {
   return MONSTER_ORDER.filter((id) => p.monsters[id].friend);
 }
 
+/** Friends available for companion chips and switching. */
+export function companions(p: Progress): MonsterId[] {
+  return friends(p).filter((id) => MONSTERS[id].companion !== false);
+}
+
+/** Finish Ember's encounter with "Let's go!" and make it follow. */
+export function invite(p: Progress, id: MonsterId): Progress {
+  if (id !== "ember" || !p.monsters[id].friend) return p;
+  return setActive(withMonster(p, id, { invited: true }), id);
+}
+
+export const LUMO_ASK_BACK = { en: "Do you like monsters?", answers: ["yesIDo", "noIDont"] as const };
+
+/** Either answer makes Lumo a friend; it stays in the sanctuary. */
+export function befriendLumo(p: Progress, answer: "yesIDo" | "noIDont"): Progress {
+  if (!gateOpen(p) || !p.monsters.lumo.discovered || neededLine(p, "lumo") || p.monsters.lumo.friend) return p;
+  return noteSaid(withMonster(p, "lumo", { friend: true }), answer);
+}
+
 /** Switch the companion. Only friends can follow; switching is immediate. */
 export function setActive(p: Progress, id: MonsterId): Progress {
-  if (!p.monsters[id].friend || p.active === id) return p;
+  if (MONSTERS[id].companion === false || !p.monsters[id].friend || p.active === id) return p;
   return { ...p, active: id };
 }
 
@@ -184,8 +213,28 @@ export const OBSTACLES: Record<ObstacleId, ObstacleDef> = {
   fallenPalm: { id: "fallenPalm", needs: "grow", question: "canHelp", others: ["canSwim", "canJump"], after: [] },
   river: { id: "river", needs: "swim", question: "canSwim", others: ["canFly", "canJump"], after: ["fallenPalm"] },
   bridge: { id: "bridge", needs: "grow", question: "canHelp", others: ["canSwim", "canFly"], after: ["river"] },
-  cliff: { id: "cliff", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["bridge"] }
+  cliff: { id: "cliff", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["bridge"] },
+  lava: { id: "lava", needs: "swim", question: "canHelp", others: ["canFly", "canJump"], after: ["cliff"] },
+  cave: { id: "cave", needs: "fire", question: "canFire", others: ["canFly", "canSwim"], after: ["lava"] },
+  gateLeaf: { id: "gateLeaf", needs: "grow", question: "canHelp", others: ["canSwim", "canFly"], after: ["cave"] },
+  gateDrop: { id: "gateDrop", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: ["cave"] },
+  gateWing: { id: "gateWing", needs: "fly", question: "canFly", others: ["canFire", "canSwim"], after: ["cave"] },
+  gateFlame: { id: "gateFlame", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: ["cave"] }
 };
+
+export const GATES: ObstacleId[] = ["gateLeaf", "gateDrop", "gateWing", "gateFlame"];
+
+export function gateOpen(p: Progress): boolean {
+  return GATES.every((id) => isSolved(p, id));
+}
+
+/** Route and story prerequisites, shared by questions and permanent unlocks. */
+export function obstacleAvailable(p: Progress, id: ObstacleId): boolean {
+  if (OBSTACLES[id].after.some((o) => !isSolved(p, o))) return false;
+  if (id === "lava" && p.endings < 2) return false;
+  if (id === "cave" && (!p.monsters.ember.friend || !p.monsters.ember.invited)) return false;
+  return true;
+}
 
 export function isSolved(p: Progress, id: ObstacleId): boolean {
   return p.solved.includes(id);
@@ -206,12 +255,12 @@ export function askAtObstacle(p: Progress, obstacle: ObstacleId, ability: Abilit
   const o = OBSTACLES[obstacle];
   const asked: AbilityId = ability === "help" ? o.needs : ability;
   const yes = canDo(def, asked);
-  return { kind: "answer", monster: def.id, ability: asked, yes, solves: yes && asked === o.needs && !isSolved(p, obstacle) };
+  return { kind: "answer", monster: def.id, ability: asked, yes, solves: yes && asked === o.needs && !isSolved(p, obstacle) && obstacleAvailable(p, obstacle) };
 }
 
 export function solve(p: Progress, id: ObstacleId): Progress {
   if (isSolved(p, id)) return p;
-  if (OBSTACLES[id].after.some((o) => !isSolved(p, o))) return p;
+  if (!obstacleAvailable(p, id)) return p;
   return { ...p, solved: [...p.solved, id] };
 }
 
@@ -234,20 +283,24 @@ export type Objective =
   | { id: "stone" }
   /** The Phase 2 ending. */
   | { id: "cliffTop" }
+  | { id: "letsGo"; monster: MonsterId }
+  | { id: "askBack"; monster: MonsterId }
+  | { id: "finale" }
   | { id: "explore" };
 
 /** Where each live monster can be reached from (the obstacle that guards it). */
-export const GUARDED_BY: Partial<Record<MonsterId, ObstacleId>> = { bubbo: "fallenPalm", puff: "bridge" };
+export const GUARDED_BY: Partial<Record<MonsterId, ObstacleId>> = { bubbo: "fallenPalm", puff: "bridge", ember: "lava" };
 
 /** The next step toward befriending one monster, or null once it is a friend. */
 function befriendStep(p: Progress, id: MonsterId): Objective | null {
   const r = p.monsters[id];
-  if (r.friend) return null;
+  if (r.friend) return id === "ember" && !r.invited ? { id: "letsGo", monster: id } : null;
   const guard = GUARDED_BY[id];
   if (guard && !isSolved(p, guard)) return { id: "obstacle", obstacle: guard, helper: helperFor(p, guard) };
   if (!r.discovered) return { id: "findMonster", monster: id };
   const line = neededLine(p, id);
   if (line) return { id: "describe", monster: id, line };
+  if (id === "lumo") return { id: "askBack", monster: id };
   const food = MONSTERS[id].favorite;
   if (!favoriteKnown(p, id)) return { id: "askFood", monster: id };
   if (!has(p, food)) return { id: "getFood", monster: id, food };
@@ -272,5 +325,15 @@ export function objective(p: Progress): Objective {
   }
   if (!isSolved(p, "cliff")) return { id: "obstacle", obstacle: "cliff", helper: helperFor(p, "cliff") };
   if (p.endings < 2) return { id: "cliffTop" };
+  if (!isSolved(p, "lava")) return { id: "obstacle", obstacle: "lava", helper: helperFor(p, "lava") };
+  const ember = befriendStep(p, "ember");
+  if (ember) return ember;
+  if (!isSolved(p, "cave")) return { id: "obstacle", obstacle: "cave", helper: helperFor(p, "cave") };
+  for (const gate of GATES) {
+    if (!isSolved(p, gate)) return { id: "obstacle", obstacle: gate, helper: helperFor(p, gate) };
+  }
+  const lumo = befriendStep(p, "lumo");
+  if (lumo) return lumo;
+  if (p.endings < 3) return { id: "finale" };
   return { id: "explore" };
 }

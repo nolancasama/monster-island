@@ -6,7 +6,7 @@ export interface MiState {
   mode: string;
   micState: string;
   progress: {
-    monsters: Record<string, { discovered: boolean; asked: Record<string, boolean>; friend: boolean; canKnown: Record<string, boolean>; described: { size?: boolean; part?: boolean } }>;
+    monsters: Record<string, { discovered: boolean; asked: Record<string, boolean>; friend: boolean; invited?: boolean; canKnown: Record<string, boolean>; described: { name?: boolean; size?: boolean; part?: boolean } }>;
     active: string | null;
     bag: Record<string, number>;
     solved: string[];
@@ -38,6 +38,13 @@ export interface MiState {
   rope: number;
   bramble: number;
   stoneGlow: Record<string, number>;
+  lava: number;
+  cave: number;
+  pillars: Record<string, number>;
+  gate: number;
+  starGlow: number;
+  finale: "idle" | "rise" | "maple" | "complete";
+  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
   perf: { calls: number; triangles: number; fps: number };
 }
 

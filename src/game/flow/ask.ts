@@ -27,6 +27,8 @@ export interface AskRequest {
   kind: "command" | "choice";
   /** Accepted sentences (a command accepts only the first). */
   options: PhraseId[];
+  /** Equivalent spoken questions, accepted without adding extra tap cards. */
+  speechAliases?: PhraseId[];
   /** Sentences displayed in speech mode (default: the command target, or every choice). */
   show?: PhraseId[];
   /** Show "before ___ after" with picture slots instead of whole sentences (speech mode). */
@@ -202,7 +204,7 @@ function succeed(id: PhraseId) {
 function accepted(id: PhraseId): boolean {
   const a = active;
   if (!a) return false;
-  return a.req.kind === "choice" ? a.req.options.includes(id) : a.req.options[0] === id;
+  return a.req.kind === "choice" ? a.req.options.includes(id) || (a.req.speechAliases?.includes(id) ?? false) : a.req.options[0] === id;
 }
 
 /** Space / 🎤: start one listening session (or end the current one early). */
@@ -219,7 +221,7 @@ export function micPress() {
     return;
   }
   tts.cancel();
-  const speechOptions = (a.req.kind === "choice" ? a.req.options : [a.req.options[0]]).map((id) => PHRASES[id]);
+  const speechOptions = [...new Set(a.req.kind === "choice" ? [...a.req.options, ...(a.req.speechAliases ?? [])] : [a.req.options[0]])].map((id) => PHRASES[id]);
   let last: Judgement = { kind: "none", heard: "" };
   let hard = false;
   audio.setListening(true);

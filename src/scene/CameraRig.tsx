@@ -3,7 +3,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
-import { BOULDERS, MONSTER_STONE, groundY } from "../game/world/island";
+import { BOULDERS, CAVE, MONSTER_STONE, groundY } from "../game/world/island";
+import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 
 /** The live camera, for projecting world labels to the screen. */
@@ -56,9 +57,10 @@ export function CameraRig() {
       wantLook.current.set(-14 + Math.sin(t) * 8, 1.4, -2);
     } else if (g.screen === "results") {
       const t = rt.time * 0.08;
-      const s = MONSTER_STONE;
-      want.current.set(s.x + Math.sin(t) * 9, 4, s.z + 3 + Math.cos(t) * 9);
-      wantLook.current.set(s.x, 1.6, s.z);
+      const s = g.progress.endings >= 3 ? MONSTERS.lumo.home : MONSTER_STONE;
+      const gy = groundY(s.x, s.z);
+      want.current.set(s.x + Math.sin(t) * 9, gy + 4, s.z + 3 + Math.cos(t) * 9);
+      wantLook.current.set(s.x, gy + 1.6, s.z);
     } else if (c.mode === "shot" && c.shot) {
       want.current.set(c.shot.pos.x, c.shot.pos.y, c.shot.pos.z);
       wantLook.current.set(c.shot.target.x, c.shot.target.y, c.shot.target.z);
@@ -68,7 +70,14 @@ export function CameraRig() {
       const horiz = c.dist * Math.cos(c.pitch);
       want.current.set(p.x + Math.sin(c.yaw) * horiz, ty + c.dist * Math.sin(c.pitch), p.z + Math.cos(c.yaw) * horiz);
       wantLook.current.set(p.x, ty, p.z);
-      want.current.y += lift(wantLook.current, want.current);
+      if (p.z < CAVE.z - 1 && p.z > CAVE.z - 27 && Math.abs(p.x - CAVE.x) < 3) {
+        // Keep the follow camera beneath the solid tunnel roof while walking through it.
+        want.current.set(Math.max(CAVE.x - 2.4, Math.min(CAVE.x + 2.4, p.x)), groundY(CAVE.x, CAVE.z) + 3.4, Math.min(CAVE.z - 0.4, p.z + 3));
+        pos.current.x = Math.max(CAVE.x - 2.4, Math.min(CAVE.x + 2.4, pos.current.x));
+        pos.current.y = Math.min(pos.current.y, groundY(CAVE.x, CAVE.z) + 3.7);
+      } else {
+        want.current.y += lift(wantLook.current, want.current);
+      }
     }
     const floor = Math.max(groundY(want.current.x, want.current.z), -0.4) + 0.7;
     if (want.current.y < floor) want.current.y = floor;

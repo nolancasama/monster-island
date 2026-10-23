@@ -7,6 +7,20 @@ const P = (ids: PhraseId[]) => ids.map((id) => PHRASES[id]);
 const LIKE_OPTIONS = P(ISLAND_FOODS.map((f) => LIKE_PHRASE[f]));
 
 describe("English response matching", () => {
+  it("matches Phase 3 phrases and accent variants without single-word questions", () => {
+    for (const text of ["Can you make fire?", "ken you make fia", "kan fire"]) {
+      expect(judgeSpeech([text], P(["canFire", "canFly", "canSwim"]))).toMatchObject({ id: "canFire" });
+    }
+    for (const text of ["What's your name?", "what your name", "whats your nem", "wat neimu"]) {
+      expect(judgeSpeech([text], P(["whatsYourName", "likeApples", "thankYou"]))).toMatchObject({ id: "whatsYourName" });
+    }
+    for (const text of ["It's yellow.", "it's yello", "iero"]) {
+      expect(judgeSpeech([text], P(["itsYellow", "itsOrange", "itsPurple"]))).toMatchObject({ id: "itsYellow" });
+    }
+    for (const text of ["fire", "make fire", "can you fly"]) expect(matchesPhrase(text, PHRASES.canFire)).toBe(false);
+    for (const text of ["name", "what", "thank you", "what a game"]) expect(matchesPhrase(text, PHRASES.whatsYourName)).toBe(false);
+    expect(matchesPhrase("hello", PHRASES.itsYellow)).toBe(false);
+  });
   it("every displayed sentence matches itself", () => {
     for (const id of PHRASE_IDS) expect(matchesPhrase(PHRASES[id].en, PHRASES[id]), id).toBe(true);
   });

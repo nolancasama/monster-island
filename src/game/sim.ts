@@ -1,15 +1,16 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
-import { objective } from "./logic/progress";
+import { gateOpen, objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { animate, rt, type MonsterRt } from "./runtime";
 import { keyboardMove } from "../input/keyboard";
 import { PLAYER_R, gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
-import { MONSTER_STONE, RIVER, shoreZ } from "./world/island";
+import { CAVE, LAVA, MONSTER_STONE, RIVER, shoreZ } from "./world/island";
 import { findFocus } from "./flow/focus";
 import { talkTo } from "./flow/encounter";
-import { stoneEnding } from "./flow/story";
+import { finaleEnding, stoneEnding } from "./flow/story";
 import { isRunning } from "./flow/script";
-import { poofTo, besidePlayer } from "./flow/companion";
+import { poofTo, companionSpot } from "./flow/companion";
+import { lookIntoDarkCave } from "./flow/obstacles";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
 
@@ -183,6 +184,19 @@ function homeLife(m: MonsterRt, dt: number) {
   const p = rt.player;
   const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
 
+  // Lumo belongs to the garden. The four powers wake it; it never wanders
+  // out through the gate or naps again after that moment.
+  if (m.id === "lumo") {
+    m.x = def.home.x;
+    m.z = def.home.z;
+    m.speed = 0;
+    m.target = null;
+    m.mode = gateOpen(g.progress) ? "idle" : "sleep";
+    m.airTarget = 0;
+    if (gateOpen(g.progress) && dPlayer < 10) turn(m, Math.atan2(p.x - m.x, p.z - m.z), dt, 3);
+    return;
+  }
+
   // A shy flier waits up on its perch until it is called down ("Come here!").
   if (def.perch && !rec.discovered) {
     m.x = def.perch.x;
@@ -206,8 +220,8 @@ function homeLife(m: MonsterRt, dt: number) {
     m.noticed = true;
     animate(m.id, def.temper === "shy" ? "hide" : "notice");
     audio.voice(m.id, "surprised");
-    m.mode = def.temper === "curious" ? "wander" : "idle";
-    m.target = def.temper === "curious" ? { x: m.x + (p.x - m.x) * 0.45, z: m.z + (p.z - m.z) * 0.45 } : null;
+    m.mode = def.temper === "curious" && m.id !== "ember" ? "wander" : "idle";
+    m.target = def.temper === "curious" && m.id !== "ember" ? { x: m.x + (p.x - m.x) * 0.45, z: m.z + (p.z - m.z) * 0.45 } : null;
     m.until = rt.time + 3;
     return;
   }
@@ -264,7 +278,7 @@ function follow(m: MonsterRt, dt: number) {
     faceLook(m, dt);
     return;
   }
-  const spot = besidePlayer(1.5, 1.1 * rt.followSide);
+  const spot = companionSpot(m.id);
   const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
   if (dPlayer > 13) {
     poofTo(m.id, spot.x, spot.z);
@@ -272,7 +286,8 @@ function follow(m: MonsterRt, dt: number) {
     return;
   }
   const dSpot = Math.hypot(spot.x - m.x, spot.z - m.z);
-  if (dSpot < 0.5 || (dPlayer < 1.3 && dSpot < 1.2)) {
+  const obstacleShot = rt.camera.mode === "shot" && p.z <= LAVA.z1 + 4;
+  if (dSpot < (obstacleShot ? 0.2 : 0.5) || (!obstacleShot && dPlayer < 1.3 && dSpot < 1.2)) {
     m.speed = 0;
     if (p.speed < 0.2) turn(m, Math.atan2(p.x - m.x, p.z - m.z), dt, 3);
     followStuck = 0;
@@ -293,8 +308,16 @@ function follow(m: MonsterRt, dt: number) {
 function autoTriggers() {
   const g = getGame();
   const p = rt.player;
+  if (Math.hypot(p.x - CAVE.x, p.z - CAVE.z) > 5) rt.caveWarned = false;
+  if (g.progress.solved.includes("lava") && !g.progress.solved.includes("cave") && !rt.caveWarned && Math.abs(p.x - CAVE.x) < 2.4 && p.z < CAVE.z + 1.7 && p.z > CAVE.z - 1) {
+    rt.caveWarned = true;
+    void lookIntoDarkCave();
+    return;
+  }
   for (const id of LIVE_MONSTERS) {
     const m = rt.monsters[id];
+    if (id === "ember" && !g.progress.solved.includes("lava")) continue;
+    if (id === "lumo" && !gateOpen(g.progress)) continue;
     if (g.progress.monsters[id].discovered) continue;
     if (Math.hypot(p.x - m.x, p.z - m.z) < 2.6) {
       void talkTo(id as MonsterId);
@@ -304,4 +327,5 @@ function autoTriggers() {
   if (g.progress.solved.includes("river") && g.progress.endings < 1 && Math.hypot(p.x - MONSTER_STONE.x, p.z - MONSTER_STONE.z) < 4.2) {
     void stoneEnding();
   }
+  if (objective(g.progress).id === "finale") void finaleEnding();
 }

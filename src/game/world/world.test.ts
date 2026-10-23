@@ -10,10 +10,13 @@ import {
   MONSTER_STONE,
   ROPE,
   SPAWN,
-  X_EAST,
   X_WEST,
   Z_NORTH,
-  FALLEN_PALM
+  FALLEN_PALM,
+  LAVA,
+  CAVE,
+  GATE_PILLARS,
+  SANCTUARY_GATE
 } from "./island";
 import { PLAYER_R, blocked, inForest, isWalkable, moveCircle, type Gates } from "./collision";
 import { MONSTERS } from "../data/monsters";
@@ -22,11 +25,11 @@ import type { ObstacleId } from "../types";
 const STEP = 0.5;
 
 /** Flood fill of the cells a player can walk to from the spawn (real collision moves). */
-function reachable(solved: ObstacleId[], forest = false): Set<string> {
-  const gates: Gates = { solved, forest };
+function reachable(solved: ObstacleId[], forest = false, volcano = false, start = SPAWN): Set<string> {
+  const gates: Gates = { solved, forest, volcano };
   const key = (i: number, j: number) => `${i},${j}`;
   const toCell = (x: number, z: number) => [Math.round(x / STEP), Math.round(z / STEP)];
-  const [si, sj] = toCell(SPAWN.x, SPAWN.z);
+  const [si, sj] = toCell(start.x, start.z);
   const seen = new Set([key(si, sj)]);
   const queue: Array<[number, number]> = [[si, sj]];
   while (queue.length) {
@@ -38,7 +41,7 @@ function reachable(solved: ObstacleId[], forest = false): Set<string> {
       if (seen.has(k)) continue;
       const tx = ni * STEP;
       const tz = nj * STEP;
-      if (tx < X_WEST - 1 || tx > X_EAST + 10 || tz < -56 || tz > 16) continue;
+      if (tx < X_WEST - 1 || tx > 85 || tz < -151 || tz > 16) continue;
       const p = moveCircle(i * STEP, j * STEP, tx, tz, PLAYER_R, gates);
       if (Math.hypot(p.x - tx, p.z - tz) > 0.05) continue;
       seen.add(k);
@@ -129,5 +132,45 @@ describe("island reachability", () => {
       const [i, j] = k.split(",").map(Number);
       if (j * STEP < Z_NORTH - 0.5) expect(inForest(i * STEP, j * STEP), k).toBe(true);
     }
+  });
+});
+
+describe("volcano and sanctuary reachability", () => {
+  const phase2: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff"];
+  const start = { ...CLIFF_TOP_SPOT, yaw: 0 };
+  const fromTop = (solved: ObstacleId[], volcano = true) => reachable(solved, true, volcano, start);
+  const hot = fromTop(phase2);
+  const cooled = fromTop([...phase2, "lava"]);
+  const lit = fromTop([...phase2, "lava", "cave"]);
+  const pillars = Object.keys(GATE_PILLARS) as ObstacleId[];
+
+  it("the lava replaces the cliff rockfall and guards Ember and the only meat", () => {
+    expect(canReach(hot, LAVA.x, LAVA.z, INTERACT_RANGE)).toBe(true);
+    expect(canReach(hot, MONSTERS.ember.home.x, MONSTERS.ember.home.z, INTERACT_RANGE)).toBe(false);
+    expect(canReach(cooled, MONSTERS.ember.home.x, MONSTERS.ember.home.z, INTERACT_RANGE)).toBe(true);
+    const meat = FOOD_SOURCES.find((s) => s.food === "meat")!;
+    expect(canReach(hot, meat.x, meat.z, INTERACT_RANGE)).toBe(false);
+    expect(canReach(cooled, meat.x, meat.z, INTERACT_RANGE)).toBe(true);
+    expect(canReach(fromTop([...phase2, "lava"], false), meat.x, meat.z, INTERACT_RANGE)).toBe(false);
+  });
+
+  it("the dark cave stops the player before the sanctuary until Ember lights it", () => {
+    expect(canReach(cooled, CAVE.x, CAVE.z, INTERACT_RANGE)).toBe(true);
+    for (const p of Object.values(GATE_PILLARS)) {
+      expect(canReach(cooled, p.x, p.z, INTERACT_RANGE)).toBe(false);
+      expect(canReach(lit, p.x, p.z, INTERACT_RANGE)).toBe(true);
+    }
+    expect(canReach(lit, MONSTERS.lumo.home.x, MONSTERS.lumo.home.z, INTERACT_RANGE)).toBe(false);
+  });
+
+  it("each pillar is necessary and all four open a permanent passage both ways", () => {
+    for (const omitted of pillars) {
+      const cells = fromTop([...phase2, "lava", "cave", ...pillars.filter((p) => p !== omitted)]);
+      expect(canReach(cells, MONSTERS.lumo.home.x, MONSTERS.lumo.home.z, INTERACT_RANGE), omitted).toBe(false);
+    }
+    const opened = fromTop([...phase2, "lava", "cave", ...pillars]);
+    expect(canReach(opened, SANCTUARY_GATE.x, SANCTUARY_GATE.z, 0.5)).toBe(true);
+    expect(canReach(opened, MONSTERS.lumo.home.x, MONSTERS.lumo.home.z, INTERACT_RANGE)).toBe(true);
+    expect(canReach(opened, CLIFF_TOP_SPOT.x, CLIFF_TOP_SPOT.z, 0.5)).toBe(true);
   });
 });

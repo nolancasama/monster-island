@@ -8,6 +8,7 @@ import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
+import { PHASE3_PLACE } from "./flow/obstacles";
 
 /**
  * Test hook (only with ?e2e=1): read game state and put the player next to
@@ -33,6 +34,7 @@ export function installE2eHook(seed: number) {
     if (name === "bridge") return { x: BRIDGE.x, z: BRIDGE.z1 + 0.6 };
     if (name === "cliff" || name === "rope") return { x: ROPE.x, z: ROPE.z + 0.2 };
     if (name === "cliffTop") return CLIFF_TOP_SPOT;
+    if (name in PHASE3_PLACE) return PHASE3_PLACE[name as keyof typeof PHASE3_PLACE];
     if ((LIVE_MONSTERS as string[]).includes(name)) return rt.monsters[name as keyof typeof rt.monsters];
     const src = FOOD_SOURCES.find((s) => s.id === name || s.food === name);
     return src ?? null;
@@ -73,6 +75,14 @@ export function installE2eHook(seed: number) {
         rope: rt.rope,
         bramble: rt.bramble,
         stoneGlow: { ...rt.stoneGlow },
+        lava: rt.lava,
+        cave: rt.cave,
+        caveWarned: rt.caveWarned,
+        pillars: { ...rt.pillars },
+        gate: rt.gate,
+        starGlow: rt.starGlow,
+        finale: rt.finale,
+        camera: { pos: { ...rt.camera.pos }, target: { ...rt.camera.target } },
         perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped }
       };
     },
@@ -85,7 +95,7 @@ export function installE2eHook(seed: number) {
       const near =
         name === "river"
           ? { x: t.x - 0.2, z: t.z }
-          : name === "bridge" || name === "cliff" || name === "rope"
+          : name === "bridge" || name === "cliff" || name === "rope" || name in PHASE3_PLACE
             ? { x: t.x, z: t.z + dist * 0.6 }
             : { x: t.x + Math.sin(a) * dist, z: t.z + Math.cos(a) * dist };
       return place(near.x, near.z, name === "river" ? CROSSING.east.x : t.x, name === "river" ? CROSSING.east.z : t.z);

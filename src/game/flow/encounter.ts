@@ -1,15 +1,19 @@
 import { MONSTERS } from "../data/monsters";
-import { FOODS, ISLAND_FOODS } from "../data/foods";
+import { FOODS } from "../data/foods";
 import { COLOR_PHRASE, LIKE_PHRASE, PART_PHRASE, PHRASES, SIZE_PHRASE, foodOfPhrase, type PhraseId } from "../logic/english";
 import {
   answerLike,
   befriend,
+  befriendLumo,
   describeLine,
   discover,
   dislikedKnown,
   favoriteKnown,
   has,
+  invite,
+  LUMO_ASK_BACK,
   neededLine,
+  questionFoods,
   recordLike,
   type DescribeLine
 } from "../logic/progress";
@@ -58,6 +62,16 @@ function endTalk(id: MonsterId) {
 /** E on a monster. */
 export function talkTo(id: MonsterId): Promise<void> {
   const p = getGame().progress;
+  if (id === "ember" && p.monsters[id].friend && !p.monsters[id].invited) {
+    return run(async () => {
+      try {
+        beginTalk(id);
+        await inviteAlong(id);
+      } finally {
+        endTalk(id);
+      }
+    });
+  }
   if (p.monsters[id].friend) return friendChat(id);
   return run(async () => {
     try {
@@ -75,6 +89,10 @@ export function talkTo(id: MonsterId): Promise<void> {
         const ok = await describeLines(id);
         setGame({ discovering: null });
         if (!ok) return;
+      }
+      if (id === "lumo") {
+        await lumoFriendship();
+        return;
       }
       if (!favoriteKnown(getGame().progress, id)) {
         const ok = await askLikes(id);
@@ -151,16 +169,17 @@ async function callDown(id: MonsterId): Promise<boolean> {
 /** Lines already written on the page (the discovery card shows them). */
 function writtenLines(id: MonsterId): DescribeLine[] {
   const d = getGame().progress.monsters[id].described;
-  return (["size", "part"] as DescribeLine[]).filter((l) => d[l]);
+  return (["name", "size", "part"] as DescribeLine[]).filter((l) => d[l]);
 }
 
 /** The phrase for one journal line about a monster ("It's small.", "It has wings."). */
 export function linePhrase(id: MonsterId, line: DescribeLine): PhraseId {
   const def = MONSTERS[id];
-  return line === "size" ? SIZE_PHRASE[def.size] : PART_PHRASE[def.part!];
+  return line === "name" ? "whatsYourName" : line === "size" ? SIZE_PHRASE[def.size] : PART_PHRASE[def.part!];
 }
 
 const LINE_ASK: Record<DescribeLine, { en: string; ja: string }> = {
+  name: { en: "Ask its name!", ja: "なまえを きこう" },
   size: { en: "Is it big or small?", ja: "おおきい? ちいさい? えいごで いおう" },
   part: { en: "Look! What does it have?", ja: "からだの とくちょうを えいごで いおう" }
 };
@@ -183,6 +202,10 @@ async function describeLines(id: MonsterId): Promise<boolean> {
     const d = getGame().discovering;
     if (d) setGame({ discovering: { ...d, lines: [...(d.lines ?? []), line] }, journalPulse: true });
     audio.play("journal");
+    if (line === "name") {
+      audio.voice(id, "hello");
+      await say(id, `I'm ${MONSTERS[id].name}!`, undefined, { target: true });
+    }
     animate(id, line === "part" ? "power" : "hop");
     audio.voice(id, "happy");
     await wait(900);
@@ -216,7 +239,7 @@ async function describe(id: MonsterId): Promise<boolean> {
   await wait(900);
   animate(id, "hop");
   audio.voice(id, "hello");
-  await say(id, `Hi! I'm ${def.name}!`, undefined, { target: true });
+  if (id !== "lumo") await say(id, `Hi! I'm ${def.name}!`, undefined, { target: true });
   const ok = await describeLines(id);
   setGame({ discovering: null });
   return ok;
@@ -250,7 +273,7 @@ export function writeLine(id: MonsterId, line: DescribeLine): Promise<void> {
 async function askLikes(id: MonsterId): Promise<boolean> {
   const def = MONSTERS[id];
   const icons: Partial<Record<PhraseId, string>> = {};
-  for (const f of ISLAND_FOODS) icons[LIKE_PHRASE[f]] = f;
+  for (const f of questionFoods(getGame().progress, id)) icons[LIKE_PHRASE[f]] = f;
   let first = !Object.values(getGame().progress.monsters).some((r) => Object.keys(r.asked).length > 0);
   if (first) {
     await say("game", `What does ${def.name} like? Ask!`, `${def.name}の すきな たべものは なにかな? きいてみよう!`);
@@ -259,7 +282,7 @@ async function askLikes(id: MonsterId): Promise<boolean> {
     const crossed = dislikedKnown(getGame().progress, id).map((f) => LIKE_PHRASE[f]);
     const said = await ask({
       kind: "choice",
-      options: ISLAND_FOODS.map((f) => LIKE_PHRASE[f]),
+      options: questionFoods(getGame().progress, id).map((f) => LIKE_PHRASE[f]),
       frame: { before: "Do you like", after: "?" },
       icons,
       crossed,
@@ -348,24 +371,7 @@ async function feed(id: MonsterId) {
   await say("game", `${def.name} is your friend!`, `${def.name}と ともだちに なった!`);
   setGame({ friendCard: null });
   if (def.phase >= 2) {
-    // From Phase 2 on the student invites the new friend along.
-    await ask({
-      kind: "command",
-      options: ["letsGo"],
-      question: { en: `Take ${def.name} with you!`, by: "game" },
-      help: `${def.name}を さそおう`,
-      readQuestion: true,
-      readSentence: true,
-      onWrong: () => animate(id, "tilt")
-    });
-    switchTo(id, true);
-    m.mode = "talk";
-    m.talking = true;
-    animate(id, "yes");
-    audio.voice(id, "excited");
-    await say(id, "OK! Let's go!", undefined, { target: true, tone: "yes" });
-    m.talking = false;
-    m.mode = "follow";
+    await inviteAlong(id);
     return;
   }
   const p = getGame().progress;
@@ -377,24 +383,76 @@ async function feed(id: MonsterId) {
   }
 }
 
+/** The saved invitation is separate from Ember's friendship so interruption resumes here. */
+async function inviteAlong(id: MonsterId) {
+  const said = await ask({
+    kind: "command",
+    options: ["letsGo"],
+    question: { en: `Take ${MONSTERS[id].name} with you!`, by: "game" },
+    help: `${MONSTERS[id].name}を さそおう`,
+    readQuestion: true,
+    readSentence: true,
+    onWrong: () => animate(id, "tilt")
+  });
+  if (!said) return;
+  switchTo(id, true);
+  if (id === "ember") updateProgress((p) => invite(p, id));
+  const m = rt.monsters[id];
+  m.mode = "talk";
+  m.talking = true;
+  animate(id, "yes");
+  audio.voice(id, "excited");
+  await say(id, "OK! Let's go!", undefined, { target: true, tone: "yes" });
+  m.talking = false;
+  m.mode = "follow";
+}
+
+async function lumoFriendship() {
+  const back = await ask({
+    kind: "choice",
+    options: [...LUMO_ASK_BACK.answers],
+    question: { en: LUMO_ASK_BACK.en, by: "lumo" },
+    help: "あなたは? こたえよう",
+    readQuestion: true
+  });
+  if (back !== "yesIDo" && back !== "noIDont") return;
+  const m = rt.monsters.lumo;
+  m.talking = true;
+  animate("lumo", "yes");
+  audio.voice("lumo", "happy");
+  await say("lumo", back === "yesIDo" ? "Me too! I like you!" : "That's OK! We can be friends!", undefined, { target: true, tone: "yes" });
+  m.talking = false;
+  updateProgress((p) => befriendLumo(p, back));
+  animate("lumo", "friend");
+  audio.play("friend");
+  effect("hearts", m.x, 1.8, m.z);
+  setGame({ friendCard: "lumo", journalPulse: true });
+  await say("game", "Lumo is your friend!", "Lumoと ともだちに なった!");
+  setGame({ friendCard: null });
+}
+
 // ------------------------------------------------------------ friends
 
 /** E on a friend: the companion chats; another friend comes along. */
 async function friendChat(id: MonsterId) {
   const p = getGame().progress;
-  if (p.active !== id) {
+  if (p.active !== id && MONSTERS[id].companion !== false) {
     switchTo(id);
     return;
   }
   const def = MONSTERS[id];
   animate(id, "hop");
   audio.voice(id, "happy");
-  const lines: Array<{ en: string; ja?: string }> = [def.powerLine, { en: `I like ${FOODS[def.favorite].word}!` }];
+  const lines: Array<{ en: string; ja?: string }> = id === "lumo"
+    ? [{ en: "I like monsters!" }, { en: "You are my friend!" }, { en: "Thank you!" }]
+    : [def.powerLine, { en: `I like ${FOODS[def.favorite].word}!` }];
   const line = lines[Math.floor(rt.time) % lines.length];
   await run(async () => {
+    if (id === "lumo") beginTalk(id);
     rt.monsters[id].talking = true;
     // "I like apples!" is target English (never glossed); the power line has help.
     await say(id, line.en, line.ja, { target: !line.ja });
     rt.monsters[id].talking = false;
+    if (id === "lumo") endTalk(id);
   });
 }

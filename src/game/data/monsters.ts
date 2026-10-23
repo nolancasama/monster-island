@@ -18,7 +18,9 @@ export interface MonsterDef {
   /** Truthful answers to "Can you ___?" (everything else is "No, I can't."). */
   can: AbilityId[];
   /** The ability it uses on obstacles. */
-  power: AbilityId;
+  power: AbilityId | null;
+  /** False for sanctuary friends who never follow the player. */
+  companion?: false;
   /** What it says about its power (journal, companion chat). */
   powerLine: Text;
   habitat: Text;
@@ -105,22 +107,41 @@ export const MONSTERS: Record<MonsterId, MonsterDef> = {
     power: "fire",
     powerLine: { en: "I can make fire!", ja: "ひを つけられるよ" },
     habitat: { en: "Volcano", ja: "かざん" },
-    home: { x: 60, z: -50, r: 3 },
-    foodSpot: { x: 60, z: -50 },
+    home: { x: 58, z: -92, r: 3 },
+    foodSpot: { x: 55, z: -90 },
     phase: 3,
     voice: { pitch: 1.1, rate: 1.0 },
     temper: "curious",
     radius: 0.5
+  },
+  lumo: {
+    id: "lumo",
+    name: "Lumo",
+    size: "big",
+    part: "wings",
+    color: "yellow",
+    favorite: "apples", // Unused: Lumo befriends through its ask-back, without food.
+    can: [],
+    power: null,
+    powerLine: { en: "" },
+    companion: false,
+    habitat: { en: "Sanctuary", ja: "まもりの にわ" },
+    home: { x: 70, z: -141, r: 2 },
+    foodSpot: { x: 70, z: -141 },
+    phase: 3,
+    voice: { pitch: 1.2, rate: 0.9 },
+    temper: "curious",
+    radius: 0.65
   }
 };
 
 /** Journal order. */
-export const MONSTER_ORDER: MonsterId[] = ["leafy", "bubbo", "puff", "ember"];
+export const MONSTER_ORDER: MonsterId[] = ["leafy", "bubbo", "puff", "ember", "lumo"];
 
 /** Monsters that exist in the world in this build. */
-export const BUILT_PHASE = 2;
+export const BUILT_PHASE = 3;
 export const LIVE_MONSTERS: MonsterId[] = MONSTER_ORDER.filter((id) => MONSTERS[id].phase <= BUILT_PHASE);
 export const monstersOfPhase = (phase: number): MonsterId[] => MONSTER_ORDER.filter((id) => MONSTERS[id].phase === phase);
 
-export const COLOR_WORD: Record<ColorId, string> = { green: "green", blue: "blue", orange: "orange", purple: "purple" };
-export const COLOR_HEX: Record<ColorId, string> = { green: "#5cc24a", blue: "#3f9fe8", orange: "#ff8a2a", purple: "#a070e0" };
+export const COLOR_WORD: Record<ColorId, string> = { green: "green", blue: "blue", orange: "orange", purple: "purple", yellow: "yellow" };
+export const COLOR_HEX: Record<ColorId, string> = { green: "#5cc24a", blue: "#3f9fe8", orange: "#ff8a2a", purple: "#a070e0", yellow: "#ffe36b" };

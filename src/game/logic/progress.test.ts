@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { MONSTERS, LIVE_MONSTERS, MONSTER_ORDER, monstersOfPhase } from "../data/monsters";
-import { ISLAND_FOODS } from "../data/foods";
+import { ISLAND_FOODS, islandFoods } from "../data/foods";
 import {
   answerCan,
+  befriendLumo,
+  companions,
+  gateOpen,
+  GATES,
+  invite,
+  questionFoods,
   answerLike,
   askAtObstacle,
   befriend,
@@ -47,7 +53,7 @@ describe("food preferences", () => {
   });
 
   it("live monsters like a food that exists on the island", () => {
-    for (const id of LIVE_MONSTERS) expect(ISLAND_FOODS).toContain(MONSTERS[id].favorite);
+    for (const id of LIVE_MONSTERS) expect(islandFoods({ endings: 2 })).toContain(MONSTERS[id].favorite);
   });
 
   it("answers use the target sentences", () => {
@@ -70,15 +76,17 @@ describe("food preferences", () => {
 
   it("never needs more than three no answers before the yes", () => {
     for (const id of LIVE_MONSTERS) {
-      let p = discover(newProgress(), id);
+      if (MONSTERS[id].companion === false) continue;
+      let p = discover({ ...newProgress(), endings: 2 }, id);
       let asks = 0;
-      for (const food of ISLAND_FOODS) {
-        if (favoriteKnown(p, id)) break;
+      while (!favoriteKnown(p, id)) {
+        const food = questionFoods(p, id).find((f) => p.monsters[id].asked[f] === undefined)!;
         p = recordLike(p, id, food);
         asks++;
       }
       expect(favoriteKnown(p, id)).toBe(true);
-      expect(asks).toBeLessThanOrEqual(ISLAND_FOODS.length);
+      expect(asks).toBeLessThanOrEqual(4);
+      expect(dislikedKnown(p, id).length).toBeLessThanOrEqual(3);
     }
   });
 });
@@ -241,7 +249,7 @@ describe("objective and puzzle completion", () => {
     p = solve(p, "cliff");
     expect(objective(p).id).toBe("cliffTop");
     p = { ...p, endings: 2 };
-    expect(objective(p).id).toBe("explore");
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "lava", helper: "bubbo" });
   });
 
   it("a student who meets Bubbo's fish first still has one clear next step", () => {
@@ -275,5 +283,88 @@ describe("journal lines", () => {
   it("sizes and parts match the models", () => {
     expect([MONSTERS.leafy.size, MONSTERS.bubbo.size, MONSTERS.puff.size]).toEqual(["small", "big", "small"]);
     expect(MONSTERS.puff.part).toBe("wings");
+  });
+});
+
+describe("Volcano and Sanctuary", () => {
+  function cliffTop(): Progress {
+    let p = { ...newProgress(), metMaple: true };
+    p = solve(makeFriend(p, "leafy"), "fallenPalm");
+    p = solve(makeFriend(p, "bubbo"), "river");
+    p = { ...p, endings: 1 };
+    p = solve(p, "bridge");
+    return setActive(solve(makeFriend(p, "puff"), "cliff"), "puff");
+  }
+
+  it("keeps meat cards out of Phases 1 and 2", () => {
+    expect(islandFoods({ endings: 0 })).toEqual(ISLAND_FOODS);
+    expect(islandFoods({ endings: 1 })).toEqual(ISLAND_FOODS);
+    expect(islandFoods({ endings: 2 })).toEqual([...ISLAND_FOODS, "meat"]);
+  });
+
+  it("walks Phase 3, including every journal line, invitation and ending", () => {
+    let p = cliffTop();
+    expect(objective(p)).toEqual({ id: "cliffTop" });
+    expect(solve(p, "lava")).toBe(p);
+    p = { ...p, endings: 2 };
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "lava", helper: "bubbo" });
+    expect(askAtObstacle(p, "lava", "help")).toMatchObject({ yes: false, solves: false });
+    p = setActive(p, "bubbo");
+    expect(askAtObstacle(p, "lava", "swim")).toMatchObject({ yes: true, solves: true });
+    expect(askAtObstacle(p, "lava", "help")).toMatchObject({ ability: "swim", solves: true });
+    p = solve(p, "lava");
+    expect(objective(p)).toEqual({ id: "findMonster", monster: "ember" });
+    expect(solve(p, "cave")).toBe(p);
+    p = discover(p, "ember");
+    for (const line of ["size", "part"] as const) {
+      expect(objective(p)).toEqual({ id: "describe", monster: "ember", line });
+      p = describeLine(p, "ember", line);
+    }
+    expect(objective(p)).toEqual({ id: "askFood", monster: "ember" });
+    p = recordLike(p, "ember", "meat");
+    expect(objective(p)).toEqual({ id: "getFood", monster: "ember", food: "meat" });
+    p = pickUp(p, "meat");
+    expect(objective(p)).toEqual({ id: "giveFood", monster: "ember", food: "meat" });
+    p = befriend(p, "ember");
+    expect(objective(p)).toEqual({ id: "letsGo", monster: "ember" });
+    expect(solve(p, "cave")).toBe(p);
+    p = invite(p, "ember");
+    expect(p.active).toBe("ember");
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "cave", helper: "ember" });
+    expect(askAtObstacle(p, "cave", "fire")).toMatchObject({ yes: true, solves: true });
+    expect(solve(p, "gateLeaf")).toBe(p);
+    p = solve(p, "cave");
+    expect(objective(p)).toEqual({ id: "obstacle", obstacle: "gateLeaf", helper: "leafy" });
+    // Pillars may be completed in any order; the objective names the first missing one.
+    const order = ["gateFlame", "gateWing", "gateDrop", "gateLeaf"] as const;
+    const helpers = ["ember", "puff", "bubbo", "leafy"] as const;
+    for (let i = 0; i < order.length; i++) {
+      expect(gateOpen(p)).toBe(false);
+      p = setActive(p, helpers[i]);
+      expect(askAtObstacle(p, order[i], "help")).toMatchObject({ yes: true, solves: true });
+      p = solve(p, order[i]);
+    }
+    expect(GATES.every((id) => p.solved.includes(id))).toBe(true);
+    expect(gateOpen(p)).toBe(true);
+    expect(objective(p)).toEqual({ id: "findMonster", monster: "lumo" });
+    p = discover(p, "lumo");
+    expect(befriendLumo(p, "yesIDo")).toBe(p);
+    for (const line of ["name", "size", "part"] as const) {
+      expect(objective(p)).toEqual({ id: "describe", monster: "lumo", line });
+      p = describeLine(p, "lumo", line);
+    }
+    expect(questionFoods(p, "lumo")).toEqual([]);
+    expect(canOffer(pickUp(recordLike(p, "lumo", "apples"), "apples"), "lumo")).toBe(false);
+    expect(objective(p)).toEqual({ id: "askBack", monster: "lumo" });
+    for (const answer of ["yesIDo", "noIDont"] as const) {
+      const friend = befriendLumo(p, answer);
+      expect(friend.monsters.lumo.friend).toBe(true);
+      expect(friend.said).toContain(answer);
+      expect(friends(friend)).toContain("lumo");
+      expect(companions(friend)).not.toContain("lumo");
+      expect(setActive(friend, "lumo").active).toBe("leafy");
+      expect(objective(friend)).toEqual({ id: "finale" });
+      expect(objective({ ...friend, endings: 3 })).toEqual({ id: "explore" });
+    }
   });
 });

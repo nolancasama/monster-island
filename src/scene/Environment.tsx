@@ -459,7 +459,7 @@ export function FarLand() {
       [-60, -48, 26, 16, "#4f8f4a"],
       [-22, -58, 30, 20, "#457f42"],
       [4, -72, 28, 22, "#4a8a45"],
-      [52, -64, 16, 14, "#518f49"],
+      [67, -66, 14, 12, "#518f49"],
       [-78, -20, 22, 10, "#5a9a52"],
       [80, -24, 22, 10, "#5a9a52"]
     ];
@@ -471,22 +471,33 @@ export function FarLand() {
       [-56, -70, 26, 12, "#4f8f4a"]
     ];
     ridges.forEach(([x, z, r, h, c], i) => b.add(rockGeometry(r, h, 40 + i, 1), c, [x, groundY(x, z) - 3, z]));
-    // The volcano (Phase 3), north-east.
-    const v = VOLCANO;
-    // A truncated cone, so the crater rim sits on its top seen from the cliff too.
-    b.add(new THREE.CylinderGeometry(8.2, 30, 46, 9, 1, true), "#7a5a4a", [v.x, 20, v.z]);
-    b.add(new THREE.CylinderGeometry(7.5, 9, 3, 9), "#5a4038", [v.x, 42.5, v.z]);
-    b.add(new THREE.CylinderGeometry(6.8, 6.8, 0.6, 9), "#ff7a2a", [v.x, 44, v.z]);
-    b.add(rockGeometry(18, 10, 31, 1), "#6f9a4a", [40, 2, -78]);
+    b.add(rockGeometry(12, 10, 31, 1), "#6f9a4a", [26, 2, -78]);
     // Headlands at both ends.
     b.add(rockGeometry(9, 6, 50, 1), "#8f8a7f", [X_WEST - 8, -1, 9]);
     b.add(rockGeometry(9, 6, 52, 1), "#8f8a7f", [X_EAST + 9, -1, 10]);
     return b.build();
   }, []);
+  const shell = useMemo(() => {
+    const b = new PartBuilder(6);
+    const v = VOLCANO;
+    // A truncated cone, open at the western cave flank. The sanctuary's
+    // own crater rim replaces this distant silhouette once we walk inside.
+    b.add(new THREE.CylinderGeometry(8.2, 30, 46, 12, 1, true, -0.18, 3.65), "#7a5a4a", [v.x, 20, v.z]);
+    b.add(new THREE.CylinderGeometry(7.5, 9, 3, 9), "#5a4038", [v.x, 42.5, v.z]);
+    b.add(new THREE.CylinderGeometry(6.8, 6.8, 0.6, 9), "#ff7a2a", [v.x, 44, v.z]);
+    return b.build();
+  }, []);
+  const volcano = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (volcano.current) volcano.current.visible = rt.player.z >= -122 && (rt.camera.shot?.target.z ?? 0) >= -122;
+  });
   return (
     <group>
       <mesh geometry={geo} material={flatMat} />
-      <Smoke />
+      <group ref={volcano}>
+        <mesh geometry={shell} material={flatMat} />
+        <Smoke />
+      </group>
     </group>
   );
 }

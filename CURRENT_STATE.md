@@ -1,66 +1,58 @@
 # Current State
 
 ## Status
-**Phase 2 (the Forest) is built and tested, not yet committed or deployed.**
-Phase 1 (the Beach) is unchanged and published. The forest continues from the
-Monster Stone ending: the bramble withers → forest path → broken bridge
-(Bubbo can't; switch to Leafy; "Can you help me?"; "Thank you!") → Puff up in
-its tree ("Come here!") → describe it ("It's purple." "It's small." "It has
-wings.") → "Do you like ___?" → berries → friend → "Let's go!" → the cliff
-("Can you fly?"; Puff flies the rope up; "Thank you!"; "Let's go!") → climb →
-cliff-top ending (volcano, Maple by radio, third light) → results → free play
-(the rope works both ways). Phase 1 saves (v1) migrate to v2.
+**Phase 3 (Volcano + Sanctuary) is built, reviewed and committed; not yet
+pushed/deployed.** The whole game now plays to the end: beach (Phase 1,
+live on Pages) → forest (Phase 2, live on Pages) → cliff top → lava (Bubbo)
+→ Ember + meat rack → dark cave (Ember's fire) → four sanctuary pillars (one
+per friend) → Lumo ("What's your name?") → Maple in person → The End → free
+exploration. Old saves (v1, v2) migrate to `mi.save.v3`.
 
-Verified 2026-10-23: `npm test` (48 unit tests), `npm run e2e` (5 Playwright
-specs: the Phase 1 loop, speech, blocked mic, save/continue, and the new
-`forest.spec.ts` from a v1 save through the whole forest mic-free).
-`forest.spec.ts` was shown to fail with the bridge's ability broken. Visuals
-checked by eye in `node scripts/shots-forest.mjs` at 1366×768 (speech),
-1366×768 touch/tap and 1280×800 (`.tmp/shots/forest-*`). Forest views: 39–73
-draw calls, ~80–90k triangles; beach ~106k.
+Verified 2026-10-24: `npm test` (59 unit tests), `npx tsc --noEmit`,
+`npm run e2e` (7 Playwright specs, run by the acceptance executor: Phase 1
+loop, speech, blocked mic, save/continue, forest, and `volcano.spec.ts` ×2
+from a v2 save through The End mic-free plus the spoken lava alias).
+`volcano.spec.ts` was shown to fail with Bubbo's swim removed. Visuals judged
+by Claude from `node scripts/shots-volcano.mjs` at 1366×768 and 1280×800
+(`.tmp/shots/volcano-*`). Phase 3 views: 24–83 draw calls, ≤~110k triangles.
 
-Published (Phase 1 only so far): repo https://github.com/nolancasama/monster-island,
+Published (Phases 1–2): repo https://github.com/nolancasama/monster-island,
 Pages https://nolancasama.github.io/monster-island/ (every push to `main`
 runs the unit tests, builds and deploys).
 
 ## What Exists
-- **Data:** `game/data/monsters.ts` (Leafy, Bubbo, Puff live — `BUILT_PHASE = 2`;
-  Ember is a journal silhouette; `size`, `part`, `perch`), `game/data/foods.ts`.
-- **Rules (pure, tested):** `game/logic/progress.ts` (likes, abilities,
-  friendship, describe lines, 4 obstacles, `endings`, per-phase objective),
-  `english.ts` (phrases incl. requests, size, wings + accent variants),
-  `speechMatch.ts`, `save.ts` (`mi.save.v2`, v1 migration).
-- **World:** `game/world/island.ts` (beach + forest layout, forest floor,
-  ravine, cliff, volcano position), `collision.ts` (gates incl. `forest`,
-  bridge deck, cliff top reachable only by rope), `world.test.ts`.
-- **Flow:** `game/flow/` — `encounter.ts` (call-down, journal lines, Let's go,
-  journal optional lines), `obstacles.ts` (bridge, rope flight, thanks,
-  climb), `story.ts` (stone ending opens the forest, cliff-top ending, hints).
-- **Scene / UI:** `scene/Forest.tsx` + `scene/models/forest.ts` (trees,
-  Puff's tree, bridge, cliff, rope, bramble), Puff in `models/monsters.ts` /
-  `Monsters.tsx`, journal size/part lines, Phase 2 results title.
-- **Scripts:** `scripts/shots.mjs` (beach), `scripts/shots-forest.mjs` (forest
-  from a seeded save).
+- **Rules (pure, tested):** `game/logic/progress.ts` — obstacles `lava`,
+  `cave`, `gateLeaf/Drop/Wing/Flame`, `gateOpen`, `obstacleAvailable`,
+  `invite` (Ember's "Let's go!"), `befriendLumo`, `companions` (Lumo never
+  follows), `questionFoods` (meat from Phase 3), objectives `letsGo`,
+  `askBack`, `finale`; `english.ts` gains "Can you make fire?", "What's your
+  name?", "It's yellow."; `save.ts` v3.
+- **Data:** `game/data/monsters.ts` — Ember (volcano), Lumo (sanctuary,
+  `companion: false`, `power: null`), `BUILT_PHASE = 3`.
+- **World / scene:** `scene/Volcano.tsx` + `scene/models/volcano.ts` (lava,
+  trail, meat rack, roofed cave with torches, crater garden, pillar gate),
+  Ember and Lumo models and portraits, finale staging in `flow/story.ts`,
+  Phase 3 results camera at the sanctuary.
+- **Harness:** `tests/e2e/volcano.spec.ts`, `scripts/shots-volcano.mjs`,
+  read-only `window.__mi.state()` (with `?e2e=1`).
 
 ## Known Issues
-- Real speech recognition (especially the new "Come here!" / "Thank you!"
-  variants), TTS voices, audio levels and real Chromebook GPU performance are
-  untested (SwiftShader runs at 5–12 fps, as expected).
+- Real speech recognition (new: "Can you make fire?", "What's your name?",
+  "It's yellow."), TTS voices, audio levels, classroom pacing and real
+  Chromebook GPU performance are untested (SwiftShader only).
+- The Phase 2 results backdrop still uses the beach camera.
 - The ravine's water is the sea plane showing through (kept as a creek).
-- The results screen backdrop is the beach camera, also after the forest.
 - `THREE.Clock` deprecation warning from R3F (harmless).
 
 ## Next Steps
-1. Review the uncommitted Phase 2 diff, commit, push (deploys to Pages).
+1. Push `main` to deploy Phase 3 to Pages (waiting for the user's go-ahead).
 2. Play it on a real school Chromebook with a class: speech acceptance for
-   the Phase 2 sentences, whether students find Puff in its tree, the length
-   of Phase 2.
-3. Phase 3 (Volcano + Sanctuary) per the frozen chain: the rockfall on the
-   cliff top opens, Ember (meat), the torch and the dark cave, the sanctuary
-   gate needing all four abilities. Freeze its design first.
+   the Phase 2–3 sentences, whether the pillar gate's four switches are clear,
+   total length (the e2e playthrough's in-game clock read ~31 min).
+3. Polish from classroom feedback; no Phase 4 is planned (the story ends).
 
 ## Codex / Delegated Work
-None pending. Phase 2 was routed through the router, which chose Codex. The
-user reported Codex had no usage left and the other workers were quarantined,
-so Claude implemented it directly. Nothing awaits review except the user's
-own review of the uncommitted diff.
+None pending. Phase 3 was built by Codex via the router in two slices (rules,
+then world/flow/UI) plus one correction pass (cave, companion placement,
+lava, legendary objective, harness known-bad proof); all reviewed and
+accepted by Claude.

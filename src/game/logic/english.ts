@@ -22,6 +22,9 @@ export type PhraseId =
   | "likeFish"
   | "likeBerries"
   | "likeMeat"
+  | "itsYellow"
+  | "canFire"
+  | "whatsYourName"
   | "itsGreen"
   | "itsBlue"
   | "itsOrange"
@@ -59,7 +62,8 @@ const COLOR_WORDS: Record<ColorId, string[]> = {
   green: ["green", "greens", "grin", "greene", "clean", "glean", "grean", "gureen"],
   blue: ["blue", "blues", "blew", "bleu", "brew", "brue", "bloo", "bru", "blue's", "buru"],
   orange: ["orange", "oranges", "orrange", "orenji", "orinj", "orange's", "oranje"],
-  purple: ["purple", "purples", "papel", "pupple", "purpur", "pupil", "paapuru", "purpel"]
+  purple: ["purple", "purples", "papel", "pupple", "purpur", "pupil", "paapuru", "purpel"],
+  yellow: ["yellow", "yello", "yellows", "iero"]
 };
 
 const ABILITY_WORDS: Record<AbilityId | "help", string[]> = {
@@ -104,7 +108,8 @@ export const COLOR_PHRASE: Record<ColorId, PhraseId> = {
   green: "itsGreen",
   blue: "itsBlue",
   orange: "itsOrange",
-  purple: "itsPurple"
+  purple: "itsPurple",
+  yellow: "itsYellow"
 };
 
 /** Which "Can you ___?" question each phrase is (help = whatever the obstacle needs). */
@@ -112,7 +117,8 @@ export const CAN_QUESTION: Partial<Record<PhraseId, AbilityId | "help">> = {
   canSwim: "swim",
   canFly: "fly",
   canJump: "jump",
-  canHelp: "help"
+  canHelp: "help",
+  canFire: "fire"
 };
 
 const like = (id: PhraseId, food: FoodId, en: string): Phrase => ({ id, en, keys: [LIKE, FOOD_WORDS[food]] });
@@ -125,6 +131,13 @@ const color = (id: PhraseId, c: ColorId, distractors: PhraseId[]): Phrase => ({
 const can = (id: PhraseId, a: AbilityId | "help", en: string): Phrase => ({ id, en, keys: [CAN_Q, ABILITY_WORDS[a]] });
 
 export const PHRASES: Record<PhraseId, Phrase> = {
+  itsYellow: color("itsYellow", "yellow", ["itsOrange", "itsPurple"]),
+  canFire: can("canFire", "fire", "Can you make fire?"),
+  whatsYourName: {
+    id: "whatsYourName", en: "What's your name?",
+    keys: [["what", "what's", "whats", "wat"], ["name", "names", "nem", "neimu"]],
+    distractors: ["likeApples", "thankYou"]
+  },
   likeApples: like("likeApples", "apples", "Do you like apples?"),
   likeBananas: like("likeBananas", "bananas", "Do you like bananas?"),
   likeFish: like("likeFish", "fish", "Do you like fish?"),

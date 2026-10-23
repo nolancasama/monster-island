@@ -68,6 +68,8 @@ export function groundY(x: number, z: number): number {
   // The forest floor replaces the jungle slope where the forest is open land.
   const f = forestMask(x, z);
   if (f > 0) y = y * (1 - f) + forestFloor(x, z) * f;
+  const v = volcanoMask(x, z);
+  if (v > 0) y = y * (1 - v) + volcanoFloor(x, z) * v;
   // The river channel.
   const r = riverDepth(x);
   if (r > -0.2) {
@@ -136,6 +138,41 @@ export const CLIFF_TOP_SPOT = { x: 34, z: CLIFF_Z - 2.2 };
 /** Far away to the north-east: where Phase 3 goes. */
 export const VOLCANO = { x: 70, z: -112 };
 
+/** The lava spans the only exit from the cliff top. */
+export const LAVA = { x: 34.5, z: -51.3, x0: 29.5, x1: 40, z0: -52.5, z1: -50.6 };
+export const CAVE = { x: 64, z: -102 };
+export const MEAT_RACK = { x: 55, z: -90 };
+export const VOLCANO_PATH = [
+  { x0: 31.5, x1: 40, z0: -63, z1: -50 },
+  { x0: 36, x1: 47, z0: -74, z1: -59 },
+  { x0: 43, x1: 55, z0: -86, z1: -70 }
+];
+export const EMBER_SLOPE = { x0: 49, x1: 68, z0: -103, z1: -82 };
+export const CAVE_PASSAGE = { x0: 61, x1: 67, z0: -125, z1: -99 };
+export const SANCTUARY = { x0: 57, x1: 83, z0: -149, z1: -122 };
+export const SANCTUARY_GATE = { x: 70, z: -133, half: 2.2 };
+export const GATE_PILLARS = {
+  gateLeaf: { x: 60, z: -130 },
+  gateDrop: { x: 65, z: -130 },
+  gateWing: { x: 75, z: -130 },
+  gateFlame: { x: 80, z: -130 }
+};
+export const PHASE3_AREAS = [...VOLCANO_PATH, EMBER_SLOPE, CAVE_PASSAGE, SANCTUARY];
+
+/** Flat cave and garden, reached by a gentle rising rock trail. */
+export function volcanoFloor(x: number, z: number): number {
+  const climb = smooth((-z - 51) / 48);
+  const base = forestBase(34.5, -51);
+  return base + climb * 8 + Math.sin(x * 0.3 + z * 0.17) * 0.08;
+}
+
+export function volcanoMask(x: number, z: number): number {
+  if (z > -48 || z < -154 || x < 27 || x > 87) return 0;
+  let d = Infinity;
+  for (const a of PHASE3_AREAS) d = Math.min(d, outside(x, z, a));
+  return 1 - smooth(d / 3);
+}
+
 type Area = { x0: number; x1: number; z0: number; z1: number };
 /** Open forest land (the bridge deck is not ground). */
 export const FOREST_AREAS: Area[] = [FOREST_PATH, GLADE, HILLS, CLIFF_TOP];
@@ -192,7 +229,8 @@ export const FOOD_SOURCES: FoodSource[] = [
   { id: "berry", food: "berries", x: -7.4, z: -4.3, regrow: 6 },
   { id: "fish", food: "fish", x: FISH_BASKET.x, z: FISH_BASKET.z, regrow: 4 },
   { id: "berry2", food: "berries", x: 38.2, z: -36.2, regrow: 6 },
-  { id: "berry3", food: "berries", x: 44.6, z: -32, regrow: 6 }
+  { id: "berry3", food: "berries", x: 44.6, z: -32, regrow: 6 },
+  { id: "meat", food: "meat", x: MEAT_RACK.x, z: MEAT_RACK.z + 0.8, regrow: 6 }
 ];
 
 export const INTERACT_RANGE = 2.2;

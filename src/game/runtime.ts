@@ -1,4 +1,4 @@
-import type { MonsterId, Vec2, Vec3 } from "./types";
+import type { MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
 
@@ -150,6 +150,15 @@ export const rt = {
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
+  /** Permanent Phase 3 unlocks, animated by the ability scenes (0..1). */
+  lava: 0,
+  cave: 0,
+  caveWarned: false,
+  pillars: { gateLeaf: 0, gateDrop: 0, gateWing: 0, gateFlame: 0 } as Partial<Record<ObstacleId, number>>,
+  gate: 0,
+  starGlow: 0,
+  /** Read-only through __mi.state(), for scene capture and acceptance waits. */
+  finale: "idle" as "idle" | "rise" | "maple" | "complete",
   /** Monster Stone symbols lit (0..1 per symbol). */
   stoneGlow: { leafy: 0, bubbo: 0, puff: 0, ember: 0 } as Record<MonsterId, number>,
   effects: [] as Effect[],
@@ -194,6 +203,10 @@ export function resetRuntime() {
   rt.bridge = rt.bridgeTarget = 0;
   rt.rope = 0;
   rt.bramble = rt.brambleTarget = 1;
+  rt.lava = rt.cave = rt.gate = rt.starGlow = 0;
+  rt.caveWarned = false;
+  for (const id of Object.keys(rt.pillars) as ObstacleId[]) rt.pillars[id] = 0;
+  rt.finale = "idle";
   for (const id of MONSTER_ORDER) rt.stoneGlow[id] = 0;
   rt.effects = [];
   rt.idle = 0;

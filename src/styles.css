@@ -1307,6 +1307,51 @@ kbd {
   opacity: 1;
 }
 
+.results-final {
+  width: min(900px, 100%);
+}
+
+.results-final .results-friends {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.results-final .r-friend {
+  padding: 6px 5px 8px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-2);
+}
+
+.r-page-lines {
+  display: flex;
+  flex-direction: column;
+  min-height: 61px;
+  margin: 4px 0;
+  gap: 2px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.r-page-friend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--leaf-dark);
+  font-size: 0.85rem;
+}
+
+.results-final .results-said {
+  gap: 4px;
+}
+
+.results-final .results-said li {
+  padding: 3px 8px;
+  font-size: 0.9rem;
+}
+
 .results-said {
   list-style: none;
   margin: 0;

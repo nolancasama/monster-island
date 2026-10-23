@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { getGame, setGame, useGame } from "../game/store";
-import { objective } from "../game/logic/progress";
-import { ISLAND_FOODS, FOODS } from "../game/data/foods";
-import { COLOR_HEX, MONSTERS, MONSTER_ORDER } from "../game/data/monsters";
+import { companions, objective } from "../game/logic/progress";
+import { islandFoods, FOODS } from "../game/data/foods";
+import { COLOR_HEX, MONSTERS } from "../game/data/monsters";
 import { interact, switchByIndex } from "../game/flow/actions";
 import { openJournal } from "../game/flow/input";
 import { cameraRef } from "../scene/CameraRig";
@@ -37,9 +37,10 @@ function ObjectiveCard() {
 }
 
 function Bag() {
-  const bag = useGame((s) => s.progress.bag);
+  const progress = useGame((s) => s.progress);
+  const bag = progress.bag;
   const mode = useGame((s) => s.mode);
-  const has = ISLAND_FOODS.filter((f) => (bag[f] ?? 0) > 0);
+  const has = islandFoods(progress).filter((f) => (bag[f] ?? 0) > 0);
   if (!has.length || mode !== "explore") return null;
   return (
     <div className="bag panel ui" data-testid="bag" aria-label="Food bag">
@@ -74,7 +75,7 @@ function Team() {
   const progress = useGame((s) => s.progress);
   const touch = useGame((s) => s.touch);
   const mode = useGame((s) => s.mode);
-  const friends = MONSTER_ORDER.filter((id) => progress.monsters[id].friend);
+  const friends = companions(progress);
   if (!friends.length || mode !== "explore") return null;
   return (
     <div className="team ui" data-testid="team">
@@ -174,7 +175,7 @@ function DiscoverCard() {
       <div className="page">
         <Portrait id={d.monster} size={120} silhouette={!d.colored} />
         <div className="page-text">
-          <b>{d.colored ? def.name : "???"}</b>
+          <b>{d.colored && (d.monster !== "lumo" || d.lines?.includes("name")) ? def.name : "???"}</b>
           {d.colored && (
             <span className="color-chip" style={{ background: COLOR_HEX[def.color] }}>
               It's {def.color}.

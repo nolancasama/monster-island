@@ -124,7 +124,10 @@ function Ember({ dark }: { dark?: string }) {
   const c = (x: string) => dark ?? x;
   return (
     <g>
-      <path d="M74 70 Q92 60 88 40 Q96 54 86 46 Q90 34 82 30 Q84 50 72 62z" fill={c("#ffcf3a")} />
+      <path d="M64 76 Q94 86 88 54 Q84 76 66 62z" fill={c("#f78325")} />
+      <path d="M86 59 Q78 48 86 37 Q96 48 90 60z" fill={c("#ffcf3a")} />
+      <ellipse cx="26" cy="61" rx="6" ry="10" transform="rotate(20 26 61)" fill={c("#e66d1e")} />
+      <ellipse cx="74" cy="61" rx="6" ry="10" transform="rotate(-20 74 61)" fill={c("#e66d1e")} />
       <ellipse cx="50" cy="62" rx="24" ry="24" fill={c("#ff8a2a")} />
       <circle cx="50" cy="38" r="17" fill={c("#ff8a2a")} />
       <path d="M40 24 L44 14 L48 24z M52 24 L56 12 L60 24z" fill={c("#ffcf3a")} />
@@ -132,6 +135,8 @@ function Ember({ dark }: { dark?: string }) {
         <>
           <ellipse cx="50" cy="68" rx="15" ry="14" fill="#ffd9a0" />
           <Eyes y={36} dx={8} r={5} />
+          <path d="M37 29 L45 32 M55 32 L63 29" stroke="#a64b1d" strokeWidth="2.5" strokeLinecap="round" />
+          <ellipse cx="50" cy="45" rx="11" ry="6" fill="#ffb354" />
           <path d="M44 46 Q50 50 56 46" stroke="#7a2a10" strokeWidth="2" fill="none" />
         </>
       )}
@@ -141,7 +146,40 @@ function Ember({ dark }: { dark?: string }) {
   );
 }
 
-const DRAW: Record<MonsterId, (p: { dark?: string }) => React.ReactElement> = { leafy: Leafy, bubbo: Bubbo, puff: Puff, ember: Ember };
+function Lumo({ dark }: { dark?: string }) {
+  const c = (x: string) => dark ?? x;
+  return (
+    <g>
+      {!dark && <ellipse cx="50" cy="52" rx="45" ry="44" fill="#fff0a0" opacity=".25" />}
+      {[-1, 1].map((s) => (
+        <g key={s}>
+          {[0, 1, 2, 3].map((i) => (
+            <ellipse key={i} cx={50 + s * (30 + i * 1.2)} cy={39 + i * 8} rx={19 - i} ry="6"
+              transform={`rotate(${s * (-42 + i * 22)} ${50 + s * (30 + i * 1.2)} ${39 + i * 8})`}
+              fill={c(i % 2 ? "#ffed9a" : "#fff5c7")} />
+          ))}
+          <ellipse cx={50 + s * 12} cy="16" rx="4" ry="10" transform={`rotate(${s * 24} ${50 + s * 12} 16)`} fill={c("#fff1b0")} />
+        </g>
+      ))}
+      <ellipse cx="50" cy="63" rx="24" ry="27" fill={c("#ffe16b")} />
+      <ellipse cx="50" cy="34" rx="23" ry="20" fill={c("#ffe77e")} />
+      <ellipse cx="38" cy="89" rx="8" ry="4" fill={c("#efc856")} />
+      <ellipse cx="62" cy="89" rx="8" ry="4" fill={c("#efc856")} />
+      {!dark && (
+        <>
+          <ellipse cx="50" cy="65" rx="15" ry="18" fill="#fff4c2" />
+          <Eyes y={33} dx={9} r={5.5} />
+          <path d="M45 44 Q50 49 55 44" fill="none" stroke="#a77d35" strokeWidth="2" strokeLinecap="round" />
+          <ellipse cx="34" cy="42" rx="4" ry="2.5" fill="#ffc3a0" />
+          <ellipse cx="66" cy="42" rx="4" ry="2.5" fill="#ffc3a0" />
+          <path d="M50 16 L52 21 L57 21 L53 24 L55 29 L50 26 L45 29 L47 24 L43 21 L48 21z" fill="#fffbdc" />
+        </>
+      )}
+    </g>
+  );
+}
+
+const DRAW: Record<MonsterId, (p: { dark?: string }) => React.ReactElement> = { leafy: Leafy, bubbo: Bubbo, puff: Puff, ember: Ember, lumo: Lumo };
 
 export function Portrait({ id, size = 64, silhouette = false }: { id: MonsterId; size?: number; silhouette?: boolean }) {
   const D = DRAW[id];

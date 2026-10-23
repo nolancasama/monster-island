@@ -112,7 +112,7 @@ function Pier() {
 function FoodPickups() {
   const geos = useMemo(() => {
     const out = {} as Record<FoodId, THREE.BufferGeometry>;
-    for (const f of ["apples", "bananas", "fish", "berries"] as FoodId[]) out[f] = foodGeometry(f);
+    for (const f of ["apples", "bananas", "fish", "berries", "meat"] as FoodId[]) out[f] = foodGeometry(f);
     return out;
   }, []);
   const refs = useRef<Array<THREE.Group | null>>([]);
@@ -214,7 +214,17 @@ function SteppingStones() {
 function symbolGeometry(id: MonsterId): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   const c = "#ffffff";
-  if (id === "leafy") b.add(new THREE.SphereGeometry(0.17, 10, 6), c, [0, 0, 0], [0, 0, 0.7], [1, 0.5, 0.25]);
+  if (id === "lumo") {
+    const shape = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const a = Math.PI / 2 + i * Math.PI / 5;
+      const r = i % 2 ? 0.1 : 0.23;
+      if (i === 0) shape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else shape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    shape.closePath();
+    b.add(new THREE.ShapeGeometry(shape), c, [0, 0, 0]);
+  } else if (id === "leafy") b.add(new THREE.SphereGeometry(0.17, 10, 6), c, [0, 0, 0], [0, 0, 0.7], [1, 0.5, 0.25]);
   else if (id === "bubbo") {
     b.sphere(0.12, 0, -0.04, 0, c, [1, 1, 0.3], 10);
     b.add(new THREE.ConeGeometry(0.1, 0.16, 10), c, [0, 0.1, 0], [0, 0, 0], [1, 1, 0.3]);
@@ -228,7 +238,7 @@ function symbolGeometry(id: MonsterId): THREE.BufferGeometry {
   return b.build();
 }
 
-const SYMBOL_COLOR: Record<MonsterId, string> = { leafy: "#6dff5a", bubbo: "#4fc3ff", puff: "#c48bff", ember: "#ff8a2a" };
+const SYMBOL_COLOR: Record<MonsterId, string> = { leafy: "#6dff5a", bubbo: "#4fc3ff", puff: "#c48bff", ember: "#ff8a2a", lumo: "#ffe36b" };
 
 function MonsterStone() {
   const stone = useMemo(monsterStoneGeometry, []);
@@ -239,7 +249,7 @@ function MonsterStone() {
   const dark = useMemo(() => new THREE.Color("#3d423a"), []);
   useFrame(() => {
     MONSTER_ORDER.forEach((id, i) => {
-      const k = rt.stoneGlow[id];
+      const k = id === "lumo" ? rt.starGlow : rt.stoneGlow[id];
       mats[i].color.copy(dark).lerp(lit.set(SYMBOL_COLOR[id]), k);
       glows[i].opacity = k * (0.55 + Math.sin(rt.time * 2.5 + i) * 0.15);
     });

@@ -29,8 +29,10 @@ export function objectiveText(o: Objective): Text {
     case "meetMaple":
       return { en: "Meet Professor Maple", ja: "メイプルはかせに あおう" };
     case "findMonster":
+      if (o.monster === "lumo") return { en: "Meet the legendary monster!", ja: "でんせつの モンスターに あおう!" };
       return { en: "Find a monster!", ja: "モンスターを さがそう!" };
     case "describe":
+      if (o.line === "name") return { en: "Ask its name!", ja: "なまえを えいごで きこう!" };
       return { en: `Write about ${name(o.monster)}`, ja: `${name(o.monster)}の ことを ずかんに かこう` };
     case "askFood":
       return { en: `What does ${name(o.monster)} like?`, ja: `${name(o.monster)}の すきな たべものを きこう` };
@@ -42,11 +44,23 @@ export function objectiveText(o: Objective): Text {
       if (o.obstacle === "fallenPalm") return { en: "A tree is in the way!", ja: "木が みちを ふさいでいる!" };
       if (o.obstacle === "river") return { en: "Cross the river!", ja: "かわを わたろう!" };
       if (o.obstacle === "bridge") return { en: "Go into the forest!", ja: "もりへ いこう! こわれた はしが あるよ" };
+      if (o.obstacle === "lava") return { en: "Cool the hot lava!", ja: "あつい ようがんを ひやそう!" };
+      if (o.obstacle === "cave") return { en: "Light the dark cave!", ja: "くらい どうくつに あかりを つけよう!" };
+      if (o.obstacle === "gateLeaf") return { en: "Wake the leaf pillar!", ja: "はっぱの はしらに ちからを あつめよう!" };
+      if (o.obstacle === "gateDrop") return { en: "Fill the water basin!", ja: "みずの はしらを みたそう!" };
+      if (o.obstacle === "gateWing") return { en: "Ring the high bell!", ja: "つばさの はしらの かねを ならそう!" };
+      if (o.obstacle === "gateFlame") return { en: "Light the flame pillar!", ja: "ほのおの はしらに ひを つけよう!" };
       return { en: "Climb the high cliff!", ja: "たかい がけを のぼろう!" };
     case "stone":
       return { en: "Look at the old stone", ja: "ふるい いしを しらべよう" };
     case "cliffTop":
       return { en: "Climb the rope!", ja: "ロープを のぼろう!" };
+    case "letsGo":
+      return { en: `Invite ${name(o.monster)}!`, ja: `${name(o.monster)}に「Let's go!」と いおう!` };
+    case "askBack":
+      return { en: "Do you like monsters?", ja: "モンスターは すき? こたえよう!" };
+    case "finale":
+      return { en: "Celebrate with your friends!", ja: "ともだちと おいわいしよう!" };
     default:
       return { en: "Explore the island!", ja: "しまを たんけんしよう!" };
   }

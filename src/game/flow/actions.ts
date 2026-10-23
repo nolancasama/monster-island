@@ -1,6 +1,6 @@
 import { FOOD_SOURCES } from "../world/island";
 import { FOODS } from "../data/foods";
-import { pickUp } from "../logic/progress";
+import { companions, pickUp } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { effect, rt } from "../runtime";
 import { talkTo } from "./encounter";
@@ -10,7 +10,6 @@ import { switchTo } from "./companion";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
 import type { MonsterId, ObstacleId } from "../types";
-import { MONSTER_ORDER } from "../data/monsters";
 
 /** E / Enter / the touch action button. */
 export function interact(f: Focus | null = getGame().focus) {
@@ -62,7 +61,7 @@ function pick(sourceId: string) {
 export function switchByIndex(i: number) {
   const g = getGame();
   if (g.mode !== "explore" || isRunning()) return;
-  const friends = MONSTER_ORDER.filter((id) => g.progress.monsters[id].friend);
+  const friends = companions(g.progress);
   const id = friends[i];
   if (!id) return;
   if (id === g.progress.active) void talkTo(id);

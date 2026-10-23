@@ -207,3 +207,85 @@ export function bubboParts(): MonsterParts {
     top: 1.2
   };
 }
+
+// ------------------------------------------------------------------ Ember
+
+/** A stocky orange volcano dragon. Its long curled tail is part of its silhouette. */
+export function emberParts(): MonsterParts {
+  const body = new PartBuilder(0);
+  body.sphere(0.53, 0, 0.72, -0.05, "#f78325", [1, 1.14, 0.9], 16);
+  body.sphere(0.37, 0, 0.65, 0.28, "#ffcf91", [1, 1.15, 0.42], 14);
+  body.sphere(0.39, 0, 1.3, 0.03, "#ff922f", [1, 0.9, 0.9], 16);
+  body.sphere(0.25, 0, 1.15, 0.3, "#ffb354", [1.2, 0.6, 0.8], 12);
+  body.sphere(0.025, -0.115, 1.21, 0.49, "#74351e", [1, 0.8, 0.5], 6);
+  body.sphere(0.025, 0.115, 1.21, 0.49, "#74351e", [1, 0.8, 0.5], 6);
+  body.add(new THREE.TorusGeometry(0.11, 0.018, 4, 12, Math.PI), "#74351e", [0, 1.08, 0.49], [0, 0, Math.PI], [1, 0.45, 1]);
+  for (const s of [-1, 1]) {
+    body.add(new THREE.ConeGeometry(0.08, 0.25, 7), "#ffe0a0", [s * 0.23, 1.64, -0.04], [0, 0, -s * 0.3]);
+    between(body, [s * 0.09, 1.48, 0.34], [s * 0.27, 1.54, 0.28], 0.025, 0.035, "#a64b1d", 5);
+    body.sphere(0.13, s * 0.48, 0.85, 0.09, "#e66d1e", [0.7, 1.3, 0.8], 10);
+  }
+  const foot = () => {
+    const f = new PartBuilder(0);
+    f.sphere(0.19, 0, 0, 0.1, "#d45e1a", [1, 0.65, 1.4], 10);
+    for (const x of [-0.08, 0.03, 0.12]) f.sphere(0.04, x, 0.01, 0.3, "#ffe0a0", [0.7, 0.65, 1.3], 6);
+    return f.build();
+  };
+  const tail = new PartBuilder(0);
+  between(tail, [0, 0, 0], [0.48, 0.04, -0.42], 0.19, 0.12, "#f78325", 9);
+  between(tail, [0.48, 0.04, -0.42], [0.78, 0.38, -0.45], 0.12, 0.045, "#ff922f", 8);
+  tail.add(new THREE.ConeGeometry(0.13, 0.34, 7), "#ffd24a", [0.78, 0.54, -0.45], [0, 0, -0.15]);
+  tail.add(new THREE.ConeGeometry(0.07, 0.24, 7), "#fff2ac", [0.79, 0.53, -0.35], [0, 0, -0.15]);
+  const smoke = new PartBuilder(0);
+  for (let i = 0; i < 4; i++) smoke.sphere(0.07 + i * 0.035, (i % 2 ? 1 : -1) * i * 0.035, i * 0.14, i * 0.1, i % 2 ? "#aaaaa5" : "#bebbb0", [1, 0.85, 1], 8);
+  const eyes = new PartBuilder(0);
+  eyePair(eyes, 0.16, 0, 0.31, 0.09);
+  return {
+    body: body.build(), eyes: eyes.build(), eyeY: 1.4,
+    parts: [
+      { name: "footL", geo: foot(), pivot: [-0.28, 0.14, 0] },
+      { name: "footR", geo: foot(), pivot: [0.28, 0.14, 0] },
+      { name: "tail", geo: tail.build(), pivot: [0, 0.49, -0.42] },
+      { name: "smoke", geo: smoke.build(), pivot: [0, 1.24, 0.48] }
+    ], shadow: 1.55, top: 1.85
+  };
+}
+
+// ------------------------------------------------------------------ Lumo
+
+/** A large golden guardian with broad layered wings and a calm, round face. */
+export function lumoParts(): MonsterParts {
+  const body = new PartBuilder(0);
+  body.sphere(0.59, 0, 0.79, 0, "#ffe16b", [1, 1.15, 0.85], 16);
+  body.sphere(0.43, 0, 0.73, 0.28, "#fff4c2", [0.9, 1.1, 0.45], 14);
+  body.sphere(0.39, 0, 1.45, 0.04, "#ffe77e", [1.1, 0.92, 0.9], 16);
+  body.sphere(0.065, -0.27, 1.35, 0.32, "#ffc3a0", [1, 0.5, 0.4], 8);
+  body.sphere(0.065, 0.27, 1.35, 0.32, "#ffc3a0", [1, 0.5, 0.4], 8);
+  body.add(new THREE.TorusGeometry(0.1, 0.019, 4, 12, Math.PI), "#a77d35", [0, 1.3, 0.39], [0, 0, Math.PI], [1, 0.7, 1]);
+  for (const s of [-1, 1]) {
+    body.add(new THREE.SphereGeometry(0.16, 10, 6), "#fff1b0", [s * 0.29, 1.8, -0.02], [0, 0, -s * 0.35], [0.5, 1.5, 0.5]);
+    body.sphere(0.18, s * 0.28, 0.14, 0.14, "#efc856", [1, 0.65, 1.4], 10);
+  }
+  // A little five-point star on the forehead echoes the Monster Stone's final light.
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    between(body, [0, 1.69, 0.33], [Math.sin(a) * 0.075, 1.69 + Math.cos(a) * 0.075, 0.33], 0.025, 0.008, "#fffbdc", 4);
+  }
+  const wing = (s: number) => {
+    const w = new PartBuilder(0);
+    for (let i = 0; i < 4; i++) {
+      const a = 0.8 - i * 0.33;
+      w.add(new THREE.SphereGeometry(0.2, 10, 6), i % 2 ? "#ffed9a" : "#fff5c7", [s * (0.42 + i * 0.07), 0.13 - i * 0.12, -0.04], [0, 0, s * a], [2.6 - i * 0.2, 0.7, 0.35]);
+    }
+    return w.build();
+  };
+  const eyes = new PartBuilder(0);
+  eyePair(eyes, 0.18, 0, 0.34, 0.09);
+  return {
+    body: body.build(), eyes: eyes.build(), eyeY: 1.52,
+    parts: [
+      { name: "wingL", geo: wing(-1), pivot: [-0.48, 1.1, -0.04] },
+      { name: "wingR", geo: wing(1), pivot: [0.48, 1.1, -0.04] }
+    ], shadow: 1.8, top: 2.1
+  };
+}

@@ -83,10 +83,13 @@ export function ResultsScreen() {
   const seconds = useGame((s) => s.seconds);
   if (screen !== "results") return null;
   const friends = MONSTER_ORDER.filter((id) => progress.monsters[id].friend);
+  const final = progress.endings >= 3;
   return (
     <div className="results ui" data-testid="results">
-      <div className="results-card panel">
-        {progress.endings >= 2 ? (
+      <div className={`results-card panel ${final ? "results-final" : ""}`}>
+        {final ? (
+          <h1>The End <Ja>モンスターの ともだち!</Ja></h1>
+        ) : progress.endings >= 2 ? (
           <h1>
             Forest Adventure: Clear! <Ja>もりの ぼうけん クリア!</Ja>
           </h1>
@@ -98,11 +101,20 @@ export function ResultsScreen() {
         <div className="results-friends">
           {MONSTER_ORDER.map((id) => {
             const f = friends.includes(id);
+            const def = MONSTERS[id];
+            const record = progress.monsters[id];
             return (
-              <div key={id} className={`r-friend ${f ? "on" : ""}`}>
-                <Portrait id={id} size={84} silhouette={!f} />
-                <span>{f ? MONSTERS[id].name : "???"}</span>
-                {f && <Icon id="heart" size={20} />}
+              <div key={id} className={`r-friend ${f ? "on" : ""}`} data-testid={final ? `results-page-${id}` : undefined}>
+                <Portrait id={id} size={final ? 72 : 84} silhouette={!f} />
+                <span>{f ? def.name : "???"}</span>
+                {final && record.discovered && (
+                  <div className="r-page-lines">
+                    <span>It's {def.color}.</span>
+                    <span>{record.described.size ? `It's ${def.size}.` : "Size: ???"}</span>
+                    {def.part && <span>{record.described.part ? `It has ${def.part === "tail" ? "a tail" : "wings"}.` : "It has ???"}</span>}
+                  </div>
+                )}
+                {f && (final ? <span className="r-page-friend"><Icon id="heart" size={16} /> Friend!</span> : <Icon id="heart" size={20} />)}
               </div>
             );
           })}

@@ -11,6 +11,11 @@ Bubbo, two obstacles and the Monster Stone ending, which opens the forest.
 hills, the high cliff (Puff flies the rope up) and the cliff-top ending with
 the volcano in view.
 
+**Phase 3: Volcano + Sanctuary.** Cool the lava with Bubbo, meet Ember by
+the meat rack, light the cave, and use all four friends at the sanctuary
+pillars. Meet Lumo, celebrate with Maple, and finish with The End and all
+five journal pages. The whole island remains open for exploration.
+
 English used in Phase 1:
 
 - "It's green." / "It's blue." — describe a new monster for the journal
@@ -27,15 +32,26 @@ Added in Phase 2:
 - "Thank you!" — after a friend's power has helped
 - "Can you fly?"
 
+Added in Phase 3:
+
+- "It's hot!" / "It's dark!" (heard)
+- "It's orange." / "It has a tail."
+- "Do you like meat?"
+- "Can you make fire?"
+- "It's yellow." / "What's your name?"
+- "Do you like monsters?" and either "Yes, I do." or "No, I don't."
+
 ## Play
 
 - **Move:** WASD / arrow keys (touch: the stick). **Look:** drag. **Zoom:** wheel.
 - **Use / talk:** E (touch: the yellow button, or tap the label).
-- **Speak:** Space or 🎤 — one press listens once. **Journal:** M. **Companion:** 1 / 2 / 3 or the chips.
+- **Speak:** Space or 🎤 — one press listens once. **Journal:** M. **Companion:** 1 / 2 / 3 / 4 or the chips.
 - **Speak or Tap** on the title screen is a teacher setting: Tap mode never uses the microphone.
   If the microphone is blocked, the game switches to tapping by itself.
 
-Progress saves on the device (Continue on the title screen).
+Progress saves on the device (Continue on the title screen). Version 1 and 2
+saves migrate to version 3. Companion keys are 1 / 2 / 3 / 4; Lumo stays in
+the sanctuary. Food questions can offer five cards (keys 1 through 5).
 
 Built for school Chromebooks (1366×768): no downloads, webfonts or CDNs; all
 models, sounds and music are generated in the browser. Chrome is needed for
@@ -52,7 +68,21 @@ node scripts/shots.mjs http://127.0.0.1:5173/ 1366x768 [--touch] [--tap]        
 node scripts/shots-forest.mjs http://127.0.0.1:5173/ 1366x768 [--touch] [--tap]   # forest playthrough from a seeded save
 ```
 
+Capture the final phase from a Phase 2-complete save (defaults to both
+1366x768 and 1280x800; optional final argument selects one size):
+
+```sh
+node scripts/shots-volcano.mjs http://127.0.0.1:5173/
+```
+
+Writes `.tmp/shots/volcano-{size}/` images and `report.json` render budgets.
+The executor owns `npm run e2e`, including `tests/e2e/volcano.spec.ts` and
+the documented temporary broken-ability probe.
+
 Add `?e2e=1` for the test hook (`window.__mi`), `&fast=1` to skip pauses.
+`__mi.state()` exposes saved progress/objective, lava/cave/pillar/gate animation
+values, `finale` (`idle`, `rise`, `maple`, `complete`), `starGlow`, camera and
+renderer statistics for semantic harness waits.
 
 ## Deploy
 
