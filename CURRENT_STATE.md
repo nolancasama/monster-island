@@ -1,58 +1,53 @@
 # Current State
 
 ## Status
-**Phase 3 (Volcano + Sanctuary) is built, reviewed and committed; not yet
-pushed/deployed.** The whole game now plays to the end: beach (Phase 1,
-live on Pages) → forest (Phase 2, live on Pages) → cliff top → lava (Bubbo)
-→ Ember + meat rack → dark cave (Ember's fire) → four sanctuary pillars (one
-per friend) → Lumo ("What's your name?") → Maple in person → The End → free
-exploration. Old saves (v1, v2) migrate to `mi.save.v3`.
+**All three phases are complete and on `main`.** The game plays to the end:
+beach → forest → cliff top → lava (Bubbo) → Ember + meat rack → dark cave
+(Ember's fire) → four sanctuary pillars (one per friend) → Lumo → Maple →
+The End → free exploration. Old saves (v1, v2) migrate to `mi.save.v3`.
 
-Verified 2026-10-24: `npm test` (59 unit tests), `npx tsc --noEmit`,
-`npm run e2e` (7 Playwright specs, run by the acceptance executor: Phase 1
-loop, speech, blocked mic, save/continue, forest, and `volcano.spec.ts` ×2
-from a v2 save through The End mic-free plus the spoken lava alias).
-`volcano.spec.ts` was shown to fail with Bubbo's swim removed. Visuals judged
-by Claude from `node scripts/shots-volcano.mjs` at 1366×768 and 1280×800
-(`.tmp/shots/volcano-*`). Phase 3 views: 24–83 draw calls, ≤~110k triangles.
+On 2026-10-24, after Phase 3, a polish pass fixed nine reported bugs and
+overhauled collision (see `DESIGN_DECISIONS.md`, the two 2026-10-24 sections
+at the top):
+- Collision: solids derived from shared placement records, walkable pier deck
+  with solid posts, dynamic solids per gate state, save-position relocation,
+  F3 overlay (dev / `?e2e=1` only), behaviour + reachability tests.
+- Fixed: food visible-but-uncollectible after regrowth, "Your bag is full!";
+  floating rope stake; rope through the cliff (now hung from measured rocks);
+  hand-over-hand climb animation (player has knees); floating tree foliage;
+  upside-down hearts; sign post through the board; lifted palm through its
+  rock; walking through pier/supports/scenery.
 
-Published (Phases 1–2): repo https://github.com/nolancasama/monster-island,
-Pages https://nolancasama.github.io/monster-island/ (every push to `main`
-runs the unit tests, builds and deploys).
+Verified 2026-10-24: `npx tsc --noEmit`, `npm test` (84 unit tests),
+`npx playwright test` (7 specs, all passing on an idle machine in ~4 min).
+Visuals judged by Claude from screenshots at 1366×768 and 1280×800
+(`.tmp/shots/forest-*`, `volcano-*`, `review-*`). Render budgets: beach and
+forest follow views 41–103 draw calls, ≤117.5k triangles; Phase 3 views
+26–86 calls, ≤110.7k triangles.
 
-## What Exists
-- **Rules (pure, tested):** `game/logic/progress.ts` — obstacles `lava`,
-  `cave`, `gateLeaf/Drop/Wing/Flame`, `gateOpen`, `obstacleAvailable`,
-  `invite` (Ember's "Let's go!"), `befriendLumo`, `companions` (Lumo never
-  follows), `questionFoods` (meat from Phase 3), objectives `letsGo`,
-  `askBack`, `finale`; `english.ts` gains "Can you make fire?", "What's your
-  name?", "It's yellow."; `save.ts` v3.
-- **Data:** `game/data/monsters.ts` — Ember (volcano), Lumo (sanctuary,
-  `companion: false`, `power: null`), `BUILT_PHASE = 3`.
-- **World / scene:** `scene/Volcano.tsx` + `scene/models/volcano.ts` (lava,
-  trail, meat rack, roofed cave with torches, crater garden, pillar gate),
-  Ember and Lumo models and portraits, finale staging in `flow/story.ts`,
-  Phase 3 results camera at the sanctuary.
-- **Harness:** `tests/e2e/volcano.spec.ts`, `scripts/shots-volcano.mjs`,
-  read-only `window.__mi.state()` (with `?e2e=1`).
+Published: repo https://github.com/nolancasama/monster-island, Pages
+https://nolancasama.github.io/monster-island/ (every push to `main` runs the
+unit tests, builds and deploys).
 
 ## Known Issues
-- Real speech recognition (new: "Can you make fire?", "What's your name?",
-  "It's yellow."), TTS voices, audio levels, classroom pacing and real
-  Chromebook GPU performance are untested (SwiftShader only).
-- The Phase 2 results backdrop still uses the beach camera.
-- The ravine's water is the sea plane showing through (kept as a creek).
-- `THREE.Clock` deprecation warning from R3F (harmless).
+- Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
+  classroom pacing and real Chromebook GPU performance are untested
+  (SwiftShader only).
+- The Playwright suite renders in SwiftShader on the CPU: another heavy
+  process on the machine causes timeouts that look like product failures.
+  Check CPU load before diagnosing a red run.
+- The cliff wall's colliders are one box; the seeded rocks bulging out at its
+  foot are not individually solid.
+- The Phase 2 results backdrop still uses the beach camera; the ravine's
+  water is the sea plane showing through.
 
 ## Next Steps
-1. Push `main` to deploy Phase 3 to Pages (waiting for the user's go-ahead).
-2. Play it on a real school Chromebook with a class: speech acceptance for
-   the Phase 2–3 sentences, whether the pillar gate's four switches are clear,
-   total length (the e2e playthrough's in-game clock read ~31 min).
-3. Polish from classroom feedback; no Phase 4 is planned (the story ends).
+1. Play it on a real school Chromebook with a class: speech acceptance for
+   the Phase 2–3 sentences, the climb's pace (5 s each way), whether the
+   pillar gate is clear, total length (~31 min in the e2e playthrough).
+2. Polish from classroom feedback; no Phase 4 is planned (the story ends).
 
 ## Codex / Delegated Work
-None pending. Phase 3 was built by Codex via the router in two slices (rules,
-then world/flow/UI) plus one correction pass (cave, companion placement,
-lava, legendary objective, harness known-bad proof); all reviewed and
-accepted by Claude.
+None pending. The collision overhaul was built by Codex via the router and
+corrected/accepted by Claude; the visual and interaction fixes were done by
+Claude directly (Codex was at its usage limit).

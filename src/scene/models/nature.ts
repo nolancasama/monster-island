@@ -106,10 +106,10 @@ function frond(b: PartBuilder, a: V3, c: V3, width: number, color: string) {
 /** One broadleaf jungle tree (instanced along the tree line). */
 export function jungleTreeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.8);
-  // Trunk into the main canopy, branches into the side ones: nothing floats.
+  // The trunk runs up into the main canopy, and both side canopies overlap it,
+  // so nothing floats. No branches: this tree is instanced by the hundred and
+  // every extra triangle counts (the beach view sits at the 120k budget).
   b.cyl(0.18, 0.32, 3.4, 0, -0.2, 0, "#7a5532", 7);
-  between(b, [0, 1.9, 0], [0.8, 2.75, 0.45], 0.1, 0.07, "#7a5532", 5);
-  between(b, [0, 2.1, 0], [-0.7, 2.95, -0.35], 0.1, 0.07, "#7a5532", 5);
   const canopy = (r: number, x: number, y: number, z: number, c: string) => b.add(rockGeometry(r, r * 0.85, x * 3 + z, 0), c, [x, y, z]);
   canopy(1.7, 0, 3.3, 0, "#3f8f3f");
   canopy(1.25, 0.9, 2.8, 0.5, "#4fa046");

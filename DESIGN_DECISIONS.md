@@ -82,8 +82,15 @@ Git is the source of truth for detailed code-change history.
   silent E. Food's focus bonus over nearby monsters rose from 0.6 to 0.9 m and
   its reach from 2.1 to 2.4 m (children stop short).
 - Trees: trunks run up into the main crown and branches end inside their side
-  clusters (forest, jungle, apple, Puff's tree); foliage bottoms sit ~0.35 h
-  below their centres, which is what left the gaps.
+  clusters (forest, apple, Puff's tree); foliage bottoms sit ~0.35 h below
+  their centres, which is what left the gaps. The jungle tree only gained trunk
+  height: its side canopies already overlap the trunk, and branches on a tree
+  instanced ~240 times pushed the beach view past 120k triangles.
+- An external Phase 3 brief (same day) asked for a rockfall that opens on a
+  story event and an ending skippable on repeat. Kept the frozen design: the
+  lava (Bubbo) is the Phase 3 gate in place of the rockfall, and the finale
+  plays once (its lines advance with Next; only a 3 s rise and fades are
+  fixed), so no replay or skip mechanism was added.
 - The forest sign's post stands behind the board (`SIGN_SIZE.postZ`) with a
   cleat on the back; collider and visual share the layout.
 - Heart sprites sample the canvas with V flipped: `gl_PointCoord` runs top-down

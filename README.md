@@ -84,6 +84,12 @@ Add `?e2e=1` for the test hook (`window.__mi`), `&fast=1` to skip pauses.
 values, `finale` (`idle`, `rise`, `maple`, `complete`), `starGlow`, camera and
 renderer statistics for semantic harness waits.
 
+**Collision overlay:** in `npm run dev` or any `?e2e=1` session, press **F3**
+to draw the player radius, solid colliders, walkable surfaces (the pier deck)
+and dynamic obstacle states. It never appears in a normal session. Colliders
+come from the same placement records the scene uses (`src/game/world/island.ts`);
+the cliff rope's line is measured from the rocks at load (`src/game/world/rope.ts`).
+
 ## Deploy
 
 Every push to `main` runs the tests and deploys `dist/` to GitHub Pages
