@@ -88,8 +88,15 @@ export async function startGame(page: Page, mode: "tap" | "speak") {
 /** Wait for a prompt offering this sentence as a button, and tap it. */
 export async function tap(page: Page, phraseId: string) {
   const s = await waitFor(page, (x) => Boolean(x.prompt?.buttons && x.prompt.choices.includes(phraseId) && x.prompt.status !== "correct" && x.prompt.status !== "wrong"), 30_000, `button ${phraseId}`);
-  await page.locator(`[data-testid=choice][data-id=${phraseId}]`).click();
-  await waitFor(page, (x) => !x.prompt || x.prompt.id !== s.prompt!.id || x.prompt.status === "wrong", 10_000, `prompt after ${phraseId}`);
+  // Observe in the browser before clicking: a slow renderer/round trip can
+  // otherwise miss the wrong-answer feedback before its 700ms reset.
+  await Promise.all([
+    page.waitForFunction((id) => {
+      const p = (window as unknown as { __mi: { state(): MiState } }).__mi.state().prompt;
+      return !p || p.id !== id || p.status === "wrong";
+    }, s.prompt!.id, { timeout: 10_000, polling: 50 }),
+    page.locator(`[data-testid=choice][data-id=${phraseId}]`).click()
+  ]);
 }
 
 /** Speak into the stub recogniser for the open prompt (one Space press = one session). */

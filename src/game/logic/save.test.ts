@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SAVE_KEY, SAVE_KEY_V1, SAVE_KEY_V2, decodeSave, encodeSave } from "./save";
 import { befriend, describeLine, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
+import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
+import { CAMP, CLIFF_TOP_SPOT, SPAWN } from "../world/island";
 
 function midGame() {
   let p = { ...newProgress(), metMaple: true };
@@ -42,7 +44,7 @@ describe("save / load", () => {
     p = describeLine(discover(p, "puff"), "puff", "size");
     p = describeLine(p, "puff", "part");
     const { lumo: _lumo, ...monsters } = p.monsters;
-    const player = { x: 51, z: -61, yaw: 0.6 };
+    const player = { ...CLIFF_TOP_SPOT, yaw: 0.6 };
     const back = decodeSave(JSON.stringify({ v: 2, progress: { ...p, monsters }, player, seconds: 1200 }))!;
     expect(back.v).toBe(3);
     expect(back.progress).toEqual(p);
@@ -60,6 +62,18 @@ describe("save / load", () => {
     const back = decodeSave(encodeSave(p, { x: 70, z: -120, yaw: 0 }, 1800))!;
     expect(back.v).toBe(3);
     expect(back.progress).toEqual(p);
+  });
+
+  it.each([1, 2, 3])("relocates a player stored inside a solid after loading save v%i without changing progression", (v) => {
+    const p = midGame();
+    const player = { x: CAMP.table.x, z: CAMP.table.z, yaw: 1.3 };
+    const gates = gatesOf(p);
+    expect(isWalkable(player.x, player.z, gates, PLAYER_R)).toBe(false);
+    const back = decodeSave(JSON.stringify({ v, progress: p, player, seconds: 321 }))!;
+    expect(back.progress).toEqual(p);
+    expect(back.player).toEqual({ ...nearestWalkable(player.x, player.z, PLAYER_R, gates, false, true), yaw: player.yaw });
+    expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
+    expect(back.seconds).toBe(321);
   });
 
   it("never restores Lumo as a companion", () => {
@@ -147,6 +161,7 @@ describe("save / load", () => {
     expect(s.progress.endings).toBe(0);
     expect(s.progress.bag).toEqual({ apples: 3 });
     expect(s.progress.said).toEqual(["likeApples"]);
-    expect(Number.isNaN(s.player.x)).toBe(true);
+    expect(s.player).toEqual({ x: SPAWN.x, z: SPAWN.z, yaw: 0 });
+    expect(isWalkable(s.player.x, s.player.z, gatesOf(s.progress), PLAYER_R)).toBe(true);
   });
 });

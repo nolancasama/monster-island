@@ -10,6 +10,9 @@ import { Maple, Player } from "./Characters";
 import { Monsters } from "./Monsters";
 import { Effects } from "./Effects";
 import { CameraRig } from "./CameraRig";
+import { CollisionOverlay } from "./CollisionOverlay";
+
+const collisionDebugAllowed = import.meta.env.DEV || new URLSearchParams(window.location.search).get("e2e") === "1";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -84,6 +87,7 @@ export function GameScene() {
       <Monsters />
       <Effects />
       <CameraRig />
+      {collisionDebugAllowed ? <CollisionOverlay /> : null}
     </Canvas>
   );
 }

@@ -25,15 +25,29 @@ import type { ObstacleId } from "../types";
 const STEP = 0.5;
 
 /** Flood fill of the cells a player can walk to from the spawn (real collision moves). */
-function reachable(solved: ObstacleId[], forest = false, volcano = false, start = SPAWN): Set<string> {
+function reachable(solved: ObstacleId[], forest = false, volcano = false, start = SPAWN, climb = false): Set<string> {
   const gates: Gates = { solved, forest, volcano };
   const key = (i: number, j: number) => `${i},${j}`;
   const toCell = (x: number, z: number) => [Math.round(x / STEP), Math.round(z / STEP)];
   const [si, sj] = toCell(start.x, start.z);
   const seen = new Set([key(si, sj)]);
   const queue: Array<[number, number]> = [[si, sj]];
+  const enqueue = (x: number, z: number) => {
+    const [i, j] = toCell(x, z);
+    const k = key(i, j);
+    if (!seen.has(k) && isWalkable(i * STEP, j * STEP, gates, PLAYER_R)) {
+      seen.add(k);
+      queue.push([i, j]);
+    }
+  };
   while (queue.length) {
     const [i, j] = queue.pop()!;
+    // Puff's rope is a scripted transition, not a walkable ramp up the cliff.
+    // Include the real interaction edge only once the rope has been solved.
+    if (climb && solved.includes("cliff")) {
+      if (Math.hypot(i * STEP - ROPE.x, j * STEP - ROPE.z) <= INTERACT_RANGE) enqueue(CLIFF_TOP_SPOT.x, CLIFF_TOP_SPOT.z);
+      if (Math.hypot(i * STEP - CLIFF_TOP_SPOT.x, j * STEP - CLIFF_TOP_SPOT.z) <= INTERACT_RANGE) enqueue(ROPE.x, ROPE.z + 1.2);
+    }
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = i + di;
       const nj = j + dj;
@@ -42,6 +56,7 @@ function reachable(solved: ObstacleId[], forest = false, volcano = false, start 
       const tx = ni * STEP;
       const tz = nj * STEP;
       if (tx < X_WEST - 1 || tx > 85 || tz < -151 || tz > 16) continue;
+      if (!isWalkable(tx, tz, gates, PLAYER_R)) continue;
       const p = moveCircle(i * STEP, j * STEP, tx, tz, PLAYER_R, gates);
       if (Math.hypot(p.x - tx, p.z - tz) > 0.05) continue;
       seen.add(k);
@@ -133,6 +148,32 @@ describe("island reachability", () => {
       if (j * STEP < Z_NORTH - 0.5) expect(inForest(i * STEP, j * STEP), k).toBe(true);
     }
   });
+});
+
+describe("required interactions remain reachable through each chapter", () => {
+  const beach: ObstacleId[] = ["fallenPalm", "river"];
+  const hills: ObstacleId[] = [...beach, "bridge"];
+  const top: ObstacleId[] = [...hills, "cliff"];
+  const cooled: ObstacleId[] = [...top, "lava"];
+  const lit: ObstacleId[] = [...cooled, "cave"];
+  const final: ObstacleId[] = [...lit, ...Object.keys(GATE_PILLARS) as ObstacleId[]];
+  const cases = [
+    { chapter: "beach arrival", solved: [] as ObstacleId[], forest: false, volcano: false, targets: [MAPLE, MONSTERS.leafy.home, FALLEN_PALM, ...FOOD_SOURCES.filter((f) => ["apple1", "apple2", "banana", "berry"].includes(f.id))] },
+    { chapter: "palm lifted", solved: ["fallenPalm"] as ObstacleId[], forest: false, volcano: false, targets: [MONSTERS.bubbo.home, CROSSING.west, ...FOOD_SOURCES.filter((f) => f.food === "fish")] },
+    { chapter: "forest opened", solved: beach, forest: true, volcano: false, targets: [MONSTER_STONE, FOREST_SIGN, { x: BRIDGE.x, z: BRIDGE.z1 + 0.6 }] },
+    { chapter: "bridge repaired", solved: hills, forest: true, volcano: false, targets: [MONSTERS.puff.home, ROPE, ...FOOD_SOURCES.filter((f) => ["berry2", "berry3"].includes(f.id))] },
+    { chapter: "cliff climbed", solved: top, forest: true, volcano: true, targets: [CLIFF_TOP_SPOT, LAVA] },
+    { chapter: "lava cooled", solved: cooled, forest: true, volcano: true, targets: [MONSTERS.ember.home, CAVE, ...FOOD_SOURCES.filter((f) => f.food === "meat")] },
+    { chapter: "cave lit", solved: lit, forest: true, volcano: true, targets: Object.values(GATE_PILLARS) },
+    { chapter: "sanctuary opened", solved: final, forest: true, volcano: true, targets: [MAPLE, ...Object.values(MONSTERS).map((m) => m.home), ...FOOD_SOURCES, FALLEN_PALM, CROSSING.west, MONSTER_STONE, FOREST_SIGN, { x: BRIDGE.x, z: BRIDGE.z1 + 0.6 }, ROPE, CLIFF_TOP_SPOT, LAVA, CAVE, ...Object.values(GATE_PILLARS), SANCTUARY_GATE] }
+  ];
+
+  for (const state of cases) {
+    it(`${state.chapter}: quest objects, NPCs and pickups can be approached from spawn`, () => {
+      const cells = reachable(state.solved, state.forest, state.volcano, SPAWN, true);
+      for (const p of state.targets) expect(canReach(cells, p.x, p.z, INTERACT_RANGE), `${state.chapter}: ${p.x},${p.z}`).toBe(true);
+    });
+  }
 });
 
 describe("volcano and sanctuary reachability", () => {

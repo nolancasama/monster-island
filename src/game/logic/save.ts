@@ -3,6 +3,7 @@ import { FOODS } from "../data/foods";
 import { OBSTACLES, gateOpen, newProgress, obstacleAvailable, type MonsterRecord, type Progress } from "./progress";
 import { PHRASES, type PhraseId } from "./english";
 import type { FoodId, MonsterId, ObstacleId } from "../types";
+import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
 
 /**
  * Versioned save. A save of an unknown version, or one that does not parse,
@@ -84,10 +85,13 @@ export function decodeSave(text: string | null): SaveData | null {
     : endings >= 2 && p.solved.includes("cliff") ? 2 : endings >= 1 && p.solved.includes("river") ? 1 : 0;
   p.said = Array.isArray(src.said) ? (src.said as unknown[]).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES) : [];
   const pl = isObj(raw.player) ? raw.player : {};
+  // Validate position after migration and progression sanitization, against the
+  // same solids and gates movement uses. Progress and the v3 format stay intact.
+  const safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);
   return {
     v: VERSION,
     progress: p,
-    player: { x: num(pl.x, NaN), z: num(pl.z, NaN), yaw: num(pl.yaw, 0) },
+    player: { x: safe.x, z: safe.z, yaw: num(pl.yaw, 0) },
     seconds: Math.max(0, num(raw.seconds, 0))
   };
 }

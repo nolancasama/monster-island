@@ -8,6 +8,8 @@ import { boot, hook, startGame, state, tap, use, waitFor } from "./helpers";
  * real key press or click.
  */
 test("discover, befriend and use both monsters to reach the Monster Stone (mic-free)", async ({ page }) => {
+  // Two complete friendships and the ending can exceed 180s on SwiftShader.
+  test.setTimeout(360_000);
   const errors = await boot(page);
   await startGame(page, "tap");
 

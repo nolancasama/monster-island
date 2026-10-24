@@ -43,6 +43,8 @@ async function continueFrom(page: Page, save: string) {
 }
 
 test("the forest: bridge, Puff, the cliff and the cliff-top ending (mic-free, from a Phase 1 save)", async ({ page }) => {
+  // Full chapter plus return trip; SwiftShader can exceed the default 180s.
+  test.setTimeout(360_000);
   const errors = await continueFrom(page, V1_SAVE);
   let s = await state(page);
   // The v1 save migrated: the beach is done and the forest is open.

@@ -81,10 +81,24 @@ export function tick(dt: number) {
 
 // ------------------------------------------------------------ player
 
+const playerObstacles: Obstacles[] = [{ circles: [...LIVE_MONSTERS.map(() => ({ x: 0, z: 0, r: 0 })), { x: 0, z: 0, r: 0.4 }], boxes: [] }];
+const moveResult = { x: 0, z: 0 };
+const noExtraObstacles: Obstacles[] = [];
+
 function monsterObstacles(): Obstacles[] {
   const active = getGame().progress.active;
-  const circles = LIVE_MONSTERS.filter((id) => id !== active).map((id) => ({ x: rt.monsters[id].x, z: rt.monsters[id].z, r: MONSTERS[id].radius }));
-  return [{ circles, boxes: [] }];
+  const circles = playerObstacles[0].circles;
+  for (let i = 0; i < LIVE_MONSTERS.length; i++) {
+    const id = LIVE_MONSTERS[i];
+    const c = circles[i];
+    c.x = id === active ? 1e6 : rt.monsters[id].x;
+    c.z = rt.monsters[id].z;
+    c.r = MONSTERS[id].radius;
+  }
+  const maple = circles[LIVE_MONSTERS.length];
+  maple.x = rt.maple.x;
+  maple.z = rt.maple.z;
+  return playerObstacles;
 }
 
 function movePlayer(dt: number, canMove: boolean) {
@@ -118,7 +132,7 @@ function movePlayer(dt: number, canMove: boolean) {
   if (!p.frozen && (p.vx || p.vz)) {
     const nx = p.x + p.vx * dt;
     const nz = p.z + p.vz * dt;
-    const q = moveCircle(p.x, p.z, nx, nz, PLAYER_R, gatesOf(getGame().progress), false, monsterObstacles());
+    const q = moveCircle(p.x, p.z, nx, nz, PLAYER_R, gatesOf(getGame().progress), false, monsterObstacles(), moveResult);
     p.vx = (q.x - p.x) / dt;
     p.vz = (q.z - p.z) / dt;
     p.x = q.x;
@@ -161,7 +175,7 @@ function walkTo(m: MonsterRt, x: number, z: number, speed: number, dt: number): 
   }
   const def = MONSTERS[m.id];
   const step = Math.min(d, speed * dt);
-  const q = moveCircle(m.x, m.z, m.x + (dx / d) * step, m.z + (dz / d) * step, def.radius, gatesOf(getGame().progress), def.can.includes("swim"));
+  const q = moveCircle(m.x, m.z, m.x + (dx / d) * step, m.z + (dz / d) * step, def.radius, gatesOf(getGame().progress), def.can.includes("swim"), noExtraObstacles, moveResult);
   const moved = Math.hypot(q.x - m.x, q.z - m.z);
   m.x = q.x;
   m.z = q.z;
@@ -183,6 +197,17 @@ function homeLife(m: MonsterRt, dt: number) {
   const rec = g.progress.monsters[m.id];
   const p = rt.player;
   const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
+
+  // Ember lives beyond the lava gate. Until it opens, player-land collision
+  // recovery cannot find his home and would send a wandering Ember to spawn.
+  if (m.id === "ember" && !g.progress.solved.includes("lava")) {
+    m.x = def.home.x;
+    m.z = def.home.z;
+    m.speed = 0;
+    m.target = null;
+    m.mode = "idle";
+    return;
+  }
 
   // Lumo belongs to the garden. The four powers wake it; it never wanders
   // out through the gate or naps again after that moment.

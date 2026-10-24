@@ -2,14 +2,15 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { between, rockGeometry } from "./nature";
 import type { FoodId } from "../../game/types";
+import { CAMP_BENCH, CAMP_CRATE, CROSSING_POST_SIZE, PIER, PIER_POSTS, TABLE_SIZE, TENT_SIZE } from "../../game/world/island";
 
 /** Professor Maple's research camp (built around its own origin). */
 export function tentGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.4);
   // A-frame tent: two sloped canvas sides, a back wall, a door flap.
-  const w = 3.2;
-  const d = 2.8;
-  const h = 2.2;
+  const w = TENT_SIZE.width;
+  const d = TENT_SIZE.depth;
+  const h = TENT_SIZE.height;
   const slope = Math.atan2(w / 2, h);
   const side = Math.hypot(w / 2, h);
   b.boxAt(0.06, side, d, [-w / 4, h / 2, 0], [0, 0, -slope], "#f2b84b");
@@ -30,7 +31,7 @@ export function tentGeometry(): THREE.BufferGeometry {
 
 export function tableGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
-  b.box(1.7, 0.08, 0.95, 0, 0.82, 0, "#b9874f");
+  b.box(TABLE_SIZE.width, 0.08, TABLE_SIZE.depth, 0, 0.82, 0, "#b9874f");
   for (const [x, z] of [
     [-0.75, -0.4],
     [0.75, -0.4],
@@ -47,7 +48,7 @@ export function tableGeometry(): THREE.BufferGeometry {
   b.cylAt(0.02, 0.22, [0.66, 0.92, -0.08], [Math.PI / 2, 0, 0.6], "#5a3d22", 6);
   b.cyl(0.08, 0.08, 0.2, -0.05, 0.86, -0.3, "#9fe0d0", 10);
   // Crates.
-  b.box(0.7, 0.6, 0.6, 1.4, 0, -0.1, "#c99a5c", 0.3);
+  b.box(CAMP_CRATE.width, 0.6, CAMP_CRATE.depth, CAMP_CRATE.x, 0, CAMP_CRATE.z, "#c99a5c", CAMP_CRATE.yaw);
   b.box(0.5, 0.45, 0.5, 1.3, 0.6, -0.05, "#d8aa6a", -0.2);
   return b.build();
 }
@@ -61,7 +62,7 @@ export function campfireGeometry(): THREE.BufferGeometry {
   b.cylAt(0.08, 0.9, [0, 0.12, 0], [0, 0.5, Math.PI / 2], "#7a5532", 7);
   b.cylAt(0.08, 0.9, [0, 0.16, 0], [0, -0.7, Math.PI / 2], "#8a6238", 7);
   // A log bench.
-  b.cylAt(0.18, 1.5, [-1.4, 0.18, 0.2], [0.3, 0.5, Math.PI / 2], "#8a6238", 8);
+  b.cylAt(CAMP_BENCH.radius, CAMP_BENCH.length, [CAMP_BENCH.x, 0.18, CAMP_BENCH.z], [0.3, CAMP_BENCH.yaw, Math.PI / 2], "#8a6238", 8);
   return b.build();
 }
 
@@ -130,11 +131,8 @@ export function berryBushGeometry(): THREE.BufferGeometry {
 export function pierGeometry(z0: number, z1: number): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   const n = Math.round((z1 - z0) / 0.45);
-  for (let i = 0; i < n; i++) b.box(1.8, 0.08, 0.38, (i % 2) * 0.03, 0.18, z0 + 0.2 + i * 0.45, i % 3 ? "#b98d58" : "#a87d4b");
-  for (let z = z0 + 0.5; z < z1; z += 2) {
-    b.cyl(0.09, 0.09, 1.6, -0.85, -1.4, z, "#7a5532", 6);
-    b.cyl(0.09, 0.09, 1.6, 0.85, -1.4, z, "#7a5532", 6);
-  }
+  for (let i = 0; i < n; i++) b.box(PIER.half * 2, 0.08, 0.38, (i % 2) * 0.03, PIER.deckY - 0.08, z0 + 0.2 + i * 0.45, i % 3 ? "#b98d58" : "#a87d4b");
+  for (const post of PIER_POSTS) b.cyl(PIER.postRadius, PIER.postRadius, 1.6, post.x - PIER.x, -1.4, post.z, "#7a5532", 6);
   return b.build();
 }
 
@@ -249,9 +247,9 @@ export function vineWallGeometry(): THREE.BufferGeometry {
 /** The crossing post at the river bank (where Bubbo can help). */
 export function crossingPostGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  b.cyl(0.09, 0.1, 1.2, 0, 0, 0, "#7a5532", 6);
-  b.cyl(0.09, 0.1, 1.2, 0, 0, 1.4, "#7a5532", 6);
-  between(b, [0, 1.05, 0], [0, 0.95, 1.4], 0.025, 0.025, "#e8dcb8", 4);
+  b.cyl(0.09, CROSSING_POST_SIZE.radius, 1.2, 0, 0, 0, "#7a5532", 6);
+  b.cyl(0.09, CROSSING_POST_SIZE.radius, 1.2, 0, 0, CROSSING_POST_SIZE.spacing, "#7a5532", 6);
+  between(b, [0, 1.05, 0], [0, 0.95, CROSSING_POST_SIZE.spacing], 0.025, 0.025, "#e8dcb8", 4);
   return b.build();
 }
 

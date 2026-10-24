@@ -7,8 +7,9 @@ import {
   BANANA_PLANT,
   BERRY_BUSH,
   CAMP,
-  CROSSING,
+  CROSSING_POSTS,
   FALLEN_PALM,
+  PALM_POSES,
   FISH_BASKET,
   FOOD_SOURCES,
   FOREST_SIGN,
@@ -62,8 +63,8 @@ function Camp() {
   const f = CAMP.fire;
   return (
     <group>
-      <mesh geometry={tent} material={occluderMat} position={at(CAMP.tent.x, CAMP.tent.z)} rotation={[0, 0.5, 0]} />
-      <mesh geometry={table} material={smoothMat} position={at(CAMP.table.x, CAMP.table.z)} rotation={[0, 0.3, 0]} />
+      <mesh geometry={tent} material={occluderMat} position={at(CAMP.tent.x, CAMP.tent.z)} rotation={[0, CAMP.tent.yaw, 0]} />
+      <mesh geometry={table} material={smoothMat} position={at(CAMP.table.x, CAMP.table.z)} rotation={[0, CAMP.table.yaw, 0]} />
       <group position={at(f.x, f.z)}>
         <mesh geometry={fire} material={flatMat} />
         <mesh ref={flame} material={flameMat} position={[0, 0.25, 0]}>
@@ -71,7 +72,7 @@ function Camp() {
         </mesh>
         <sprite material={glow} position={[0, 0.5, 0]} scale={[1.8, 1.8, 1]} />
       </group>
-      <group position={at(CAMP.tent.x + 2.4, CAMP.tent.z + 1.6)}>
+      <group position={at(CAMP.flag.x, CAMP.flag.z)}>
         <mesh geometry={flag} material={smoothMat} />
         <mesh ref={cloth} position={[0.4, 2.85, 0]}>
           <boxGeometry args={[0.8, 0.5, 0.03]} />
@@ -154,15 +155,14 @@ function FallenPalm() {
   const vines = useMemo(() => vinesGeometry(FALLEN_PALM.len), []);
   const group = useRef<THREE.Group>(null);
   const vineRef = useRef<THREE.Mesh>(null);
-  const y0 = groundY(FALLEN_PALM.x, FALLEN_PALM.z) - 0.08;
   useFrame(() => {
     const g = group.current;
     if (!g) return;
-    const k = rt.palm;
-    const lift = Math.sin(Math.min(1, k) * Math.PI) * 1.4;
-    g.position.set(FALLEN_PALM.x - 0.4 * k, y0 + 2.4 * k + lift, FALLEN_PALM.z - 4.2 * k);
-    // Crown toward the sea, where the camera usually is, so it reads as a fallen palm.
-    g.rotation.set(0.12 * k, Math.PI + (Math.PI / 2 - 0.25) * k, -0.22 * k);
+    const k = Math.max(0, Math.min(1, rt.palm));
+    const from = PALM_POSES.fallen, to = PALM_POSES.resting;
+    const lift = Math.sin(k * Math.PI) * 1.4;
+    g.position.set(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k + lift, from.z + (to.z - from.z) * k);
+    g.rotation.set(from.pitch + (to.pitch - from.pitch) * k, from.yaw + (to.yaw - from.yaw) * k, from.roll + (to.roll - from.roll) * k);
     if (vineRef.current) {
       const v = Math.max(0.001, rt.vines);
       vineRef.current.scale.set(1, v, 1);
@@ -204,8 +204,7 @@ function SteppingStones() {
           }}
         />
       ))}
-      <mesh geometry={post} material={smoothMat} position={at(CROSSING.west.x - 0.5, CROSSING.west.z - 1.6)} />
-      <mesh geometry={post} material={smoothMat} position={at(CROSSING.east.x + 0.5, CROSSING.east.z - 1.6)} />
+      {CROSSING_POSTS.map((p, i) => <mesh key={i} geometry={post} material={smoothMat} position={at(p.x, p.z)} />)}
     </group>
   );
 }
@@ -256,7 +255,7 @@ function MonsterStone() {
   });
   const [x, y, z] = at(MONSTER_STONE.x, MONSTER_STONE.z);
   return (
-    <group position={[x, y, z]} rotation={[0, 0.25, 0]}>
+    <group position={[x, y, z]} rotation={[0, MONSTER_STONE.yaw, 0]}>
       <mesh geometry={stone} material={flatMat} />
       {MONSTER_ORDER.map((id, i) => (
         <group key={id} position={[SOCKETS[i][0], SOCKETS[i][1], 0.4]}>
@@ -291,7 +290,7 @@ function ForestGate() {
   const tex = useMemo(signTexture, []);
   return (
     <group>
-      <group position={at(FOREST_SIGN.x, FOREST_SIGN.z)} rotation={[0, 0.2, 0]}>
+      <group position={at(FOREST_SIGN.x, FOREST_SIGN.z)} rotation={[0, FOREST_SIGN.yaw, 0]}>
         <mesh geometry={post} material={smoothMat} />
         <mesh position={[0.35, 1.43, 0.045]}>
           <planeGeometry args={[1.42, 0.5]} />

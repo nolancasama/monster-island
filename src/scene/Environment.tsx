@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import {
   BOULDERS,
+  DRIFTWOOD,
   FOREST_SIGN,
   PALMS,
   RIVER,
@@ -439,8 +440,7 @@ function beachDetails(): THREE.BufferGeometry {
     }
   }
   // Driftwood.
-  b.cylAt(0.13, 1.8, [6, groundY(6, 8.4) + 0.12, 8.4], [0, 0.4, Math.PI / 2], "#b29676", 7);
-  b.cylAt(0.11, 1.4, [-15, groundY(-15, 8.2) + 0.1, 8.2], [0, -0.7, Math.PI / 2], "#a68a6a", 7);
+  for (const log of DRIFTWOOD) b.cylAt(log.radius, log.length, [log.x, groundY(log.x, log.z) + log.y, log.z], [0, log.yaw, Math.PI / 2], log.color, 7);
   return b.build();
 }
 

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { between, rockGeometry } from "./nature";
 import { makeRng } from "../../game/logic/rng";
-import { CAVE, GATE_PILLARS, LAVA, MEAT_RACK, SANCTUARY, SANCTUARY_GATE, groundY, volcanoMask } from "../../game/world/island";
+import { CAVE, CAVE_WALLS, GATE_PILLARS, GATE_POSTS, GATE_WALLS, LAVA, MEAT_RACK, SANCTUARY, SANCTUARY_GATE, VOLCANO_ROCKS, groundY, volcanoMask } from "../../game/world/island";
 
 /** One terrain draw for the new region, with the same height function as collision. */
 export function volcanoGroundGeometry(): THREE.BufferGeometry {
@@ -55,25 +55,13 @@ export function lavaBedGeometry(cooled: boolean): THREE.BufferGeometry {
 
 export function volcanoRocksGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  const rand = makeRng(395);
-  const rock = (x: number, z: number, r: number, h: number, seed: number) => b.add(rockGeometry(r, h, seed, 1), seed % 2 ? "#77665e" : "#675b57", [x, groundY(x, z) - 0.3, z]);
-  // Trail edges guide the winding route without making another interaction.
-  const points = [[31, -56], [39.8, -58], [36, -67], [46.4, -68], [43, -78], [54.4, -77], [49, -88], [67.5, -91]];
-  points.forEach(([x, z], i) => rock(x, z, 1.2 + rand() * 0.8, 1 + rand(), 420 + i));
-  // Ember's warm resting rocks, leaving the meat and approach clear.
-  for (let i = 0; i < 5; i++) rock(59 + Math.cos(i * 0.8) * 3, -94 + Math.sin(i * 0.8) * 2, 0.8 + rand(), 0.6 + rand(), 440 + i);
-  // Rough outer flank around the solid tunnel shell below.
-  for (let i = 0; i < 10; i++) {
-    rock(59.2, -103 - i * 2.2, 1.4, 3.1 + rand(), 460 + i);
-    const eastHeight = 3.2 + rand();
-    if (i < 8) rock(68.8, -103 - i * 2.2, 1.4, eastHeight, 480 + i);
-  }
+  const rock = (r: typeof VOLCANO_ROCKS[number]) => b.add(rockGeometry(r.r, r.h, r.seed, 1), r.seed % 2 ? "#77665e" : "#675b57", [r.x, groundY(r.x, r.z) - 0.3, r.z]);
+  for (const r of VOLCANO_ROCKS) if (r.seed < 540) rock(r);
   // A broad rock cap joins the arch to the volcano flank and hides the garden
   // above the mouth. Unlike decorative rocks this roof never fades for the lens.
   const caveY = groundY(CAVE.x, CAVE.z);
   b.box(32, 5, 24, CAVE.x, caveY + 4.4, -113.5, "#665750");
-  b.box(12, 4.4, 24, CAVE.x - 10, caveY, -113.5, "#665750");
-  b.box(12, 4.4, 20.5, CAVE.x + 10, caveY, -111.75, "#665750");
+  for (const wall of CAVE_WALLS) if (wall.shell) b.box(wall.width, wall.height, wall.depth, wall.x, caveY, wall.z, "#665750");
   // The mouth is a broad stone arch, so its black centre reads from the slope.
   for (let i = 0; i <= 7; i++) {
     const a = (i / 7) * Math.PI;
@@ -81,16 +69,7 @@ export function volcanoRocksGeometry(): THREE.BufferGeometry {
     const y = groundY(CAVE.x, CAVE.z) + Math.sin(a) * 4.2;
     b.add(rockGeometry(1.1, 1.05, 500 + i, 1), i % 2 ? "#665958" : "#82716a", [x, y, CAVE.z - 0.3]);
   }
-  // Raised crater rim around the gentle garden, with a south passage.
-  for (let i = 0; i < 25; i++) {
-    const a = (i / 25) * Math.PI * 2;
-    const x = 70 + Math.cos(a) * 12;
-    const z = -136 + Math.sin(a) * 12.5;
-    // The gate wall closes the south rim. Keep its approach courtyard and
-    // the outer pillar symbols clear of the crater's decorative boulders.
-    if (z > SANCTUARY_GATE.z - 0.5) continue;
-    rock(x, z, 2.1 + rand(), 2.6 + rand() * 1.2, 540 + i);
-  }
+  for (const r of VOLCANO_ROCKS) if (r.seed >= 540) rock(r);
   return b.build();
 }
 
@@ -98,11 +77,9 @@ export function volcanoRocksGeometry(): THREE.BufferGeometry {
 export function caveInteriorGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.25);
   const y = groundY(CAVE.x, CAVE.z);
-  b.box(1, 4.5, 24, 60.5, y, -113.5, "#716056");
-  b.box(1, 4.5, 20.5, 67.5, y, -111.75, "#716056");
+  for (const wall of CAVE_WALLS) if (!wall.shell) b.box(wall.width, wall.height, wall.depth, wall.x, y, wall.z, wall.depth < 1 ? "#6b5749" : "#716056");
   b.box(7, 0.15, 24, 64, y + 0.08, -113.5, "#655345");
   b.box(7, 0.2, 24, 64, y + 4.2, -113.5, "#776052");
-  b.box(7, 4.5, 0.8, 64, y, -125, "#6b5749");
   return b.build();
 }
 
@@ -187,11 +164,11 @@ export function pillarPowerGeometry(id: PillarId): THREE.BufferGeometry {
 export function gateWallGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   const y = groundY(SANCTUARY_GATE.x, SANCTUARY_GATE.z);
-  for (const side of [-1, 1]) {
-    b.box(10.8, 2.7, 0.9, 70 + side * 8.1, y, SANCTUARY_GATE.z, "#a1aa84");
-    b.box(11.2, 0.25, 1.2, 70 + side * 8.1, y + 2.7, SANCTUARY_GATE.z, "#c4c7a2");
-    b.cyl(0.72, 0.9, 4.1, 70 + side * 2.6, y, SANCTUARY_GATE.z, "#cac8a9", 8);
+  for (const wall of GATE_WALLS) {
+    b.box(wall.width, 2.7, wall.depth, wall.x, y, wall.z, "#a1aa84");
+    b.box(wall.width + 0.4, 0.25, wall.depth + 0.3, wall.x, y + 2.7, wall.z, "#c4c7a2");
   }
+  for (const post of GATE_POSTS) b.cyl(0.72, post.r, 4.1, post.x, y, post.z, "#cac8a9", 8);
   b.box(6.6, 0.6, 1.4, 70, y + 4.0, SANCTUARY_GATE.z, "#d7d6b8");
   return b.build();
 }

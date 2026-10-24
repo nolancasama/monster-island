@@ -8,9 +8,10 @@ import {
   CLIFF_HEIGHT,
   CLIFF_TOP_SPOT,
   CLIFF_Z,
+  CLIFF_WALL,
   FOREST_AREAS,
   FOREST_BERRY_BUSHES,
-  FOREST_TREES,
+  FOREST_TREE_PLACEMENTS,
   GLADE,
   PUFF_TREE,
   RAVINE,
@@ -149,7 +150,7 @@ function Trees() {
   const jungle = useMemo(jungleTreeGeometry, []);
   const fern = useMemo(fernGeometry, []);
   const { edge, ferns } = useMemo(forestSpots, []);
-  const big = useMemo<Spot[]>(() => FOREST_TREES.map((t, i) => ({ x: t.x, z: t.z, s: t.s, r: i * 1.3, tint: 0.92 + (i % 3) * 0.05 })), []);
+  const big = useMemo<Spot[]>(() => FOREST_TREE_PLACEMENTS.map((t) => ({ x: t.x, z: t.z, s: t.scale, r: t.yaw, tint: t.tint })), []);
   const puffTree = useMemo(puffTreeGeometry, []);
   const berry = useMemo(berryBushGeometry, []);
   return (
@@ -208,7 +209,7 @@ function Ravine() {
 
 /** The high cliff, the rope and the cliff top's rockfall. */
 function Cliff() {
-  const wall = useMemo(() => rockWallGeometry(26, CLIFF_HEIGHT + 4, 1.2, 160, ["#8f8578", "#7d7468", "#9a9082"]), []);
+  const wall = useMemo(() => rockWallGeometry(CLIFF_WALL.length, CLIFF_HEIGHT + 4, CLIFF_WALL.depth, 160, ["#8f8578", "#7d7468", "#9a9082"]), []);
   const coil = useMemo(ropeCoilGeometry, []);
   const hang = useMemo(() => ropeHangingGeometry(CLIFF_HEIGHT + 0.4), []);
   const coilRef = useRef<THREE.Mesh>(null);
@@ -226,7 +227,7 @@ function Cliff() {
   const baseY = forestBase(30, CLIFF_Z + 0.4);
   return (
     <group>
-      <mesh geometry={wall} material={flatMat} position={[24, baseY - 1, CLIFF_Z - 0.5]} />
+      <mesh geometry={wall} material={flatMat} position={[CLIFF_WALL.x, baseY - 1, CLIFF_WALL.z]} />
       <mesh ref={coilRef} geometry={coil} material={smoothMat} position={at(ROPE.x + 0.9, ROPE.z + 0.4)} />
       <mesh ref={hangRef} geometry={hang} material={smoothMat} position={[ROPE.x, groundY(ROPE.x, ROPE.z), ROPE.z - 0.25]} />
     </group>

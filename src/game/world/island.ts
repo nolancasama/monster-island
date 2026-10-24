@@ -1,4 +1,23 @@
 import type { FoodId, Vec2 } from "../types";
+import { makeRng } from "../logic/rng";
+
+/** Scene placements and their small, ground-plane collision proxies share one transform. */
+export interface Placement { x: number; z: number; yaw?: number; scale?: number }
+export type SolidShape =
+  | { kind: "circle"; x: number; z: number; r: number }
+  | { kind: "box"; x: number; z: number; hx: number; hz: number; yaw: number }
+  | { kind: "capsule"; ax: number; az: number; bx: number; bz: number; r: number };
+
+export function solidAt(p: Placement, shape: SolidShape): SolidShape {
+  const s = p.scale ?? 1;
+  const yaw = p.yaw ?? 0;
+  const c = Math.cos(yaw), n = Math.sin(yaw);
+  const x = (lx: number, lz: number) => p.x + (lx * c + lz * n) * s;
+  const z = (lx: number, lz: number) => p.z + (-lx * n + lz * c) * s;
+  if (shape.kind === "capsule") return { kind: "capsule", ax: x(shape.ax, shape.az), az: z(shape.ax, shape.az), bx: x(shape.bx, shape.bz), bz: z(shape.bx, shape.bz), r: shape.r * s };
+  if (shape.kind === "circle") return { kind: "circle", x: x(shape.x, shape.z), z: z(shape.x, shape.z), r: shape.r * s };
+  return { kind: "box", x: x(shape.x, shape.z), z: z(shape.x, shape.z), hx: shape.hx * s, hz: shape.hz * s, yaw: shape.yaw + yaw };
+}
 
 /**
  * The handcrafted beach (Phase 1). +x is east, +z is south toward the sea.
@@ -83,17 +102,34 @@ export function groundY(x: number, z: number): number {
 
 export const SPAWN = { x: -23.5, z: 2.2, yaw: Math.PI / 2 };
 export const MAPLE = { x: -26.2, z: 0.4, yaw: 1.2 };
-export const CAMP = { tent: { x: -29.5, z: -3.6 }, table: { x: -25.6, z: -2.2 }, fire: { x: -24.6, z: 4.6 } };
+export const CAMP = { tent: { x: -29.5, z: -3.6, yaw: 0.5 }, table: { x: -25.6, z: -2.2, yaw: 0.3 }, fire: { x: -24.6, z: 4.6 }, flag: { x: -27.1, z: -2 } };
+export const TENT_SIZE = { width: 3.2, depth: 2.8, height: 2.2 };
+export const TABLE_SIZE = { width: 1.7, depth: 0.95 };
+export const CAMP_CRATE = { x: 1.4, z: -0.1, yaw: 0.3, width: 0.7, depth: 0.6 };
+export const CAMP_BENCH = { x: -1.4, z: 0.2, yaw: 0.5, length: 1.5, radius: 0.18 };
+export const DRIFTWOOD = [
+  { x: 6, z: 8.4, yaw: 0.4, length: 1.8, radius: 0.13, y: 0.12, color: "#b29676" },
+  { x: -15, z: 8.2, yaw: -0.7, length: 1.4, radius: 0.11, y: 0.1, color: "#a68a6a" }
+];
 export const APPLE_TREES: Vec2[] = [
   { x: -18.2, z: -6.6 },
   { x: -12.6, z: -6.9 }
 ];
 export const BANANA_PLANT = { x: -32.2, z: 1.6 };
 export const BERRY_BUSH = { x: -7.6, z: -5.6 };
-export const PIER = { x: 13, z0: 7.2, z1: 13.5 };
+export const PIER = { x: 13, z0: 7.2, z1: 13.5, half: 0.9, deckY: 0.26, postRadius: 0.09, postOffset: 0.85, postSpacing: 2, postStart: 0.5 };
+export const PIER_POSTS: Vec2[] = [];
+for (let z = PIER.z0 + PIER.postStart; z < PIER.z1; z += PIER.postSpacing) {
+  for (const side of [-1, 1]) PIER_POSTS.push({ x: PIER.x + side * PIER.postOffset, z });
+}
 export const FISH_BASKET = { x: 13.6, z: 6.4 };
-export const MONSTER_STONE = { x: 33.6, z: -3.2 };
-export const FOREST_SIGN = { x: 31, z: -7.6 };
+export const MONSTER_STONE = { x: 33.6, z: -3.2, yaw: 0.25 };
+export const FOREST_SIGN = { x: 31, z: -7.6, yaw: 0.2 };
+export const CROSSING_POSTS = [
+  { x: CROSSING.west.x - 0.5, z: CROSSING.west.z - 1.6 },
+  { x: CROSSING.east.x + 0.5, z: CROSSING.east.z - 1.6 }
+];
+export const CROSSING_POST_SIZE = { radius: 0.1, spacing: 1.4 };
 
 // ------------------------------------------------------------------ forest (Phase 2)
 //
@@ -128,10 +164,12 @@ export const FOREST_TREES: Array<Vec2 & { s: number }> = [
   { x: 45.4, z: -41.8, s: 1.1 },
   { x: 30.4, z: -37.8, s: 1 }
 ];
+export const FOREST_TREE_PLACEMENTS = FOREST_TREES.map((t, i) => ({ ...t, scale: t.s, yaw: i * 1.3, tint: 0.92 + (i % 3) * 0.05 }));
 /** The high cliff at the north edge of the hills; the rope hangs at ROPE. */
 export const CLIFF_Z = -45.4;
 export const ROPE = { x: 34, z: CLIFF_Z + 0.9 };
 export const CLIFF_HEIGHT = 6.5;
+export const CLIFF_WALL = { x: 24, z: CLIFF_Z - 0.5, length: 26, depth: 1.2 };
 /** The cliff top (reached only by the rope). */
 export const CLIFF_TOP = { x0: 29.5, x1: 40, z0: -52, z1: CLIFF_Z - 0.6 };
 export const CLIFF_TOP_SPOT = { x: 34, z: CLIFF_Z - 2.2 };
@@ -283,3 +321,92 @@ export const BOULDERS: Boulder[] = [
   { x: 35.6, z: 4.2, r: 1.1, h: 1.1, rot: 0.6 },
   { x: 19.2, z: 8.8, r: 0.8, h: 0.7, rot: 2.4 }
 ];
+
+/** The deterministic rock records are consumed by both the merged mesh and collision. */
+export interface VolcanoRock extends Vec2 { r: number; h: number; seed: number }
+export const VOLCANO_ROCKS: VolcanoRock[] = (() => {
+  const rand = makeRng(395);
+  const rocks: VolcanoRock[] = [];
+  const add = (x: number, z: number, r: number, h: number, seed: number) => rocks.push({ x, z, r, h, seed });
+  const points = [[31, -56], [39.8, -58], [36, -67], [46.4, -68], [43, -78], [54.4, -77], [49, -88], [67.5, -91]];
+  points.forEach(([x, z], i) => add(x, z, 1.2 + rand() * 0.8, 1 + rand(), 420 + i));
+  for (let i = 0; i < 5; i++) add(59 + Math.cos(i * 0.8) * 3, -94 + Math.sin(i * 0.8) * 2, 0.8 + rand(), 0.6 + rand(), 440 + i);
+  for (let i = 0; i < 10; i++) {
+    add(59.2, -103 - i * 2.2, 1.4, 3.1 + rand(), 460 + i);
+    const h = 3.2 + rand();
+    if (i < 8) add(68.8, -103 - i * 2.2, 1.4, h, 480 + i);
+  }
+  for (let i = 0; i < 25; i++) {
+    const a = (i / 25) * Math.PI * 2;
+    const x = 70 + Math.cos(a) * 12, z = -136 + Math.sin(a) * 12.5;
+    if (z > SANCTUARY_GATE.z - 0.5) continue;
+    add(x, z, 2.1 + rand(), 2.6 + rand() * 1.2, 540 + i);
+  }
+  return rocks;
+})();
+
+/** Roofs are visual only: these records describe the solid walls at walking height. */
+export const CAVE_WALLS = [
+  { x: CAVE.x - 3.5, z: -113.5, width: 1, depth: 24, height: 4.5, shell: false },
+  { x: CAVE.x + 3.5, z: -111.75, width: 1, depth: 20.5, height: 4.5, shell: false },
+  { x: CAVE.x, z: -125, width: 7, depth: 0.8, height: 4.5, shell: false },
+  { x: CAVE.x - 10, z: -113.5, width: 12, depth: 24, height: 4.4, shell: true },
+  { x: CAVE.x + 10, z: -111.75, width: 12, depth: 20.5, height: 4.4, shell: true }
+];
+export const GATE_WALLS = [-1, 1].map((side) => ({ x: SANCTUARY_GATE.x + side * 8.1, z: SANCTUARY_GATE.z, width: 10.8, depth: 0.9 }));
+export const GATE_POSTS = [-1, 1].map((side) => ({ x: SANCTUARY_GATE.x + side * 2.6, z: SANCTUARY_GATE.z, r: 0.9 }));
+
+const circleAt = (p: Placement, r: number) => solidAt(p, { kind: "circle", x: 0, z: 0, r });
+const boxAt = (p: Placement, hx: number, hz: number) => solidAt(p, { kind: "box", x: 0, z: 0, hx, hz, yaw: 0 });
+
+/** Important solid scenery only. Leaves, bushes, flowers, thin ropes and distant
+ * scenery outside the walkable region remain non-blocking. Raised decks are surfaces. */
+export const STATIC_SOLIDS: SolidShape[] = [
+  ...PALMS.map((p) => circleAt(p, 0.3)),
+  ...BOULDERS.map((p) => circleAt(p, p.r * 0.9)),
+  ...APPLE_TREES.map((p) => circleAt(p, 0.3)),
+  circleAt(BANANA_PLANT, 0.24),
+  boxAt(CAMP.tent, TENT_SIZE.width / 2, TENT_SIZE.depth / 2 + 0.15),
+  boxAt(CAMP.table, TABLE_SIZE.width / 2, TABLE_SIZE.depth / 2),
+  solidAt(CAMP.table, { kind: "box", x: CAMP_CRATE.x, z: CAMP_CRATE.z, hx: CAMP_CRATE.width / 2, hz: CAMP_CRATE.depth / 2, yaw: CAMP_CRATE.yaw }),
+  circleAt(CAMP.fire, 0.75),
+  solidAt(CAMP.fire, { kind: "capsule", ax: CAMP_BENCH.x - Math.cos(CAMP_BENCH.yaw) * CAMP_BENCH.length / 2, az: CAMP_BENCH.z + Math.sin(CAMP_BENCH.yaw) * CAMP_BENCH.length / 2, bx: CAMP_BENCH.x + Math.cos(CAMP_BENCH.yaw) * CAMP_BENCH.length / 2, bz: CAMP_BENCH.z - Math.sin(CAMP_BENCH.yaw) * CAMP_BENCH.length / 2, r: CAMP_BENCH.radius }),
+  circleAt(CAMP.flag, 0.05),
+  ...DRIFTWOOD.map((p) => solidAt(p, { kind: "capsule", ax: -p.length / 2, az: 0, bx: p.length / 2, bz: 0, r: p.radius })),
+  circleAt(FISH_BASKET, 0.42),
+  ...PIER_POSTS.map((p) => circleAt(p, PIER.postRadius)),
+  boxAt(MONSTER_STONE, 1.45, 0.85),
+  circleAt(FOREST_SIGN, 0.08),
+  solidAt(FOREST_SIGN, { kind: "box", x: 0.35, z: 0, hx: 0.75, hz: 0.04, yaw: 0 }),
+  ...CROSSING_POSTS.flatMap((p) => [circleAt(p, CROSSING_POST_SIZE.radius), circleAt({ x: p.x, z: p.z + CROSSING_POST_SIZE.spacing }, CROSSING_POST_SIZE.radius)]),
+  ...FOREST_TREE_PLACEMENTS.map((p) => circleAt(p, 0.48)),
+  circleAt(PUFF_TREE, 0.72),
+  ...[-1, 1].flatMap((side) => [circleAt({ x: BRIDGE.x + side * (BRIDGE.half + 0.05), z: BRIDGE.z1 + 0.2 }, 0.13), circleAt({ x: BRIDGE.x + side * (BRIDGE.half + 0.05), z: BRIDGE.z0 - 0.2 }, 0.13)]),
+  ...[-1, 1].flatMap((side): SolidShape[] => [
+    { kind: "capsule", ax: BRIDGE.x + side * (BRIDGE.half + 0.05), az: BRIDGE.z1 + 0.2, bx: BRIDGE.x + side * (BRIDGE.half + 0.05), bz: BRIDGE.z1 - (BRIDGE.z1 - BRIDGE.z0) * 0.3 + 0.3, r: 0.025 },
+    { kind: "capsule", ax: BRIDGE.x + side * (BRIDGE.half + 0.05), az: BRIDGE.z0 - 0.2, bx: BRIDGE.x + side * (BRIDGE.half + 0.05), bz: BRIDGE.z1 - (BRIDGE.z1 - BRIDGE.z0) * 0.72 - 0.3, r: 0.025 }
+  ]),
+  // The cliff face remains solid after tying the rope; climbing is scripted.
+  boxAt({ x: CLIFF_WALL.x + CLIFF_WALL.length / 2, z: CLIFF_WALL.z }, CLIFF_WALL.length / 2, CLIFF_WALL.depth / 2),
+  ...VOLCANO_ROCKS.map((p) => circleAt(p, p.r * 0.9)),
+  ...CAVE_WALLS.map((p) => boxAt(p, p.width / 2, p.depth / 2)),
+  // Arch feet touch the slope; the overhead arch and roof do not block the passage.
+  circleAt({ x: CAVE.x - 3.4, z: CAVE.z - 0.3 }, 0.9),
+  circleAt({ x: CAVE.x + 3.4, z: CAVE.z - 0.3 }, 0.9),
+  boxAt(MEAT_RACK, 0.9, 0.35),
+  ...Object.values(GATE_PILLARS).map((p) => circleAt(p, 1.1)),
+  ...GATE_WALLS.map((p) => boxAt(p, p.width / 2, p.depth / 2)),
+  ...GATE_POSTS.map((p) => circleAt(p, p.r))
+];
+
+/** Repaired living railings; broken rails only exist beside the surviving ends. */
+export const BRIDGE_RAILS: SolidShape[] = [-1, 1].map((side) => ({ kind: "capsule", ax: BRIDGE.x + side * (BRIDGE.half + 0.05), az: BRIDGE.z0 - 0.2, bx: BRIDGE.x + side * (BRIDGE.half + 0.05), bz: BRIDGE.z1 + 0.2, r: 0.045 }));
+
+/** The support height/line are the highest vertex of BOULDERS[0]'s procedural
+ * mesh (seed 1). The horizontal trunk rests on that peak; its crown clears the east side. */
+export const PALM_POSES = {
+  fallen: { x: FALLEN_PALM.x, z: FALLEN_PALM.z, y: groundY(FALLEN_PALM.x, FALLEN_PALM.z) - 0.08, pitch: 0, yaw: Math.PI, roll: 0 },
+  resting: { x: -1, z: -3.17925, y: groundY(-1, -3.6) + 3.24, pitch: 0, yaw: Math.PI * 1.5, roll: 0 }
+};
+const palmTrunk: SolidShape = { kind: "capsule", ax: 0, az: -FALLEN_PALM.len / 2, bx: 0, bz: FALLEN_PALM.len / 2 + 0.25, r: 0.38 };
+export const PALM_SOLIDS = { fallen: solidAt(PALM_POSES.fallen, palmTrunk), resting: solidAt(PALM_POSES.resting, palmTrunk) };

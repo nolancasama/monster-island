@@ -21,6 +21,45 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-24 — Shared placement and collision overhaul
+
+- Solid scenery uses simple circles, rotated boxes and capsules derived from
+  the placement records in `world/island.ts`. Scene meshes consume the same
+  transforms and dimensions. This includes furniture, signs/posts, trunks,
+  driftwood, bridge rails, volcano rocks, cave walls and sanctuary structures.
+  Leaves, small vegetation, thin decorative ropes and tiny ground details remain
+  non-blocking; jungle fringe and distant structures lie outside walkable land.
+- `isWalkable` includes solids as well as the land/gate restrictions, so movement,
+  recovery and reachability checks agree. `moveCircle` retains projection and
+  sliding, with bounded substeps to stop thin posts being skipped. Collider sets
+  are cached by gate state and simulation movement reuses output/obstacle storage.
+  No mesh-based physics or new library is used.
+- Live NPC circles follow runtime positions, including Maple's finale move,
+  instead of leaving a fixed collider at an empty home location.
+- The pier is an independent walkable deck with its actual top height and
+  individually solid support posts. It has no existing visual railings; the
+  bridge's broken and repaired rails are solid. A solid rectangle over the pier
+  would prevent its intended use and was rejected.
+- The solved palm rests horizontally across the north support rock's highest
+  vertex (measured from its deterministic seed-1 geometry). Its crown extends
+  east of the rock, leaving the beach pass clear. The animation and solved-save
+  pose share these endpoints, and the trunk retains a capsule at its new place.
+  Runtime collision still uses only these authored 2D primitives.
+- Saves are relocated with `nearestWalkable` after progression validation and
+  v1/v2 migration. Only invalid positions move; progression, yaw and play time
+  remain intact. The v3 format and save key are unchanged.
+- When `nearestWalkable` finds no open spot nearby, the walker stays where it is;
+  only save loading opts into the beach spawn (`toSpawn`). Monsters live behind
+  gates that are still closed (Ember before the lava, Lumo behind the gate), and
+  a spawn fallback teleported them to the beach on every move, which broke the
+  Phase 3 playthrough. Ember also stays at home until the lava is solved.
+- F3 toggles merged collision/surface lines and obstacle-state markers only in
+  development or an explicit `?e2e=1` session. When disabled there are no debug
+  geometries or frame callbacks. Normal production sessions cannot enable it.
+- Reachability tests start at spawn for every chapter and the final gate state.
+  The solved rope contributes an explicit traversal edge, matching the scripted
+  climb; it never makes the cliff face a walkable ramp.
+
 A useful rule:
 
 > If a future developer or AI could reasonably ask, "Why is it designed this way?", record the answer here.
