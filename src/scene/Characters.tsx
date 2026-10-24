@@ -6,7 +6,8 @@ import { getGame } from "../game/store";
 import { MONSTERS } from "../game/data/monsters";
 import { groundY } from "../game/world/island";
 import { smoothMat, shadowMaterial } from "./materials";
-import { PLAYER_OUTFIT, armGeometry, bodyGeometry, legGeometry } from "./models/people";
+import { KNEE_Y, PLAYER_OUTFIT, armGeometry, bodyGeometry, shinGeometry, thighGeometry } from "./models/people";
+import { CLIMB_PULL } from "../game/world/rope";
 import { mapleArmGeometry, mapleBodyGeometry, mapleLegGeometry } from "./models/maple";
 import { foodGeometry } from "./models/props";
 import type { FoodId } from "../game/types";
@@ -23,7 +24,8 @@ function Shadow({ size = 1.1 }: { size?: number }) {
 /** The player: a kid explorer with a cap and backpack. */
 export function Player() {
   const body = useMemo(() => bodyGeometry(PLAYER_OUTFIT), []);
-  const leg = useMemo(() => legGeometry(PLAYER_OUTFIT), []);
+  const thigh = useMemo(() => thighGeometry(PLAYER_OUTFIT), []);
+  const shin = useMemo(() => shinGeometry(PLAYER_OUTFIT), []);
   const arm = useMemo(() => armGeometry(PLAYER_OUTFIT), []);
   const foods = useMemo(() => {
     const out = {} as Record<FoodId, THREE.BufferGeometry>;
@@ -34,9 +36,44 @@ export function Player() {
   const pose = useRef<THREE.Group>(null);
   const legL = useRef<THREE.Group>(null);
   const legR = useRef<THREE.Group>(null);
+  const shinL = useRef<THREE.Group>(null);
+  const shinR = useRef<THREE.Group>(null);
+  const shadow = useRef<THREE.Group>(null);
   const armL = useRef<THREE.Group>(null);
   const armR = useRef<THREE.Group>(null);
   const held = useRef<THREE.Mesh>(null);
+
+  /**
+   * Hand over hand on the rope (the player faces it). The cycle is driven by
+   * the height climbed, so hands and body move together up or down: one hand
+   * reaches overhead to grip while the other pulls down to the chest, and the
+   * opposite leg draws up with a bent knee to push.
+   */
+  function climbPose(y: number) {
+    const c = Math.sin((y / CLIMB_PULL) * Math.PI);
+    const lift = Math.abs(Math.cos((y / CLIMB_PULL) * Math.PI));
+    if (pose.current) {
+      pose.current.position.y = lift * 0.03;
+      pose.current.rotation.x = 0.14;
+    }
+    if (armL.current && armR.current) {
+      armL.current.rotation.x = -2.45 - 0.45 * c;
+      armR.current.rotation.x = -2.45 + 0.45 * c;
+      // Hands come in to the rope in front of the chest.
+      armL.current.rotation.z = 0.36;
+      armR.current.rotation.z = -0.36;
+    }
+    const uR = (1 + c) / 2;
+    const uL = (1 - c) / 2;
+    if (legL.current && legR.current && shinL.current && shinR.current) {
+      legL.current.rotation.x = -0.25 - 0.75 * uL;
+      legR.current.rotation.x = -0.25 - 0.75 * uR;
+      legL.current.rotation.z = -0.08;
+      legR.current.rotation.z = 0.08;
+      shinL.current.rotation.x = 0.35 + 1.0 * uL;
+      shinR.current.rotation.x = 0.35 + 1.0 * uR;
+    }
+  }
 
   useFrame(() => {
     const p = rt.player;
@@ -81,6 +118,12 @@ export function Player() {
         armR.current.rotation.z = 0.12;
       }
     }
+    if (shinL.current && shinR.current) {
+      shinL.current.rotation.x = p.riding ? 1.1 : walk * Math.max(0, -s) * 0.5;
+      shinR.current.rotation.x = p.riding ? 1.1 : walk * Math.max(0, s) * 0.5;
+    }
+    if (shadow.current) shadow.current.visible = p.climbY === null;
+    if (p.climbY !== null) climbPose(p.climbY);
     const h = held.current;
     if (h) {
       const food: FoodId | null = action?.kind === "give" ? holdingFood() : null;
@@ -94,10 +137,16 @@ export function Player() {
       <group ref={pose}>
         <mesh geometry={body} material={smoothMat} />
         <group ref={legL} position={[-0.09, 0.5, 0]}>
-          <mesh geometry={leg} material={smoothMat} />
+          <mesh geometry={thigh} material={smoothMat} />
+          <group ref={shinL} position={[0, KNEE_Y, 0]}>
+            <mesh geometry={shin} material={smoothMat} />
+          </group>
         </group>
         <group ref={legR} position={[0.09, 0.5, 0]}>
-          <mesh geometry={leg} material={smoothMat} />
+          <mesh geometry={thigh} material={smoothMat} />
+          <group ref={shinR} position={[0, KNEE_Y, 0]}>
+            <mesh geometry={shin} material={smoothMat} />
+          </group>
         </group>
         <group ref={armL} position={[-0.27, 0.98, 0]}>
           <mesh geometry={arm} material={smoothMat} />
@@ -107,7 +156,9 @@ export function Player() {
           <mesh ref={held} position={[0, -0.45, 0.06]} geometry={foods.apples} material={smoothMat} visible={false} scale={1.2} />
         </group>
       </group>
-      <Shadow />
+      <group ref={shadow}>
+        <Shadow />
+      </group>
     </group>
   );
 }

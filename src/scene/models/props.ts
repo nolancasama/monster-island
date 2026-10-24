@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { between, rockGeometry } from "./nature";
 import type { FoodId } from "../../game/types";
-import { CAMP_BENCH, CAMP_CRATE, CROSSING_POST_SIZE, PIER, PIER_POSTS, TABLE_SIZE, TENT_SIZE } from "../../game/world/island";
+import { CAMP_BENCH, CAMP_CRATE, CROSSING_POST_SIZE, PIER, PIER_POSTS, SIGN_SIZE, TABLE_SIZE, TENT_SIZE } from "../../game/world/island";
 
 /** Professor Maple's research camp (built around its own origin). */
 export function tentGeometry(): THREE.BufferGeometry {
@@ -75,9 +75,10 @@ export function flagGeometry(): THREE.BufferGeometry {
 
 export function appleTreeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.7);
-  b.cyl(0.2, 0.3, 2.1, 0, 0, 0, "#8a5d36", 7);
-  between(b, [0, 1.6, 0], [0.7, 2.4, 0.2], 0.12, 0.08, "#8a5d36", 6);
-  between(b, [0, 1.7, 0], [-0.6, 2.5, -0.3], 0.12, 0.08, "#8a5d36", 6);
+  // Trunk and branches end inside the foliage (its bottom is ~2.6 m up).
+  b.cyl(0.16, 0.3, 2.85, 0, 0, 0, "#8a5d36", 7);
+  between(b, [0, 1.6, 0], [0.85, 2.65, 0.35], 0.12, 0.08, "#8a5d36", 6);
+  between(b, [0, 1.7, 0], [-0.85, 2.75, -0.2], 0.12, 0.08, "#8a5d36", 6);
   b.add(rockGeometry(1.6, 1.25, 81, 1), "#4fa53f", [0, 3, 0]);
   b.add(rockGeometry(1.1, 0.9, 82, 1), "#62b84a", [0.9, 2.7, 0.4]);
   b.add(rockGeometry(1.1, 0.9, 83, 1), "#46963b", [-0.9, 2.8, -0.2]);
@@ -228,8 +229,12 @@ export const SOCKETS: Array<[number, number]> = [
 
 export function signPostGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  b.cyl(0.07, 0.08, 1.7, 0, 0, 0, "#7a5532", 6);
-  b.box(1.5, 0.55, 0.08, 0.35, 1.15, 0, "#c48a4c");
+  const s = SIGN_SIZE;
+  // The post stands behind the board (its front touches the back face), so it
+  // never shows through the writing; a cleat on the back joins the two.
+  b.cyl(0.07, s.postR, 1.78, 0, 0, s.postZ, "#7a5532", 6);
+  b.box(s.boardW, 0.55, s.boardD, s.boardX, 1.15, 0, "#c48a4c");
+  b.box(0.3, 0.12, 0.06, 0, 1.38, -s.boardD / 2 - 0.02, "#6b4a2b");
   return b.build();
 }
 

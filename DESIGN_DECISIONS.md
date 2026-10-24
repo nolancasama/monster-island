@@ -60,6 +60,35 @@ Git is the source of truth for detailed code-change history.
   The solved rope contributes an explicit traversal edge, matching the scripted
   climb; it never makes the cliff face a walkable ramp.
 
+## 2026-10-24 — Rope, climb, food and model fixes
+
+- The rope is hung, not authored: the scene ray-casts the real cliff rocks at
+  the rope's x and `world/rope.ts` (`hangRope`) runs it taut from the stake's
+  knot over the highest points of the cliff top (spanning notches), then plumb
+  down the face, stepping outward only round bulges, 0.13 m clear of rock. The
+  stake (`ROPE_STAKE`) stands on the measured top surface with its lower third
+  buried. Rejected: a fixed lean or offset, which cannot clear the seeded rock
+  pile (bulges reach ~1.6 m out) and pushed the rope's top into the face.
+- The rope unrolls by revealing its vertices top-down (draw range), so the
+  stake and lashing never squash, unlike the previous Y-scale of the whole mesh.
+- The climb follows the same line (`ropeZAt`): the player hangs 0.3 m in front
+  of the rope at hand height and goes over the lip with it. It takes 5 s with a
+  short ease at each end; the arm and leg cycle is driven by the height climbed
+  (one pull per 0.45 m), so limbs and progress stay in step up and down. The
+  player's legs gained knees (thigh + shin) for this; walking barely bends them.
+- Food is visible exactly when it is collectible: `rt.taken` is the single
+  truth and the pop-in plays after regrowth (`rt.ripe`), never before. A full
+  bag keeps the food focusable and answers "Your bag is full!" instead of a
+  silent E. Food's focus bonus over nearby monsters rose from 0.6 to 0.9 m and
+  its reach from 2.1 to 2.4 m (children stop short).
+- Trees: trunks run up into the main crown and branches end inside their side
+  clusters (forest, jungle, apple, Puff's tree); foliage bottoms sit ~0.35 h
+  below their centres, which is what left the gaps.
+- The forest sign's post stands behind the board (`SIGN_SIZE.postZ`) with a
+  cleat on the back; collider and visual share the layout.
+- Heart sprites sample the canvas with V flipped: `gl_PointCoord` runs top-down
+  while the canvas texture is uploaded flipped, so every heart was inverted.
+
 A useful rule:
 
 > If a future developer or AI could reasonably ask, "Why is it designed this way?", record the answer here.

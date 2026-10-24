@@ -46,11 +46,14 @@ export function tick(dt: number) {
     m.air += (m.airTarget - m.air) * Math.min(1, dt * 2.5);
   }
 
-  // Food grows back.
+  // Food grows back. It is collectible from the moment it reappears; the
+  // pop-in animation plays after that, never before.
   for (const [id, left] of rt.taken) {
     const t = left - dt;
-    if (t <= 0) rt.taken.delete(id);
-    else rt.taken.set(id, t);
+    if (t <= 0) {
+      rt.taken.delete(id);
+      rt.ripe.set(id, rt.time);
+    } else rt.taken.set(id, t);
   }
 
   // World animations ease toward their targets.

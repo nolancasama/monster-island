@@ -35,9 +35,9 @@ function candidates(): Candidate[] {
     add({ id, kind: "monster", verb: r.friend && id !== "lumo" ? "Choose" : "Talk to", noun: name, x: m.x, z: m.z }, MONSTERS[id].perch && !r.discovered ? 3.2 : 2.7);
   }
   for (const s of FOOD_SOURCES) {
+    // A full bag still focuses the food, so E explains instead of doing nothing.
     if (rt.taken.has(s.id)) continue;
-    if ((p.bag[s.food] ?? 0) >= 3) continue;
-    add({ id: s.id, kind: "food", verb: "Get", noun: FOODS[s.food].one, x: s.x, z: s.z }, 2.1);
+    add({ id: s.id, kind: "food", verb: "Get", noun: FOODS[s.food].one, x: s.x, z: s.z }, 2.4);
   }
   if (!isSolved(p, "fallenPalm")) add({ id: "fallenPalm", kind: "obstacle", verb: "Look at", noun: "the tree", x: FALLEN_PALM.x - 1, z: FALLEN_PALM.z }, 2.9);
   else if (!isSolved(p, "river")) add({ id: "river", kind: "obstacle", verb: "Cross", noun: "the river", x: CROSSING.west.x, z: CROSSING.west.z }, 2.6);
@@ -74,7 +74,7 @@ export function findFocus(): Focus | null {
     // In front counts as up to a metre closer. Food is a small target beside
     // monsters that wander over it, and picking it up is instant and harmless.
     const facing = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
-    const score = d - facing * 1 - (c.focus.kind === "food" ? 0.6 : 0);
+    const score = d - facing * 1 - (c.focus.kind === "food" ? 0.9 : 0);
     if (score < bestScore) {
       bestScore = score;
       best = c.focus;

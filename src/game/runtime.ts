@@ -134,6 +134,8 @@ export const rt = {
   monsters: Object.fromEntries(MONSTER_ORDER.map((id) => [id, monsterStart(id)])) as Record<MonsterId, MonsterRt>,
   /** Picked food sources: id -> seconds until it grows back. */
   taken: new Map<string, number>(),
+  /** Food that grew back: id -> rt.time it became collectible (drives the pop-in). */
+  ripe: new Map<string, number>(),
   /** Fallen palm: 0 = across the pass, 1 = lifted aside. */
   palm: 0,
   palmTarget: 0,
@@ -197,6 +199,7 @@ export function resetRuntime() {
   rt.camera.snap = true;
   for (const id of MONSTER_ORDER) rt.monsters[id] = monsterStart(id);
   rt.taken.clear();
+  rt.ripe.clear();
   rt.palm = rt.palmTarget = 0;
   rt.vines = 0;
   rt.stones = rt.stonesTarget = 0;

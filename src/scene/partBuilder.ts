@@ -108,6 +108,11 @@ export class PartBuilder {
     return this.add(new THREE.TorusGeometry(r, tube, 6, 16), color, pos, rot);
   }
 
+  /** Vertices added so far (parts are non-indexed and merged in order). */
+  get vertexCount(): number {
+    return this.parts.reduce((n, p) => n + p.attributes.position.count, 0);
+  }
+
   get empty(): boolean {
     return this.parts.length === 0;
   }

@@ -17,6 +17,7 @@ import {
   RAVINE,
   RIVER,
   ROPE,
+  ROPE_STAKE,
   VOLCANO,
   forestBase,
   forestMask,
@@ -36,8 +37,10 @@ import {
   puffTreeGeometry,
   rockWallGeometry,
   ropeCoilGeometry,
-  ropeHangingGeometry
+  ropeLineGeometry,
+  ropeStakeGeometry
 } from "./models/forest";
+import { hangRope, setRopeLine } from "../game/world/rope";
 
 /**
  * The Phase 2 forest: big trees in the clearings, the jungle wall around
@@ -211,25 +214,73 @@ function Ravine() {
 function Cliff() {
   const wall = useMemo(() => rockWallGeometry(CLIFF_WALL.length, CLIFF_HEIGHT + 4, CLIFF_WALL.depth, 160, ["#8f8578", "#7d7468", "#9a9082"]), []);
   const coil = useMemo(ropeCoilGeometry, []);
-  const hang = useMemo(() => ropeHangingGeometry(CLIFF_HEIGHT + 0.4), []);
+  const stake = useMemo(ropeStakeGeometry, []);
+  const baseY = forestBase(30, CLIFF_Z + 0.4);
+  const wallPos = useMemo(() => new THREE.Vector3(CLIFF_WALL.x, baseY - 1, CLIFF_WALL.z), [baseY]);
+  // Measure the real rocks at the rope's x so the rope hangs clear of them; the
+  // climb follows the same line (setRopeLine).
+  const rope = useMemo(() => {
+    const probe = new THREE.Mesh(wall);
+    probe.position.copy(wallPos);
+    probe.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+    const o = new THREE.Vector3();
+    const fwd = new THREE.Vector3(0, 0, -1);
+    const down = new THREE.Vector3(0, -1, 0);
+    const first = (dir: THREE.Vector3) => {
+      ray.set(o, dir);
+      return ray.intersectObject(probe, false)[0]?.point ?? null;
+    };
+    const topY = groundY(ROPE_STAKE.x, ROPE_STAKE.z);
+    const faceZ = (y: number) => {
+      let z = CLIFF_Z;
+      for (const dx of [-0.08, 0, 0.08]) {
+        o.set(ROPE.x + dx, y, CLIFF_Z + 6);
+        const hit = first(fwd);
+        if (hit) z = Math.max(z, hit.z);
+      }
+      return z;
+    };
+    const surfaceY = (z: number) => {
+      let y = groundY(ROPE.x, z);
+      for (const dx of [-0.08, 0, 0.08]) {
+        o.set(ROPE.x + dx, topY + 8, z);
+        const hit = first(down);
+        if (hit) y = Math.max(y, hit.y);
+      }
+      return y;
+    };
+    const stakeY = surfaceY(ROPE_STAKE.z);
+    const knot = { y: stakeY + 0.3, z: ROPE_STAKE.z + ROPE_STAKE.r + 0.03 };
+    const line = hangRope({ knot, bottomY: groundY(ROPE.x, ROPE.z), faceZ, surfaceY, clearance: 0.13 });
+    setRopeLine(line);    return { stakeY, ...ropeLineGeometry(line, [0, stakeY + 0.3, ROPE_STAKE.z]) };
+  }, [wall, wallPos]);
   const coilRef = useRef<THREE.Mesh>(null);
   const hangRef = useRef<THREE.Mesh>(null);
+  const knotRef = useRef<THREE.Mesh>(null);
   useFrame(() => {
     if (coilRef.current) coilRef.current.visible = rt.rope < 0.5;
-    const h = hangRef.current;
-    if (h) {
-      h.visible = rt.rope > 0.01;
-      // The rope unrolls down the cliff from the top.
-      h.scale.set(1, Math.max(0.001, rt.rope), 1);
-      h.position.y = groundY(ROPE.x, ROPE.z) + (1 - rt.rope) * (CLIFF_HEIGHT + 0.4);
+    const k = Math.min(1, Math.max(0, rt.rope));
+    // The rope unrolls down the cliff from the knot on the stake.
+    if (hangRef.current) {
+      hangRef.current.visible = k > 0.01;
+      const per = (rope.rope.attributes.position.count - rope.tieVerts) / rope.segments;
+      rope.rope.setDrawRange(0, rope.tieVerts + Math.round(k * rope.segments) * per);
+    }
+    if (knotRef.current) {
+      let shown = 0;
+      while (shown < rope.knotAt.length && rope.knotAt[shown] <= k) shown++;
+      knotRef.current.visible = shown > 0;
+      rope.knots.setDrawRange(0, shown * (rope.knots.attributes.position?.count ?? 0) / Math.max(1, rope.knotAt.length));
     }
   });
-  const baseY = forestBase(30, CLIFF_Z + 0.4);
   return (
     <group>
-      <mesh geometry={wall} material={flatMat} position={[CLIFF_WALL.x, baseY - 1, CLIFF_WALL.z]} />
+      <mesh geometry={wall} material={flatMat} position={wallPos} />
       <mesh ref={coilRef} geometry={coil} material={smoothMat} position={at(ROPE.x + 0.9, ROPE.z + 0.4)} />
-      <mesh ref={hangRef} geometry={hang} material={smoothMat} position={[ROPE.x, groundY(ROPE.x, ROPE.z), ROPE.z - 0.25]} />
+      <mesh geometry={stake} material={smoothMat} position={[ROPE_STAKE.x, rope.stakeY, ROPE_STAKE.z]} />
+      <mesh ref={hangRef} geometry={rope.rope} material={smoothMat} position={[ROPE.x, 0, 0]} />
+      <mesh ref={knotRef} geometry={rope.knots} material={smoothMat} position={[ROPE.x, 0, 0]} />
     </group>
   );
 }

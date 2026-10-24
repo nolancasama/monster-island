@@ -4,6 +4,7 @@ import { OBSTACLES, askAtObstacle, gateOpen, helperFor, isSolved, obstacleAvaila
 import { getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { BRIDGE, CAVE, CLIFF_HEIGHT, CLIFF_TOP_SPOT, CLIFF_Z, CROSSING, FALLEN_PALM, GATE_PILLARS, LAVA, ROPE, SANCTUARY_GATE, groundY } from "../world/island";
+import { CLIMB_GAP, CLIMB_HANDS, ropeZAt } from "../world/rope";
 import { ask, say, wait } from "./ask";
 import { facePlayer, fadeThrough, frameTwo, run, shot } from "./script";
 import { companionSpot, poofTo } from "./companion";
@@ -404,28 +405,34 @@ async function climbAndEnd(id: MonsterId) {
 /** Climb the rope up (or down). Friends poof over afterwards, as they do when left behind. */
 export async function climbRope(up: boolean) {
   const p = rt.player;
-  const bottom = { x: ROPE.x, z: ROPE.z + 0.15 };
   const top = CLIFF_TOP_SPOT;
-  const bottomY = groundY(bottom.x, bottom.z);
+  const bottomY = groundY(ROPE.x, ROPE.z);
   const topY = groundY(top.x, top.z);
+  // Face the rope with the hands on it: the body hangs just in front of the
+  // rope's line at hand height (the line the scene measured off the rocks).
+  const hug = () => {
+    p.x = ROPE.x;
+    p.z = ropeZAt(p.climbY! + CLIMB_HANDS) + CLIMB_GAP;
+  };
   p.frozen = true;
   await fadeThrough(() => {
-    p.x = bottom.x;
-    p.z = bottom.z;
     p.vx = p.vz = 0;
     p.yaw = Math.PI;
     p.climbY = up ? bottomY : topY - 0.1;
-    shot({ x: ROPE.x - 1.8, y: bottomY + 2.6, z: ROPE.z + 7.5 }, { x: ROPE.x, y: bottomY + CLIFF_HEIGHT * 0.55, z: ROPE.z });
+    hug();
+    shot({ x: ROPE.x - 2.4, y: bottomY + 2.6, z: ROPE.z + 7.5 }, { x: ROPE.x, y: bottomY + CLIFF_HEIGHT * 0.55, z: ROPE.z });
   }, 250);
   audio.play("whoosh");
   const from = p.climbY!;
   const to = up ? topY - 0.1 : bottomY;
   const t0 = rt.time;
-  const dur = 2.4;
+  // Hand over hand is steady: a short ease at each end, constant pace between.
+  const dur = 5;
   for (;;) {
     const k = Math.min(1, (rt.time - t0) / dur);
-    p.climbY = from + (to - from) * (k * k * (3 - 2 * k));
-    p.step += 0.06;
+    const e = k < 0.1 ? (k * k) / 0.2 : k > 0.9 ? 0.9 - ((1 - k) * (1 - k)) / 0.2 : k - 0.05;
+    p.climbY = from + ((to - from) * e) / 0.9;
+    hug();
     if (k >= 1) break;
     await wait(30);
   }

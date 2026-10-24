@@ -81,10 +81,19 @@ export function bodyGeometry(o: Outfit): THREE.BufferGeometry {
   return b.build();
 }
 
-export function legGeometry(o: Outfit): THREE.BufferGeometry {
+/** Hip to knee (the hip is the origin; the knee sits at KNEE_Y). */
+export const KNEE_Y = -0.2;
+export function thighGeometry(o: Outfit): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  b.add(new THREE.CapsuleGeometry(0.075, 0.2, 4, 8), o.skin, [0, -0.2, 0]);
-  b.add(new THREE.CapsuleGeometry(0.08, 0.1, 4, 8), o.shoes, [0, -0.4, 0.04], [Math.PI / 2, 0, 0], [1, 1.25, 1]);
+  b.add(new THREE.CapsuleGeometry(0.075, 0.1, 4, 8), o.skin, [0, -0.11, 0]);
+  return b.build();
+}
+
+/** Knee to shoe (the knee is the origin), so the leg can bend when climbing. */
+export function shinGeometry(o: Outfit): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  b.add(new THREE.CapsuleGeometry(0.072, 0.1, 4, 8), o.skin, [0, -0.08, 0]);
+  b.add(new THREE.CapsuleGeometry(0.08, 0.1, 4, 8), o.shoes, [0, -0.2, 0.04], [Math.PI / 2, 0, 0], [1, 1.25, 1]);
   return b.build();
 }
 

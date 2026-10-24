@@ -135,7 +135,8 @@ function burstMaterial(map: THREE.Texture, size: number, additive: boolean) {
       varying vec3 vColor;
       varying float vAlpha;
       void main() {
-        vec4 t = texture2D(map, gl_PointCoord);
+        // gl_PointCoord runs top-down; the canvas texture is uploaded flipped (flipY).
+        vec4 t = texture2D(map, vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y));
         gl_FragColor = vec4(t.rgb * vColor, t.a * vAlpha);
         if (gl_FragColor.a < 0.01) discard;
       }`,

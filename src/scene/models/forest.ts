@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { between, rockGeometry } from "./nature";
 import { makeRng } from "../../game/logic/rng";
+import { ROPE_STAKE } from "../../game/world/island";
+import type { RopePoint } from "../../game/world/rope";
 
 /**
  * Phase 2 forest pieces. Same rules as the beach: merged vertex-coloured
@@ -11,14 +13,16 @@ import { makeRng } from "../../game/logic/rng";
 /** A tall broadleaf forest tree (instanced): a darker, rounder crown than the jungle wall. */
 export function forestTreeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.9);
-  b.cyl(0.26, 0.4, 3.6, 0, -0.2, 0, "#6e4a2c", 8);
+  // The trunk runs up into the main crown and each branch ends inside its own
+  // cluster, so no foliage floats (crown bottoms sit ~0.35 h below their centres).
+  b.cyl(0.2, 0.4, 4.6, 0, -0.2, 0, "#6e4a2c", 8);
   // Roots.
   for (let i = 0; i < 4; i++) {
     const a = i * 1.57 + 0.4;
     between(b, [0, 0.35, 0], [Math.cos(a) * 0.75, -0.05, Math.sin(a) * 0.75], 0.14, 0.06, "#6a4628", 5);
   }
-  between(b, [0, 2.4, 0], [0.9, 3.4, 0.3], 0.13, 0.08, "#6e4a2c", 6);
-  between(b, [0, 2.7, 0], [-0.8, 3.6, -0.4], 0.12, 0.07, "#6e4a2c", 6);
+  between(b, [0, 2.4, 0], [1.05, 3.75, 0.42], 0.13, 0.08, "#6e4a2c", 6);
+  between(b, [0, 2.7, 0], [-0.95, 3.95, -0.45], 0.12, 0.07, "#6e4a2c", 6);
   const crown = (r: number, x: number, y: number, z: number, c: string, seed: number) => b.add(rockGeometry(r, r * 0.8, seed, 1), c, [x, y, z]);
   crown(1.9, 0, 4.4, 0, "#2f7a3a", 81);
   crown(1.35, 1.2, 3.9, 0.5, "#3c8c40", 82);
@@ -42,7 +46,8 @@ export function fernGeometry(): THREE.BufferGeometry {
 /** Puff's tree: the biggest tree on the hills, with a wide perching branch facing the glade. */
 export function puffTreeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(1.2);
-  b.cyl(0.42, 0.62, 4.6, 0, -0.2, 0, "#7a5232", 9);
+  // Tall enough to reach into the main crown (its bottom is ~5.1 m up).
+  b.cyl(0.36, 0.62, 5.7, 0, -0.2, 0, "#7a5232", 9);
   for (let i = 0; i < 5; i++) {
     const a = i * 1.25 + 0.2;
     between(b, [0, 0.5, 0], [Math.cos(a) * 1.1, -0.05, Math.sin(a) * 1.1], 0.2, 0.08, "#704a2c", 5);
@@ -129,17 +134,56 @@ export function ropeCoilGeometry(): THREE.BufferGeometry {
   return b.build();
 }
 
-/** The rope hanging down the cliff, knotted every half metre (y = 0 at the bottom). */
-export function ropeHangingGeometry(height: number): THREE.BufferGeometry {
+/** The stake on the cliff top (y = 0 at the surface): its lower part is driven in. */
+export function ropeStakeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  // It leans back against the cliff face toward the top.
-  between(b, [0, 0, 0], [0, height, -0.75], 0.045, 0.045, "#d8c9a0", 6);
-  for (let y = 0.5; y < height; y += 0.55) b.sphere(0.075, 0, y, -0.75 * (y / height), "#c9b78a", [1, 0.7, 1], 6);
-  // Tied round a stake on the top.
-  b.cyl(0.08, 0.1, 0.7, 0, height - 0.2, -1.4, "#6e4a2c", 6);
-  b.torus(0.12, 0.04, [0, height + 0.25, -1.4], [Math.PI / 2, 0, 0], "#d8c9a0");
-  between(b, [0, height, -0.75], [0, height + 0.25, -1.3], 0.04, 0.04, "#d8c9a0", 5);
+  b.cyl(0.07, ROPE_STAKE.r, 0.9, 0, -0.35, 0, "#6e4a2c", 6);
+  b.cone(0.07, 0.06, 0, 0.55, 0, "#5c3d24", 6);
   return b.build();
+}
+
+/**
+ * The tied rope along `line` (x = 0, world y/z, knot first). Vertices run from
+ * the stake downward, so a draw range unrolls it from the top: the lashing
+ * comes first (`tieVerts`), then `segments` equal tube segments.
+ * Knots are a separate geometry, also top-down, with their arc positions.
+ */
+export function ropeLineGeometry(line: RopePoint[], stakeTop: [number, number, number]) {
+  const curve = new THREE.CatmullRomCurve3(line.map((p) => new THREE.Vector3(0, p.y, p.z)), false, "centripetal");
+  const len = curve.getLength();
+  const segments = Math.ceil(len / 0.12);
+  const rope = new PartBuilder(0);
+  // Two turns lashed round the stake at the knot height.
+  for (const dy of [-0.04, 0.04]) rope.torus(ROPE_STAKE.r + 0.025, 0.035, [stakeTop[0], stakeTop[1] + dy, stakeTop[2]], [Math.PI / 2, 0, 0], "#d8c9a0");
+  const tieVerts = rope.vertexCount;
+  rope.add(new THREE.TubeGeometry(curve, segments, 0.045, 6, false), "#d8c9a0", [0, 0, 0]);
+  const knots = new PartBuilder(0);
+  const knotAt: number[] = [];
+  // Knots for hands start below the lip and stop short of the loose end.
+  const lipS = arcAtLip(curve, line, len);
+  for (let s = lipS + 0.45; s < len - 0.5; s += 0.55) {
+    const p = curve.getPointAt(s / len);
+    knots.add(new THREE.SphereGeometry(0.075, 6, 6), "#c9b78a", [p.x, p.y, p.z], [0, 0, 0], [1, 0.7, 1]);
+    knotAt.push(s / len);
+  }
+  return { rope: rope.build(), tieVerts, segments, knots: knots.build(), knotAt };
+}
+
+/** Arc fraction where the rope leaves the cliff top (the highest point of the taut part). */
+function arcAtLip(curve: THREE.CatmullRomCurve3, line: RopePoint[], len: number): number {
+  let lip = 0;
+  for (let i = 1; i < line.length && line[i].y >= line[i - 1].y - 0.05; i++) lip = i;
+  const target = new THREE.Vector3(0, line[lip].y, line[lip].z);
+  let best = 0;
+  let bestD = Infinity;
+  for (let k = 0; k <= 200; k++) {
+    const d = curve.getPointAt(k / 200).distanceToSquared(target);
+    if (d < bestD) {
+      bestD = d;
+      best = k / 200;
+    }
+  }
+  return best * len;
 }
 
 /** Thorny bramble closing the forest path until the beach is done. */

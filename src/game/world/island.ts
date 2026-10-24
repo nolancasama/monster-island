@@ -125,6 +125,8 @@ for (let z = PIER.z0 + PIER.postStart; z < PIER.z1; z += PIER.postSpacing) {
 export const FISH_BASKET = { x: 13.6, z: 6.4 };
 export const MONSTER_STONE = { x: 33.6, z: -3.2, yaw: 0.25 };
 export const FOREST_SIGN = { x: 31, z: -7.6, yaw: 0.2 };
+/** Sign layout in the sign's own frame: the board faces +z, the post stands behind it. */
+export const SIGN_SIZE = { boardX: 0.35, boardW: 1.5, boardD: 0.08, postZ: -0.12, postR: 0.08 };
 export const CROSSING_POSTS = [
   { x: CROSSING.west.x - 0.5, z: CROSSING.west.z - 1.6 },
   { x: CROSSING.east.x + 0.5, z: CROSSING.east.z - 1.6 }
@@ -173,6 +175,8 @@ export const CLIFF_WALL = { x: 24, z: CLIFF_Z - 0.5, length: 26, depth: 1.2 };
 /** The cliff top (reached only by the rope). */
 export const CLIFF_TOP = { x0: 29.5, x1: 40, z0: -52, z1: CLIFF_Z - 0.6 };
 export const CLIFF_TOP_SPOT = { x: 34, z: CLIFF_Z - 2.2 };
+/** The wooden stake the rope is tied to, driven into the cliff top behind the lip. */
+export const ROPE_STAKE = { x: ROPE.x, z: CLIFF_Z - 1.3, r: 0.1 };
 /** Far away to the north-east: where Phase 3 goes. */
 export const VOLCANO = { x: 70, z: -112 };
 
@@ -376,8 +380,8 @@ export const STATIC_SOLIDS: SolidShape[] = [
   circleAt(FISH_BASKET, 0.42),
   ...PIER_POSTS.map((p) => circleAt(p, PIER.postRadius)),
   boxAt(MONSTER_STONE, 1.45, 0.85),
-  circleAt(FOREST_SIGN, 0.08),
-  solidAt(FOREST_SIGN, { kind: "box", x: 0.35, z: 0, hx: 0.75, hz: 0.04, yaw: 0 }),
+  solidAt(FOREST_SIGN, { kind: "circle", x: 0, z: SIGN_SIZE.postZ, r: SIGN_SIZE.postR }),
+  solidAt(FOREST_SIGN, { kind: "box", x: SIGN_SIZE.boardX, z: 0, hx: SIGN_SIZE.boardW / 2, hz: SIGN_SIZE.boardD / 2, yaw: 0 }),
   ...CROSSING_POSTS.flatMap((p) => [circleAt(p, CROSSING_POST_SIZE.radius), circleAt({ x: p.x, z: p.z + CROSSING_POST_SIZE.spacing }, CROSSING_POST_SIZE.radius)]),
   ...FOREST_TREE_PLACEMENTS.map((p) => circleAt(p, 0.48)),
   circleAt(PUFF_TREE, 0.72),
@@ -388,6 +392,7 @@ export const STATIC_SOLIDS: SolidShape[] = [
   ]),
   // The cliff face remains solid after tying the rope; climbing is scripted.
   boxAt({ x: CLIFF_WALL.x + CLIFF_WALL.length / 2, z: CLIFF_WALL.z }, CLIFF_WALL.length / 2, CLIFF_WALL.depth / 2),
+  circleAt(ROPE_STAKE, ROPE_STAKE.r),
   ...VOLCANO_ROCKS.map((p) => circleAt(p, p.r * 0.9)),
   ...CAVE_WALLS.map((p) => boxAt(p, p.width / 2, p.depth / 2)),
   // Arch feet touch the slope; the overhead arch and roof do not block the passage.

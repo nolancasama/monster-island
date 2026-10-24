@@ -1,5 +1,5 @@
 import { FOOD_SOURCES } from "../world/island";
-import { FOODS } from "../data/foods";
+import { BAG_MAX, FOODS } from "../data/foods";
 import { companions, pickUp } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { effect, rt } from "../runtime";
@@ -48,6 +48,10 @@ function pick(sourceId: string) {
   const s = FOOD_SOURCES.find((x) => x.id === sourceId);
   if (!s || rt.taken.has(s.id)) return;
   const before = getGame().progress.bag[s.food] ?? 0;
+  if (before >= BAG_MAX) {
+    toast({ en: "Your bag is full!", ja: `${FOODS[s.food].ja}は もう いっぱい!`, icon: s.food, tone: "info" }, 2200);
+    return;
+  }
   updateProgress((p) => pickUp(p, s.food));
   if ((getGame().progress.bag[s.food] ?? 0) === before) return;
   rt.taken.set(s.id, s.regrow);

@@ -122,9 +122,10 @@ function FoodPickups() {
     FOOD_SOURCES.forEach((s, i) => {
       const g = refs.current[i];
       if (!g) return;
-      const taken = rt.taken.get(s.id);
-      g.visible = taken === undefined || taken < 0.4;
-      const pop = taken === undefined ? 1 : 1 - taken / 0.4;
+      // Visible exactly when collectible (rt.taken is the single source of truth).
+      g.visible = !rt.taken.has(s.id);
+      const ripe = rt.ripe.get(s.id);
+      const pop = ripe === undefined ? 1 : Math.min(1, 0.3 + (rt.time - ripe) / 0.4);
       const base = s.food === "fish" ? 0.62 : 0.05;
       g.position.y = groundY(s.x, s.z) + base + Math.sin(rt.time * 2.4 + i) * 0.04;
       g.rotation.y = rt.time * 0.8 + i;
@@ -292,7 +293,7 @@ function ForestGate() {
     <group>
       <group position={at(FOREST_SIGN.x, FOREST_SIGN.z)} rotation={[0, FOREST_SIGN.yaw, 0]}>
         <mesh geometry={post} material={smoothMat} />
-        <mesh position={[0.35, 1.43, 0.045]}>
+        <mesh position={[0.35, 1.43, 0.052]}>
           <planeGeometry args={[1.42, 0.5]} />
           <meshBasicMaterial map={tex} />
         </mesh>
