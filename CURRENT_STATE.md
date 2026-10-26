@@ -89,9 +89,10 @@ through the body. There is no close-up of the knee coming up onto the edge.
 - To update it, rebuild and republish the same preview page with the new
   `dist/assets` files.
 
-**Not verified:**
-- Nothing has been tested on a real Chromebook (SwiftShader only).
-- `test.yml` (unit + Playwright) passed on GitHub for the branch (`e3d6d3c`).
+`test.yml` (unit + Playwright) also passed on GitHub's runners for the branch
+(`e3d6d3c`).
+
+**Not verified:** nothing has been tested on a real Chromebook (SwiftShader only).
 
 ## Known Issues
 - Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
