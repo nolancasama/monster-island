@@ -1,4 +1,4 @@
-import type { MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
+import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
 
@@ -98,6 +98,8 @@ function monsterStart(id: MonsterId): MonsterRt {
 export const rt = {
   /** Real seconds since load (animation). */
   time: 0,
+  /** Test hook only: slows or freezes the clock for frame-by-frame captures. */
+  timeScale: 1,
   /** Seconds of play (paused on the title and results). */
   playTime: 0,
   player: {
@@ -111,12 +113,15 @@ export const rt = {
     step: 0,
     /** A cutscene owns the player (no input movement). */
     frozen: false,
-    /** Riding Bubbo across the river. */
+    /** Riding Bubbo across the river (the simulation keeps the player on the saddle). */
     riding: false,
+    /** While riding: 0 = standing at rideFrom, 1 = seated on Bubbo (the hop on and off). */
+    seat: 0,
+    rideFrom: { x: 0, z: 0 },
     /** Climbing the cliff rope: the height the player hangs at (null = on the ground). */
     climbY: null as number | null,
     /** Short gesture: give food, cheer. */
-    action: null as null | { kind: "give" | "cheer" | "pick"; t0: number }
+    action: null as null | { kind: "give" | "cheer" | "pick"; t0: number; food?: FoodId; depth?: number }
   },
   /** Keyboard + joystick intent, camera space: x = right, y = forward. */
   joy: { x: 0, y: 0, active: false },
@@ -180,6 +185,9 @@ export function animate(id: MonsterId, kind: MonsterAnim) {
   rt.monsters[id].anim = { kind, t0: rt.time };
 }
 
+/** Squat-and-reach length (s); walking waits for it so the feet never slide. */
+export const PICK_TIME = 0.7;
+
 export function resetRuntime() {
   const p = rt.player;
   p.x = SPAWN.x;
@@ -188,6 +196,7 @@ export function resetRuntime() {
   p.vx = p.vz = p.speed = 0;
   p.frozen = false;
   p.riding = false;
+  p.seat = 0;
   p.climbY = null;
   p.action = null;
   rt.joy.x = rt.joy.y = 0;

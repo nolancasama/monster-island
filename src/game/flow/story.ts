@@ -15,8 +15,9 @@ import { recognition, requestMicPermission } from "../../audio/recognition";
 
 /**
  * Starting, continuing, saving, the intro with Professor Maple, Maple's
- * hints, the Phase 1 ending at the Monster Stone (which opens the forest)
- * and the Phase 2 ending on the cliff top.
+ * hints, the Phase 1 ending at the Monster Stone (which opens the forest),
+ * the Phase 2 ending on the cliff top (both celebrate with a banner and play
+ * on) and the finale, the only ending with a results card.
  */
 
 // ------------------------------------------------------------ save
@@ -320,7 +321,11 @@ export function stoneEnding(): Promise<void> {
     await say("maple", "The forest path is open now!", "もりへの みちが ひらいたよ!");
     setGame((g) => ({ progress: { ...g.progress, endings: Math.max(g.progress.endings, 1) } }));
     saveNow();
-    setGame({ screen: "results", seconds: Math.round(rt.playTime) });
+    // Only the final ending has a results card: the beach chapter celebrates
+    // with a banner and play carries straight on toward the forest.
+    toast({ en: "Beach Adventure: Clear!", ja: "はまべの ぼうけん クリア! もりへ いこう!", icon: "star", tone: "chapter" }, 4200);
+    audio.play("sparkle");
+    await fadeThrough(resumeExploring);
   });
 }
 
@@ -371,7 +376,9 @@ export async function cliffTopEnding(): Promise<void> {
   await say("maple", "One more monster lives on the volcano. Let's find it!", "かざんに あと 1ぴき モンスターが いる。その モンスターを さがそう!");
   setGame((g) => ({ progress: { ...g.progress, endings: 2 } }));
   saveNow();
-  setGame({ screen: "results", seconds: Math.round(rt.playTime) });
+  toast({ en: "Forest Adventure: Clear!", ja: "もりの ぼうけん クリア! かざんへ いこう!", icon: "star", tone: "chapter" }, 4200);
+  audio.play("sparkle");
+  await fadeThrough(resumeExploring);
 }
 
 /** The final ending stays in the sanctuary, including the results backdrop. */
@@ -449,8 +456,11 @@ export function finaleEnding(): Promise<void> {
   });
 }
 
-/** "Keep exploring" from the results card. */
-export function keepExploring() {
+/**
+ * Back to free play after an ending: Maple goes home, friends gathered for
+ * the scene go home too, the companion falls in beside the player.
+ */
+function resumeExploring() {
   rt.maple.x = MAPLE.x;
   rt.maple.z = MAPLE.z;
   rt.maple.yaw = MAPLE.yaw;
@@ -470,6 +480,11 @@ export function keepExploring() {
   }
   audio.startMusic("island");
   rt.camera.snap = true;
+}
+
+/** "Keep exploring" from the final results card. */
+export function keepExploring() {
+  resumeExploring();
   setGame({ screen: "game", mode: "explore" });
 }
 

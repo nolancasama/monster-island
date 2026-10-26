@@ -21,7 +21,7 @@ function Clock() {
   const frames = useRef({ n: 0, t: 0 });
   // Runs before everything else each frame.
   useFrame((state, dt) => {
-    const d = Math.min(dt, 0.1);
+    const d = Math.min(dt, 0.1) * rt.timeScale;
     rt.time += d;
     tick(d);
     perf.calls = state.gl.info.render.calls;

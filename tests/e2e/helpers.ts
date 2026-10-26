@@ -78,9 +78,23 @@ export async function waitFor(page: Page, pred: (s: MiState) => boolean, timeout
   return s;
 }
 
+/**
+ * Choose how answers are given, through Settings (a teacher setting; the
+ * title screen no longer shows a Speak/Tap switch). Leaves Settings closed.
+ */
+export async function chooseMode(page: Page, mode: "tap" | "speak") {
+  await page.getByTestId("title-settings").click();
+  const toggle = page.getByTestId("toggle-mic");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-checked")) !== String(mode === "speak")) await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", String(mode === "speak"));
+  await page.getByTestId("settings-close").click();
+  await expect(page.getByTestId("settings")).toHaveCount(0);
+}
+
 /** Start a new game in tap (mic-free) or speech mode and wait for exploration after Maple's intro. */
 export async function startGame(page: Page, mode: "tap" | "speak") {
-  await page.getByTestId(mode === "tap" ? "mode-tap" : "mode-speak").click();
+  await chooseMode(page, mode);
   await page.getByTestId("btn-start").click();
   await waitFor(page, (s) => s.mode === "explore" && s.progress.metMaple, 30_000, "intro done");
 }

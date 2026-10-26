@@ -367,6 +367,21 @@ kbd {
   border-color: var(--coral);
 }
 
+/* A chapter cleared: a short celebration, play carries on underneath. */
+.toast.chapter {
+  padding: 12px 26px;
+  font-size: 1.35rem;
+  border-color: var(--sun-dark);
+  background: #fffbea;
+  animation: toast-in 0.25s ease-out, chapter-glow 1.2s ease-in-out 2;
+}
+
+@keyframes chapter-glow {
+  50% {
+    transform: scale(1.04);
+  }
+}
+
 @keyframes toast-in {
   from {
     transform: translateY(-10px);
@@ -1231,36 +1246,6 @@ kbd {
   margin: 0;
   font-weight: 800;
   font-size: 1.2rem;
-}
-
-.mode-switch {
-  display: flex;
-  gap: 6px;
-  padding: 5px;
-  border-radius: 16px;
-  background: var(--paper-2);
-  border: 3px solid var(--line);
-}
-
-.mode-switch button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 1rem;
-}
-
-.mode-switch button .ja {
-  display: inline;
-  margin: 0;
-}
-
-.mode-switch button.on {
-  background: #fff;
-  box-shadow: 0 3px 0 var(--line);
-  color: var(--teal-dark);
 }
 
 .title-buttons {

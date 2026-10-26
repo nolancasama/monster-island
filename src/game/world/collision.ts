@@ -330,7 +330,26 @@ export function standY(x: number, z: number, solved: readonly ObstacleId[]): num
   if (onPier(x, z)) return Math.max(y, groundY(PIER.x, PIER.z0) + PIER.deckY);
   if (solved.includes("river") && inBox(x, z, STONES, -0.3)) return Math.max(y, STONE_TOP);
   if (solved.includes("bridge") && onBridge(x, z, -0.3)) return Math.max(y, bridgeDeckY(z));
+  if (solved.includes("lava")) return Math.max(y, lavaCrustY(x, z));
   return y;
+}
+
+/** Height of the cooled crust's flat top above the ground at the lava's centre. */
+export const LAVA_CRUST = 0.2;
+/** Width of the gentle edge where the crust meets the trail on each side. */
+export const LAVA_RAMP = 0.9;
+
+/**
+ * The cooled lava's walking surface: flat over the lava bed, easing down to
+ * the trail over LAVA_RAMP (the scene builds the same shape). -Infinity off it.
+ * Every walker (player, monsters) stands on it through standY.
+ */
+export function lavaCrustY(x: number, z: number): number {
+  const out = Math.hypot(Math.max(LAVA.x0 - x, 0, x - LAVA.x1), Math.max(LAVA.z0 - z, 0, z - LAVA.z1));
+  if (out >= LAVA_RAMP) return -Infinity;
+  const top = groundY(LAVA.x, LAVA.z) + LAVA_CRUST;
+  const t = out / LAVA_RAMP;
+  return top - LAVA_CRUST * 1.2 * t * t * (3 - 2 * t);
 }
 
 /** The bridge deck: a straight span between the two lips of the ravine. */

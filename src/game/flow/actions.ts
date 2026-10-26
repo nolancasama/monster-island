@@ -55,7 +55,10 @@ function pick(sourceId: string) {
   updateProgress((p) => pickUp(p, s.food));
   if ((getGame().progress.bag[s.food] ?? 0) === before) return;
   rt.taken.set(s.id, s.regrow);
-  rt.player.action = { kind: "pick", t0: rt.time };
+  // Turn to the food and squat for it: a full squat for food on the ground,
+  // a shallower one for the fish basket.
+  rt.player.yaw = Math.atan2(s.x - rt.player.x, s.z - rt.player.z);
+  rt.player.action = { kind: "pick", t0: rt.time, food: s.food, depth: s.food === "fish" ? 0.45 : 1 };
   effect("sparkle", s.x, 0.8, s.z);
   audio.play("pick");
   toast({ en: `+1 ${FOODS[s.food].word}`, ja: FOODS[s.food].ja, icon: s.food, tone: "good" }, 1600);

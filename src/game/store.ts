@@ -92,7 +92,7 @@ export interface Toast {
   en: string;
   ja?: string;
   icon?: string;
-  tone: "good" | "info" | "warn";
+  tone: "good" | "info" | "warn" | "chapter";
 }
 
 export type HintKey = "move" | "talk" | "journal" | "switch" | "micBlocked" | null;

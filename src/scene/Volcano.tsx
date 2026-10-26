@@ -50,12 +50,14 @@ function Lava() {
     }
     if (cooled.current) {
       cooled.current.visible = rt.lava > 0.01;
-      cooled.current.scale.x = Math.max(0.001, rt.lava);
+      // The crust spreads across from the near bank as Bubbo's water lands.
+      cooled.current.scale.set(Math.max(0.001, rt.lava), Math.max(0.001, rt.lava), 1);
     }
   });
   return <group position={at(LAVA.x, LAVA.z, 0.08)}>
     <mesh ref={ref} geometry={hot} material={glow} />
-    <mesh ref={cooled} geometry={cool} material={flatMat} position={[0, 0.08, 0]} />
+    {/* The crust's top is the walking surface: placed on the ground, not on the hot bed's offset. */}
+    <mesh ref={cooled} geometry={cool} material={flatMat} position={[0, -0.08, 0]} />
     <instancedMesh ref={steam} args={[undefined, steamMat, 6]} frustumCulled={false}>
       <icosahedronGeometry args={[1, 0]} />
     </instancedMesh>

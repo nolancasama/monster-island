@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { saveSettings, setGame, useGame } from "../game/store";
+import { setGame, useGame } from "../game/store";
 import { continueGame, keepExploring, newGame, toTitle } from "../game/flow/story";
 import { MONSTERS, MONSTER_ORDER } from "../game/data/monsters";
 import { PHRASES } from "../game/logic/english";
@@ -10,14 +10,8 @@ import { Ja } from "./Talk";
 export function TitleScreen() {
   const screen = useGame((s) => s.screen);
   const hasSave = useGame((s) => s.hasSave);
-  const settings = useGame((s) => s.settings);
   const [confirm, setConfirm] = useState(false);
   if (screen !== "title") return null;
-  const setMic = (mic: boolean) => {
-    const s = { ...settings, mic };
-    saveSettings(s);
-    setGame({ settings: s });
-  };
   return (
     <div className="title-screen ui" data-testid="title">
       <div className="title-card">
@@ -34,14 +28,6 @@ export function TitleScreen() {
           Find monsters. Make friends.
           <Ja>モンスターを さがして ともだちに なろう</Ja>
         </p>
-        <div className="mode-switch" role="radiogroup" aria-label="How to answer">
-          <button className={settings.mic ? "on" : ""} onClick={() => setMic(true)} aria-pressed={settings.mic} data-testid="mode-speak">
-            <Icon id="mic" size={22} /> Speak <Ja>はなす</Ja>
-          </button>
-          <button className={!settings.mic ? "on" : ""} onClick={() => setMic(false)} aria-pressed={!settings.mic} data-testid="mode-tap">
-            <Icon id="hand" size={22} /> Tap <Ja>タップ</Ja>
-          </button>
-        </div>
         {hasSave ? (
           <div className="title-buttons">
             <button className="primary big" onClick={() => void continueGame()} data-testid="btn-continue">
@@ -77,44 +63,34 @@ function fmt(s: number) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** The full results card: shown only at the final Sanctuary ending. */
 export function ResultsScreen() {
   const screen = useGame((s) => s.screen);
   const progress = useGame((s) => s.progress);
   const seconds = useGame((s) => s.seconds);
   if (screen !== "results") return null;
   const friends = MONSTER_ORDER.filter((id) => progress.monsters[id].friend);
-  const final = progress.endings >= 3;
   return (
     <div className="results ui" data-testid="results">
-      <div className={`results-card panel ${final ? "results-final" : ""}`}>
-        {final ? (
-          <h1>The End <Ja>モンスターの ともだち!</Ja></h1>
-        ) : progress.endings >= 2 ? (
-          <h1>
-            Forest Adventure: Clear! <Ja>もりの ぼうけん クリア!</Ja>
-          </h1>
-        ) : (
-          <h1>
-            Beach Adventure: Clear! <Ja>はまべの ぼうけん クリア!</Ja>
-          </h1>
-        )}
+      <div className="results-card panel results-final">
+        <h1>The End <Ja>モンスターの ともだち!</Ja></h1>
         <div className="results-friends">
           {MONSTER_ORDER.map((id) => {
             const f = friends.includes(id);
             const def = MONSTERS[id];
             const record = progress.monsters[id];
             return (
-              <div key={id} className={`r-friend ${f ? "on" : ""}`} data-testid={final ? `results-page-${id}` : undefined}>
-                <Portrait id={id} size={final ? 72 : 84} silhouette={!f} />
+              <div key={id} className={`r-friend ${f ? "on" : ""}`} data-testid={`results-page-${id}`}>
+                <Portrait id={id} size={72} silhouette={!f} />
                 <span>{f ? def.name : "???"}</span>
-                {final && record.discovered && (
+                {record.discovered && (
                   <div className="r-page-lines">
                     <span>It's {def.color}.</span>
                     <span>{record.described.size ? `It's ${def.size}.` : "Size: ???"}</span>
                     {def.part && <span>{record.described.part ? `It has ${def.part === "tail" ? "a tail" : "wings"}.` : "It has ???"}</span>}
                   </div>
                 )}
-                {f && (final ? <span className="r-page-friend"><Icon id="heart" size={16} /> Friend!</span> : <Icon id="heart" size={20} />)}
+                {f && <span className="r-page-friend"><Icon id="heart" size={16} /> Friend!</span>}
               </div>
             );
           })}

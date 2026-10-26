@@ -1,7 +1,7 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
 import { gateOpen, objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
-import { animate, rt, type MonsterRt } from "./runtime";
+import { PICK_TIME, animate, rt, type MonsterRt } from "./runtime";
 import { keyboardMove } from "../input/keyboard";
 import { PLAYER_R, gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
 import { CAVE, LAVA, MONSTER_STONE, RIVER, shoreZ } from "./world/island";
@@ -11,6 +11,7 @@ import { finaleEnding, stoneEnding } from "./flow/story";
 import { isRunning } from "./flow/script";
 import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
+import { bubboSeat } from "./ride";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
 
@@ -33,7 +34,8 @@ export function tick(dt: number) {
   const paused = g.journalOpen || g.settingsOpen;
   if (!paused) rt.playTime += dt;
 
-  movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen);
+  const picking = rt.player.action?.kind === "pick" && rt.time - rt.player.action.t0 < PICK_TIME;
+  movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen && !picking);
 
   for (const id of LIVE_MONSTERS) {
     const m = rt.monsters[id];
@@ -149,8 +151,19 @@ function movePlayer(dt: number, canMove: boolean) {
     p.yaw += d * Math.min(1, dt * 12);
     p.step += p.speed * dt * 2.3;
   }
-  p.y = standY(p.x, p.z, getGame().progress.solved);
-  if (p.riding) p.y = -0.05;
+  const solved = getGame().progress.solved;
+  p.y = standY(p.x, p.z, solved);
+  if (p.riding) {
+    // Attached to Bubbo's saddle, hopping on and off from the bank.
+    const seat = bubboSeat(rt.monsters.bubbo, solved, rt.time);
+    const k = p.seat;
+    const from = p.rideFrom;
+    const ground = standY(from.x, from.z, solved);
+    p.x = from.x + (seat.x - from.x) * k;
+    p.z = from.z + (seat.z - from.z) * k;
+    p.y = ground + (seat.y - ground) * k + Math.sin(k * Math.PI) * 0.45;
+    p.yaw = rt.monsters.bubbo.yaw;
+  }
   if (p.climbY !== null) p.y = p.climbY;
 }
 

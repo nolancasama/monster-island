@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, hook, state, tap, use, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, use, waitFor } from "./helpers";
 
 /**
  * Phase 2 (the Forest) in mic-free mode, through the real UI, starting from a
@@ -36,7 +36,7 @@ async function continueFrom(page: Page, save: string) {
     }
   }, save);
   const errors = await boot(page);
-  await page.getByTestId("mode-tap").click();
+  await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.screen === "game" && s.mode === "explore", 15_000, "continued");
   return errors;
@@ -141,16 +141,15 @@ test("the forest: bridge, Puff, the cliff and the cliff-top ending (mic-free, fr
   await tap(page, "letsGo");
 
   // ---- The climb and the cliff-top ending.
-  s = await waitFor(page, (x) => x.screen === "results", 60_000, "results");
-  expect(s.progress.endings).toBe(2);
+  // No results card: a short "clear" banner and play goes straight on.
+  s = await waitFor(page, (x) => x.progress.endings === 2, 60_000, "cliff-top ending");
+  await expect(page.getByTestId("toast").filter({ hasText: "Forest Adventure: Clear!" })).toBeVisible();
+  s = await waitFor(page, (x) => x.screen === "game" && x.mode === "explore", 15_000, "free play on the cliff top");
+  await expect(page.getByTestId("results")).toHaveCount(0);
   expect(s.stoneGlow.puff).toBe(1);
-  await expect(page.getByTestId("results")).toContainText("Forest Adventure: Clear!");
-  for (const sentence of ["Come here!", "Let's go!", "Thank you!", "It's small.", "It has wings."]) {
-    await expect(page.getByTestId("results-said")).toContainText(sentence);
-  }
-  await page.getByTestId("btn-explore").click();
-  s = await waitFor(page, (x) => x.screen === "game" && x.mode === "explore", 5_000, "free play");
+  for (const sentence of ["comeHere", "letsGo", "thankYou", "itsSmall", "hasWings"]) expect(s.progress.said).toContain(sentence);
   expect(s.player.z).toBeLessThan(-45.5);
+  expect(s.objective).toMatchObject({ id: "obstacle", obstacle: "lava" });
 
   // The rope leads back down.
   await use(page, "cliffTop", "ropeDown", 0.6);

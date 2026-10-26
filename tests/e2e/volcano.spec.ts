@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, hook, state, type MiState } from "./helpers";
+import { boot, chooseMode, hook, state, type MiState } from "./helpers";
 
 /**
  * Executor-owned acceptance: real mic-free UI, with only the starting save and
@@ -71,7 +71,7 @@ test("volcano and sanctuary: lava, Ember, cave, four powers, Lumo and The End (m
   }, V2_SAVE);
   const errors = await boot(page);
   await expect(page.getByTestId("btn-continue")).toBeVisible();
-  await page.getByTestId("mode-tap").click();
+  await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
   let s = await precondition(page, "continued Phase 2 save", (x) => x.screen === "game" && x.mode === "explore");
   expect(s.progress.endings).toBe(2);
@@ -86,6 +86,18 @@ test("volcano and sanctuary: lava, Ember, cave, four powers, Lumo and The End (m
   expect(s.progress.monsters.puff.canKnown.swim).toBe(false);
   await select(page, 2, "bubbo");
   await solve(page, "lava", "canHelp");
+  // The cooled crust is a surface: stand on top of it (not sunk into it) and
+  // walk across it with the keyboard, toward Ember.
+  await hook(page, "teleport", 34.5, -49.4, Math.PI);
+  const bank = (await state(page)).player.y;
+  await hook(page, "teleport", 34.5, -51.6, Math.PI);
+  s = await precondition(page, "standing on the cooled lava", (x) => Math.abs(x.player.z + 51.6) < 0.2);
+  expect(s.player.y, "standing on the crust's top").toBeGreaterThan(bank + 0.15);
+  await hook(page, "teleport", 34.5, -49.4, Math.PI);
+  await hook(page, "setCamera", 0, 0.5, 9);
+  await page.keyboard.down("KeyW");
+  await precondition(page, "crossed the cooled lava on foot", (x) => x.player.z < -54);
+  await page.keyboard.up("KeyW");
 
   // Ember's description and all five question cards, including meat.
   await hook(page, "goTo", "ember", 2);
@@ -165,7 +177,7 @@ test("lava also accepts the spoken swim question", async ({ page }) => {
   test.setTimeout(90_000);
   await page.addInitScript((save) => localStorage.setItem("mi.save.v2", save), V2_SAVE);
   const errors = await boot(page);
-  await page.getByTestId("mode-speak").click();
+  await chooseMode(page, "speak");
   await page.getByTestId("btn-continue").click();
   await precondition(page, "continued Phase 2 save for speech", (s) => s.screen === "game" && s.mode === "explore");
   await select(page, 2, "bubbo");

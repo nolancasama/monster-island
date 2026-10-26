@@ -1,13 +1,14 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { rt } from "../game/runtime";
+import { PICK_TIME, rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { MONSTERS } from "../game/data/monsters";
 import { groundY } from "../game/world/island";
 import { smoothMat, shadowMaterial } from "./materials";
 import { KNEE_Y, PLAYER_OUTFIT, armGeometry, bodyGeometry, shinGeometry, thighGeometry } from "./models/people";
 import { CLIMB_PULL } from "../game/world/rope";
+import { HIP_Y, SEATED, squatAmount, squatPose } from "./poses";
 import { mapleArmGeometry, mapleBodyGeometry, mapleLegGeometry } from "./models/maple";
 import { foodGeometry } from "./models/props";
 import type { FoodId } from "../game/types";
@@ -86,47 +87,52 @@ export function Player() {
     const s = Math.sin(p.step * Math.PI);
     const action = p.action && rt.time - p.action.t0 < 1.2 ? p.action : null;
     const at = action ? rt.time - action.t0 : 0;
-    let legSwing = s * 0.7 * walk;
-    let armSwing = -s * 0.6 * walk;
     let reach = 0;
-    let crouch = 0;
     if (action?.kind === "give") reach = Math.sin(Math.min(1, at / 0.5) * Math.PI * 0.5) * (at < 1 ? 1 : 1 - (at - 1) / 0.2);
-    if (action?.kind === "pick") crouch = Math.sin(Math.min(1, at / 0.5) * Math.PI);
-    if (action?.kind === "cheer") armSwing = 0;
-    if (p.riding) {
-      legSwing = 0;
-      armSwing = 0;
-    }
+    // Squat and reach: hips down, knees bent over planted feet, a slight lean.
+    const c = action?.kind === "pick" ? squatAmount(at, PICK_TIME) * (action.depth ?? 1) : 0;
+    const sq = squatPose(c);
+    // Hop on, sit astride and hop off Bubbo (0..1).
+    const k = p.riding ? p.seat : 0;
+    const walkK = (1 - k) * (1 - c);
+    const legSwing = s * 0.7 * walk * walkK;
+    const armSwing = action?.kind === "cheer" ? 0 : -s * 0.6 * walk * walkK;
     if (pose.current) {
-      pose.current.position.y = (p.riding ? 0.32 : 0) + Math.abs(s) * 0.05 * walk - crouch * 0.18 + (walk < 0.1 ? Math.sin(rt.time * 2.2) * 0.008 : 0);
-      pose.current.rotation.x = crouch * 0.35;
+      // Lean about the hip (not the feet), so the hips stay over the feet.
+      const lean = sq.lean + SEATED.lean * k;
+      const hipY = HIP_Y - sq.drop - SEATED.drop * k + (Math.abs(s) * 0.05 * walk + (walk < 0.1 ? Math.sin(rt.time * 2.2) * 0.008 : 0)) * walkK;
+      pose.current.rotation.x = lean;
+      pose.current.position.set(0, hipY - HIP_Y * Math.cos(lean), -HIP_Y * Math.sin(lean));
     }
     if (legL.current && legR.current) {
-      legL.current.rotation.x = p.riding ? -1.2 : legSwing;
-      legR.current.rotation.x = p.riding ? -1.2 : -legSwing;
-      legL.current.rotation.z = p.riding ? -0.5 : 0;
-      legR.current.rotation.z = p.riding ? 0.5 : 0;
+      legL.current.rotation.set(legSwing + sq.thigh * (1 - k) + SEATED.thigh.x * k, SEATED.thigh.y * k, SEATED.thigh.z * k);
+      legR.current.rotation.set(-legSwing + sq.thigh * (1 - k) + SEATED.thigh.x * k, -SEATED.thigh.y * k, -SEATED.thigh.z * k);
+    }
+    if (shinL.current && shinR.current) {
+      shinL.current.rotation.x = walk * Math.max(0, -s) * 0.5 * walkK + sq.knee * (1 - k) + SEATED.knee * k;
+      shinR.current.rotation.x = walk * Math.max(0, s) * 0.5 * walkK + sq.knee * (1 - k) + SEATED.knee * k;
     }
     if (armL.current && armR.current) {
-      armL.current.rotation.x = armSwing;
-      armR.current.rotation.x = -armSwing - reach * 1.4 - crouch * 0.8;
+      // Squatting: the left hand rests toward the knee, the right reaches down
+      // to the food in front of the feet. Riding: both hands forward, holding on.
+      armL.current.rotation.x = armSwing - sq.lean - 0.35 * c + SEATED.arm.x * k;
+      armR.current.rotation.x = -armSwing - reach * 1.4 - sq.lean - 0.75 * c + SEATED.arm.x * k;
       if (action?.kind === "cheer") {
         armL.current.rotation.z = -2.6;
         armR.current.rotation.z = 2.6;
       } else {
-        armL.current.rotation.z = -0.12;
-        armR.current.rotation.z = 0.12;
+        armL.current.rotation.z = -0.12 + (SEATED.arm.z + 0.12) * k;
+        armR.current.rotation.z = 0.12 - 0.1 * c - (SEATED.arm.z + 0.12) * k;
       }
     }
-    if (shinL.current && shinR.current) {
-      shinL.current.rotation.x = p.riding ? 1.1 : walk * Math.max(0, -s) * 0.5;
-      shinR.current.rotation.x = p.riding ? 1.1 : walk * Math.max(0, s) * 0.5;
-    }
-    if (shadow.current) shadow.current.visible = p.climbY === null;
+    if (shadow.current) shadow.current.visible = p.climbY === null && k < 0.5;
     if (p.climbY !== null) climbPose(p.climbY);
     const h = held.current;
     if (h) {
-      const food: FoodId | null = action?.kind === "give" ? holdingFood() : null;
+      // Food in the hand: the gift being offered, or the food just picked (from
+      // the moment the hand reaches it until the player is up again).
+      const picked = action?.kind === "pick" && at > PICK_TIME * 0.42 && at < PICK_TIME * 0.95 ? action.food ?? null : null;
+      const food: FoodId | null = action?.kind === "give" ? holdingFood() : picked;
       h.visible = Boolean(food) && at < 0.9;
       if (food) h.geometry = foods[food];
     }

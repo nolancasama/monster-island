@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PLAYER_R, blocked, isWalkable, moveCircle, standY, type Gates, type Obstacles } from "./collision";
-import { APPLE_TREES, CAMP, DRIFTWOOD, FALLEN_PALM, PALM_SOLIDS, PIER, groundY, solidAt } from "./island";
+import { LAVA_CRUST, LAVA_RAMP, PLAYER_R, blocked, isWalkable, lavaCrustY, moveCircle, standY, type Gates, type Obstacles } from "./collision";
+import { APPLE_TREES, CAMP, DRIFTWOOD, FALLEN_PALM, LAVA, PALM_SOLIDS, PIER, groundY, solidAt } from "./island";
 
 const beach: Gates = { solved: ["fallenPalm"] };
 
@@ -88,5 +88,37 @@ describe("pier surface and supports", () => {
     expect(p.x).toBeLessThan(post.x - PLAYER_R);
     expect(p.z).toBeCloseTo(post.z, 4);
     expect(blocked(p.x, p.z, PLAYER_R, beach)).toBe(false);
+  });
+});
+
+describe("cooled lava surface", () => {
+  const top = groundY(LAVA.x, LAVA.z) + LAVA_CRUST;
+  it("walkers stand on the crust's flat top once the lava is cooled", () => {
+    for (const x of [LAVA.x0 + 0.5, LAVA.x, LAVA.x1 - 0.5]) {
+      for (const z of [LAVA.z0 + 0.2, LAVA.z, LAVA.z1 - 0.2]) {
+        expect(standY(x, z, ["lava"])).toBeCloseTo(top, 5);
+        expect(standY(x, z, [])).toBeCloseTo(groundY(x, z), 5);
+      }
+    }
+  });
+
+  it("joins the trail smoothly on both banks", () => {
+    let prev = standY(LAVA.x, LAVA.z1 + 1.5, ["lava"]);
+    expect(prev).toBeCloseTo(groundY(LAVA.x, LAVA.z1 + 1.5), 5);
+    for (let z = LAVA.z1 + 1.5; z >= LAVA.z; z -= 0.05) {
+      const y = standY(LAVA.x, z, ["lava"]);
+      expect(Math.abs(y - prev)).toBeLessThan(0.03);
+      prev = y;
+    }
+    expect(lavaCrustY(LAVA.x, LAVA.z0 - LAVA_RAMP - 0.01)).toBe(-Infinity);
+  });
+
+  it("does not block the opened route", () => {
+    const solved = ["fallenPalm", "river", "bridge", "cliff", "lava"] as const;
+    const gates: Gates = { solved: [...solved], forest: true, volcano: true };
+    const p = moveCircle(LAVA.x, LAVA.z1 + 1.2, LAVA.x, LAVA.z0 - 1.5, PLAYER_R, gates);
+    expect(p.z).toBeCloseTo(LAVA.z0 - 1.5, 4);
+    const hot = moveCircle(LAVA.x, LAVA.z1 + 1.2, LAVA.x, LAVA.z0 - 1.5, PLAYER_R, { ...gates, solved: solved.slice(0, 4) });
+    expect(hot.z).toBeGreaterThan(LAVA.z1);
   });
 });

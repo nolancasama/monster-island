@@ -2,7 +2,7 @@ import { MONSTERS } from "../data/monsters";
 import { CAN_QUESTION, PHRASES } from "../logic/english";
 import { OBSTACLES, askAtObstacle, gateOpen, helperFor, isSolved, obstacleAvailable, recordCan, solve } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress } from "../store";
-import { animate, effect, rt } from "../runtime";
+import { animate, effect, rt, type MonsterRt } from "../runtime";
 import { BRIDGE, CAVE, CLIFF_HEIGHT, CLIFF_TOP_SPOT, CLIFF_Z, CROSSING, FALLEN_PALM, GATE_PILLARS, LAVA, ROPE, SANCTUARY_GATE, groundY } from "../world/island";
 import { CLIMB_GAP, CLIMB_HANDS, ropeZAt } from "../world/rope";
 import { ask, say, wait } from "./ask";
@@ -479,6 +479,46 @@ async function growVines(id: MonsterId) {
 
 // ------------------------------------------------------------ Bubbo's ferry
 
+/** A scripted walk for a monster (eased, facing where it goes). */
+async function glideWalk(m: MonsterRt, to: Vec2, seconds: number) {
+  const from = { x: m.x, z: m.z };
+  const d = Math.hypot(to.x - from.x, to.z - from.z);
+  if (d < 0.05) return;
+  m.yaw = Math.atan2(to.x - from.x, to.z - from.z);
+  const t0 = rt.time;
+  for (;;) {
+    const k = Math.min(1, (rt.time - t0) / seconds);
+    const s = k * k * (3 - 2 * k);
+    m.x = from.x + (to.x - from.x) * s;
+    m.z = from.z + (to.z - from.z) * s;
+    m.step += d * 0.1;
+    if (k >= 1) return;
+    await wait(30);
+  }
+}
+
+/** Hop onto Bubbo's saddle from `ground`, or off it onto `ground`. */
+async function hop(p: typeof rt.player, ground: Vec2, on: boolean) {
+  p.rideFrom.x = ground.x;
+  p.rideFrom.z = ground.z;
+  p.seat = on ? 0 : 1;
+  p.riding = true;
+  audio.play("whoosh");
+  const t0 = rt.time;
+  for (;;) {
+    const k = Math.min(1, (rt.time - t0) / 0.55);
+    const s = k * k * (3 - 2 * k);
+    p.seat = on ? s : 1 - s;
+    if (k >= 1) break;
+    await wait(16);
+  }
+  if (!on) {
+    p.riding = false;
+    p.x = ground.x;
+    p.z = ground.z;
+  }
+}
+
 async function ferry(id: MonsterId) {
   const m = rt.monsters[id];
   // Bubbo asks back: the student answers about themself (both answers lead on).
@@ -496,21 +536,24 @@ async function ferry(id: MonsterId) {
   else await say(id, "That's OK! Get on!", "だいじょうぶ! せなかに のって!", { tone: "yes" });
   m.talking = false;
 
-  // Ride across.
+  // Ride across: Bubbo wades in at the bank and the player hops onto his back.
+  // The simulation keeps the rider on the saddle (game/ride.ts), so rider and
+  // body move as one; walking collision is off while frozen.
   m.mode = "script";
   const w = CROSSING.west;
   const e = CROSSING.east;
-  rt.player.frozen = true;
-  m.x = w.x + 0.9;
-  m.z = w.z;
+  const p = rt.player;
+  p.frozen = true;
+  p.vx = p.vz = 0;
+  shot({ x: (w.x + e.x) / 2, y: 3.6, z: w.z + 9 }, { x: (w.x + e.x) / 2, y: 0, z: w.z });
+  await glideWalk(m, { x: w.x + 0.9, z: w.z }, 0.6);
   m.yaw = Math.PI / 2;
-  rt.player.x = m.x;
-  rt.player.z = m.z;
-  rt.player.yaw = Math.PI / 2;
-  rt.player.riding = true;
+  // Bubbo swims for the whole crossing: his height follows the bank down into
+  // the water and back up (the higher of ground and water), with no jump.
+  m.swimming = true;
+  await hop(p, { x: p.x, z: p.z }, true);
   audio.play("splash");
   effect("splash", m.x + 0.6, -0.2, m.z);
-  shot({ x: (w.x + e.x) / 2, y: 3.6, z: w.z + 9 }, { x: (w.x + e.x) / 2, y: 0, z: w.z });
   const from = m.x;
   const to = e.x - 0.6;
   const t0 = rt.time;
@@ -520,9 +563,6 @@ async function ferry(id: MonsterId) {
     const k = (rt.time - t0) / dur;
     const s = k * k * (3 - 2 * k);
     m.x = from + (to - from) * s;
-    m.swimming = s > 0.08 && s < 0.92;
-    rt.player.x = m.x;
-    rt.player.z = m.z;
     if (k > splashes * 0.33 + 0.15) {
       splashes++;
       effect("splash", m.x, -0.25, m.z + 0.4);
@@ -530,14 +570,13 @@ async function ferry(id: MonsterId) {
     }
     await wait(30);
   }
+  m.x = to;
+  // Hop off onto the far bank; Bubbo climbs out beside the player.
+  await hop(p, { x: e.x + 0.3, z: e.z + 0.6 }, false);
   m.swimming = false;
-  rt.player.riding = false;
-  rt.player.x = e.x + 0.3;
-  rt.player.z = e.z + 0.6;
-  rt.player.yaw = -Math.PI / 2;
-  m.x = e.x - 0.2;
-  m.z = e.z - 1;
-  await wait(500);
+  p.yaw = -Math.PI / 2;
+  await glideWalk(m, { x: e.x - 0.2, z: e.z - 1 }, 0.5);
+  await wait(300);
 
   // Stepping stones rise behind them: the crossing stays open.
   shot({ x: e.x + 4.5, y: 3.4, z: e.z + 6.5 }, { x: (w.x + e.x) / 2 + 0.5, y: -0.2, z: w.z });
@@ -546,9 +585,9 @@ async function ferry(id: MonsterId) {
   audio.play("stones");
   rt.stonesTarget = 1;
   await wait(1800);
-  updateProgress((p) => solve(p, "river"));
-  m.look = { x: rt.player.x, z: rt.player.z };
-  rt.player.frozen = false;
+  updateProgress((pr) => solve(pr, "river"));
+  m.look = { x: p.x, z: p.z };
+  p.frozen = false;
   animate(id, "friend");
   audio.voice(id, "excited");
   frameTwo(rt.player, m);

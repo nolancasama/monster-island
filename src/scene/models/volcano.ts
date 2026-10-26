@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { between, rockGeometry } from "./nature";
 import { makeRng } from "../../game/logic/rng";
+import { LAVA_CRUST, LAVA_RAMP } from "../../game/world/collision";
 import { CAVE, CAVE_WALLS, GATE_PILLARS, GATE_POSTS, GATE_WALLS, LAVA, MEAT_RACK, SANCTUARY, SANCTUARY_GATE, VOLCANO_ROCKS, groundY, volcanoMask } from "../../game/world/island";
 
 /** One terrain draw for the new region, with the same height function as collision. */
@@ -39,16 +40,43 @@ export function volcanoGroundGeometry(): THREE.BufferGeometry {
 
 export function lavaBedGeometry(cooled: boolean): THREE.BufferGeometry {
   const b = new PartBuilder(0);
+  if (cooled) return cooledCrustGeometry(b);
   // Flat dark crust under a network of glowing streams.
-  b.box(LAVA.x1 - LAVA.x0 + 0.4, 0.12, 2, 0, -0.04, 0, cooled ? "#48484b" : "#ff961b");
+  b.box(LAVA.x1 - LAVA.x0 + 0.4, 0.12, 2, 0, -0.04, 0, "#ff961b");
   for (let i = 0; i < 18; i++) {
     const x = -5 + i * 0.6;
     const z = Math.sin(i * 1.7) * 0.35;
-    b.add(rockGeometry(0.48, 0.12, 400 + i, 0), cooled ? "#66646a" : "#542820", [x, 0.08, z]);
-    if (!cooled) {
-      b.boxAt(0.13, 0.025, 1.8, [x + 0.25, 0.16, z], [0, Math.sin(i) * 0.5, 0], "#fff3a0");
-      b.boxAt(0.55, 0.025, 0.09, [x, 0.17, z + 0.38], [0, -0.5, 0], "#ffe76a");
-    }
+    b.add(rockGeometry(0.48, 0.12, 400 + i, 0), "#542820", [x, 0.08, z]);
+    b.boxAt(0.13, 0.025, 1.8, [x + 0.25, 0.16, z], [0, Math.sin(i) * 0.5, 0], "#fff3a0");
+    b.boxAt(0.55, 0.025, 0.09, [x, 0.17, z + 0.38], [0, -0.5, 0], "#ffe76a");
+  }
+  return b.build();
+}
+
+/**
+ * The cooled crust in world-relative coordinates around (LAVA.x, ground, LAVA.z):
+ * a flat top exactly at LAVA_CRUST with gentle ramps to the trail, the same
+ * shape `lavaCrustY` gives every walker. Cracks and plates lie flush on top.
+ */
+function cooledCrustGeometry(b: PartBuilder): THREE.BufferGeometry {
+  const w = LAVA.x1 - LAVA.x0;
+  const d = LAVA.z1 - LAVA.z0;
+  const cx = (LAVA.x0 + LAVA.x1) / 2 - LAVA.x;
+  const cz = (LAVA.z0 + LAVA.z1) / 2 - LAVA.z;
+  const top = LAVA_CRUST;
+  b.box(w, top + 0.3, d, cx, -0.3, cz, "#4a494d");
+  // Ramps down to the trail on both banks (rise LAVA_CRUST over LAVA_RAMP).
+  const slope = Math.atan2(top, LAVA_RAMP);
+  const len = Math.hypot(top, LAVA_RAMP);
+  for (const side of [-1, 1]) {
+    b.boxAt(w, 0.1, len, [cx, top / 2 - 0.05, cz + side * (d / 2 + LAVA_RAMP / 2)], [side * slope, 0, 0], "#545257");
+  }
+  // Flush plates and dark cracks: a hint of the flow, nothing to trip over.
+  for (let i = 0; i < 16; i++) {
+    const x = cx - w / 2 + 0.5 + i * ((w - 1) / 15);
+    const z = cz + Math.sin(i * 1.7) * 0.4;
+    b.boxAt(0.5 + (i % 3) * 0.12, 0.02, 0.42, [x, top + 0.005, z], [0, Math.sin(i * 2.3) * 0.6, 0], i % 2 ? "#67656b" : "#5b5a60");
+    b.boxAt(0.05, 0.012, 0.9, [x + 0.3, top + 0.008, z - 0.2], [0, Math.sin(i) * 0.5, 0], "#2f2e33");
   }
   return b.build();
 }

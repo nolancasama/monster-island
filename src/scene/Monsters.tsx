@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { rt, type MonsterRt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { LIVE_MONSTERS } from "../game/data/monsters";
-import { RIVER_Y } from "../game/world/island";
+import { breathe, monsterRootY } from "../game/ride";
 import { standY } from "../game/world/collision";
 import { smoothMat, shadowMaterial } from "./materials";
 import { bubboParts, emberParts, leafyParts, lumoParts, puffParts, type MonsterParts } from "./models/monsters";
@@ -34,7 +34,7 @@ interface Pose {
 
 /** The shared body language every monster speaks: bounce = yes, shake = no, spin = favourite. */
 function basePose(m: MonsterRt, t: number): Pose {
-  const p: Pose = { bounce: 0, squash: 1 + Math.sin(t * 2.4 + m.x) * 0.03, spin: 0, shake: 0, lean: 0, armsUp: 0, cover: 0, eyes: 1, tilt: 0 };
+  const p: Pose = { bounce: 0, squash: breathe(m, t), spin: 0, shake: 0, lean: 0, armsUp: 0, cover: 0, eyes: 1, tilt: 0 };
   const a = m.anim;
   const at = a ? rt.time - a.t0 : 99;
   if (a && at > (DUR[a.kind] ?? 1)) m.anim = null;
@@ -116,10 +116,10 @@ function MonsterBody({ id }: { id: MonsterId }) {
     const t = rt.time;
     const solved = getGame().progress.solved;
     const ground = standY(m.x, m.z, solved);
-    const water = m.swimming ? RIVER_Y - (id === "bubbo" ? 0.32 : 0.1) + Math.sin(t * 3) * 0.04 : -Infinity;
-    // Fliers hover (a gentle bob); a perched flier sits up in its tree.
+    // Ground, water or hover (fliers bob; a perched flier sits up in its tree).
+    // A rider on Bubbo is attached to this same height (game/ride.ts).
     const hover = m.air > 0.05 ? m.air + Math.sin(t * 2.6 + m.x) * 0.06 : 0;
-    const baseY = Math.max(ground, water) + hover;
+    const baseY = monsterRootY(m, solved, t);
     const pose = basePose(m, t);
     const moving = m.speed > 0.2;
     const step = m.step;

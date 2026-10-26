@@ -97,12 +97,13 @@ test("discover, befriend and use both monsters to reach the Monster Stone (mic-f
 
   // ---- The Monster Stone ending.
   await hook(page, "teleport", 31, -0.5, 0.5);
-  s = await waitFor(page, (x) => x.screen === "results", 60_000, "results");
-  expect(s.progress.endings).toBe(1);
-  await expect(page.getByTestId("results-said")).toContainText("Do you like apples?");
-  await expect(page.getByTestId("results-said")).toContainText("Can you swim?");
-  await page.getByTestId("btn-explore").click();
-  await waitFor(page, (x) => x.screen === "game" && x.mode === "explore", 5_000, "free play");
+  // No results card: a short "clear" banner, then the forest objective.
+  s = await waitFor(page, (x) => x.progress.endings === 1, 60_000, "stone ending");
+  await expect(page.getByTestId("toast").filter({ hasText: "Beach Adventure: Clear!" })).toBeVisible();
+  s = await waitFor(page, (x) => x.screen === "game" && x.mode === "explore", 15_000, "free play");
+  await expect(page.getByTestId("results")).toHaveCount(0);
+  expect(s.progress.said).toEqual(expect.arrayContaining(["likeApples", "canSwim"]));
+  expect(s.objective).toMatchObject({ id: "obstacle", obstacle: "bridge" });
   // The ending opened the forest path.
   await waitFor(page, (x) => x.bramble < 0.2, 10_000, "bramble gone");
   expect(errors).toEqual([]);

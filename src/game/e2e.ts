@@ -130,6 +130,10 @@ export function installE2eHook(seed: number) {
     set(patch: Record<string, unknown>) {
       setGame(patch as never);
     },
+    /** Slow or freeze the game clock (0 = paused) for visual captures. */
+    timeScale(k: number) {
+      rt.timeScale = Math.max(0, k);
+    },
     mapleHome() {
       rt.maple.x = MAPLE.x;
       rt.maple.z = MAPLE.z;

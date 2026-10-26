@@ -46,8 +46,9 @@ Added in Phase 3:
 - **Move:** WASD / arrow keys (touch: the stick). **Look:** drag. **Zoom:** wheel.
 - **Use / talk:** E (touch: the yellow button, or tap the label).
 - **Speak:** Space or 🎤 — one press listens once. **Journal:** M. **Companion:** 1 / 2 / 3 / 4 or the chips.
-- **Speak or Tap** on the title screen is a teacher setting: Tap mode never uses the microphone.
-  If the microphone is blocked, the game switches to tapping by itself.
+- **Speak or Tap** is a teacher setting in Settings (⚙ on the title screen or in game,
+  "Speak with the microphone"): Tap mode never uses the microphone. The choice is
+  remembered. If the microphone is blocked, the game switches to tapping by itself.
 
 Progress saves on the device (Continue on the title screen). Version 1 and 2
 saves migrate to version 3. Companion keys are 1 / 2 / 3 / 4; Lumo stays in
