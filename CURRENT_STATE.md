@@ -30,8 +30,9 @@ https://nolancasama.github.io/monster-island/ (every push to `main` runs the
 unit tests, builds and deploys).
 
 ## Polish pass 2 (2026-10-26, branch `claude/blissful-volta-dscgid`)
-All 12 reported issues are implemented on the development branch. `main`
-and the live Pages site are unchanged and nothing has been merged or deployed.
+All 12 reported issues are implemented. Merged to `main` with the user's
+approval and deployed to GitHub Pages on 2026-10-26 (`949aa23`; the Pages
+workflow's tests, build and deploy all passed).
 
 - **#1 Bubbo ride:** the rider sits on a saddle on Bubbo's back, from shared
   height code (`game/ride.ts`), legs astride, and hops on and off.
@@ -90,7 +91,7 @@ through the body. There is no close-up of the knee coming up onto the edge.
 
 **Not verified:**
 - Nothing has been tested on a real Chromebook (SwiftShader only).
-- The new `test.yml` workflow has not run on GitHub yet.
+- `test.yml` (unit + Playwright) passed on GitHub for the branch (`e3d6d3c`).
 
 ## Known Issues
 - Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
@@ -104,8 +105,7 @@ through the body. There is no close-up of the knee coming up onto the edge.
 - The ravine's water is the sea plane showing through.
 
 ## Next Steps
-0. Review the development branch (and, if wanted, a private preview for the
-   school Chromebook), then merge to `main` to publish.
+0. Play the live game on a school Chromebook and report anything still off.
 1. Play it on a real school Chromebook with a class: speech acceptance for
    the Phase 2–3 sentences, the climb's pace (5 s each way), whether the
    pillar gate is clear, total length (~31 min in the e2e playthrough).
