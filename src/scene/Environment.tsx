@@ -15,6 +15,7 @@ import {
   Z_NORTH,
   CLIFF_Z,
   VOLCANO,
+  VOLCANO_CONE,
   forestMask,
   groundY,
   ravineDepth,
@@ -24,6 +25,7 @@ import { trailDistance } from "./Forest";
 import { makeRng } from "../game/logic/rng";
 import { flatMat, occluderMat, smoothMat } from "./materials";
 import { bouldersGeometry, bushGeometry, jungleTreeGeometry, palmsGeometry, rockGeometry } from "./models/nature";
+import { massifTiles, seaStacksGeometry } from "./models/highlands";
 import { PartBuilder } from "./partBuilder";
 
 const sstep = (a: number, b: number, v: number) => {
@@ -104,6 +106,7 @@ const GRASS = new THREE.Color("#93c464");
 const JUNGLE = new THREE.Color("#4f8f45");
 const MUD = new THREE.Color("#a58a5c");
 const PATH = new THREE.Color("#e2c78f");
+const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
 const MOSS = new THREE.Color("#6da64e");
 const TRAIL_DIRT = new THREE.Color("#b89a66");
 const ROCK = new THREE.Color("#8a7c6a");
@@ -136,10 +139,11 @@ function pathDistance(x: number, z: number): number {
 }
 
 function terrainGeometry(): THREE.BufferGeometry {
-  // From the sea (z 19) to well beyond the cliff top (z -91), 1 m cells.
-  const g = new THREE.PlaneGeometry(150, 110, 150, 110);
+  // From the sea (z 19) to just beyond the cliff top (z -58), 1 m cells; the
+  // island's north and east beyond that are the massif (models/highlands).
+  const g = new THREE.PlaneGeometry(150, 77, 150, 77);
   g.rotateX(-Math.PI / 2);
-  g.translate(0, 0, -36);
+  g.translate(0, 0, -19.5);
   const p = g.attributes.position;
   const colors = new Float32Array(p.count * 3);
   const c = new THREE.Color();
@@ -459,7 +463,6 @@ export function FarLand() {
       [-60, -48, 26, 16, "#4f8f4a"],
       [-22, -58, 30, 20, "#457f42"],
       [4, -72, 28, 22, "#4a8a45"],
-      [67, -66, 14, 12, "#518f49"],
       [-78, -20, 22, 10, "#5a9a52"],
       [80, -24, 22, 10, "#5a9a52"]
     ];
@@ -477,27 +480,22 @@ export function FarLand() {
     b.add(rockGeometry(9, 6, 52, 1), "#8f8a7f", [X_EAST + 9, -1, 10]);
     return b.build();
   }, []);
-  const shell = useMemo(() => {
-    const b = new PartBuilder(6);
-    const v = VOLCANO;
-    // A truncated cone, open at the western cave flank. The sanctuary's
-    // own crater rim replaces this distant silhouette once we walk inside.
-    b.add(new THREE.CylinderGeometry(8.2, 30, 46, 12, 1, true, -0.18, 3.65), "#7a5a4a", [v.x, 20, v.z]);
-    b.add(new THREE.CylinderGeometry(7.5, 9, 3, 9), "#5a4038", [v.x, 42.5, v.z]);
-    b.add(new THREE.CylinderGeometry(6.8, 6.8, 0.6, 9), "#ff7a2a", [v.x, 44, v.z]);
+  const massif = useMemo(() => massifTiles(), []);
+  const stacks = useMemo(seaStacksGeometry, []);
+  const lava = useMemo(() => {
+    const b = new PartBuilder(0);
+    b.cyl(VOLCANO_CONE.rim - 1.2, VOLCANO_CONE.rim - 1.2, 0.4, VOLCANO.x, VOLCANO_CONE.crater + 0.2, VOLCANO.z, "#ff7a2a", 12);
     return b.build();
   }, []);
-  const volcano = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (volcano.current) volcano.current.visible = rt.player.z >= -122 && (rt.camera.shot?.target.z ?? 0) >= -122;
-  });
+  // The whole north of the island, volcano included, is one landmass seen
+  // from everywhere (the beach, the cliff top, the sanctuary).
   return (
     <group>
       <mesh geometry={geo} material={flatMat} />
-      <group ref={volcano}>
-        <mesh geometry={shell} material={flatMat} />
-        <Smoke />
-      </group>
+      {massif.map((g, i) => <mesh key={i} geometry={g} material={flatMat} />)}
+      <mesh geometry={stacks} material={flatMat} />
+      <mesh geometry={lava} material={glowMat} />
+      <Smoke />
     </group>
   );
 }
@@ -512,7 +510,7 @@ function Smoke() {
     if (!m) return;
     for (let i = 0; i < 6; i++) {
       const k = (rt.time * 0.05 + i / 6) % 1;
-      o.position.set(VOLCANO.x + k * 18, 46 + k * 30, VOLCANO.z + k * 6);
+      o.position.set(VOLCANO.x + k * 18, VOLCANO_CONE.top + 1 + k * 30, VOLCANO.z + k * 6);
       o.scale.setScalar(3 + k * 9);
       o.updateMatrix();
       m.setMatrixAt(i, o.matrix);

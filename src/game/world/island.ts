@@ -84,6 +84,10 @@ export function groundY(x: number, z: number): number {
   const dunes = 0.14 * Math.sin(x * 0.23 + z * 0.11) + 0.08 * Math.sin(x * 0.07 - z * 0.31 + 1.3);
   y += dunes * (1 - smooth((d + 9) / 6));
   if (z < Z_NORTH + 2) y += (Z_NORTH + 2 - z) * 0.22;
+  // North of the cliff the jungle slope becomes the island's north: the
+  // plateau, the volcano, the ridge over the tunnel and the coasts.
+  if (z < -50) y += (massifY(x, z) - y) * smooth((-50 - z) / 6);
+  else if (x > 60) y += (massifY(x, z) - y) * smooth((x - 60) / 10) * smooth((-z - 8) / 8);
   // The forest floor replaces the jungle slope where the forest is open land.
   const f = forestMask(x, z);
   if (f > 0) y = y * (1 - f) + forestFloor(x, z) * f;
@@ -177,8 +181,8 @@ export const CLIFF_TOP = { x0: 29.5, x1: 40, z0: -52, z1: CLIFF_Z - 0.6 };
 export const CLIFF_TOP_SPOT = { x: 34, z: CLIFF_Z - 2.2 };
 /** The wooden stake the rope is tied to, driven into the cliff top behind the lip. */
 export const ROPE_STAKE = { x: ROPE.x, z: CLIFF_Z - 1.3, r: 0.1 };
-/** Far away to the north-east: where Phase 3 goes. */
-export const VOLCANO = { x: 70, z: -112 };
+/** The volcano's crater, east of Ember's slope; the cave runs under its west flank. */
+export const VOLCANO = { x: 78, z: -104 };
 
 /** The lava spans the only exit from the cliff top. */
 export const LAVA = { x: 34.5, z: -51.3, x0: 29.5, x1: 40, z0: -52.5, z1: -50.6 };
@@ -191,9 +195,14 @@ export const VOLCANO_PATH = [
   { x0: 36, x1: 47, z0: -74, z1: -59 },
   { x0: 43, x1: 55, z0: -86, z1: -70 }
 ];
-export const EMBER_SLOPE = { x0: 49, x1: 68, z0: -103, z1: -82 };
-export const CAVE_PASSAGE = { x0: 61, x1: 67, z0: -125, z1: -99 };
-export const SANCTUARY = { x0: 57, x1: 83, z0: -149, z1: -122 };
+export const EMBER_SLOPE = { x0: 49, x1: 68, z0: -102, z1: -82 };
+/** The tunnel runs straight from the mouth into the courtyard in front of the gate. */
+export const CAVE_PASSAGE = { x0: 61, x1: 67, z0: -127, z1: -99 };
+export const SANCTUARY = { x0: 57, x1: 83, z0: -149, z1: -125.4 };
+/** The garden south of the gate: a bowl inside its ring of rim rocks (the box's corners lie outside the ring). */
+export const GARDEN = { x: 70, z: -136, r: 10.8 };
+/** The courtyard between the tunnel and the gate. */
+export const COURTYARD = { x0: 57, x1: 83, z0: -133.5, z1: -125.4 };
 export const SANCTUARY_GATE = { x: 70, z: -133, half: 2.2 };
 export const GATE_PILLARS = {
   gateLeaf: { x: 60, z: -130 },
@@ -210,10 +219,13 @@ export function volcanoFloor(x: number, z: number): number {
   return base + climb * 8 + Math.sin(x * 0.3 + z * 0.17) * 0.08;
 }
 
+/** Walkable-looking ground: the trail, Ember's slope, the tunnel, the courtyard and the round garden. */
+const VOLCANO_FLOORS: Area[] = [...VOLCANO_PATH, EMBER_SLOPE, CAVE_PASSAGE, COURTYARD];
+
 export function volcanoMask(x: number, z: number): number {
   if (z > -48 || z < -154 || x < 27 || x > 87) return 0;
-  let d = Infinity;
-  for (const a of PHASE3_AREAS) d = Math.min(d, outside(x, z, a));
+  let d = Math.max(0, Math.hypot(x - GARDEN.x, z - GARDEN.z) - GARDEN.r);
+  for (const a of VOLCANO_FLOORS) d = Math.min(d, outside(x, z, a));
   return 1 - smooth(d / 3);
 }
 
@@ -254,6 +266,66 @@ export function forestBase(x: number, z: number): number {
 
 export function forestFloor(x: number, z: number): number {
   return forestBase(x, z) - ravineDepth(z);
+}
+
+// ------------------------------------------------------------------ the island's north (Phase 3 backdrop)
+//
+// Beyond the cliff top the island is one landmass: a jungle plateau that
+// rises from the forest, the volcano cone to the east of Ember's slope, a
+// rock ridge over the tunnel, the sanctuary on a high shelf, and rocky slopes
+// down to the sea on every side. It is scenery only: walking is decided by
+// the boxes above, and walkable land is drawn by its own floor (the masks in
+// groundY give the floor there).
+
+/** The volcano cone: rim radius and height, crater floor, and where its foot meets the sea. */
+export const VOLCANO_CONE = { rim: 6.5, top: 45, crater: 39, foot: 40.5 };
+
+/** Height of the volcano's cone at distance r from its centre. */
+export function coneY(r: number): number {
+  const c = VOLCANO_CONE;
+  if (r < c.rim) return c.crater + (c.top - c.crater) * (r / c.rim) ** 2;
+  const t = Math.max(0, 1 - (r - c.rim) / (c.foot - c.rim));
+  return -4 + (c.top + 4) * t ** 1.6;
+}
+
+/** Soft land fraction: 1 inside the island's outline, 0 a little way out to sea. */
+function landFraction(x: number, z: number): number {
+  const wobble = 2.5 * Math.sin(x * 0.13 + 1.1) * Math.sin(z * 0.11 - 0.4) + 1.5 * Math.sin(x * 0.31 - z * 0.23);
+  // West jungle (behind the beach and the forest), to a north coast.
+  const west = Math.max(x - 36, -z - (98 + 5 * Math.sin(x * 0.11)));
+  // East jungle beside the forest.
+  const east = Math.max(x - 88, -z - 70);
+  // The north lobe around the volcano and the sanctuary.
+  const lobe = (Math.hypot((x - 74) / 46, (z + 112) / 50) - 1) * 47;
+  const d = Math.min(west, east, lobe) + wobble;
+  return 1 - smooth(d / 14);
+}
+
+/** Over the tunnel, the top of the rock ridge (the walkable floor below is the tunnel's); null elsewhere. */
+export function tunnelCoverY(x: number, z: number): number | null {
+  if (Math.abs(x - TUNNEL.x) > 5.01 || z > TUNNEL.z1 + 0.01 || z < TUNNEL.z0 + 0.99) return null;
+  return massifY(x, z);
+}
+
+/** Inside the tunnel's lined passage (under its roof). */
+export function inTunnel(x: number, z: number, margin = 0): boolean {
+  return Math.abs(x - TUNNEL.x) < TUNNEL.half - margin && z < TUNNEL.z1 + margin && z > TUNNEL.z0 - margin;
+}
+
+/** Background height north of the cliff (z < -50), before walkable floors are blended in. */
+export function massifY(x: number, z: number): number {
+  // The jungle plateau: the old rising slope, levelling at 17 m, then
+  // stepping down north of the cave so the sanctuary stands on a shelf.
+  const plateau = Math.min(0.35 + 0.22 * (-7 - z), 17.1) - 0.25 * Math.max(0, -97 - z);
+  const bumps = 0.7 * Math.sin(x * 0.21 + z * 0.17) + 0.45 * Math.sin(x * 0.47 - z * 0.33 + 2);
+  const land = landFraction(x, z);
+  let y = (plateau + bumps) * land - 4 * (1 - land);
+  // A rock ridge carries the tunnel from Ember's slope to the sanctuary.
+  const along = Math.max(TUNNEL.z0 - 2 - z, 0, z - TUNNEL.z1);
+  const across = Math.abs(x - TUNNEL.x);
+  const ridge = volcanoFloor(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof + 2.6 - 0.75 * Math.max(0, across - 3.5) - 1.2 * along;
+  y = Math.max(y, ridge);
+  return Math.max(y, coneY(Math.hypot(x - VOLCANO.x, z - VOLCANO.z)));
 }
 
 export interface FoodSource {
@@ -351,14 +423,10 @@ export const VOLCANO_ROCKS: VolcanoRock[] = (() => {
   return rocks;
 })();
 
-/** Roofs are visual only: these records describe the solid walls at walking height. */
-export const CAVE_WALLS = [
-  { x: CAVE.x - 3.5, z: -113.5, width: 1, depth: 24, height: 4.5, shell: false },
-  { x: CAVE.x + 3.5, z: -111.75, width: 1, depth: 20.5, height: 4.5, shell: false },
-  { x: CAVE.x, z: -125, width: 7, depth: 0.8, height: 4.5, shell: false },
-  { x: CAVE.x - 10, z: -113.5, width: 12, depth: 24, height: 4.4, shell: true },
-  { x: CAVE.x + 10, z: -111.75, width: 12, depth: 20.5, height: 4.4, shell: true }
-];
+/** The stone arch stands just in front of the tunnel lining (z offset from CAVE.z). */
+export const ARCH_Z = 0.35;
+/** The tunnel's side walls at walking height (the ridge above is scenery). */
+export const CAVE_WALLS = [-1, 1].map((side) => ({ x: CAVE.x + side * 3.5, z: -113.25, width: 1, depth: 23.5, height: 4.5 }));
 export const GATE_WALLS = [-1, 1].map((side) => ({ x: SANCTUARY_GATE.x + side * 8.1, z: SANCTUARY_GATE.z, width: 10.8, depth: 0.9 }));
 export const GATE_POSTS = [-1, 1].map((side) => ({ x: SANCTUARY_GATE.x + side * 2.6, z: SANCTUARY_GATE.z, r: 0.9 }));
 
@@ -398,8 +466,10 @@ export const STATIC_SOLIDS: SolidShape[] = [
   ...VOLCANO_ROCKS.map((p) => circleAt(p, p.r * 0.9)),
   ...CAVE_WALLS.map((p) => boxAt(p, p.width / 2, p.depth / 2)),
   // Arch feet touch the slope; the overhead arch and roof do not block the passage.
-  circleAt({ x: CAVE.x - 3.4, z: CAVE.z - 0.3 }, 0.9),
-  circleAt({ x: CAVE.x + 3.4, z: CAVE.z - 0.3 }, 0.9),
+  circleAt({ x: CAVE.x - 3.4, z: CAVE.z + ARCH_Z }, 0.9),
+  circleAt({ x: CAVE.x + 3.4, z: CAVE.z + ARCH_Z }, 0.9),
+  circleAt({ x: CAVE.x - 3.4, z: TUNNEL.z0 - ARCH_Z + 0.1 }, 0.9),
+  circleAt({ x: CAVE.x + 3.4, z: TUNNEL.z0 - ARCH_Z + 0.1 }, 0.9),
   boxAt(MEAT_RACK, 0.9, 0.35),
   ...Object.values(GATE_PILLARS).map((p) => circleAt(p, 1.1)),
   ...GATE_WALLS.map((p) => boxAt(p, p.width / 2, p.depth / 2)),

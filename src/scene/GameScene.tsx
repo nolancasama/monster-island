@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
+import type * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { rt } from "../game/runtime";
 import { tick } from "../game/sim";
@@ -61,6 +62,19 @@ function AdaptiveDpr() {
   return null;
 }
 
+/**
+ * The beach's detail (vegetation, props, rocks, river) is over 100 m away
+ * and below the plateau from the sanctuary; it is skipped there, so a view
+ * back across the island stays inside the Chromebook budget.
+ */
+function BeachDetail({ children }: { children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.visible = rt.player.z > -100 || (rt.camera.shot !== null && rt.camera.shot.target.z > -100);
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 export function GameScene() {
   return (
     <Canvas
@@ -75,11 +89,13 @@ export function GameScene() {
       <SkyAndLights />
       <Terrain />
       <Sea />
-      <River />
-      <Rocks />
-      <Vegetation />
       <FarLand />
-      <Props />
+      <BeachDetail>
+        <River />
+        <Rocks />
+        <Vegetation />
+        <Props />
+      </BeachDetail>
       <Forest />
       <Volcano />
       <Player />

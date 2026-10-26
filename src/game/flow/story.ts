@@ -351,8 +351,9 @@ export async function cliffTopEnding(): Promise<void> {
       m.look = { x: VOLCANO.x, z: VOLCANO.z };
       m.yaw = toV;
     });
-    // From the south-west corner of the cliff top: the group on the right, the smoking volcano beyond.
-    shot({ x: top.x - 4, y: gy + 2.2, z: top.z + 3 }, { x: top.x + Math.sin(toV) * 30, y: gy + 6, z: top.z + Math.cos(toV) * 30 });
+    // From the south-west corner of the cliff top: the group in front, the
+    // whole volcano beyond, crater and smoke inside the top of the frame.
+    shot({ x: top.x - 4, y: gy + 2.2, z: top.z + 3 }, { x: top.x + Math.sin(toV) * 30, y: gy + 7.5, z: top.z + Math.cos(toV) * 30 });
   }, 300);
   audio.startMusic("celebrate");
   await wait(1400);

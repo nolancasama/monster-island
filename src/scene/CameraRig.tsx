@@ -3,7 +3,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
-import { BOULDERS, MONSTER_STONE, TUNNEL, groundY } from "../game/world/island";
+import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from "../game/world/island";
+
+const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 
@@ -36,7 +38,12 @@ export function CameraRig() {
     for (let i = 2; i <= 14; i++) {
       const u = i / 14;
       probe.lerpVectors(target, candidate, u);
-      let floor = groundY(probe.x, probe.z) + 0.7;
+      const lineY0 = probe.y + up * u;
+      // The ridge over the tunnel is solid rock above the passage; the lined
+      // passage itself is open space a camera may look through.
+      const cover = tunnelCoverY(probe.x, probe.z);
+      const open = cover !== null && inTunnel(probe.x, probe.z, 0.4) && lineY0 < tunnelRoof - 0.4;
+      let floor = (cover !== null && !open ? cover : groundY(probe.x, probe.z)) + 0.7;
       for (const b of BOULDERS) {
         const d = Math.hypot(probe.x - b.x, probe.z - b.z);
         if (d < b.r * 1.1) floor = Math.max(floor, groundY(b.x, b.z) + b.h * 0.95 * Math.sqrt(1 - (d / (b.r * 1.1)) ** 2) + 0.6);
@@ -75,7 +82,7 @@ export function CameraRig() {
       // used, so leaving never swings the view (or the controls) around.
       const inside = Math.abs(p.x - TUNNEL.x) < TUNNEL.half + 0.6 && p.z < TUNNEL.z1 + 0.8 && p.z > TUNNEL.z0 - 1.2;
       tunnel.current += ((inside ? 1 : 0) - tunnel.current) * Math.min(1, dt * 2.5);
-      const k = tunnel.current < 0.002 ? 0 : tunnel.current;
+      let k = tunnel.current < 0.002 ? 0 : tunnel.current;
       if (k > 0) {
         const d = Math.atan2(Math.sin(-c.yaw), Math.cos(-c.yaw));
         c.yaw += d * Math.min(1, dt * 4 * k);
@@ -85,8 +92,11 @@ export function CameraRig() {
       const horiz = dist * Math.cos(pitch);
       want.current.set(p.x + Math.sin(c.yaw) * horiz, ty + dist * Math.sin(pitch), p.z + Math.cos(c.yaw) * horiz);
       wantLook.current.set(p.x, ty, p.z);
+      // A camera inside the passage (just outside its portals the orbit can
+      // swing in) stays under the roof and between the walls.
+      if (inTunnel(want.current.x, want.current.z, -0.2)) k = Math.max(k, 1);
       if (k > 0) {
-        const roof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof - 0.55;
+        const roof = tunnelRoof - 0.55;
         const side = TUNNEL.half - 0.6;
         const cx = Math.max(TUNNEL.x - side, Math.min(TUNNEL.x + side, want.current.x));
         want.current.x += (cx - want.current.x) * k;

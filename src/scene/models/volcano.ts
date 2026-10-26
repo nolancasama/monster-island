@@ -3,7 +3,7 @@ import { PartBuilder } from "../partBuilder";
 import { between, rockGeometry } from "./nature";
 import { makeRng } from "../../game/logic/rng";
 import { LAVA_CRUST, LAVA_RAMP } from "../../game/world/collision";
-import { CAVE, CAVE_WALLS, GATE_PILLARS, GATE_POSTS, GATE_WALLS, LAVA, MEAT_RACK, SANCTUARY, SANCTUARY_GATE, VOLCANO_ROCKS, groundY, volcanoMask } from "../../game/world/island";
+import { ARCH_Z, CAVE, GATE_PILLARS, GATE_POSTS, GATE_WALLS, LAVA, MEAT_RACK, SANCTUARY_GATE, TUNNEL, VOLCANO_ROCKS, groundY, volcanoMask } from "../../game/world/island";
 
 /** One terrain draw for the new region, with the same height function as collision. */
 export function volcanoGroundGeometry(): THREE.BufferGeometry {
@@ -15,9 +15,6 @@ export function volcanoGroundGeometry(): THREE.BufferGeometry {
   const c = new THREE.Color();
   for (let z = -153; z < -48; z++) {
     for (let x = 27; x < 87; x++) {
-      // The garden ends at its rock rim. Drawing its faded mask fringe
-      // would reconnect it to the much taller, unwalkable jungle slope.
-      if (z < -121 && (x < SANCTUARY.x0 || x >= SANCTUARY.x1 || z < SANCTUARY.z0)) continue;
       if (volcanoMask(x + 0.5, z + 0.5) < 0.03) continue;
       for (const [dx, dz] of [[0, 0], [0, 1], [1, 0], [1, 0], [0, 1], [1, 1]]) {
         const px = x + dx;
@@ -85,31 +82,36 @@ export function volcanoRocksGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   const rock = (r: typeof VOLCANO_ROCKS[number]) => b.add(rockGeometry(r.r, r.h, r.seed, 1), r.seed % 2 ? "#77665e" : "#675b57", [r.x, groundY(r.x, r.z) - 0.3, r.z]);
   for (const r of VOLCANO_ROCKS) if (r.seed < 540) rock(r);
-  // A broad rock cap joins the arch to the volcano flank and hides the garden
-  // above the mouth. Unlike decorative rocks this roof never fades for the lens.
+  // The tunnel's two portals: a stone arch round each opening, standing just
+  // in front of the lining so no edge of the dark interior shows ahead of
+  // the rock. The ridge and its portal walls (models/highlands) close the rest.
   const caveY = groundY(CAVE.x, CAVE.z);
-  b.box(32, 5, 24, CAVE.x, caveY + 4.4, -113.5, "#665750");
-  for (const wall of CAVE_WALLS) if (wall.shell) b.box(wall.width, wall.height, wall.depth, wall.x, caveY, wall.z, "#665750");
-  // The mouth is a broad stone arch, so its black centre reads from the slope.
-  for (let i = 0; i <= 7; i++) {
-    const a = (i / 7) * Math.PI;
-    const x = CAVE.x + Math.cos(a) * 3.4;
-    const y = groundY(CAVE.x, CAVE.z) + Math.sin(a) * 4.2;
-    b.add(rockGeometry(1.1, 1.05, 500 + i, 1), i % 2 ? "#665958" : "#82716a", [x, y, CAVE.z - 0.3]);
+  for (const [z, seed] of [[CAVE.z + ARCH_Z, 500], [TUNNEL.z0 - ARCH_Z + 0.1, 510]] as const) {
+    for (let i = 0; i <= 7; i++) {
+      const a = (i / 7) * Math.PI;
+      b.add(rockGeometry(1.1, 1.05, seed + i, 1), i % 2 ? "#665958" : "#82716a", [CAVE.x + Math.cos(a) * 3.4, caveY + Math.sin(a) * 4.2, z]);
+    }
   }
   for (const r of VOLCANO_ROCKS) if (r.seed >= 540) rock(r);
   return b.build();
 }
 
-/** Continuous opaque lining; turn east at the closed back to reach the garden. */
+/** The tunnel's lining from the mouth to the courtyard: walls, floor and roof, open at both ends. */
 export function caveInteriorGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.25);
   const y = groundY(CAVE.x, CAVE.z);
-  for (const wall of CAVE_WALLS) if (!wall.shell) b.box(wall.width, wall.height, wall.depth, wall.x, y, wall.z, wall.depth < 1 ? "#6b5749" : "#716056");
-  b.box(7, 0.15, 24, 64, y + 0.08, -113.5, "#655345");
-  b.box(7, 0.2, 24, 64, y + 4.2, -113.5, "#776052");
+  const z1 = TUNNEL.z1;
+  const z0 = TUNNEL.z0 + 0.45;
+  const mid = (z0 + z1) / 2;
+  const len = z1 - z0;
+  for (const side of [-1, 1]) b.box(1, 4.5, len, CAVE.x + side * (TUNNEL.half + 0.5), y, mid, "#716056");
+  b.box(TUNNEL.half * 2, 0.15, len, CAVE.x, y + 0.08, mid, "#655345");
+  b.box(TUNNEL.half * 2 + 2, 0.2, len, CAVE.x, y + TUNNEL.roof, mid, "#776052");
   return b.build();
 }
+
+/** Torches along both walls, inside the lining (the first is a step inside the mouth). */
+export const CAVE_TORCHES = Array.from({ length: 10 }, (_, i) => ({ x: CAVE.x + (i % 2 ? 1 : -1) * 2.6, z: TUNNEL.z1 - 1.5 - Math.floor(i / 2) * 4.6 }));
 
 export function meatRackGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.4);
@@ -128,16 +130,12 @@ export function meatRackGeometry(): THREE.BufferGeometry {
 
 export function caveTorchGeometry(lit: boolean): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (let i = 0; i < 5; i++) {
-    for (const s of [-1, 1]) {
-      const x = CAVE.x + s * 2.6;
-      const z = CAVE.z - i * 4.8;
-      const y = groundY(x, z);
-      if (lit) {
-        b.cone(0.18, 0.55, x, y + 1.9, z, "#ffba4d", 6);
-        b.cone(0.09, 0.35, x, y + 1.9, z + 0.02, "#fff0a4", 5);
-      } else b.cyl(0.1, 0.07, 0.7, x, y + 1.2, z, "#64442e", 5);
-    }
+  for (const t of CAVE_TORCHES) {
+    const y = groundY(t.x, t.z);
+    if (lit) {
+      b.cone(0.18, 0.55, t.x, y + 1.9, t.z, "#ffba4d", 6);
+      b.cone(0.09, 0.35, t.x, y + 1.9, t.z + 0.02, "#fff0a4", 5);
+    } else b.cyl(0.1, 0.07, 0.7, t.x, y + 1.2, t.z, "#64442e", 5);
   }
   return b.build();
 }

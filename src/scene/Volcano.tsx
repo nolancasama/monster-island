@@ -2,10 +2,11 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
-import { CAVE, GATE_PILLARS, LAVA, SANCTUARY_GATE, groundY } from "../game/world/island";
+import { GATE_PILLARS, LAVA, SANCTUARY_GATE, groundY } from "../game/world/island";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
 import {
   gardenGeometry,
+  CAVE_TORCHES,
   caveTorchGeometry,
   caveInteriorGeometry,
   gateDoorGeometry,
@@ -86,11 +87,7 @@ function Cave() {
     <mesh geometry={torches} material={flatMat} />
     <mesh ref={flames} geometry={fire} material={flameMat} />
     <group ref={halos}>
-      {Array.from({ length: 10 }, (_, i) => {
-        const x = CAVE.x + (i % 2 ? 1 : -1) * 2.6;
-        const z = CAVE.z - Math.floor(i / 2) * 4.8;
-        return <sprite key={i} position={at(x, z, 2.1)} scale={[2.5, 2.5, 1]} material={haloMat} />;
-      })}
+      {CAVE_TORCHES.map((t, i) => <sprite key={i} position={at(t.x, t.z, 2.1)} scale={[2.5, 2.5, 1]} material={haloMat} />)}
     </group>
   </group>;
 }
