@@ -77,12 +77,20 @@ equal or lower everywhere. Looking back across the island from the garden
 drops from 173 to 122 calls and from 154k to 115k triangles. The beach spawn
 view is 107 calls and 121k triangles, against 96 calls and 123k on `main`.
 
+The climb over the lip was also checked on the game's own climb camera: the
+player rises to the edge and stands up on the top with no fade and no rock
+through the body. There is no close-up of the knee coming up onto the edge.
+
+**Chromebook preview:** https://claude.ai/artifact/8tLLTpHHi369KVjLZUi1M5
+- A private build of commit `e3d6d3c`. The live game is unchanged.
+- The microphone is blocked inside the preview, so answers are tapped.
+- Saves are kept apart from the live game's.
+- To update it, rebuild and republish the same preview page with the new
+  `dist/assets` files.
+
 **Not verified:**
-- The mantle over the lip has not been seen on screen; only unit tests
-  cover it.
 - Nothing has been tested on a real Chromebook (SwiftShader only).
 - The new `test.yml` workflow has not run on GitHub yet.
-- No preview link has been published yet.
 
 ## Known Issues
 - Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
