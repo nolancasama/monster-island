@@ -166,7 +166,10 @@ export function ropeLineGeometry(line: RopePoint[], stakeTop: [number, number, n
     knots.add(new THREE.SphereGeometry(0.075, 6, 6), "#c9b78a", [p.x, p.y, p.z], [0, 0, 0], [1, 0.7, 1]);
     knotAt.push(s / len);
   }
-  return { rope: rope.build(), tieVerts, segments, knots: knots.build(), knotAt };
+  // The drawn curve, densely sampled for the climb (which must follow the rope
+  // the player sees, not the straight lines between the hung points).
+  const drawn = curve.getSpacedPoints(Math.max(60, segments * 2)).map((p) => ({ y: p.y, z: p.z }));
+  return { rope: rope.build(), tieVerts, segments, knots: knots.build(), knotAt, drawn };
 }
 
 /** Arc fraction where the rope leaves the cliff top (the highest point of the taut part). */

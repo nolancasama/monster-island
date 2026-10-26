@@ -3,8 +3,8 @@ import { CAN_QUESTION, PHRASES } from "../logic/english";
 import { OBSTACLES, askAtObstacle, gateOpen, helperFor, isSolved, obstacleAvailable, recordCan, solve } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt, type MonsterRt } from "../runtime";
-import { BRIDGE, CAVE, CLIFF_HEIGHT, CLIFF_TOP_SPOT, CLIFF_Z, CROSSING, FALLEN_PALM, GATE_PILLARS, LAVA, ROPE, SANCTUARY_GATE, groundY } from "../world/island";
-import { CLIMB_GAP, CLIMB_HANDS, ropeZAt } from "../world/rope";
+import { BRIDGE, CAVE, CLIFF_Z, CROSSING, FALLEN_PALM, GATE_PILLARS, LAVA, ROPE, SANCTUARY_GATE, groundY } from "../world/island";
+import { ROPE_FOOT, ROPE_TOP, climbPath, ropeFlightPath } from "../world/rope";
 import { ask, say, wait } from "./ask";
 import { facePlayer, fadeThrough, frameTwo, run, shot } from "./script";
 import { companionSpot, poofTo } from "./companion";
@@ -329,19 +329,26 @@ async function flyRope(id: MonsterId) {
   const m = rt.monsters[id];
   m.mode = "script";
   const baseY = groundY(ROPE.x, ROPE.z);
-  shot({ x: ROPE.x + 6.5, y: baseY + 2.4, z: ROPE.z + 9 }, { x: ROPE.x, y: baseY + 3.6, z: ROPE.z - 0.5 });
+  // Wide enough to keep the coil, the whole face and the top edge in view.
+  shot({ x: ROPE.x + 7.5, y: baseY + 3, z: ROPE.z + 11.5 }, { x: ROPE.x, y: baseY + 4.3, z: ROPE.z - 0.5 });
   // Picks up the rope end at the coil...
   const coil = { x: ROPE.x + 0.9, z: ROPE.z + 0.4 };
   await glide(id, coil, 0.5, 0.8);
   animate(id, "hop");
   audio.play("pick");
   await wait(300);
-  // ...flies it up the cliff...
+  // ...the coil vanishes in a puff of smoke as Puff lifts it (one rope only:
+  // the carried coil under Puff until it is tied)...
+  rt.ropeCarried = true;
+  effect("poof", coil.x, baseY + 0.3, coil.z);
+  audio.play("poof");
   animate(id, "power");
   audio.play("whoosh");
-  await glide(id, { x: ROPE.x, z: ROPE.z - 0.2 }, CLIFF_HEIGHT + 1, 2);
-  await glide(id, { x: ROPE.x, z: CLIFF_Z - 1.2 }, 0.6, 0.8);
+  // ...flies it up well clear of the face and over the edge to the stake...
+  const path = ropeFlightPath({ x: m.x, y: groundY(m.x, m.z) + m.air, z: m.z }, baseY, MONSTERS[id].radius);
+  await flyThrough(id, path, 3.2);
   // ...ties it, and the rope unrolls down the cliff.
+  rt.ropeCarried = false;
   animate(id, "spin");
   audio.play("stones");
   const t0 = rt.time;
@@ -351,12 +358,41 @@ async function flyRope(id: MonsterId) {
   }
   updateProgress((p) => solve(p, "cliff"));
   await wait(400);
-  await glide(id, { x: ROPE.x + 1, z: ROPE.z + 0.8 }, 0.35, 1.4);
+  // Back down the same clear line, beside the new rope.
+  await flyThrough(id, [...path.slice(1).reverse(), { x: ROPE.x + 1, y: baseY + 0.35, z: ROPE.z + 0.8 }], 2.4);
   m.look = { x: rt.player.x, z: rt.player.z };
   animate(id, "friend");
   audio.voice(id, "excited");
   effect("sparkle", m.x, 1, m.z);
   toast({ en: "The rope is up!", ja: "ロープが かかった!", icon: "path", tone: "good" });
+}
+
+/**
+ * Fly a monster through absolute points at an even pace (eased at the ends),
+ * facing where it travels; straight up or down it keeps its heading.
+ */
+async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z: number }>, seconds: number) {
+  const m = rt.monsters[id];
+  const start = { x: m.x, y: groundY(m.x, m.z) + m.air, z: m.z };
+  const pts = [start, ...points];
+  const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y, p.z - pts[i].z));
+  const total = lens.reduce((a, b) => a + b, 0) || 1;
+  const t0 = rt.time;
+  for (;;) {
+    const k = Math.min(1, (rt.time - t0) / seconds);
+    let d = (k * k * (3 - 2 * k)) * total;
+    let i = 0;
+    while (i < lens.length - 1 && d > lens[i]) d -= lens[i++];
+    const a = pts[i], b = pts[i + 1];
+    const u = lens[i] ? Math.min(1, d / lens[i]) : 1;
+    m.x = a.x + (b.x - a.x) * u;
+    m.z = a.z + (b.z - a.z) * u;
+    m.air = m.airTarget = a.y + (b.y - a.y) * u - groundY(m.x, m.z);
+    if (Math.hypot(b.x - a.x, b.z - a.z) > 0.2) m.yaw = Math.atan2(b.x - a.x, b.z - a.z);
+    else m.yaw = Math.PI;
+    if (k >= 1) return;
+    await wait(30);
+  }
 }
 
 /** Fly a monster to a point at a height above the ground there (eased). */
@@ -405,44 +441,58 @@ async function climbAndEnd(id: MonsterId) {
 /** Climb the rope up (or down). Friends poof over afterwards, as they do when left behind. */
 export async function climbRope(up: boolean) {
   const p = rt.player;
-  const top = CLIFF_TOP_SPOT;
   const bottomY = groundY(ROPE.x, ROPE.z);
-  const topY = groundY(top.x, top.z);
-  // Face the rope with the hands on it: the body hangs just in front of the
-  // rope's line at hand height (the line the scene measured off the rocks).
-  const hug = () => {
-    p.x = ROPE.x;
-    p.z = ropeZAt(p.climbY! + CLIMB_HANDS) + CLIMB_GAP;
+  const place = (k: number) => {
+    const q = climbPath(k);
+    p.x = q.x;
+    p.z = q.z;
+    p.climbY = q.y;
+    p.mantle = q.mantle;
+    // The camera follows the climber up and down the face.
+    const y = Math.max(bottomY + 1.6, q.y + 0.9);
+    shot({ x: ROPE.x - 2.6, y: y + 0.8, z: ROPE.z + 7.2 }, { x: ROPE.x, y: y, z: ROPE.z - 0.2 });
   };
   p.frozen = true;
+  // Only the start cuts: from wherever the player stood to the foot of the
+  // rope (or the top beside the stake). The top itself is climbed over.
   await fadeThrough(() => {
     p.vx = p.vz = 0;
     p.yaw = Math.PI;
-    p.climbY = up ? bottomY : topY - 0.1;
-    hug();
-    shot({ x: ROPE.x - 2.4, y: bottomY + 2.6, z: ROPE.z + 7.5 }, { x: ROPE.x, y: bottomY + CLIFF_HEIGHT * 0.55, z: ROPE.z });
+    place(up ? 0 : 1);
   }, 250);
   audio.play("whoosh");
-  const from = p.climbY!;
-  const to = up ? topY - 0.1 : bottomY;
   const t0 = rt.time;
-  // Hand over hand is steady: a short ease at each end, constant pace between.
-  const dur = 5;
+  // About 5.6 s: steady hand over hand on the face, a slower mantle at the top.
+  const dur = 5.6;
   for (;;) {
-    const k = Math.min(1, (rt.time - t0) / dur);
-    const e = k < 0.1 ? (k * k) / 0.2 : k > 0.9 ? 0.9 - ((1 - k) * (1 - k)) / 0.2 : k - 0.05;
-    p.climbY = from + ((to - from) * e) / 0.9;
-    hug();
-    if (k >= 1) break;
+    const s = Math.min(1, (rt.time - t0) / dur);
+    // A short ease at each end, constant pace between.
+    const e = s < 0.08 ? (s * s) / 0.16 : s > 0.92 ? 1 - ((1 - s) * (1 - s)) / 0.16 : (s - 0.04) / 0.92;
+    place(up ? e : 1 - e);
+    if (s >= 1) break;
     await wait(30);
   }
-  await fadeThrough(() => {
-    p.climbY = null;
-    const spot = up ? top : { x: ROPE.x, z: ROPE.z + 1.4 };
-    p.x = spot.x;
-    p.z = spot.z;
-    p.yaw = up ? Math.PI : 0;
-  }, 250);
+  p.climbY = null;
+  p.mantle = 0;
+  if (up) {
+    p.x = ROPE_TOP.x;
+    p.z = ROPE_TOP.z;
+  } else {
+    // Step back from the rope onto the hill.
+    const from = { x: p.x, z: p.z };
+    const t1 = rt.time;
+    p.yaw = 0;
+    for (;;) {
+      const k = Math.min(1, (rt.time - t1) / 0.45);
+      p.x = from.x + (ROPE_FOOT.x - from.x) * k;
+      p.z = from.z + (ROPE_FOOT.z - from.z) * k;
+      p.step += 0.06;
+      p.speed = k < 1 ? 2 : 0;
+      if (k >= 1) break;
+      await wait(30);
+    }
+  }
+  p.yaw = up ? Math.PI : 0;
   p.frozen = false;
 }
 

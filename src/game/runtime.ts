@@ -120,6 +120,8 @@ export const rt = {
     rideFrom: { x: 0, z: 0 },
     /** Climbing the cliff rope: the height the player hangs at (null = on the ground). */
     climbY: null as number | null,
+    /** Going over the cliff lip at the top of the climb (0 = on the face, 0..1 = the mantle). */
+    mantle: 0,
     /** Short gesture: give food, cheer. */
     action: null as null | { kind: "give" | "cheer" | "pick"; t0: number; food?: FoodId; depth?: number }
   },
@@ -154,6 +156,8 @@ export const rt = {
   bridgeTarget: 0,
   /** The cliff rope: 0 = coiled at the foot, 1 = hanging from the top. */
   rope: 0,
+  /** Puff is carrying the rope up (the coil at the foot has gone in a puff). */
+  ropeCarried: false,
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
@@ -198,6 +202,7 @@ export function resetRuntime() {
   p.riding = false;
   p.seat = 0;
   p.climbY = null;
+  p.mantle = 0;
   p.action = null;
   rt.joy.x = rt.joy.y = 0;
   rt.camera.mode = "follow";
@@ -214,6 +219,7 @@ export function resetRuntime() {
   rt.stones = rt.stonesTarget = 0;
   rt.bridge = rt.bridgeTarget = 0;
   rt.rope = 0;
+  rt.ropeCarried = false;
   rt.bramble = rt.brambleTarget = 1;
   rt.lava = rt.cave = rt.gate = rt.starGlow = 0;
   rt.caveWarned = false;

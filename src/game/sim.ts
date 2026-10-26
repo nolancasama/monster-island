@@ -120,10 +120,19 @@ function movePlayer(dt: number, canMove: boolean) {
       iy /= l;
     }
   }
-  // Camera space -> world: forward is away from the camera.
-  const cy = rt.camera.yaw;
-  const fx = -Math.sin(cy);
-  const fz = -Math.cos(cy);
+  // Camera space -> world: forward is away from the camera, along the view
+  // actually on screen (the rendered camera, also in the tunnel and in shots),
+  // so Right is always screen-right whatever placed the camera.
+  let fx = rt.camera.target.x - rt.camera.pos.x;
+  let fz = rt.camera.target.z - rt.camera.pos.z;
+  const fl = Math.hypot(fx, fz);
+  if (fl > 1e-3) {
+    fx /= fl;
+    fz /= fl;
+  } else {
+    fx = -Math.sin(rt.camera.yaw);
+    fz = -Math.cos(rt.camera.yaw);
+  }
   const rx = -fz;
   const rz = fx;
   const wx = (fx * iy + rx * ix) * WALK;

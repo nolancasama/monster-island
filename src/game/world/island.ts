@@ -183,6 +183,8 @@ export const VOLCANO = { x: 70, z: -112 };
 /** The lava spans the only exit from the cliff top. */
 export const LAVA = { x: 34.5, z: -51.3, x0: 29.5, x1: 40, z0: -52.5, z1: -50.6 };
 export const CAVE = { x: 64, z: -102 };
+/** The lit tunnel under the volcano: its walls' inner faces, its mouth (z1) and its far end (z0), and the roof height above the floor. */
+export const TUNNEL = { x: CAVE.x, half: 3, z1: CAVE.z, z0: -125, roof: 4.2 };
 export const MEAT_RACK = { x: 55, z: -90 };
 export const VOLCANO_PATH = [
   { x0: 31.5, x1: 40, z0: -63, z1: -50 },

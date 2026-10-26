@@ -919,7 +919,8 @@ kbd {
   background: rgba(13, 34, 48, 0.45);
   display: grid;
   place-items: center;
-  z-index: 40;
+  /* Above the title and results screens: Settings opens from the title too. */
+  z-index: 55;
   padding: 12px;
 }
 

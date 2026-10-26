@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
-import { BOULDERS, CAVE, MONSTER_STONE, groundY } from "../game/world/island";
+import { BOULDERS, MONSTER_STONE, TUNNEL, groundY } from "../game/world/island";
 import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 
@@ -27,6 +27,8 @@ export function CameraRig() {
   const probe = useMemo(() => new THREE.Vector3(), []);
   const ready = useRef(false);
   const shift = useRef(0);
+  /** 0..1: how far the follow camera has settled into the tunnel framing. */
+  const tunnel = useRef(0);
 
   /** Raise the endpoint until the whole target-to-camera line clears the ground and the big rocks. */
   const lift = (target: THREE.Vector3, candidate: THREE.Vector3): number => {
@@ -67,17 +69,30 @@ export function CameraRig() {
     } else {
       const p = rt.player;
       const ty = p.y + 1.1;
-      const horiz = c.dist * Math.cos(c.pitch);
-      want.current.set(p.x + Math.sin(c.yaw) * horiz, ty + c.dist * Math.sin(c.pitch), p.z + Math.cos(c.yaw) * horiz);
-      wantLook.current.set(p.x, ty, p.z);
-      if (p.z < CAVE.z - 1 && p.z > CAVE.z - 27 && Math.abs(p.x - CAVE.x) < 3) {
-        // Keep the follow camera beneath the solid tunnel roof while walking through it.
-        want.current.set(Math.max(CAVE.x - 2.4, Math.min(CAVE.x + 2.4, p.x)), groundY(CAVE.x, CAVE.z) + 3.4, Math.min(CAVE.z - 0.4, p.z + 3));
-        pos.current.x = Math.max(CAVE.x - 2.4, Math.min(CAVE.x + 2.4, pos.current.x));
-        pos.current.y = Math.min(pos.current.y, groundY(CAVE.x, CAVE.z) + 3.7);
-      } else {
-        want.current.y += lift(wantLook.current, want.current);
+      // In the tunnel the orbit turns to look along the passage, comes in
+      // closer and lower, and stays under the roof. It blends in and out
+      // over about a second, and the yaw it leaves behind is the yaw it
+      // used, so leaving never swings the view (or the controls) around.
+      const inside = Math.abs(p.x - TUNNEL.x) < TUNNEL.half + 0.6 && p.z < TUNNEL.z1 + 0.8 && p.z > TUNNEL.z0 - 1.2;
+      tunnel.current += ((inside ? 1 : 0) - tunnel.current) * Math.min(1, dt * 2.5);
+      const k = tunnel.current < 0.002 ? 0 : tunnel.current;
+      if (k > 0) {
+        const d = Math.atan2(Math.sin(-c.yaw), Math.cos(-c.yaw));
+        c.yaw += d * Math.min(1, dt * 4 * k);
       }
+      const dist = c.dist + (3.4 - c.dist) * k;
+      const pitch = c.pitch + (0.24 - c.pitch) * k;
+      const horiz = dist * Math.cos(pitch);
+      want.current.set(p.x + Math.sin(c.yaw) * horiz, ty + dist * Math.sin(pitch), p.z + Math.cos(c.yaw) * horiz);
+      wantLook.current.set(p.x, ty, p.z);
+      if (k > 0) {
+        const roof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof - 0.55;
+        const side = TUNNEL.half - 0.6;
+        const cx = Math.max(TUNNEL.x - side, Math.min(TUNNEL.x + side, want.current.x));
+        want.current.x += (cx - want.current.x) * k;
+        if (want.current.y > roof) want.current.y += (roof - want.current.y) * k;
+      }
+      if (k < 1) want.current.y += lift(wantLook.current, want.current) * (1 - k);
     }
     const floor = Math.max(groundY(want.current.x, want.current.z), -0.4) + 0.7;
     if (want.current.y < floor) want.current.y = floor;

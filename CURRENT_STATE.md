@@ -29,6 +29,47 @@ Published: repo https://github.com/nolancasama/monster-island, Pages
 https://nolancasama.github.io/monster-island/ (every push to `main` runs the
 unit tests, builds and deploys).
 
+## Polish pass 2 (2026-10-26, branch `claude/blissful-volta-dscgid`, in progress)
+A 12-item polish pass is under way on the development branch; `main` and the
+live Pages site are unchanged. Passes A and B are done; Pass C has not started.
+
+**Pass A (done):** #1 Bubbo ride (rider attached to a saddle on Bubbo's
+body from shared height code in `game/ride.ts`, seated astride, hops on/off),
+#2 pickup squat (planted feet, knee IK, reach, food in hand), #3 Speak/Tap
+only in Settings, #6/#10 beach and forest endings show a short banner and play
+continues (only the finale has the results card), #11 cooled lava is a shared
+walking surface (`lavaCrustY` via `standY`).
+
+**Pass B (done):** #4 movement follows the rendered camera's view, and the
+tunnel camera turns along the passage smoothly (no hard snap). #7 Puff flies
+a path that stays clear of the face (`ropeFlightPath`), the ground coil
+vanishes in a poof, and a small carried coil stays with Puff until the rope is
+tied. #8 the climb follows the drawn Catmull-Rom rope with the whole body kept
+clear (`climbBodyZ`), then mantles over the lip to stand beside the stake
+(`climbPath`, mantle pose). There is no fade at the top any more.
+Also: Settings opened from the title screen was hidden behind the title card
+(z-index) and is now fixed. A new `test.yml` workflow runs typecheck, unit
+tests, the build and Playwright on branch pushes, PRs and manual runs, and it
+never deploys. Pages deploys only from `main`.
+
+**Verified so far:** `tsc` and `npm test` pass (95 unit tests: squat feet,
+seat clearance, lava surface, curved-rope climb). Screenshots checked: ride,
+squat, cooled lava, Puff's flight, the climb on the face.
+**Not yet verified:** the mantle over the lip on screen. Playwright has not
+passed on these changes yet: the one run (menu/loop/forest) used a build made
+before the Settings z-index fix and failed on it, and was stopped. The new
+`camera.spec.ts` has not been run. It assumes the Pass C tunnel layout (exit
+facing the garden).
+
+**Next (Pass C, planned):** replace the floating volcano region with one
+landmass: a plateau, the volcano cone (moved to x 78, z -104) with a crater,
+a rock ridge over the tunnel, the sanctuary on a shelf, and slopes and sea
+stacks down to the sea. Rebuild the cave portals (face walls and arches in
+front of the lining) and open the tunnel straight into the courtyard.
+Reframe the volcano reveal. Then run the full Playwright suite, update docs,
+and publish a private Chromebook preview. Drafts are in the session
+scratchpad and not in the repo.
+
 ## Known Issues
 - Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
   classroom pacing and real Chromebook GPU performance are untested

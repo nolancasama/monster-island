@@ -253,13 +253,27 @@ function Cliff() {
     const stakeY = surfaceY(ROPE_STAKE.z);
     const knot = { y: stakeY + 0.3, z: ROPE_STAKE.z + ROPE_STAKE.r + 0.03 };
     const line = hangRope({ knot, bottomY: groundY(ROPE.x, ROPE.z), faceZ, surfaceY, clearance: 0.13 });
-    setRopeLine(line);    return { stakeY, ...ropeLineGeometry(line, [0, stakeY + 0.3, ROPE_STAKE.z]) };
+    const geo = ropeLineGeometry(line, [0, stakeY + 0.3, ROPE_STAKE.z]);
+    setRopeLine(line, geo.drawn);
+    return { stakeY, ...geo };
   }, [wall, wallPos]);
   const coilRef = useRef<THREE.Mesh>(null);
+  const carryRef = useRef<THREE.Mesh>(null);
   const hangRef = useRef<THREE.Mesh>(null);
   const knotRef = useRef<THREE.Mesh>(null);
   useFrame(() => {
-    if (coilRef.current) coilRef.current.visible = rt.rope < 0.5;
+    // One rope only: the coil at the foot until Puff lifts it (in a puff of
+    // smoke), then a small coil under Puff until the rope is tied and unrolls.
+    if (coilRef.current) coilRef.current.visible = rt.rope < 0.01 && !rt.ropeCarried;
+    const carry = carryRef.current;
+    if (carry) {
+      carry.visible = rt.ropeCarried;
+      if (rt.ropeCarried) {
+        const m = rt.monsters.puff;
+        carry.position.set(m.x, groundY(m.x, m.z) + m.air - 0.12, m.z);
+        carry.rotation.y = m.yaw;
+      }
+    }
     const k = Math.min(1, Math.max(0, rt.rope));
     // The rope unrolls down the cliff from the knot on the stake.
     if (hangRef.current) {
@@ -278,6 +292,7 @@ function Cliff() {
     <group>
       <mesh geometry={wall} material={flatMat} position={wallPos} />
       <mesh ref={coilRef} geometry={coil} material={smoothMat} position={at(ROPE.x + 0.9, ROPE.z + 0.4)} />
+      <mesh ref={carryRef} geometry={coil} material={smoothMat} scale={0.45} visible={false} />
       <mesh geometry={stake} material={smoothMat} position={[ROPE_STAKE.x, rope.stakeY, ROPE_STAKE.z]} />
       <mesh ref={hangRef} geometry={rope.rope} material={smoothMat} position={[ROPE.x, 0, 0]} />
       <mesh ref={knotRef} geometry={rope.knots} material={smoothMat} position={[ROPE.x, 0, 0]} />

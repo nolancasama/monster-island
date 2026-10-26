@@ -50,12 +50,14 @@ export function Player() {
    * reaches overhead to grip while the other pulls down to the chest, and the
    * opposite leg draws up with a bent knee to push.
    */
-  function climbPose(y: number) {
+  function climbPose(y: number, mantle: number) {
+    if (mantle > 0) return mantlePose(mantle);
     const c = Math.sin((y / CLIMB_PULL) * Math.PI);
     const lift = Math.abs(Math.cos((y / CLIMB_PULL) * Math.PI));
     if (pose.current) {
-      pose.current.position.y = lift * 0.03;
+      // A slight lean in to the rope, about the hips.
       pose.current.rotation.x = 0.14;
+      pose.current.position.set(0, lift * 0.03 + HIP_Y - HIP_Y * Math.cos(0.14), -HIP_Y * Math.sin(0.14));
     }
     if (armL.current && armR.current) {
       armL.current.rotation.x = -2.45 - 0.45 * c;
@@ -73,6 +75,38 @@ export function Player() {
       legR.current.rotation.z = 0.08;
       shinL.current.rotation.x = 0.35 + 1.0 * uL;
       shinR.current.rotation.x = 0.35 + 1.0 * uR;
+    }
+  }
+
+  /**
+   * Over the cliff lip (u 0..1): hands move from the rope to pushing down on
+   * the top while the body rises and leans in and one knee comes up onto the
+   * edge (u < 0.5); then the player steps in and straightens up.
+   */
+  function mantlePose(u: number) {
+    const ease = (v: number) => v * v * (3 - 2 * v);
+    const push = ease(Math.min(1, u / 0.45));
+    const stand = ease(Math.max(0, (u - 0.5) / 0.5));
+    const lean = 0.5 * push * (1 - stand) + 0.14 * (1 - push);
+    if (pose.current) {
+      pose.current.rotation.x = lean;
+      pose.current.position.set(0, HIP_Y - HIP_Y * Math.cos(lean), -HIP_Y * Math.sin(lean));
+    }
+    if (armL.current && armR.current) {
+      const arm = -2.45 + (2.45 - 0.55) * push;
+      armL.current.rotation.x = arm * (1 - stand) - lean * stand;
+      armR.current.rotation.x = arm * (1 - stand) - lean * stand;
+      armL.current.rotation.z = 0.36 * (1 - push) - 0.2 * push * (1 - stand) - 0.12 * stand;
+      armR.current.rotation.z = -0.36 * (1 - push) + 0.2 * push * (1 - stand) + 0.12 * stand;
+    }
+    // The leading (left) knee comes up onto the lip, the other leg follows.
+    const knee = Math.sin(Math.min(1, u / 0.7) * Math.PI);
+    const trail = Math.sin(Math.max(0, Math.min(1, (u - 0.35) / 0.55)) * Math.PI);
+    if (legL.current && legR.current && shinL.current && shinR.current) {
+      legL.current.rotation.set(-1.3 * knee - lean, 0, -0.06);
+      legR.current.rotation.set(-0.9 * trail - lean * (1 - stand), 0, 0.06);
+      shinL.current.rotation.x = 1.6 * knee;
+      shinR.current.rotation.x = 1.2 * trail + 0.3 * (1 - stand) * (1 - trail);
     }
   }
 
@@ -126,7 +160,7 @@ export function Player() {
       }
     }
     if (shadow.current) shadow.current.visible = p.climbY === null && k < 0.5;
-    if (p.climbY !== null) climbPose(p.climbY);
+    if (p.climbY !== null) climbPose(p.climbY, p.mantle);
     const h = held.current;
     if (h) {
       // Food in the hand: the gift being offered, or the food just picked (from
