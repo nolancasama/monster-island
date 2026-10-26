@@ -39,8 +39,15 @@ async function screenOf(page: Page) {
 /** Hold a direction briefly; return how the player moved on screen. */
 async function push(page: Page, key: string) {
   const before = await screenOf(page);
+  // Hold until the player has really moved (SwiftShader can run at ~3 fps).
+  const start = await state(page);
   await page.keyboard.down(key);
-  await page.waitForTimeout(350);
+  const t0 = Date.now();
+  for (;;) {
+    await page.waitForTimeout(100);
+    const s = await state(page);
+    if (Math.hypot(s.player.x - start.player.x, s.player.z - start.player.z) > 0.9 || Date.now() - t0 > 4000) break;
+  }
   await page.keyboard.up(key);
   await page.waitForTimeout(250);
   const after = await screenOf(page);

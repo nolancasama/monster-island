@@ -27,6 +27,7 @@ export function CameraRig() {
   const want = useRef(new THREE.Vector3());
   const wantLook = useRef(new THREE.Vector3());
   const probe = useMemo(() => new THREE.Vector3(), []);
+  const probe2 = useMemo(() => new THREE.Vector3(), []);
   const ready = useRef(false);
   const shift = useRef(0);
   /** 0..1: how far the follow camera has settled into the tunnel framing. */
@@ -51,7 +52,7 @@ export function CameraRig() {
       const lineY = probe.y + up * u;
       if (lineY < floor) up += (floor - lineY) / u;
     }
-    return Math.min(up, 8);
+    return up;
   };
 
   useFrame((_, rawDt) => {
@@ -102,7 +103,22 @@ export function CameraRig() {
         want.current.x += (cx - want.current.x) * k;
         if (want.current.y > roof) want.current.y += (roof - want.current.y) * k;
       }
-      if (k < 1) want.current.y += lift(wantLook.current, want.current) * (1 - k);
+      if (k < 1) {
+        // Against the mountain (the volcano's flank, the ridge) the orbit
+        // comes in closer rather than climbing tens of metres up the rock;
+        // small things like the beach ridge are still risen over.
+        let up = lift(wantLook.current, want.current);
+        for (const f of [0.75, 0.55, 0.4, 0.28]) {
+          if (up < 6) break;
+          probe2.lerpVectors(wantLook.current, want.current, f);
+          const shorter = lift(wantLook.current, probe2);
+          if (shorter < up) {
+            want.current.copy(probe2);
+            up = shorter;
+          }
+        }
+        want.current.y += Math.min(up, 8) * (1 - k);
+      }
     }
     const floor = Math.max(groundY(want.current.x, want.current.z), -0.4) + 0.7;
     if (want.current.y < floor) want.current.y = floor;

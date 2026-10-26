@@ -89,10 +89,12 @@ test("volcano and sanctuary: lava, Ember, cave, four powers, Lumo and The End (m
   // The cooled crust is a surface: stand on top of it (not sunk into it) and
   // walk across it with the keyboard, toward Ember.
   await hook(page, "teleport", 34.5, -49.4, Math.PI);
+  await page.waitForTimeout(500);
   const bank = (await state(page)).player.y;
   await hook(page, "teleport", 34.5, -51.6, Math.PI);
-  s = await precondition(page, "standing on the cooled lava", (x) => Math.abs(x.player.z + 51.6) < 0.2);
-  expect(s.player.y, "standing on the crust's top").toBeGreaterThan(bank + 0.15);
+  // Height follows on the next simulated frame after the teleport.
+  s = await precondition(page, "standing on the cooled lava's top", (x) => Math.abs(x.player.z + 51.6) < 0.2 && x.player.y > bank + 0.15);
+  expect(s.player.y, "on the crust, not sunk into it").toBeLessThan(bank + 0.4);
   await hook(page, "teleport", 34.5, -49.4, Math.PI);
   await hook(page, "setCamera", 0, 0.5, 9);
   await page.keyboard.down("KeyW");

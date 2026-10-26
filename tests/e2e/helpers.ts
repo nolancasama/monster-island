@@ -71,7 +71,7 @@ export async function waitFor(page: Page, pred: (s: MiState) => boolean, timeout
   const t0 = Date.now();
   let s = await state(page);
   while (!pred(s)) {
-    if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for ${label}: ${JSON.stringify({ mode: s.mode, line: s.line, prompt: s.prompt, objective: s.objective })}`);
+    if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for ${label}: ${JSON.stringify({ mode: s.mode, line: s.line, prompt: s.prompt, objective: s.objective, player: s.player, fps: s.perf.fps })}`);
     await page.waitForTimeout(60);
     s = await state(page);
   }

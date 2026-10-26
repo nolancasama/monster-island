@@ -153,7 +153,8 @@ test("the forest: bridge, Puff, the cliff and the cliff-top ending (mic-free, fr
 
   // The rope leads back down.
   await use(page, "cliffTop", "ropeDown", 0.6);
-  s = await waitFor(page, (x) => x.mode === "explore" && x.player.z > -45, 20_000, "climbed down");
+  // The climb takes ~6 s of game time; at SwiftShader frame rates that is far longer.
+  s = await waitFor(page, (x) => x.mode === "explore" && x.player.z > -45, 60_000, "climbed down");
   expect(s.player.climbing).toBe(false);
 
   // Leafy and Bubbo's pages now offer an optional size line (never on the objective path).

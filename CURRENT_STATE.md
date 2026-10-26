@@ -29,46 +29,60 @@ Published: repo https://github.com/nolancasama/monster-island, Pages
 https://nolancasama.github.io/monster-island/ (every push to `main` runs the
 unit tests, builds and deploys).
 
-## Polish pass 2 (2026-10-26, branch `claude/blissful-volta-dscgid`, in progress)
-A 12-item polish pass is under way on the development branch; `main` and the
-live Pages site are unchanged. Passes A and B are done; Pass C has not started.
+## Polish pass 2 (2026-10-26, branch `claude/blissful-volta-dscgid`)
+All 12 reported issues are implemented on the development branch. `main`
+and the live Pages site are unchanged and nothing has been merged or deployed.
 
-**Pass A (done):** #1 Bubbo ride (rider attached to a saddle on Bubbo's
-body from shared height code in `game/ride.ts`, seated astride, hops on/off),
-#2 pickup squat (planted feet, knee IK, reach, food in hand), #3 Speak/Tap
-only in Settings, #6/#10 beach and forest endings show a short banner and play
-continues (only the finale has the results card), #11 cooled lava is a shared
-walking surface (`lavaCrustY` via `standY`).
+- **#1 Bubbo ride:** the rider sits on a saddle on Bubbo's back, from shared
+  height code (`game/ride.ts`), legs astride, and hops on and off.
+- **#2 Pickup:** a squat with planted feet (knee IK), a lean, a reach, and
+  the food in the hand.
+- **#3 Menu:** Speak/Tap is now only in Settings and is remembered. Settings
+  now opens above the title card; it used to open hidden behind it.
+- **#6, #10 Chapter endings:** the beach and forest endings show a short
+  "Clear!" banner and play continues. Only the finale shows the results card.
+  Save values are unchanged.
+- **#11 Cooled lava:** a shared walking surface (`lavaCrustY` via `standY`).
+- **#4 Controls:** movement follows the rendered camera. The tunnel camera
+  turns along the passage smoothly, and against the mountain the camera
+  comes in closer instead of climbing the rock.
+- **#7 Puff and the rope:** Puff's flight stays clear of the cliff. The coil
+  vanishes in a poof and a carried coil stays with Puff until it is tied.
+- **#8 Climb:** follows the drawn rope, keeps the body clear of the rock, and
+  mantles over the lip.
+- **#5 Island edges:** the north of the island is one landmass: a plateau,
+  the volcano with its crater at (78, -104), a ridge over the tunnel, the
+  sanctuary on a shelf, and slopes and sea stacks down to the sea
+  (`massifY`, `models/highlands.ts`).
+- **#9 Volcano view:** the cliff-top reveal frames the whole volcano.
+- **#12 Cave entrance:** rebuilt. The arches stand in front of the lining,
+  portal walls close the ridge, nothing is coplanar, and the tunnel runs
+  straight into the courtyard.
 
-**Pass B (done):** #4 movement follows the rendered camera's view, and the
-tunnel camera turns along the passage smoothly (no hard snap). #7 Puff flies
-a path that stays clear of the face (`ropeFlightPath`), the ground coil
-vanishes in a poof, and a small carried coil stays with Puff until the rope is
-tied. #8 the climb follows the drawn Catmull-Rom rope with the whole body kept
-clear (`climbBodyZ`), then mantles over the lip to stand beside the stake
-(`climbPath`, mantle pose). There is no fade at the top any more.
-Also: Settings opened from the title screen was hidden behind the title card
-(z-index) and is now fixed. A new `test.yml` workflow runs typecheck, unit
-tests, the build and Playwright on branch pushes, PRs and manual runs, and it
-never deploys. Pages deploys only from `main`.
+**Verified 2026-10-26:** `tsc` and `npm test` pass (100 unit tests). The full
+`npx playwright test` passes (9 specs, 9.4 min), including the new
+`menu.spec.ts` and `camera.spec.ts` (all four directions at 7 cave and
+sanctuary spots, with the camera turned by hand) and updated
+loop/forest/volcano specs.
 
-**Verified so far:** `tsc` and `npm test` pass (95 unit tests: squat feet,
-seat clearance, lava surface, curved-rope climb). Screenshots checked: ride,
-squat, cooled lava, Puff's flight, the climb on the face.
-**Not yet verified:** the mantle over the lip on screen. Playwright has not
-passed on these changes yet: the one run (menu/loop/forest) used a build made
-before the Settings z-index fix and failed on it, and was stopped. The new
-`camera.spec.ts` has not been run. It assumes the Pass C tunnel layout (exit
-facing the garden).
+Screenshots were checked for:
+- the ride, the squat and the cooled lava;
+- Puff's flight and the climb up the face;
+- the island from far away and after leaving the cave;
+- the cave entrance dark and lit, from the front, side, an angle and close up;
+- the volcano reveal at 1366×768 and 1280×800.
 
-**Next (Pass C, planned):** replace the floating volcano region with one
-landmass: a plateau, the volcano cone (moved to x 78, z -104) with a crater,
-a rock ridge over the tunnel, the sanctuary on a shelf, and slopes and sea
-stacks down to the sea. Rebuild the cave portals (face walls and arches in
-front of the lining) and open the tunnel straight into the courtyard.
-Reframe the volcano reveal. Then run the full Playwright suite, update docs,
-and publish a private Chromebook preview. Drafts are in the session
-scratchpad and not in the repo.
+Render budgets were compared with `main` at the same views: triangles are
+equal or lower everywhere. Looking back across the island from the garden
+drops from 173 to 122 calls and from 154k to 115k triangles. The beach spawn
+view is 107 calls and 121k triangles, against 96 calls and 123k on `main`.
+
+**Not verified:**
+- The mantle over the lip has not been seen on screen; only unit tests
+  cover it.
+- Nothing has been tested on a real Chromebook (SwiftShader only).
+- The new `test.yml` workflow has not run on GitHub yet.
+- No preview link has been published yet.
 
 ## Known Issues
 - Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
@@ -79,10 +93,11 @@ scratchpad and not in the repo.
   Check CPU load before diagnosing a red run.
 - The cliff wall's colliders are one box; the seeded rocks bulging out at its
   foot are not individually solid.
-- The Phase 2 results backdrop still uses the beach camera; the ravine's
-  water is the sea plane showing through.
+- The ravine's water is the sea plane showing through.
 
 ## Next Steps
+0. Review the development branch (and, if wanted, a private preview for the
+   school Chromebook), then merge to `main` to publish.
 1. Play it on a real school Chromebook with a class: speech acceptance for
    the Phase 2–3 sentences, the climb's pace (5 s each way), whether the
    pillar gate is clear, total length (~31 min in the e2e playthrough).

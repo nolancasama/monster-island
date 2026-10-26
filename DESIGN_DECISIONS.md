@@ -21,6 +21,54 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-26 — Polish pass 2: continuous adventure, one island
+
+- **Only the finale has a results card.** The beach and forest endings keep
+  their story (stone lights, bramble withers, the volcano reveal, Maple's
+  lines) and save values (`endings` 1 and 2), then show a short "…Clear!"
+  banner and play continues. With the whole game built, a mandatory card
+  mid-adventure was an interruption.
+- **Speak/Tap is a Settings toggle only.** It is a teacher setting; the
+  title shows Start/Continue, New game and Settings. The setting persists and
+  blocked microphones still fall back to tapping. Settings now opens above
+  the title card (it used to open underneath it, unclickable).
+- **Movement follows the camera on screen.** Input is mapped through the
+  rendered camera's horizontal view (pos → target), not the stored orbit yaw,
+  so any camera placement (tunnel framing, shots) keeps Right = screen right.
+  In the tunnel the orbit's yaw is eased to the passage axis and the camera
+  comes closer and under the roof, blending over ~1 s; leaving keeps that yaw,
+  so there is no swing. Rejected: rotating controls inside the cave.
+- **Riders and walkers share heights.** `game/ride.ts` gives the monster's
+  root height (ground, water or hover) to both the scene and the rider; the
+  player sits on a saddle 0.82 m up Bubbo's back, legs splayed over his round
+  body (checked against his body/eye shapes in a unit test). Bubbo's size is
+  unchanged. Cooled lava is a surface in `standY` (`lavaCrustY`, flat top with
+  ramps) and the crust mesh is built to the same numbers.
+- **Pickup is a squat with planted feet**: hips drop 0.2 m, two-link leg IK
+  keeps the soles still, the torso leans about the hip; walking waits 0.7 s.
+- **The climb follows the drawn rope.** The scene hands the climb its sampled
+  Catmull-Rom curve; the body hangs in front of the furthest rope point over
+  its whole height (`climbBodyZ`), then mantles over the lip (no fade at the
+  top). Puff flies the rope outside the furthest rope point and over the
+  highest rock; the coil vanishes in a poof and a small coil rides with Puff
+  until the rope is tied (never two ropes).
+- **The north of the island is one landmass.** The floating Phase 3 slab
+  (rock cap box, wall shells, a half-open distant cone hidden from the
+  sanctuary) is replaced by `massifY`: plateau, volcano cone with crater at
+  (78, -104) east of Ember's slope, a ridge over the tunnel, the garden on a
+  shelf, slopes to the sea, sea stacks. It is scenery fed into `groundY`
+  (walkable floors fully mask it; a test floods the reachable land to prove
+  it) and drawn as 2 m tiles for frustum culling. The main terrain now stops
+  at z -58. The tunnel runs straight into the courtyard (no east turn) and
+  the garden's visible ground is the courtyard plus the bowl inside its rim
+  rocks (the box corners outside the ring were unreachable). Arches stand in
+  front of the lining, portal walls close the ridge, nothing is coplanar.
+  Rejected: fog or locking the camera to hide the edges.
+- **Budgets:** compared with main at the same views, triangles are equal or
+  lower; beach detail is skipped when the player is deep in the sanctuary.
+- Development branches are tested by `test.yml` (unit + Playwright, never
+  deploys); Pages deploys only from `main`.
+
 ## 2026-10-24 — Shared placement and collision overhaul
 
 - Solid scenery uses simple circles, rotated boxes and capsules derived from

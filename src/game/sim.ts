@@ -126,7 +126,9 @@ function movePlayer(dt: number, canMove: boolean) {
   let fx = rt.camera.target.x - rt.camera.pos.x;
   let fz = rt.camera.target.z - rt.camera.pos.z;
   const fl = Math.hypot(fx, fz);
-  if (fl > 1e-3) {
+  // A camera about to snap to a new place (teleport, end of a shot) has not
+  // been drawn there yet: its yaw is already the truth for this frame.
+  if (fl > 1e-3 && !(rt.camera.snap && rt.camera.mode === "follow")) {
     fx /= fl;
     fz /= fl;
   } else {
