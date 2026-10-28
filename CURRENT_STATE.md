@@ -1,118 +1,77 @@
 # Current State
 
 ## Status
-**All three phases are complete and on `main`.** The game plays to the end:
-beach → forest → cliff top → lava (Bubbo) → Ember + meat rack → dark cave
-(Ember's fire) → four sanctuary pillars (one per friend) → Lumo → Maple →
-The End → free exploration. Old saves (v1, v2) migrate to `mi.save.v3`.
+**`main` (live on Pages):** the original adventure, beach → forest → cliff →
+lava → Ember → cave → sanctuary pillars → Lumo → results card, with polish
+pass 2 (2026-10-26). Pages: https://nolancasama.github.io/monster-island/
 
-On 2026-10-24, after Phase 3, a polish pass fixed nine reported bugs and
-overhauled collision (see `DESIGN_DECISIONS.md`, the two 2026-10-24 sections
-at the top):
-- Collision: solids derived from shared placement records, walkable pier deck
-  with solid posts, dynamic solids per gate state, save-position relocation,
-  F3 overlay (dev / `?e2e=1` only), behaviour + reachability tests.
-- Fixed: food visible-but-uncollectible after regrowth, "Your bag is full!";
-  floating rope stake; rope through the cliff (now hung from measured rocks);
-  hand-over-hand climb animation (player has knees); floating tree foliage;
-  upside-down hearts; sign post through the board; lifted palm through its
-  rock; walking through pier/supports/scenery.
+**Branch `feature/act2-hunt-for-lumo` (pushed, NOT merged, NOT deployed):**
+Act 2 "The Hunt for Lumo" is complete for its first chapter. The original
+adventure becomes the prologue. After Lumo comes the kidnapping cutscene
+(airship, cage, reveal), Maple's quest, the rope down the sanctuary cliff,
+the Primeval Forest tutorial, Fern Camp, then Flooded Grove / Ancient Canopy,
+the Ruined Causeway with its shortcut gate, the Coastal Path and Port Town:
+market, kitchen with the first treat upgrade, trainer, inn, and the harbour's
+lead (Cloud Isle). Combat is real time in the world (J/K, held J, 1–4 switch,
+F eats). One HP pool, MP per friend, coins, food, respawns after 12 s away.
+Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten. A
+finished save gets "NEW! Act 2" on the title. What was accepted, changed and
+decided is in `DESIGN_DECISIONS.md` (the two 2026-10-29 sections at the top).
 
-Verified 2026-10-24: `npx tsc --noEmit`, `npm test` (84 unit tests),
-`npx playwright test` (7 specs, all passing on an idle machine in ~4 min).
-Visuals judged by Claude from screenshots at 1366×768 and 1280×800
-(`.tmp/shots/forest-*`, `volcano-*`, `review-*`). Render budgets: beach and
-forest follow views 41–103 draw calls, ≤117.5k triangles; Phase 3 views
-26–86 calls, ≤110.7k triangles.
+Commits: `924b5c3` (milestones 1–2), `c064537` (3), `e4d1b48` (4: tunnel
+render budget, camera spec fix, decisions).
 
-Published: repo https://github.com/nolancasama/monster-island, Pages
-https://nolancasama.github.io/monster-island/ (every push to `main` runs the
-unit tests, builds and deploys).
+**Chromebook preview of the branch (private):**
+https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr, a build of `e4d1b48`.
+Its saves are kept apart from the live game's. The microphone is blocked
+inside the preview, so use Tap mode. To update it, rebuild and republish the
+same page with the new `dist/assets` files. The older preview
+(https://claude.ai/artifact/8tLLTpHHi369KVjLZUi1M5) is still a build of
+`main` (`e3d6d3c`).
 
-## Polish pass 2 (2026-10-26, branch `claude/blissful-volta-dscgid`)
-All 12 reported issues are implemented. Merged to `main` with the user's
-approval and deployed to GitHub Pages on 2026-10-26 (`949aa23`; the Pages
-workflow's tests, build and deploy all passed).
-
-- **#1 Bubbo ride:** the rider sits on a saddle on Bubbo's back, from shared
-  height code (`game/ride.ts`), legs astride, and hops on and off.
-- **#2 Pickup:** a squat with planted feet (knee IK), a lean, a reach, and
-  the food in the hand.
-- **#3 Menu:** Speak/Tap is now only in Settings and is remembered. Settings
-  now opens above the title card; it used to open hidden behind it.
-- **#6, #10 Chapter endings:** the beach and forest endings show a short
-  "Clear!" banner and play continues. Only the finale shows the results card.
-  Save values are unchanged.
-- **#11 Cooled lava:** a shared walking surface (`lavaCrustY` via `standY`).
-- **#4 Controls:** movement follows the rendered camera. The tunnel camera
-  turns along the passage smoothly, and against the mountain the camera
-  comes in closer instead of climbing the rock.
-- **#7 Puff and the rope:** Puff's flight stays clear of the cliff. The coil
-  vanishes in a poof and a carried coil stays with Puff until it is tied.
-- **#8 Climb:** follows the drawn rope, keeps the body clear of the rock, and
-  mantles over the lip.
-- **#5 Island edges:** the north of the island is one landmass: a plateau,
-  the volcano with its crater at (78, -104), a ridge over the tunnel, the
-  sanctuary on a shelf, and slopes and sea stacks down to the sea
-  (`massifY`, `models/highlands.ts`).
-- **#9 Volcano view:** the cliff-top reveal frames the whole volcano.
-- **#12 Cave entrance:** rebuilt. The arches stand in front of the lining,
-  portal walls close the ridge, nothing is coplanar, and the tunnel runs
-  straight into the courtyard.
-
-**Verified 2026-10-26:** `tsc` and `npm test` pass (100 unit tests). The full
-`npx playwright test` passes (9 specs, 9.4 min), including the new
-`menu.spec.ts` and `camera.spec.ts` (all four directions at 7 cave and
-sanctuary spots, with the camera turned by hand) and updated
-loop/forest/volcano specs.
-
-Screenshots were checked for:
-- the ride, the squat and the cooled lava;
-- Puff's flight and the climb up the face;
-- the island from far away and after leaving the cave;
-- the cave entrance dark and lit, from the front, side, an angle and close up;
-- the volcano reveal at 1366×768 and 1280×800.
-
-Render budgets were compared with `main` at the same views: triangles are
-equal or lower everywhere. Looking back across the island from the garden
-drops from 173 to 122 calls and from 154k to 115k triangles. The beach spawn
-view is 107 calls and 121k triangles, against 96 calls and 123k on `main`.
-
-The climb over the lip was also checked on the game's own climb camera: the
-player rises to the edge and stands up on the top with no fade and no rock
-through the body. There is no close-up of the knee coming up onto the edge.
-
-**Chromebook preview:** https://claude.ai/artifact/8tLLTpHHi369KVjLZUi1M5
-- A private build of commit `e3d6d3c`. The live game is unchanged.
-- The microphone is blocked inside the preview, so answers are tapped.
-- Saves are kept apart from the live game's.
-- To update it, rebuild and republish the same preview page with the new
-  `dist/assets` files.
-
-`test.yml` (unit + Playwright) also passed on GitHub's runners for the branch
-(`e3d6d3c`).
-
-**Not verified:** nothing has been tested on a real Chromebook (SwiftShader only).
+## Verified 2026-10-29 (branch, `e4d1b48`)
+- `npx tsc --noEmit` clean; `npm test` 129 unit tests pass.
+- Full `npx playwright test`: 15/15 pass in 9.0 min on an idle machine,
+  including `act2.spec.ts` (6 tests) and the updated camera/volcano specs.
+- The camera spec failed 3 times in a row before the fix. Cause: the lowland
+  was drawn while the camera was in the tunnel, which halved the tunnel's
+  frame rate. The spec also measured the follow camera's catch-up along with
+  the move. Its fixed version was checked with one known-good pass and one
+  known-bad fail (Left and Right keys swapped).
+- Render budget at the tunnel views is back to `main`'s (50–59 calls, ~40k
+  triangles). Lowland views 39–112 calls, ≤108k triangles; sanctuary views
+  up to 120 calls.
+- Visuals judged by Claude from screenshots: the whole Act 2 sequence at
+  1366×768 (`.tmp/shots/act2-1366x768`). Clean combat-position views at
+  1280×800 (`.tmp/shots/ride-1280x800`): Ember piggyback, Bubbo, Leafy on
+  the backpack, Puff on the shoulder, no visible intersections, the HUD
+  fits.
+- GitHub `test.yml` was started for `e4d1b48`; its result was not yet
+  checked when this file was written (`gh run list --branch
+  feature/act2-hunt-for-lumo`).
 
 ## Known Issues
-- Real speech recognition (Phase 2–3 sentences), TTS voices, audio levels,
-  classroom pacing and real Chromebook GPU performance are untested
-  (SwiftShader only).
+- Nothing has been tested on a real Chromebook (SwiftShader only): speech
+  for Phase 2–3 and the town sentences, TTS voices, audio levels, fight
+  difficulty and pacing, GPU frame rate in the town.
+- The whole Act 2 sequence was captured at 1366×768 only. At 1280×800 only
+  the combat positions were captured.
 - The Playwright suite renders in SwiftShader on the CPU: another heavy
-  process on the machine causes timeouts that look like product failures.
-  Check CPU load before diagnosing a red run.
-- The cliff wall's colliders are one box; the seeded rocks bulging out at its
-  foot are not individually solid.
-- The ravine's water is the sea plane showing through.
+  process causes timeouts that look like product failures. Check CPU load
+  before diagnosing a red run.
+- The cliff wall's colliders are one box; the seeded rocks at its foot are
+  not individually solid. The ravine's water is the sea plane showing through.
 
 ## Next Steps
-0. Play the live game on a school Chromebook and report anything still off.
-1. Play it on a real school Chromebook with a class: speech acceptance for
-   the Phase 2–3 sentences, the climb's pace (5 s each way), whether the
-   pillar gate is clear, total length (~31 min in the e2e playthrough).
-2. Polish from classroom feedback; no Phase 4 is planned (the story ends).
+1. Play the Act 2 preview on a school Chromebook (steps in the 2026-10-29
+   handoff: title → "NEW! Act 2" or Continue a finished save → kidnapping →
+   rope at the lookout → forest tutorial → a route → town → market, kitchen,
+   harbour).
+2. If it is approved: merge `feature/act2-hunt-for-lumo` into `main`. Pages
+   then deploys. This needs the user's explicit approval.
+3. Polish from classroom feedback. The next chapter (Cloud Isle) is not
+   planned yet.
 
 ## Codex / Delegated Work
-None pending. The collision overhaul was built by Codex via the router and
-corrected/accepted by Claude; the visual and interaction fixes were done by
-Claude directly (Codex was at its usage limit).
+None pending. Act 2 was built by Claude directly across two sessions. The
+milestone 4 fixes were diagnosed and made directly (a small, localized fix).
