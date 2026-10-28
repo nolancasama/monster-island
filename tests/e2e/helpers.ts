@@ -13,6 +13,11 @@ export interface MiState {
     metMaple: boolean;
     endings: number;
     said: string[];
+    act2: {
+      started: boolean; lumoTaken: boolean; descended: boolean; hp: number; mp: Record<string, number>; coins: number;
+      items: { amber?: number }; upgrades: string[]; chests: string[]; tutorial: string[]; checkpoint: string;
+      portFound: boolean; bought: boolean; harbor: boolean; trained: string[]; zone: string | null;
+    };
   };
   objective: { id: string; [k: string]: unknown };
   focus: { id: string; kind: string } | null;
@@ -30,7 +35,7 @@ export interface MiState {
     question: string | null;
   } | null;
   line: { by: string; en: string } | null;
-  player: { x: number; z: number; y: number; riding: boolean; climbing: boolean };
+  player: { x: number; z: number; y: number; ground: number; riding: boolean; climbing: boolean };
   monsters: Record<string, { x: number; z: number; mode: string; air: number }>;
   palm: number;
   stones: number;
@@ -46,6 +51,24 @@ export interface MiState {
   finale: "idle" | "rise" | "maple" | "complete";
   camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
   perf: { calls: number; triangles: number; fps: number };
+  playTime: number;
+  act2: {
+    scene: string;
+    zone: string | null;
+    stance: { friend: string | null; k: number };
+    hp: number;
+    mp: Record<string, number>;
+    knockedOut: boolean;
+    enemies: Array<{ i: number; zone: string; kind: string; state: string; hp: number; x: number; z: number }>;
+    drops: number;
+    shots: number;
+    ship: { visible: boolean; x: number; y: number; z: number; cage: boolean };
+    cliffRope: number;
+    unlock: Record<string, number>;
+    panel: string | null;
+    banner: string | null;
+    hint: string | null;
+  };
 }
 
 /** Open the game with speech stubs and the test hook. Returns collected page errors. */

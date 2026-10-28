@@ -148,30 +148,22 @@ test("volcano and sanctuary: lava, Ember, cave, four powers, Lumo and The End (m
   await precondition(page, "Lumo asks back", (x) => x.prompt?.question === "Do you like monsters?");
   // A student's No is just as valid as Yes and still finishes the game.
   await answer(page, "noIDont");
-  s = await precondition(page, "final results displayed", (x) => x.screen === "results", 60_000);
-  expect(s.progress.endings).toBe(3);
+  // The prologue is complete: no results card any more, the raiders take Lumo (Act 2).
+  s = await precondition(page, "prologue complete", (x) => x.progress.endings === 3, 60_000);
   expect(s.progress.monsters.lumo).toMatchObject({ friend: true, described: { name: true, size: true, part: true } });
-  expect(s.progress.active).toBe("bubbo");
   expect(s.stoneGlow.ember).toBe(1);
-  await expect(page.getByTestId("results")).toContainText("The End");
-  for (const name of ["Leafy", "Bubbo", "Puff", "Ember", "Lumo"]) await expect(page.getByTestId("results")).toContainText(name);
-  for (const sentence of ["It's orange.", "It has a tail.", "Can you make fire?", "It's yellow.", "What's your name?"]) {
-    await expect(page.getByTestId("results-said")).toContainText(sentence);
-  }
-  await page.getByTestId("btn-explore").click();
-  await precondition(page, "free exploration in sanctuary", (x) => x.screen === "game" && x.mode === "explore");
-  expect((await state(page)).player.z).toBeLessThan(-130);
+  s = await precondition(page, "the kidnapping plays and play resumes at the cliff", (x) => x.screen === "game" && x.mode === "explore" && x.progress.act2.started, 90_000);
+  await expect(page.getByTestId("results")).toHaveCount(0);
+  expect(s.progress.act2.lumoTaken).toBe(true);
+  expect(s.progress.monsters.lumo.friend).toBe(true);
+  expect(s.progress.active).toBe("bubbo");
+  expect(s.objective).toEqual({ id: "descend" });
+  expect(s.player.z).toBeLessThan(-140);
   await expect(page.getByTestId("team-lumo")).toHaveCount(0);
   for (const id of ["leafy", "bubbo", "puff", "ember"]) await expect(page.getByTestId(`team-${id}`)).toBeVisible();
-  // Hold dialogue for the final chat assertion instead of auto-advancing it.
-  await page.evaluate(() => {
-    const url = new URL(location.href);
-    url.searchParams.delete("fast");
-    history.replaceState(null, "", url);
-  });
-  await approach(page, "lumo");
-  await precondition(page, "Lumo chats at home", (x) => x.line?.by === "lumo");
-  expect((await state(page)).progress.active).toBe("bubbo");
+  for (const sentence of ["It's orange.", "It has a tail.", "Can you make fire?", "It's yellow.", "What's your name?"]) {
+    expect(s.progress.said.map(String)).toContain(({ "It's orange.": "itsOrange", "It has a tail.": "hasTail", "Can you make fire?": "canFire", "It's yellow.": "itsYellow", "What's your name?": "whatsYourName" } as Record<string, string>)[sentence]);
+  }
   expect(errors).toEqual([]);
 });
 

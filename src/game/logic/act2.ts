@@ -280,10 +280,13 @@ export type Act2Objective =
 export function act2Objective(p: Progress): Act2Objective {
   const a = p.act2;
   if (!a.started) return { id: "act2Start" };
-  if (!a.descended) return { id: "descend" };
-  if (!a.chests.includes("forestChest")) return { id: "openChest" };
-  if (!a.tutorial.includes("rest")) return { id: "rest" };
-  if (!a.portFound) return { id: "reachPort" };
+  // The forest's steps guide the way to the town; once there, they never send the player back.
+  if (!a.portFound) {
+    if (!a.descended) return { id: "descend" };
+    if (!a.chests.includes("forestChest")) return { id: "openChest" };
+    if (!a.tutorial.includes("rest")) return { id: "rest" };
+    return { id: "reachPort" };
+  }
   if (a.harbor) return { id: "act2Done" };
   if (!a.bought) return { id: "market" };
   if (!a.upgrades.length) return { id: "kitchen" };

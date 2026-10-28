@@ -195,9 +195,10 @@ function gapCut(id: keyof typeof CANOPY_GAPS): Rect {
   const g = CANOPY_GAPS[id];
   return rect(g.x - GAP_HALF, g.x + GAP_HALF, g.z0, g.z1);
 }
+/** The deck runs a metre onto the root walk at each end, so its ends overlap the land by more than a body width. */
 function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
   const g = CANOPY_GAPS[id];
-  return rect(g.x - DECK_HALF, g.x + DECK_HALF, g.z0 - 0.6, g.z1 + 0.6);
+  return rect(g.x - DECK_HALF, g.x + DECK_HALF, g.z0 - 1, g.z1 + 1);
 }
 const GATE_CUT = rect(SHORTCUT_GATE.x - SHORTCUT_GATE.half - 0.5, SHORTCUT_GATE.x + SHORTCUT_GATE.half + 0.5, SHORTCUT_GATE.z - 0.45, SHORTCUT_GATE.z + 0.45);
 

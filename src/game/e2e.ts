@@ -2,7 +2,7 @@ import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { objective } from "./logic/progress";
-import { PLAYER_R, gatesOf, nearestWalkable } from "./world/collision";
+import { PLAYER_R, gatesOf, nearestWalkable, standY } from "./world/collision";
 import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
@@ -78,7 +78,7 @@ export function installE2eHook(seed: number) {
             }
           : null,
         line: g.line ? { by: g.line.by, en: g.line.en } : null,
-        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, riding: rt.player.riding, climbing: rt.player.climbY !== null },
+        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null },
         monsters: Object.fromEntries(
           LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, air: rt.monsters[id].air }])
         ),
@@ -97,6 +97,7 @@ export function installE2eHook(seed: number) {
         finale: rt.finale,
         camera: { pos: { ...rt.camera.pos }, target: { ...rt.camera.target } },
         perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped },
+        playTime: rt.playTime,
         act2: {
           scene: rt.act2Scene,
           zone: cb.zones.current,
