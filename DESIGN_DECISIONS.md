@@ -21,6 +21,123 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-29 — Act 2 "The Hunt for Lumo": brief accepted, with these changes
+
+The external brief (Kirby: Forgotten Land-style fights in the world, Secret
+of Mana-style areas, a lowland below the sanctuary, a port town) is the
+product definition of Act 2. The original adventure is the prologue and is
+unchanged up to the finale. Built on branch `feature/act2-hunt-for-lumo`.
+
+**Accepted as written:** the kidnapping replaces the final results card;
+Lumo stays a friend and being taken is a separate fact
+(`progress.act2.lumoTaken`); a rope down the sanctuary's cliff (both ways);
+Primeval Forest → camp → Flooded Grove / Ancient Canopy → Ruined Causeway →
+Coastal Path → Port Town; manual J/K attacks only; automatic combat
+positions by area; one HP pool, per-friend MP (100, regenerating, specials
+25–30); food restores HP and the MP of the friend who loves it; camps and the
+inn restore everything; coins collected by walking near them; respawn on
+re-entry after a real absence; v4 save with migration; town services with
+English exchanges; the harbour's lead closes the chapter.
+
+**Changed:**
+- **No microphone in fights.** The buttons show each move's English word
+  (Whip!/Splash!/Fly!/Fire!, Pull!/Push!/Blow!/Burn!) and K is always
+  instant. Speaking the special commands is practised at the Monster
+  Trainer, with no enemies about (+10 coins the first time). A 1–7 s
+  recognition session plus speaker bleed would make real-time fights unfair.
+- **The route puzzles reuse the obstacle flow** ("Can you ___?", truthful
+  answers, "Thank you!"): Leafy's vines and Puff's rope bridge span the
+  canopy's two gaps (required for that route), Bubbo's lily pads reach the
+  grove's islet treasure (optional), Ember burns the thorns on the causeway's
+  shortcut gate (its lever side faces the causeway, so it opens from there).
+  The abilities stay free at 0 MP.
+- **Shopping in two steps:** "What do you want?" → "I want apples, please."
+  (a picture frame of the five foods); a number in the spoken answer ("I want
+  three apples") skips "How many?" → "One/Two/Three, please." After the
+  first purchase the market opens a quick panel whose Buy button still reads
+  the sentence ("I want two fish, please.").
+- **Kitchen phrases name the two foods** ("Mix the apples and berries.");
+  "Mix the" is not judged. One treat per friend: two foods + one amber.
+- **The first chest is in the tutorial forest** and always holds amber, so
+  the first upgrade needs no grinding.
+- **Finished saves get a title button** ("NEW! Act 2: The Hunt for Lumo")
+  that goes straight to the garden and the kidnapping; Continue also works
+  (the ★ marks Lumo; walking up to Lumo starts it).
+- **"Prologue Clear!" is a banner** during the celebration, not a card.
+
+**Rejected:** a microphone-gated special in combat; a separate battle
+screen; a carried torch/rope inventory; tutorial pop-up screens (the
+tutorial is hint-bar lines that disappear once each lesson is done).
+
+## 2026-10-29 — Act 2 decisions made while building
+
+- **Geography.** The island continues north of the sanctuary's shelf as a
+  basin (`world/lowland.ts`, `BASIN` x 19..135, z -150..-344): its own height
+  function (`lowlandY`) is blended into `massifY` by `basinFraction`; hills
+  close it east and west and fall into the sea; the north coast is the town's
+  quay. The massif mesh skips the basin and the basin's own 2 m terrain tiles
+  share its grid on the seam (odd x, even z). The garden reaches the ledge
+  through a gap where two north-east rim rocks were (their random numbers are
+  still drawn, so every other rock keeps its shape). The ledge's north edge
+  is a sharp lip (no mask fade); a stratified rock slab is the climbing face.
+  Behind the gate the garden is now the round bowl plus the ledge (the box's
+  corners outside the ring used to be sealed by those rocks).
+- **Collision.** The lowland has its own solids set: walkers north of the
+  cliff never test the rest of the island's shapes and the other way round.
+  Walkable land is a union of rectangles, trails with a half-width and discs,
+  minus cut-outs (the pond, the canopy gaps, the closed gate) plus decks that
+  unlocks add. Bridge decks run a metre onto the land at each end (a shorter
+  overlap left a seam narrower than a body). Reachability tests flood the
+  lowland with real moves: both routes reach the town, the shortcut works,
+  optional treasure needs its friend.
+- **Areas.** Zones decide everything about fights: hostile (forests,
+  causeway, coast) or safe (camp, old trail, town). Respawn rule
+  (`changeZone`): an area's knocked-out enemies return on entry only after
+  12 s of play elsewhere; stepping back and forth over a border never adds up.
+  Enemies outside the player's area walk home and heal (patrols reset).
+- **Combat positions.** Leafy rides on the backpack and Puff on the right
+  shoulder at half size (it flies out and back for each attack); the player
+  rides Bubbo (the prologue's saddle) and Ember piggyback against its back,
+  legs round its sides, its tail swung back (Ember stands upright with a big
+  head, so a saddle would put the rider's chest in it; `ember-ride.test.ts`
+  checks the legs, chest and tail against Ember's shapes). Scenes take the
+  friend off; play puts it back with a 0.4 s hop. Riding is 18% quicker.
+- **The party.** In Act 2 the friends who are not active walk with the
+  player (further back during fights) instead of going home; they never take
+  E (switch with 1–4 or the chips) and never block the player.
+- **Fights.** Forgiving aim (nearest enemy in front, else close by); held J
+  repeats. Enemies (gloomlet, snapjaw, shellback) wear the raiders' crescent
+  emblem; they notice ("!"), chase, show a red, shaking wind-up, lunge, and
+  can be interrupted. Knock-outs are a dizzy spin and a poof (no gore). All
+  enemies pause during conversations, prompts and scenes. A knocked-out
+  player wakes at the last rest point (foot of the rope, camp, inn) with at
+  least 60 HP; coins, food, amber and progress are kept.
+- **Upgrades** (one treat each): Super Whip (reach ×1.35, damage ×1.6), Big
+  Bubble and Big Fireball (bigger, ×1.6, splash), Twin Wind (two shots).
+- **Lumo** is hidden after the kidnapping except inside the cage; its
+  journal page says it was taken (then "Lumo is on Cloud Isle!").
+- **Maple** stays by the lookout until the town is found, then waits on the
+  quay ("I came by boat").
+- **Save v4** (`mi.save.v4`). v1–v3 still load (Act 2 starts fresh) and are
+  never overwritten; Act 2 fields are re-validated (nothing stands before the
+  prologue is complete; a 0-HP save wakes with 60 HP). Live HP/MP are copied
+  in when the game saves, so a fight never writes storage every frame.
+- **Budget.** Lowland views measured 39–112 draw calls, ≤108k triangles;
+  sanctuary views with all five friends and Maple up to 120 calls. Small
+  vegetation, chests and keepers are drawn only near the camera; vegetation
+  is tiled (48 m) so the frustum skips tiles; fog reaches further north so
+  the coast and town show from the cliff. The lowland is not drawn while the
+  camera is south of the tunnel's north end (z > -125): the ridge and the
+  garden's rim hide all of it there, and drawing it anyway took the tunnel
+  views from ~50 to ~95 draw calls and 40k to 97k triangles (the tunnel
+  camera looks north along the passage, straight at it).
+- **The camera spec measures screen direction through one camera.** Both
+  ends of a move are projected through the camera as it is after the move.
+  Comparing two live screen positions also measured the follow camera's
+  catch-up, which depends on frame rate and failed on correct movement. Its
+  last spot is in the garden 7 m from Lumo, because walking within 5 m of
+  Lumo in a finished save now starts Act 2.
+
 ## 2026-10-26 — Polish pass 2: continuous adventure, one island
 
 - **Only the finale has a results card.** The beach and forest endings keep

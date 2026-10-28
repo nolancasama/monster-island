@@ -31,14 +31,16 @@ const DONE_SAVE = JSON.stringify({
 
 const KEYS = { right: "KeyD", left: "KeyA", forward: "KeyW", back: "KeyS" } as const;
 
-async function screenOf(page: Page) {
-  const s = await state(page);
-  return (await hook(page, "project", s.player.x, s.player.y + 0.9, s.player.z)) as { x: number; y: number };
-}
+type Spot = { x: number; y: number; z: number };
+const screenOf = async (page: Page, p: Spot) => (await hook(page, "project", p.x, p.y + 0.9, p.z)) as { x: number; y: number };
 
-/** Hold a direction briefly; return how the player moved on screen. */
+/**
+ * Hold a direction briefly; return how the player moved on screen. Both ends
+ * are projected through the camera as it is afterwards: the follow camera
+ * catches up after a move, so comparing two live screen positions measures
+ * its lag (frame-rate dependent) as much as the move.
+ */
 async function push(page: Page, key: string) {
-  const before = await screenOf(page);
   // Hold until the player has really moved (SwiftShader can run at ~3 fps).
   const start = await state(page);
   await page.keyboard.down(key);
@@ -50,7 +52,9 @@ async function push(page: Page, key: string) {
   }
   await page.keyboard.up(key);
   await page.waitForTimeout(250);
-  const after = await screenOf(page);
+  const end = await state(page);
+  const before = await screenOf(page, start.player);
+  const after = await screenOf(page, end.player);
   return { dx: after.x - before.x, dy: after.y - before.y };
 }
 
@@ -61,7 +65,8 @@ const PLACES: Array<[string, number, number]> = [
   ["sanctuary entrance", 64.5, -127.2],
   ["sanctuary pillars", 70, -129.5],
   ["sanctuary gate", 70, -133],
-  ["Lumo", 70, -138.2]
+  // In the garden, kept over 5 m from Lumo: closer, a finished save starts Act 2.
+  ["garden", 64, -137]
 ];
 
 test("Right, Left, Forward and Back follow the screen in the cave and the sanctuary", async ({ page }) => {
@@ -94,5 +99,6 @@ test("Right, Left, Forward and Back follow the screen in the cave and the sanctu
       }
     }
   }
+  expect((await state(page)).progress.act2.started).toBe(false);
   expect(errors).toEqual([]);
 });

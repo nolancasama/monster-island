@@ -5,7 +5,7 @@ import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { NPCS, NPC_OF } from "../game/data/town";
 import { CAMP2, CANOPY_GAPS, CHESTS, POND_Y, SERVICES, SHORTCUT_GATE, type ServiceId } from "../game/world/lowland";
-import { groundY } from "../game/world/island";
+import { TUNNEL, groundY } from "../game/world/island";
 import { additiveSprite, flatMat, occluderMat, smoothMat } from "./materials";
 import {
   chestBaseGeometry, chestLidGeometry, cliffFaceGeometry, cliffRopeGeometry, gateBarsGeometry, giantFernGeometry, lilyPadGeometry,
@@ -235,8 +235,10 @@ export function Lowland() {
   const signs = useMemo(townSigns, []);
   const signMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signs.tex, side: THREE.DoubleSide }), [signs]);
   useFrame(() => {
-    // From the sanctuary (looking down from the lookout) and inside the lowland; never from the beach or the forest.
-    if (region.current) region.current.visible = rt.player.z < -110 || (rt.camera.shot !== null && rt.camera.shot.target.z < -110);
+    // From the sanctuary (looking down from the lookout) and inside the lowland; never from the beach or the forest,
+    // nor while the camera is still in the tunnel (the ridge and the garden's rim hide all of it from there).
+    const shot = rt.camera.shot !== null && rt.camera.shot.target.z < -110;
+    if (region.current) region.current.visible = shot || (rt.player.z < -110 && rt.camera.pos.z < TUNNEL.z0);
   });
   return (
     <group ref={region}>
