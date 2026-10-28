@@ -46,9 +46,8 @@ same page with the new `dist/assets` files. The older preview
   1280×800 (`.tmp/shots/ride-1280x800`): Ember piggyback, Bubbo, Leafy on
   the backpack, Puff on the shoulder, no visible intersections, the HUD
   fits.
-- GitHub `test.yml` was started for `e4d1b48`; its result was not yet
-  checked when this file was written (`gh run list --branch
-  feature/act2-hunt-for-lumo`).
+- GitHub `test.yml` passed on the branch (run 40778698063, `8582a65`:
+  typecheck, unit tests, build and the Playwright suite).
 
 ## Known Issues
 - Nothing has been tested on a real Chromebook (SwiftShader only): speech
