@@ -1,11 +1,12 @@
 # Current State
 
 ## Status
-**`main` (live on Pages):** the original adventure, beach → forest → cliff →
-lava → Ember → cave → sanctuary pillars → Lumo → results card, with polish
-pass 2 (2026-10-26). Pages: https://nolancasama.github.io/monster-island/
+**Act 2 is live.** With the user's approval, `feature/act2-hunt-for-lumo`
+was fast-forwarded into `main` on 2026-10-29 (`02bc281`). The Pages workflow
+(run 40781012500) passed its tests, built and deployed. The live site serves
+the tested bundle (`index-BdbnZuVW.js`).
+Pages: https://nolancasama.github.io/monster-island/
 
-**Branch `feature/act2-hunt-for-lumo` (pushed, NOT merged, NOT deployed):**
 Act 2 "The Hunt for Lumo" is complete for its first chapter. The original
 adventure becomes the prologue. After Lumo comes the kidnapping cutscene
 (airship, cage, reveal), Maple's quest, the rope down the sanctuary cliff,
@@ -21,13 +22,12 @@ decided is in `DESIGN_DECISIONS.md` (the two 2026-10-29 sections at the top).
 Commits: `924b5c3` (milestones 1–2), `c064537` (3), `e4d1b48` (4: tunnel
 render budget, camera spec fix, decisions).
 
-**Chromebook preview of the branch (private):**
-https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr, a build of `e4d1b48`.
-Its saves are kept apart from the live game's. The microphone is blocked
-inside the preview, so use Tap mode. To update it, rebuild and republish the
-same page with the new `dist/assets` files. The older preview
-(https://claude.ai/artifact/8tLLTpHHi369KVjLZUi1M5) is still a build of
-`main` (`e3d6d3c`).
+**Private preview** (the same build as the live game):
+https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr. Its saves are kept apart
+from the live game's, and the microphone is blocked inside it (Tap mode). The
+live game is now the place to test on Chromebooks, with a real microphone.
+The older preview (https://claude.ai/artifact/8tLLTpHHi369KVjLZUi1M5) is a
+pre-Act 2 build (`e3d6d3c`).
 
 ## Verified 2026-10-29 (branch, `e4d1b48`)
 - `npx tsc --noEmit` clean; `npm test` 129 unit tests pass.
@@ -62,13 +62,12 @@ same page with the new `dist/assets` files. The older preview
   not individually solid. The ravine's water is the sea plane showing through.
 
 ## Next Steps
-1. Play the Act 2 preview on a school Chromebook (steps in the 2026-10-29
-   handoff: title → "NEW! Act 2" or Continue a finished save → kidnapping →
-   rope at the lookout → forest tutorial → a route → town → market, kitchen,
-   harbour).
-2. If it is approved: merge `feature/act2-hunt-for-lumo` into `main`. Pages
-   then deploys. This needs the user's explicit approval.
-3. Polish from classroom feedback. The next chapter (Cloud Isle) is not
+1. Play the live game on a school Chromebook: title → "NEW! Act 2" (or
+   Continue a finished save and walk up to Lumo) → kidnapping → rope at the
+   lookout → forest tutorial → a route → town → market, kitchen, harbour.
+   Check the speech for the town sentences, the fight difficulty and the
+   town's frame rate.
+2. Polish from classroom feedback. The next chapter (Cloud Isle) is not
    planned yet.
 
 ## Codex / Delegated Work
