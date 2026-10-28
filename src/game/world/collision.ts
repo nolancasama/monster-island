@@ -28,6 +28,8 @@ import {
   STATIC_SOLIDS,
   PALM_SOLIDS,
   BRIDGE_RAILS,
+  LEDGE,
+  GARDEN,
   type SolidShape,
   forestBase,
   inRavine,
@@ -35,6 +37,7 @@ import {
   groundY,
   shoreZ
 } from "./island";
+import { CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
 
 export interface Circle {
   x: number;
@@ -67,23 +70,30 @@ export interface Gates {
   forest?: boolean;
   /** The Phase 2 ending has played: the volcano route is available. */
   volcano?: boolean;
+  /** Act 2 has begun (Lumo was taken): the lowland below the sanctuary is open. */
+  act2?: boolean;
 }
 
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
-export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number }): Gates {
-  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2);
-  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2 };
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean } }): Gates {
+  const act2 = p.act2?.started === true;
+  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2);
+  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2 };
 }
 
-const GATE_IDS: readonly ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
+const GATE_IDS: readonly ObstacleId[] = [
+  "fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame",
+  "groveLilies", "canopyVines", "canopyRope", "causewayGate"
+];
 const gateCache: Gates[] = [];
-function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false): number {
-  let key = (forest ? 1024 : 0) | (volcano ? 2048 : 0);
+function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false, act2 = false): number {
+  let key = (forest ? 1 << 14 : 0) | (volcano ? 1 << 15 : 0) | (act2 ? 1 << 16 : 0);
   for (let i = 0; i < GATE_IDS.length; i++) if (solved.includes(GATE_IDS[i])) key |= 1 << i;
   return key;
 }
+const keyOf = (g: Gates) => stateKey(g.solved, g.forest, g.volcano, g.act2);
 
 /** The bramble across the forest path while it is closed. */
 export const BRAMBLE_BLOCK: Box = { x0: FOREST_PATH.x0 - 1, x1: FOREST_PATH.x1 + 1, z0: BRAMBLE.z - 0.5, z1: BRAMBLE.z + 0.5 };
@@ -91,19 +101,24 @@ export const BRAMBLE_BLOCK: Box = { x0: FOREST_PATH.x0 - 1, x1: FOREST_PATH.x1 +
 const solidCache: SolidShape[][] = [];
 const obstacleCache: Obstacles[][] = [];
 export function solidsFor(gates: Gates): readonly SolidShape[] {
-  const key = stateKey(gates.solved, gates.forest, gates.volcano);
+  const key = keyOf(gates);
   if (solidCache[key]) return solidCache[key];
   const solids = [...STATIC_SOLIDS, PALM_SOLIDS[gates.solved.includes("fallenPalm") ? "resting" : "fallen"]];
   if (gates.solved.includes("bridge")) solids.push(...BRIDGE_RAILS);
   if (!gates.forest) solids.push({ kind: "box", x: BRAMBLE.x, z: BRAMBLE.z, hx: (BRAMBLE_BLOCK.x1 - BRAMBLE_BLOCK.x0) / 2, hz: 0.5, yaw: 0 });
   if (!gates.solved.includes("lava")) solids.push({ kind: "box", x: (LAVA.x0 + LAVA.x1) / 2, z: (LAVA.z0 + LAVA.z1) / 2, hx: (LAVA.x1 - LAVA.x0) / 2, hz: (LAVA.z1 - LAVA.z0) / 2, yaw: 0 });
   if (!gates.solved.includes("cave")) solids.push({ kind: "box", x: CAVE.x, z: CAVE.z, hx: (CAVE_PASSAGE.x1 - CAVE_PASSAGE.x0) / 2, hz: 0.4, yaw: 0 });
-  if (!GATE_IDS.slice(6).every((id) => gates.solved.includes(id))) solids.push({ kind: "box", x: SANCTUARY_GATE.x, z: SANCTUARY_GATE.z, hx: SANCTUARY_GATE.half, hz: 0.45, yaw: 0 });
+  if (!GATE_IDS.slice(6, 10).every((id) => gates.solved.includes(id))) solids.push({ kind: "box", x: SANCTUARY_GATE.x, z: SANCTUARY_GATE.z, hx: SANCTUARY_GATE.half, hz: 0.45, yaw: 0 });
   return solidCache[key] = solids;
 }
 
-export function obstaclesFor(gates: Gates): Obstacles[] {
-  const key = stateKey(gates.solved, gates.forest, gates.volcano);
+/** The lowland has its own solids: walkers there never test the rest of the island's, and the other way round. */
+const LOWLAND_OBSTACLES: Obstacles[] = [{ circles: [], boxes: [], shapes: lowlandSolids() }];
+const inLowlandSet = (z: number) => z < CLIFF_FOOT_Z + 0.5;
+
+export function obstaclesFor(gates: Gates, z = 0): Obstacles[] {
+  if (inLowlandSet(z)) return LOWLAND_OBSTACLES;
+  const key = keyOf(gates);
   return obstacleCache[key] ??= [{ circles: [], boxes: [], shapes: solidsFor(gates) }];
 }
 
@@ -151,6 +166,8 @@ export function onPier(x: number, z: number, m = 0): boolean {
 
 function onLand(x: number, z: number, gates: Gates, m: number, swimmer: boolean): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  // North of the sanctuary's cliff: the Act 2 lowland (reached only by its rope).
+  if (z < CLIFF_FOOT_Z + 1) return gates.act2 === true && lowlandWalkable(x, z, gates, m);
   if (onPier(x, z, m)) return true;
   const ridgeBand = x > RIDGE.x0 && x < RIDGE.x1;
   // Ridge rocks are solid except for the pass itself.
@@ -184,13 +201,19 @@ function volcanoWalkable(x: number, z: number, gates: Gates, m: number): boolean
   }
   if (!gates.solved.includes("cave")) return false;
   if (inBox(x, z, CAVE_PASSAGE, m)) return true;
+  const opened0 = Object.keys(GATE_PILLARS).every((id) => gates.solved.includes(id as ObstacleId));
+  // The lookout ledge through the garden's north-east rim (its north edge is the cliff's lip).
+  if (opened0 && inBox(x, z, LEDGE, m) && z < SANCTUARY.z0 + 1) return true;
   if (!inBox(x, z, SANCTUARY, m)) return false;
   const opened = Object.keys(GATE_PILLARS).every((id) => gates.solved.includes(id as ObstacleId));
   // The wall closes the entire garden; when open its central doorway is the only crossing.
   if (Math.abs(z - SANCTUARY_GATE.z) < 0.45 + m) {
     return opened && Math.abs(x - SANCTUARY_GATE.x) < SANCTUARY_GATE.half - m;
   }
-  return z > SANCTUARY_GATE.z || opened;
+  if (z > SANCTUARY_GATE.z) return true;
+  // Behind the gate: the round garden inside its rim (and the lookout ledge through
+  // the gap in the rim); the box's corners outside the ring are not garden floor.
+  return opened && (Math.hypot(x - GARDEN.x, z - GARDEN.z) <= GARDEN.r + 0.6 - m || inBox(x, z, LEDGE, m));
 }
 
 // Scratch projection coordinates: these synchronous queries never allocate in a
@@ -270,7 +293,7 @@ export function moveCircle(
   extra: Obstacles[] = EMPTY,
   out = { x: 0, z: 0 }
 ): { x: number; z: number } {
-  const sets = obstaclesFor(gates);
+  const sets = obstaclesFor(gates, z0);
   const count = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.15));
   const dx = (x1 - x0) / count, dz = (z1 - z0) / count;
   let x = x0, z = z0;
@@ -321,12 +344,13 @@ export function nearestWalkable(x: number, z: number, r: number, gates: Gates = 
 
 /** True if a circle overlaps solid scenery. */
 export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED): boolean {
-  return overlaps(x, z, r, obstaclesFor(gates));
+  return overlaps(x, z, r, obstaclesFor(gates, z));
 }
 
 /** Height a walker stands at: the ground, or the stepping stones' tops once they are up. */
 export function standY(x: number, z: number, solved: readonly ObstacleId[]): number {
   const y = groundY(x, z);
+  if (z < CLIFF_FOOT_Z + 1) return Math.max(y, lowlandDeckY(x, z, solved));
   if (onPier(x, z)) return Math.max(y, groundY(PIER.x, PIER.z0) + PIER.deckY);
   if (solved.includes("river") && inBox(x, z, STONES, -0.3)) return Math.max(y, STONE_TOP);
   if (solved.includes("bridge") && onBridge(x, z, -0.3)) return Math.max(y, bridgeDeckY(z));

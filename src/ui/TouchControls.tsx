@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { interact } from "../game/flow/actions";
+import { inHostileZone } from "../game/combat";
 import { Icon } from "./icons";
 
 const RADIUS = 56;
@@ -67,7 +68,7 @@ export function TouchControls() {
     <>
       {mode === "explore" && <Joystick />}
       {mode === "explore" && focus && (
-        <button className="touch-action ui" onClick={() => interact()} aria-label={`${focus.verb} ${focus.noun}`} data-testid="touch-action">
+        <button className={`touch-action ui ${inHostileZone() ? "raised" : ""}`} onClick={() => interact()} aria-label={`${focus.verb} ${focus.noun}`} data-testid="touch-action">
           <Icon id="hand" size={44} />
           <span>
             {focus.verb} {focus.noun}

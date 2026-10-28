@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { rockGeometry } from "./nature";
+import { BASIN } from "../../game/world/lowland";
 import { SEA_Y, TUNNEL, VOLCANO, forestMask, groundY, massifY, tunnelCoverY, volcanoFloor, volcanoMask } from "../../game/world/island";
 
 /**
@@ -94,7 +95,9 @@ export function massifGeometry(): THREE.BufferGeometry {
       for (let i = 0; i <= nx; i++) {
         let x = r.x0 + i * STEP;
         let z = r.z0 + j * STEP;
-        const seam = i === 0 || j === 0 || i === nx || j === nz;
+        // Vertices on or near the Act 2 basin's edge stay on the grid, so its own terrain meets them exactly.
+        const nearBasin = x > BASIN.x0 - 2.5 && x < BASIN.x1 + 2.5 && z < BASIN.z1 + 2.5;
+        const seam = i === 0 || j === 0 || i === nx || j === nz || nearBasin;
         if (!seam && !inCover(x, z) && !inCover(x + 2, z) && !inCover(x - 2, z) && !inCover(x, z + 2) && !inCover(x, z - 2) && volcanoMask(x, z) < 0.5 && forestMask(x, z) < 0.5) {
           x += (hash(x, z) - 0.5) * 0.9;
           z += (hash(z, x) - 0.5) * 0.9;
@@ -110,6 +113,8 @@ export function massifGeometry(): THREE.BufferGeometry {
         const x = r.x0 + i * STEP;
         const z = r.z0 + j * STEP;
         if (portalCell(x, z)) continue;
+        // The Act 2 lowland draws its own ground (models/lowland.ts).
+        if (x >= BASIN.x0 && x + STEP <= BASIN.x1 && z + STEP <= BASIN.z1) continue;
         const ids = [j * (nx + 1) + i, j * (nx + 1) + i + 1, (j + 1) * (nx + 1) + i, (j + 1) * (nx + 1) + i + 1];
         const ys = ids.map((k) => vy[k]);
         // Under the sea, or hidden under walkable land drawn by its own floor.

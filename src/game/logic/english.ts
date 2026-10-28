@@ -43,7 +43,25 @@ export type PhraseId =
   | "itsSmall"
   | "itsBig"
   | "hasWings"
-  | "hasTail";
+  | "hasTail"
+  // Act 2: shopping, the harbour, the kitchen and the trainer's commands.
+  | "wantApples"
+  | "wantBananas"
+  | "wantFish"
+  | "wantBerries"
+  | "wantMeat"
+  | "oneP"
+  | "twoP"
+  | "threeP"
+  | "whereShip"
+  | "mixLeafy"
+  | "mixBubbo"
+  | "mixPuff"
+  | "mixEmber"
+  | "cmdPull"
+  | "cmdPush"
+  | "cmdBlow"
+  | "cmdBurn";
 
 const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
 const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
@@ -92,6 +110,24 @@ const PART_WORDS: Record<PartId, string[]> = {
   wings: ["wing", "wings", "wingu", "wingsu", "ring", "rings", "wink", "winks", "weeks", "wins", "win", "swings", "wingz"],
   tail: ["tail", "tails", "tale", "tales", "teru", "teiru", "tell", "towel", "dale", "taylor", "teal"]
 };
+
+// Act 2. "please" and "the" are never judged; the content words are.
+export const NUMBER_WORDS: Record<1 | 2 | 3, string[]> = {
+  1: ["one", "won", "wan", "juan", "1", "an", "a"],
+  2: ["two", "to", "too", "2", "tu", "tsu", "tew"],
+  3: ["three", "tree", "free", "3", "sri", "suri", "sree", "threes"]
+};
+const WHERE = ["where", "where's", "wheres", "wear", "ware", "were", "wair", "whea", "howea", "hair", "air"];
+const SHIP = ["ship", "ships", "sheep", "chip", "shipp", "shippu", "sip", "shape", "chips"];
+const COMMAND_WORDS: Record<"pull" | "push" | "blow" | "burn", string[]> = {
+  pull: ["pull", "pulls", "pool", "pul", "puru", "full", "bull", "paul", "poll", "pulled"],
+  push: ["push", "pushes", "pusch", "puss", "pash", "posh", "bush", "pusshu", "pushed", "puch"],
+  blow: ["blow", "blows", "bro", "bloh", "burow", "flow", "glow", "blo", "bureau", "below"],
+  burn: ["burn", "burns", "bun", "barn", "born", "ban", "bahn", "burned", "bern", "verne", "bahn", "bang"]
+};
+
+export const WANT_PHRASE: Record<FoodId, PhraseId> = { apples: "wantApples", bananas: "wantBananas", fish: "wantFish", berries: "wantBerries", meat: "wantMeat" };
+export const NUMBER_PHRASE: Record<1 | 2 | 3, PhraseId> = { 1: "oneP", 2: "twoP", 3: "threeP" };
 
 export const SIZE_PHRASE: Record<SizeId, PhraseId> = { small: "itsSmall", big: "itsBig" };
 export const PART_PHRASE: Record<PartId, PhraseId> = { wings: "hasWings", tail: "hasTail" };
@@ -163,8 +199,36 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   itsBig: { id: "itsBig", en: "It's big.", keys: [SIZE_WORDS.big], forbid: SIZE_WORDS.small, distractors: ["itsSmall"] },
   // "has" is not judged: "It wings" from a beginner still names the right part.
   hasWings: { id: "hasWings", en: "It has wings.", keys: [PART_WORDS.wings], distractors: ["hasTail"] },
-  hasTail: { id: "hasTail", en: "It has a tail.", keys: [PART_WORDS.tail], distractors: ["hasWings"] }
+  hasTail: { id: "hasTail", en: "It has a tail.", keys: [PART_WORDS.tail], distractors: ["hasWings"] },
+  // "I want ___, please." needs only the food: the shop offers one food per sentence.
+  wantApples: { id: "wantApples", en: "I want apples, please.", keys: [FOOD_WORDS.apples] },
+  wantBananas: { id: "wantBananas", en: "I want bananas, please.", keys: [FOOD_WORDS.bananas] },
+  wantFish: { id: "wantFish", en: "I want fish, please.", keys: [FOOD_WORDS.fish] },
+  wantBerries: { id: "wantBerries", en: "I want berries, please.", keys: [FOOD_WORDS.berries] },
+  wantMeat: { id: "wantMeat", en: "I want meat, please.", keys: [FOOD_WORDS.meat] },
+  oneP: { id: "oneP", en: "One, please.", keys: [NUMBER_WORDS[1].slice(0, 5)], forbid: [...NUMBER_WORDS[2], ...NUMBER_WORDS[3]] },
+  twoP: { id: "twoP", en: "Two, please.", keys: [NUMBER_WORDS[2]], forbid: [...NUMBER_WORDS[3]] },
+  threeP: { id: "threeP", en: "Three, please.", keys: [NUMBER_WORDS[3]], forbid: [...NUMBER_WORDS[2]] },
+  whereShip: { id: "whereShip", en: "Where is the ship?", keys: [WHERE, SHIP], distractors: ["thankYou", "letsGo"] },
+  // Two foods name the recipe; "Mix the" is not judged.
+  mixLeafy: { id: "mixLeafy", en: "Mix the apples and berries.", keys: [FOOD_WORDS.apples, FOOD_WORDS.berries] },
+  mixBubbo: { id: "mixBubbo", en: "Mix the fish and bananas.", keys: [FOOD_WORDS.fish, FOOD_WORDS.bananas] },
+  mixPuff: { id: "mixPuff", en: "Mix the berries and bananas.", keys: [FOOD_WORDS.berries, FOOD_WORDS.bananas] },
+  mixEmber: { id: "mixEmber", en: "Mix the meat and apples.", keys: [FOOD_WORDS.meat, FOOD_WORDS.apples] },
+  cmdPull: { id: "cmdPull", en: "Pull!", keys: [COMMAND_WORDS.pull], distractors: ["cmdPush", "cmdBlow"] },
+  cmdPush: { id: "cmdPush", en: "Push!", keys: [COMMAND_WORDS.push], distractors: ["cmdPull", "cmdBurn"] },
+  cmdBlow: { id: "cmdBlow", en: "Blow!", keys: [COMMAND_WORDS.blow], distractors: ["cmdBurn", "cmdPull"] },
+  cmdBurn: { id: "cmdBurn", en: "Burn!", keys: [COMMAND_WORDS.burn], distractors: ["cmdBlow", "cmdPush"] }
 };
+
+/** The quantity in a heard shopping sentence ("I want three apples"), if any. */
+export function heardQuantity(text: string): 1 | 2 | 3 | null {
+  const words = text.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/);
+  for (const n of [3, 2] as const) if (words.some((w) => NUMBER_WORDS[n].includes(w))) return n;
+  // "one" (not "a"/"an", which every sentence has) only counts when said as a number.
+  if (words.some((w) => ["one", "1"].includes(w))) return 1;
+  return null;
+}
 
 export const PHRASE_IDS = Object.keys(PHRASES) as PhraseId[];
 

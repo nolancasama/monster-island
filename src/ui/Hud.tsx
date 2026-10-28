@@ -13,6 +13,8 @@ import { Portrait } from "./Portraits";
 import { Ja } from "./Talk";
 import { UI, objectiveText } from "./i18n";
 import { rt } from "../game/runtime";
+import { eat } from "../game/combat";
+import { Act2Hud } from "./Act2Hud";
 import type { MonsterId } from "../game/types";
 
 /** How high a monster floats (a flier up in its tree carries its label with it). */
@@ -42,6 +44,19 @@ function Bag() {
   const mode = useGame((s) => s.mode);
   const has = islandFoods(progress).filter((f) => (bag[f] ?? 0) > 0);
   if (!has.length || mode !== "explore") return null;
+  // Act 2: tapping a food eats it (HP for the player, MP for the friend who loves it).
+  if (progress.act2.started) {
+    return (
+      <div className="bag panel ui" data-testid="bag" aria-label="Food bag">
+        {has.map((f) => (
+          <button key={f} className="bag-item eatable" title={`Eat ${FOODS[f].word}`} onClick={() => eat(f)} data-testid={`bag-${f}`}>
+            <Icon id={f} size={30} />
+            <b>{bag[f]}</b>
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="bag panel ui" data-testid="bag" aria-label="Food bag">
       {has.map((f) => (
@@ -118,7 +133,16 @@ function HintBar() {
   const touch = useGame((s) => s.touch);
   const mode = useGame((s) => s.mode);
   if (!hint || mode !== "explore") return null;
-  const t = hint === "move" ? (touch ? UI.moveTouch : UI.move) : hint === "micBlocked" ? UI.micBlocked : hint === "switch" ? UI.switch : null;
+  const t =
+    hint === "move" ? (touch ? UI.moveTouch : UI.move)
+    : hint === "micBlocked" ? UI.micBlocked
+    : hint === "switch" ? UI.switch
+    : hint === "attack" ? (touch ? UI.attackTouch : UI.attack)
+    : hint === "coins" ? UI.coins
+    : hint === "special" ? (touch ? UI.specialTouch : UI.special)
+    : hint === "eat" ? (touch ? UI.eatTouch : UI.eat)
+    : hint === "switchAct2" ? UI.switchAct2
+    : null;
   if (!t) return null;
   return (
     <div className="hint-bar" data-testid="hint">
@@ -229,6 +253,7 @@ export function Hud() {
       <FocusLabel />
       <DiscoverCard />
       <FriendCard />
+      <Act2Hud />
     </>
   );
 }

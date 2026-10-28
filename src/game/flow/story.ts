@@ -12,6 +12,10 @@ import { poofTo, besidePlayer } from "./companion";
 import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
+import { cb, resetCombat } from "../combat";
+import { CLIFF_ROPE, CHESTS, zoneAt } from "../world/lowland";
+import { gatherParty, kidnapScene, placeMapleForAct2, startAct2Scene } from "./act2";
+import type { ObstacleId } from "../types";
 
 /**
  * Starting, continuing, saving, the intro with Professor Maple, Maple's
@@ -29,8 +33,12 @@ export function saveNow() {
   if (g.screen === "title") return;
   const p = rt.player;
   // Never save mid-ride or mid-climb: resume at the bank or the foot of the rope instead.
-  const at = p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? { x: ROPE.x, z: ROPE.z + 1.4 } : { x: p.x, z: p.z };
-  const text = encodeSave(g.progress, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
+  // The cliff rope below the sanctuary resumes on its ledge.
+  const climbAt = p.z < -140 ? CLIFF_ROPE.top : { x: ROPE.x, z: ROPE.z + 1.4 };
+  const at = p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
+  // Act 2's live HP and MP are written in with the rest of the progress.
+  const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: zoneAt(p.x, p.z) } } : g.progress;
+  const text = encodeSave(progress, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
   if (text === lastSaved) return;
   lastSaved = text;
   writeSave(text);
@@ -81,6 +89,15 @@ function applyWorld(p: Progress) {
     m.x = spot.x;
     m.z = spot.z;
   }
+  // Act 2: the cliff rope, the lowland's unlocks and opened chests; Maple and the friends travel with the story.
+  if (p.act2.started) {
+    rt.cliffRope = 1;
+    rt.act2Scene = "done";
+    for (const id of Object.keys(rt.act2Unlock) as ObstacleId[]) rt.act2Unlock[id] = p.solved.includes(id) ? 1 : 0;
+    for (const c of CHESTS) if (p.act2.chests.includes(c.id)) rt.chestLid.set(c.id, 1);
+    placeMapleForAct2();
+    gatherParty();
+  }
 }
 
 async function beginAudio() {
@@ -116,8 +133,11 @@ export async function newGame() {
     friendCard: null,
     hint: null,
     journalPulse: false,
-    fade: 1
+    fade: 1,
+    banner: null,
+    panel: null
   });
+  resetCombat();
   rt.camera.snap = true;
   await beginAudio();
   void intro();
@@ -136,10 +156,25 @@ export async function continueGame() {
   rt.player.yaw = save.player.yaw;
   rt.playTime = save.seconds;
   rt.camera.snap = true;
-  setGame({ screen: "game", mode: "explore", progress: p, journalOpen: false, settingsOpen: false, fade: 0, hint: null });
+  setGame({ screen: "game", mode: "explore", progress: p, journalOpen: false, settingsOpen: false, fade: 0, hint: null, banner: null, panel: null });
+  resetCombat();
   applyWorld(p);
   await beginAudio();
   if (!p.metMaple) void intro();
+}
+
+/** Title screen, a finished prologue: straight to the sanctuary, where the new chapter begins. */
+export async function startAct2FromTitle() {
+  await continueGame();
+  const p = getGame().progress;
+  if (p.act2.started || p.endings < 3) return;
+  const h = MONSTERS.lumo.home;
+  const safe = nearestWalkable(h.x, h.z + 5, PLAYER_R, gatesOf(p));
+  rt.player.x = safe.x;
+  rt.player.z = safe.z;
+  rt.player.yaw = Math.PI;
+  rt.camera.snap = true;
+  await startAct2Scene();
 }
 
 // ------------------------------------------------------------ intro
@@ -196,6 +231,16 @@ export function talkToMaple(): Promise<void> {
     else if (o.id === "askBack") phase3Hint = ["Do you like monsters? Tell your new friend!", "モンスターが すき? きみの こたえを いってみよう!"];
     else if (o.id === "finale") phase3Hint = ["Look! Lumo is shining!", "みて! ルモが ひかっているよ!"];
     else if (o.id === "explore" && p.endings >= 3) phase3Hint = ["You are a Monster Friend! Enjoy the island!", "モンスターフレンドだね! しまを たんけんしよう!"];
+    // Act 2.
+    else if (o.id === "act2Start") phase3Hint = ["Let's go and see Lumo in the garden!", "にわの ルモに あいに いこう!"];
+    else if (o.id === "descend") phase3Hint = ["Climb down the rope at the cliff!", "がけの ロープを おりよう!"];
+    else if (o.id === "openChest") phase3Hint = ["Follow the path. Look for a treasure chest!", "みちを すすんで たからばこを さがそう!"];
+    else if (o.id === "rest") phase3Hint = ["Rest at the camp. Then choose a path!", "キャンプで やすもう。それから みちを えらぼう!"];
+    else if (o.id === "reachPort") phase3Hint = ["Go north to the port. The grove or the canopy, both are OK!", "きたの みなとへ。どちらの みちでも いけるよ!"];
+    else if (o.id === "market") phase3Hint = ["Buy food at the market: I want apples, please.", "おみせで「I want apples, please.」と いって かおう!"];
+    else if (o.id === "kitchen") phase3Hint = ["Make a monster treat in the kitchen!", "キッチンで モンスターの おやつを つくろう!"];
+    else if (o.id === "harbor") phase3Hint = ["Ask at the harbor office: Where is the ship?", "みなとの じむしょで「Where is the ship?」と きこう!"];
+    else if (o.id === "act2Done") phase3Hint = ["Lumo is on Cloud Isle. We'll sail there soon!", "ルモは クラウドじまに いる。もうすぐ ふねで いこう!"];
     if (phase3Hint) {
       await say("maple", ...phase3Hint);
       m.talking = false;
@@ -453,7 +498,8 @@ export function finaleEnding(): Promise<void> {
     setGame((g) => ({ progress: { ...g.progress, endings: 3 } }));
     rt.finale = "complete";
     saveNow();
-    setGame({ screen: "results", seconds: Math.round(rt.playTime) });
+    // The prologue's end is no longer The End: the raiders come for Lumo (Act 2).
+    await kidnapScene(true);
   });
 }
 

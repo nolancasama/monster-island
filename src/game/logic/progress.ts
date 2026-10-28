@@ -1,7 +1,8 @@
 import { MONSTERS, MONSTER_ORDER, monstersOfPhase, type MonsterDef } from "../data/monsters";
-import { BAG_MAX, FOODS, islandFoods } from "../data/foods";
+import { FOODS, islandFoods } from "../data/foods";
 import type { AbilityId, Bag, FoodId, MonsterId, ObstacleId } from "../types";
 import type { PhraseId } from "./english";
+import { ACT2_OBSTACLES, act2Objective, bagMax, newAct2, prologueComplete, type Act2, type Act2Objective } from "./act2";
 
 /**
  * The saved game: what the student has learned and unlocked. Pure functions
@@ -33,6 +34,8 @@ export interface Progress {
   endings: number;
   /** Every sentence produced at least once. */
   said: PhraseId[];
+  /** Act 2: The Hunt for Lumo (untouched until the prologue is complete). */
+  act2: Act2;
 }
 
 const emptyRecord = (): MonsterRecord => ({ discovered: false, asked: {}, friend: false, canKnown: {}, described: {} });
@@ -40,7 +43,7 @@ const emptyRecord = (): MonsterRecord => ({ discovered: false, asked: {}, friend
 export function newProgress(): Progress {
   const monsters = {} as Record<MonsterId, MonsterRecord>;
   for (const id of MONSTER_ORDER) monsters[id] = emptyRecord();
-  return { monsters, active: null, bag: {}, solved: [], metMaple: false, endings: 0, said: [] };
+  return { monsters, active: null, bag: {}, solved: [], metMaple: false, endings: 0, said: [], act2: newAct2() };
 }
 
 // ------------------------------------------------------------ monster answers
@@ -187,7 +190,7 @@ export function setActive(p: Progress, id: MonsterId): Progress {
 
 export function pickUp(p: Progress, food: FoodId): Progress {
   const n = p.bag[food] ?? 0;
-  if (n >= BAG_MAX) return p;
+  if (n >= bagMax(p)) return p;
   return { ...p, bag: { ...p.bag, [food]: n + 1 } };
 }
 
@@ -219,7 +222,12 @@ export const OBSTACLES: Record<ObstacleId, ObstacleDef> = {
   gateLeaf: { id: "gateLeaf", needs: "grow", question: "canHelp", others: ["canSwim", "canFly"], after: ["cave"] },
   gateDrop: { id: "gateDrop", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: ["cave"] },
   gateWing: { id: "gateWing", needs: "fly", question: "canFly", others: ["canFire", "canSwim"], after: ["cave"] },
-  gateFlame: { id: "gateFlame", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: ["cave"] }
+  gateFlame: { id: "gateFlame", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: ["cave"] },
+  // Act 2: the grove's lily pads (optional treasure), the canopy's two gaps, and the causeway's shortcut gate.
+  groveLilies: { id: "groveLilies", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: [] },
+  canopyVines: { id: "canopyVines", needs: "grow", question: "canHelp", others: ["canSwim", "canFire"], after: [] },
+  canopyRope: { id: "canopyRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["canopyVines"] },
+  causewayGate: { id: "causewayGate", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: [] }
 };
 
 export const GATES: ObstacleId[] = ["gateLeaf", "gateDrop", "gateWing", "gateFlame"];
@@ -233,6 +241,7 @@ export function obstacleAvailable(p: Progress, id: ObstacleId): boolean {
   if (OBSTACLES[id].after.some((o) => !isSolved(p, o))) return false;
   if (id === "lava" && p.endings < 2) return false;
   if (id === "cave" && (!p.monsters.ember.friend || !p.monsters.ember.invited)) return false;
+  if (ACT2_OBSTACLES.includes(id) && !p.act2.started) return false;
   return true;
 }
 
@@ -286,7 +295,8 @@ export type Objective =
   | { id: "letsGo"; monster: MonsterId }
   | { id: "askBack"; monster: MonsterId }
   | { id: "finale" }
-  | { id: "explore" };
+  | { id: "explore" }
+  | Act2Objective;
 
 /** Where each live monster can be reached from (the obstacle that guards it). */
 export const GUARDED_BY: Partial<Record<MonsterId, ObstacleId>> = { bubbo: "fallenPalm", puff: "bridge", ember: "lava" };
@@ -335,5 +345,7 @@ export function objective(p: Progress): Objective {
   const lumo = befriendStep(p, "lumo");
   if (lumo) return lumo;
   if (p.endings < 3) return { id: "finale" };
+  // The prologue is complete: Act 2 carries the story on.
+  if (prologueComplete(p)) return act2Objective(p);
   return { id: "explore" };
 }

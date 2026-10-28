@@ -4,6 +4,8 @@ import { makeRng, shuffle } from "../logic/rng";
 import { noteSaid } from "../logic/progress";
 import { getGame, setGame, updateProgress, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
 import { MONSTERS } from "../data/monsters";
+import { NPCS, type NpcId } from "../data/town";
+import type { MonsterId } from "../types";
 import { recognition, HARD_ERRORS } from "../../audio/recognition";
 import { tts } from "../../audio/tts";
 import { audio } from "../../audio/audio";
@@ -59,6 +61,9 @@ interface Active {
 
 let active: Active | null = null;
 let promptId = 1;
+/** What the recogniser heard for the last accepted spoken answer ("" when it was tapped). */
+let heardForLast = "";
+export const lastHeard = () => heardForLast;
 let rng = makeRng(Date.now() % 100000);
 
 export function seedChoices(seed: number) {
@@ -75,7 +80,8 @@ function voiceOf(by: Speaker): { pitch: number; rate: number } {
   if (by === "maple") return { pitch: 1.1, rate: 0.9 };
   if (by === "self") return { pitch: 1.3, rate: 0.95 };
   if (by === "game") return { pitch: 1.1, rate: 0.9 };
-  return MONSTERS[by].voice;
+  if (by in NPCS) return NPCS[by as NpcId].voice;
+  return MONSTERS[by as MonsterId].voice;
 }
 
 export function speak(text: string, by: Speaker = "game"): Promise<void> {
@@ -234,6 +240,7 @@ export function micPress() {
         const j = judgeSpeech(alts, speechOptions);
         if (alts[0]) update({ heard: alts[0] });
         if (j.kind === "match" && accepted(j.id)) {
+          heardForLast = alts[0] ?? "";
           succeed(j.id);
           return;
         }
@@ -274,6 +281,7 @@ export function choose(id: PhraseId) {
   const p = getGame().prompt;
   if (!a || a.done || !p || !p.buttons || p.status === "listening") return;
   if (accepted(id)) {
+    heardForLast = "";
     succeed(id);
     return;
   }

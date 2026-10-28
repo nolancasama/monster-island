@@ -1,4 +1,5 @@
 import type { MonsterId } from "../game/types";
+import { NPCS, type NpcId } from "../game/data/town";
 
 /**
  * Journal portraits, drawn to match the 3D models. `silhouette` draws the
@@ -186,6 +187,35 @@ export function Portrait({ id, size = 64, silhouette = false }: { id: MonsterId;
   return (
     <svg className={`portrait ${silhouette ? "silhouette" : ""}`} width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
       <D dark={silhouette ? "#3a3550" : undefined} />
+    </svg>
+  );
+}
+
+/** A Port Town keeper's face, drawn from the keeper's look (data/town.ts). */
+export function NpcPortrait({ id, size = 64 }: { id: NpcId; size?: number }) {
+  const n = NPCS[id];
+  return (
+    <svg className="portrait" width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
+      <ellipse cx="50" cy="98" rx="34" ry="21" fill={n.shirt} />
+      {n.apron && <path d="M36 82 h28 v18 h-28z" fill={n.apron} />}
+      <circle cx="50" cy="55" r="25" fill={n.skin} />
+      <path d="M25 52 Q27 28 50 28 Q73 28 75 52 Q68 40 50 40 Q32 40 25 52z" fill={n.hair} />
+      {n.hat === "chef" && <path d="M30 34 Q24 12 40 14 Q50 2 60 14 Q76 12 70 34z" fill={n.hatColor} stroke="#e6e0d8" strokeWidth="1.5" />}
+      {n.hat === "captain" && (
+        <>
+          <path d="M26 34 Q50 16 74 34z" fill={n.hatColor} />
+          <rect x="26" y="31" width="48" height="6" rx="2" fill="#26467a" />
+          <circle cx="50" cy="26" r="3.5" fill="#ffd23f" />
+        </>
+      )}
+      {n.hat === "band" && <rect x="25" y="36" width="50" height="6" rx="3" fill={n.hatColor} />}
+      {n.hat === "scarf" && <path d="M26 40 Q50 22 74 40 Q50 32 26 40z" fill={n.hatColor} />}
+      {id === "harbor" && <path d="M34 70 Q50 84 66 70 Q60 78 50 79 Q40 78 34 70z" fill={n.hair} />}
+      <circle cx="41" cy="55" r="3.3" fill="#1d1712" />
+      <circle cx="59" cy="55" r="3.3" fill="#1d1712" />
+      <path d="M43 65 Q50 70 57 65" stroke="#8a3a2a" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <ellipse cx="34" cy="63" rx="4" ry="2.5" fill="#ff9a8a" />
+      <ellipse cx="66" cy="63" rx="4" ry="2.5" fill="#ff9a8a" />
     </svg>
   );
 }

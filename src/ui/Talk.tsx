@@ -2,7 +2,8 @@ import { useGame, type Speaker } from "../game/store";
 import { cancelAsk, choose, micPress, micUsable, nextLine, replay } from "../game/flow/ask";
 import { MONSTERS } from "../game/data/monsters";
 import { Icon } from "./icons";
-import { MaplePortrait, Portrait, SelfPortrait } from "./Portraits";
+import { MaplePortrait, NpcPortrait, Portrait, SelfPortrait } from "./Portraits";
+import { NPCS, type NpcId } from "../game/data/town";
 import { UI } from "./i18n";
 import type { MonsterId } from "../game/types";
 
@@ -17,10 +18,11 @@ export function Ja({ children }: { children: React.ReactNode }) {
 }
 
 const NAME: Record<string, string> = { maple: "Professor Maple", self: "You", game: "" };
-export const speakerName = (by: Speaker) => NAME[by] ?? MONSTERS[by as MonsterId]?.name ?? "";
+export const speakerName = (by: Speaker) => NAME[by] ?? NPCS[by as NpcId]?.name ?? MONSTERS[by as MonsterId]?.name ?? "";
 
 export function SpeakerFace({ by, size }: { by: Speaker; size: number }) {
   if (by === "maple") return <MaplePortrait size={size} />;
+  if (by in NPCS) return <NpcPortrait id={by as NpcId} size={size} />;
   if (by === "self") return <SelfPortrait size={size} />;
   if (by === "game")
     return (
@@ -28,7 +30,7 @@ export function SpeakerFace({ by, size }: { by: Speaker; size: number }) {
         <Icon id="journal" size={size * 0.8} />
       </span>
     );
-  return <Portrait id={by} size={size} />;
+  return <Portrait id={by as MonsterId} size={size} />;
 }
 
 /** An English prompt: say the sentence (or choose it). */

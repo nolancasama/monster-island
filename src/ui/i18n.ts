@@ -19,7 +19,16 @@ export const UI = {
   micBlocked: { en: "Microphone is off: tap the sentences.", ja: "マイクが つかえないので タップで こたえよう" },
   move: { en: "Move: WASD / arrows. Drag to look.", ja: "いどう: WASD / やじるし。ドラッグで みまわす" },
   moveTouch: { en: "Move with the stick. Drag to look.", ja: "スティックで いどう。ドラッグで みまわす" },
-  switch: { en: "Open the journal (M) and choose a friend!", ja: "ずかん(M)で ともだちを えらぼう!" }
+  switch: { en: "Open the journal (M) and choose a friend!", ja: "ずかん(M)で ともだちを えらぼう!" },
+  // Act 2's tutorial (each shows until it is understood).
+  attack: { en: "An enemy! Press J to attack. Hold J to keep going!", ja: "てきだ! J で こうげき。おしつづけると れんぞく こうげき!" },
+  attackTouch: { en: "An enemy! Tap the big button to attack!", ja: "てきだ! おおきい ボタンで こうげき!" },
+  coins: { en: "Coins! Walk near them to pick them up.", ja: "コインだ! ちかくを あるくと ひろえるよ" },
+  special: { en: "Press K for a special move! It uses MP.", ja: "K で とくべつな わざ! MPを つかうよ" },
+  specialTouch: { en: "Tap the special button! It uses MP.", ja: "とくべつな わざの ボタンを タップ! MPを つかうよ" },
+  eat: { en: "HP or MP low? Press F to eat food!", ja: "HPや MPが へったら F で たべよう!" },
+  eatTouch: { en: "HP or MP low? Tap Eat!", ja: "HPや MPが へったら「Eat」を タップ!" },
+  switchAct2: { en: "Press 1-4 to change friends. Each friend fights in its own way!", ja: "1〜4 で ともだちを かえよう。それぞれ たたかいかたが ちがうよ!" }
 } satisfies Record<string, Text>;
 
 /** The objective card. */
@@ -61,6 +70,25 @@ export function objectiveText(o: Objective): Text {
       return { en: "Do you like monsters?", ja: "モンスターは すき? こたえよう!" };
     case "finale":
       return { en: "Celebrate with your friends!", ja: "ともだちと おいわいしよう!" };
+    // Act 2: The Hunt for Lumo.
+    case "act2Start":
+      return { en: "New chapter! Visit Lumo in the garden.", ja: "あたらしい おはなし! にわの ルモに あいに いこう" };
+    case "descend":
+      return { en: "Climb down the cliff!", ja: "がけの ロープを おりよう!" };
+    case "openChest":
+      return { en: "Find the treasure chest!", ja: "たからばこを さがそう!" };
+    case "rest":
+      return { en: "Rest at the camp!", ja: "キャンプで やすもう!" };
+    case "reachPort":
+      return { en: "Rescue Lumo! Reach the port.", ja: "ルモを たすけよう! みなとへ いこう" };
+    case "market":
+      return { en: "Buy food at the market!", ja: "おみせで たべものを かおう!" };
+    case "kitchen":
+      return { en: "Make a monster treat!", ja: "キッチンで おやつを つくろう!" };
+    case "harbor":
+      return { en: "Ask at the harbor: Where is the ship?", ja: "みなとの じむしょで ふねの ことを きこう" };
+    case "act2Done":
+      return { en: "Lumo is on Cloud Isle! (To be continued)", ja: "ルモは クラウドじまに いる! (つづく)" };
     default:
       return { en: "Explore the island!", ja: "しまを たんけんしよう!" };
   }

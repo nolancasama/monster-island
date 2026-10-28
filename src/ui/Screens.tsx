@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { setGame, useGame } from "../game/store";
-import { continueGame, keepExploring, newGame, toTitle } from "../game/flow/story";
+import { continueGame, keepExploring, newGame, startAct2FromTitle, toTitle } from "../game/flow/story";
+import { readSave } from "../game/logic/save";
 import { MONSTERS, MONSTER_ORDER } from "../game/data/monsters";
 import { PHRASES } from "../game/logic/english";
 import { Icon } from "./icons";
@@ -11,6 +12,9 @@ export function TitleScreen() {
   const screen = useGame((s) => s.screen);
   const hasSave = useGame((s) => s.hasSave);
   const [confirm, setConfirm] = useState(false);
+  // A finished adventure gets a clear way into the new chapter.
+  const save = useMemo(() => (screen === "title" && hasSave ? readSave() : null), [screen, hasSave]);
+  const act2Ready = Boolean(save && save.progress.endings >= 3 && !save.progress.act2.started);
   if (screen !== "title") return null;
   return (
     <div className="title-screen ui" data-testid="title">
@@ -30,7 +34,12 @@ export function TitleScreen() {
         </p>
         {hasSave ? (
           <div className="title-buttons">
-            <button className="primary big" onClick={() => void continueGame()} data-testid="btn-continue">
+            {act2Ready && (
+              <button className="primary big act2" onClick={() => void startAct2FromTitle()} data-testid="btn-act2">
+                <span className="new-badge">NEW!</span> Act 2: The Hunt for Lumo <Ja>だい2しょう: ルモを さがせ</Ja>
+              </button>
+            )}
+            <button className={act2Ready ? "secondary" : "primary big"} onClick={() => void continueGame()} data-testid="btn-continue">
               <Icon id="play" size={24} /> Continue <Ja>つづきから</Ja>
             </button>
             {confirm ? (

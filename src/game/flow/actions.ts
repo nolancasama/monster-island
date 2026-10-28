@@ -1,5 +1,6 @@
 import { FOOD_SOURCES } from "../world/island";
-import { BAG_MAX, FOODS } from "../data/foods";
+import { FOODS } from "../data/foods";
+import { bagMax } from "../logic/act2";
 import { companions, pickUp } from "../logic/progress";
 import { getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { effect, rt } from "../runtime";
@@ -9,6 +10,8 @@ import { cliffTopEnding, readSign, stoneEnding, talkToMaple } from "./story";
 import { switchTo } from "./companion";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
+import { climbCliff, lookAtLockedGate, openChestScene, readForkSign, restAtCamp, talkToKeeper } from "./act2";
+import type { ServiceId } from "../world/lowland";
 import type { MonsterId, ObstacleId } from "../types";
 
 /** E / Enter / the touch action button. */
@@ -40,7 +43,22 @@ export function interact(f: Focus | null = getGame().focus) {
       if (getGame().progress.endings < 1) void stoneEnding();
       return;
     case "sign":
-      void readSign();
+      if (f.id === "forkSign") void readForkSign();
+      else if (f.id === "lockedGate") void lookAtLockedGate();
+      else void readSign();
+      return;
+    // Act 2.
+    case "cliffRope":
+      void climbCliff(f.id === "cliffDown");
+      return;
+    case "chest":
+      void openChestScene(f.id);
+      return;
+    case "rest":
+      void restAtCamp();
+      return;
+    case "npc":
+      void talkToKeeper(f.id as ServiceId);
   }
 }
 
@@ -48,7 +66,7 @@ function pick(sourceId: string) {
   const s = FOOD_SOURCES.find((x) => x.id === sourceId);
   if (!s || rt.taken.has(s.id)) return;
   const before = getGame().progress.bag[s.food] ?? 0;
-  if (before >= BAG_MAX) {
+  if (before >= bagMax(getGame().progress)) {
     toast({ en: "Your bag is full!", ja: `${FOODS[s.food].ja}は もう いっぱい!`, icon: s.food, tone: "info" }, 2200);
     return;
   }

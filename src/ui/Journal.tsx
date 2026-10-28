@@ -144,6 +144,12 @@ function Page({ id }: { id: MonsterId }) {
           <Icon id="speaker" size={18} /> I like monsters!
         </button>
       )}
+      {id === "lumo" && progress.act2.lumoTaken && (
+        <p className="j-taken" data-testid="journal-lumo-taken">
+          <b>{progress.act2.harbor ? "Lumo is on Cloud Isle!" : "Taken by the sky raiders!"}</b>{" "}
+          <Ja>{progress.act2.harbor ? "ルモは クラウドじまに いる! たすけに いこう" : "そらの とうぞくに つれて いかれた! たすけに いこう"}</Ja>
+        </p>
+      )}
       {r.friend && def.companion !== false && (
         <button
           className={`primary j-choose ${progress.active === id ? "chosen" : ""}`}

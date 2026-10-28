@@ -9,6 +9,9 @@ import { standY } from "../game/world/collision";
 import { smoothMat, shadowMaterial } from "./materials";
 import { bubboParts, emberParts, leafyParts, lumoParts, puffParts, type MonsterParts } from "./models/monsters";
 import type { MonsterId } from "../game/types";
+import { mountPose } from "../game/combat";
+import { lumoHidden } from "../game/flow/act2";
+import { EMBER_TAIL_RIDE } from "./poses";
 
 const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
@@ -130,6 +133,14 @@ function MonsterBody({ id }: { id: MonsterId }) {
     g.position.set(m.x, baseY + m.lift, m.z);
     g.rotation.y = m.yaw + pose.spin + pose.shake;
     g.scale.setScalar(0.2 + 0.8 * sm(poof));
+    // Act 2: Lumo is in the raiders' cage; a friend in its combat position sits on (or carries) the player.
+    g.visible = !(id === "lumo" && lumoHidden());
+    const mount = mountPose(id);
+    if (mount) {
+      g.position.set(mount.x, mount.y, mount.z);
+      g.rotation.y = mount.yaw + pose.spin * 0.2;
+      g.scale.setScalar(mount.scale);
+    }
     r.position.y = pose.bounce + walkHop + (m.talking ? Math.abs(Math.sin(t * 8)) * 0.03 : 0);
     r.scale.set(1 / Math.sqrt(pose.squash), pose.squash, 1 / Math.sqrt(pose.squash));
     r.rotation.x = pose.lean;
@@ -137,7 +148,8 @@ function MonsterBody({ id }: { id: MonsterId }) {
     if (eyes.current) eyes.current.scale.y = pose.eyes;
     if (shadowRef.current) {
       shadowRef.current.position.y = ground - baseY - m.lift + 0.03;
-      shadowRef.current.visible = !m.swimming;
+      shadowRef.current.visible = !m.swimming && !(mount && mount.scale < 0.95);
+      if (mount) shadowRef.current.position.y = standY(mount.x, mount.z, solved) - mount.y + 0.03;
       const s = (1 - Math.min(0.5, pose.bounce)) * (1 - Math.min(0.55, hover * 0.15));
       shadowRef.current.scale.set(s, s, s);
     }
@@ -192,7 +204,8 @@ function MonsterBody({ id }: { id: MonsterId }) {
     } else if (id === "ember") {
       if (n.footL) n.footL.rotation.x = swing * 0.45;
       if (n.footR) n.footR.rotation.x = -swing * 0.45;
-      if (n.tail) n.tail.rotation.y = Math.sin(t * 2.1) * 0.18;
+      // Carrying the rider piggyback, the tail swings back between the rider's legs.
+      if (n.tail) n.tail.rotation.y = mount ? EMBER_TAIL_RIDE + Math.sin(t * 2.1) * 0.05 : Math.sin(t * 2.1) * 0.18;
       if (n.smoke) {
         const a = m.anim;
         const huff = a?.kind === "notice" || a?.kind === "power";

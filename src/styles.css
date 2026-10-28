@@ -1557,3 +1557,386 @@ kbd {
     transition: none !important;
   }
 }
+
+/* ------------------------------------------------------------ Act 2 */
+
+/* HP (one continuous bar) and the active friend's MP, above the team chips. */
+.vitals {
+  position: absolute;
+  left: 12px;
+  bottom: 112px;
+  width: 270px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 9;
+  pointer-events: none;
+}
+
+.vitals.hurt {
+  animation: hurt 0.3s ease-out;
+  border-color: var(--coral);
+}
+
+@keyframes hurt {
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.vital-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vital-label {
+  width: 26px;
+  font-size: 0.95rem;
+  color: #c0392b;
+}
+
+.vital-bar {
+  position: relative;
+  flex: 1;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(31, 58, 74, 0.18);
+  overflow: hidden;
+}
+
+.vital-bar.mp {
+  height: 14px;
+}
+
+.vital-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  border-radius: 10px;
+  transition: width 0.15s linear;
+}
+
+.mp-fill {
+  background: linear-gradient(#7fd0ff, #2f8fd8);
+}
+
+.vital-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.coins {
+  position: absolute;
+  top: 74px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 1.15rem;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.amber-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+}
+
+.bag-item.eatable {
+  border-radius: 10px;
+  padding: 2px 4px;
+}
+
+.bag-item.eatable:hover {
+  background: rgba(255, 210, 63, 0.35);
+}
+
+/* The active friend's moves with their English words (keyboard). */
+.moves-legend {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  display: flex;
+  gap: 8px;
+  z-index: 9;
+  pointer-events: none;
+}
+
+.moves-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 3px solid var(--line);
+  box-shadow: var(--shadow);
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.moves-legend kbd {
+  background: var(--sun);
+  color: #4a3200;
+}
+
+/* Touch: big, forgiving buttons on the right thumb. */
+.touch-moves {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 236px;
+  height: 200px;
+  z-index: 12;
+}
+
+.move-btn {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 900;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.18), var(--shadow);
+  touch-action: none;
+}
+
+.move-btn.basic {
+  right: 0;
+  bottom: 0;
+  width: 118px;
+  height: 118px;
+  background: var(--coral);
+  color: #fff;
+  font-size: 1.4rem;
+}
+
+.move-btn.special {
+  right: 124px;
+  bottom: 18px;
+  width: 92px;
+  height: 92px;
+  background: #3f7fd0;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.move-btn.eat {
+  right: 30px;
+  bottom: 128px;
+  width: 66px;
+  height: 66px;
+  background: var(--paper);
+  font-size: 0.8rem;
+}
+
+.move-btn:active {
+  transform: scale(0.94);
+}
+
+.touch-action.raised {
+  bottom: 236px;
+}
+
+/* Story banners ("Prologue Clear!", "NEW QUEST: Rescue Lumo!"). */
+.story-banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  min-width: min(560px, 90vw);
+  max-width: 92vw;
+  padding: 18px 30px 16px;
+  border-radius: 24px;
+  text-align: center;
+  background: #fffbea;
+  border: 5px solid var(--sun-dark);
+  box-shadow: var(--shadow), 0 0 0 8px rgba(255, 210, 63, 0.35);
+  z-index: 40;
+  pointer-events: none;
+  animation: banner-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.story-banner.quest {
+  border-color: #7a4fbf;
+  background: #f6f0ff;
+  box-shadow: var(--shadow), 0 0 0 8px rgba(122, 79, 191, 0.25);
+}
+
+.story-banner.place {
+  border-color: var(--leaf-dark);
+  background: #f2fbe9;
+  top: 16%;
+}
+
+.banner-title {
+  font-size: 2.1rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.banner-sub {
+  margin-top: 4px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+@keyframes banner-in {
+  from {
+    transform: translateX(-50%) scale(0.6);
+    opacity: 0;
+  }
+}
+
+/* Town panels: quick shop and the trainer's list. */
+.shop-panel,
+.trainer-panel {
+  width: min(720px, 94vw);
+  padding: 18px 22px;
+}
+
+.shop-panel h2,
+.trainer-panel h2 {
+  margin: 0 0 6px;
+}
+
+.shop-coins {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+.shop-rows,
+.trainer-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.shop-row,
+.trainer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: var(--paper-2);
+}
+
+.shop-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 48px;
+  font-weight: 900;
+}
+
+.shop-have {
+  min-width: 32px;
+  color: var(--ink-soft);
+  font-weight: 800;
+}
+
+.qty {
+  display: flex;
+  gap: 4px;
+}
+
+.qty button {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #fff;
+  border: 3px solid var(--line);
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+
+.qty button.on {
+  border-color: var(--teal);
+  background: #e3f7fa;
+}
+
+.shop-row .buy {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 1rem;
+}
+
+.trainer-moves {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.trainer-moves .learned {
+  color: var(--leaf-dark);
+}
+
+.trainer-moves .locked {
+  color: var(--ink-soft);
+}
+
+.title-buttons .act2 {
+  position: relative;
+  background: #7a4fbf;
+  box-shadow: 0 5px 0 #4a2a7a, var(--shadow);
+}
+
+.new-badge {
+  position: absolute;
+  top: -12px;
+  left: -10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--coral);
+  color: #fff;
+  font-size: 0.85rem;
+  transform: rotate(-8deg);
+}
+
+@media (max-height: 560px) {
+  .vitals {
+    bottom: 96px;
+    width: 220px;
+  }
+  .story-banner {
+    top: 12%;
+  }
+  .banner-title {
+    font-size: 1.5rem;
+  }
+}
+
+.title-buttons .primary.act2,
+.title-buttons .primary.act2 .ja {
+  color: #ffffff;
+}
+
+.j-taken {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #f1e9ff;
+  border: 2px dashed #7a4fbf;
+  color: #4a2a7a;
+}

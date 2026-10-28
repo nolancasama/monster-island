@@ -2,6 +2,7 @@ import { getGame, setGame } from "../store";
 import { cancelAsk, chooseIndex, hasLine, micPress, nextLine } from "./ask";
 import { interact, switchByIndex } from "./actions";
 import { audio } from "../../audio/audio";
+import { basicAttack, eat, specialAttack } from "../combat";
 
 export function openJournal(open = !getGame().journalOpen) {
   const g = getGame();
@@ -39,7 +40,15 @@ export function onKey(code: string) {
       return;
     }
     case "explore": {
-      if (code === "KeyE" || code === "Enter") interact();
+      if (g.panel) {
+        if (code === "Escape") setGame({ panel: null });
+        return;
+      }
+      // Act 2's fights: J attacks (held J repeats, see sim.ts), K is the special, F eats.
+      if (code === "KeyJ") basicAttack();
+      else if (code === "KeyK") specialAttack();
+      else if (code === "KeyF") eat();
+      else if (code === "KeyE" || code === "Enter") interact();
       else if (code === "KeyM") openJournal(true);
       else if (code === "Escape") setGame({ settingsOpen: true });
       else if (code.startsWith("Digit")) {

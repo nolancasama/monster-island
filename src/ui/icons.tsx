@@ -131,7 +131,21 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M20 60c4-16 20-20 20-34 0-8-6-14-8-20" stroke="#fff" strokeWidth="2" fill="none" strokeDasharray="4 6" />
     </>
   ),
-  play: <path d="M18 10l36 22-36 22z" fill="currentColor" />
+  play: <path d="M18 10l36 22-36 22z" fill="currentColor" />,
+  // Act 2: Monster Coins and amber (the treats' rare ingredient).
+  coin: (
+    <>
+      <circle cx="32" cy="32" r="24" fill="#ffcf3a" stroke="#c99a1a" strokeWidth="3" />
+      <circle cx="32" cy="32" r="15" fill="none" stroke="#e0a800" strokeWidth="3" />
+      <path d="M26 24c4-4 12-3 12 3s-12 4-12 10 8 7 12 3" stroke="#a87400" strokeWidth="4" fill="none" strokeLinecap="round" />
+    </>
+  ),
+  amber: (
+    <>
+      <path d="M32 6l20 16-6 30H18l-6-30z" fill="#ffa21f" stroke="#b86a00" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M24 18l8-6 10 8" stroke="#ffe0a0" strokeWidth="3" fill="none" strokeLinecap="round" />
+    </>
+  )
 };
 
 const MONSTER_IDS = new Set(["leafy", "bubbo", "puff", "ember"]);

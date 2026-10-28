@@ -8,7 +8,9 @@ import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
-import { PHASE3_PLACE } from "./flow/obstacles";
+import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
+import { cb } from "./combat";
+import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
 
 /**
  * Test hook (only with ?e2e=1): read game state and put the player next to
@@ -35,6 +37,17 @@ export function installE2eHook(seed: number) {
     if (name === "cliff" || name === "rope") return { x: ROPE.x, z: ROPE.z + 0.2 };
     if (name === "cliffTop") return CLIFF_TOP_SPOT;
     if (name in PHASE3_PLACE) return PHASE3_PLACE[name as keyof typeof PHASE3_PLACE];
+    // Act 2 places.
+    if (name in ACT2_PLACE) return ACT2_PLACE[name as keyof typeof ACT2_PLACE];
+    if (name === "cliffDown") return { x: CLIFF_ROPE.top.x, z: CLIFF_ROPE.top.z - 0.5 };
+    if (name === "cliffUp") return { x: CLIFF_ROPE.foot.x, z: CLIFF_ROPE.foot.z + 0.6 };
+    if (name === "campRest") return CAMP2.rest;
+    if (name === "forkSign") return FORK_SIGN;
+    if (name === "lockedGate") return { x: SHORTCUT_GATE.x, z: SHORTCUT_GATE.z + 1.2 };
+    if (name in SERVICES) return SERVICES[name as ServiceId].keeper;
+    if (name.startsWith("zone:")) return ROUTE_MARKERS[name.slice(5) as ZoneId] ?? null;
+    const chest = CHESTS.find((c) => c.id === name);
+    if (chest) return chest;
     if ((LIVE_MONSTERS as string[]).includes(name)) return rt.monsters[name as keyof typeof rt.monsters];
     const src = FOOD_SOURCES.find((s) => s.id === name || s.food === name);
     return src ?? null;
@@ -83,7 +96,24 @@ export function installE2eHook(seed: number) {
         starGlow: rt.starGlow,
         finale: rt.finale,
         camera: { pos: { ...rt.camera.pos }, target: { ...rt.camera.target } },
-        perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped }
+        perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped },
+        act2: {
+          scene: rt.act2Scene,
+          zone: cb.zones.current,
+          stance: { friend: cb.stance.friend, k: cb.stance.k },
+          hp: cb.vitals.hp,
+          mp: { ...cb.vitals.mp },
+          knockedOut: cb.knockedOut,
+          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, hp: e.hp, x: e.x, z: e.z })),
+          drops: cb.drops.length,
+          shots: cb.shots.length,
+          ship: { visible: rt.ship.visible, x: rt.ship.x, y: rt.ship.y, z: rt.ship.z, cage: rt.ship.cage.visible },
+          cliffRope: rt.cliffRope,
+          unlock: { ...rt.act2Unlock },
+          panel: g.panel,
+          banner: g.banner?.title ?? null,
+          hint: g.hint
+        }
       };
     },
     /** Stand next to a named thing (a monster, a food, maple, palm, river, stone), facing it. */
@@ -92,6 +122,16 @@ export function installE2eHook(seed: number) {
       if (!t) throw new Error(`no target ${name}`);
       const a = Math.atan2(rt.player.x - t.x, rt.player.z - t.z);
       // Obstacles are approached from the side the player arrives on.
+      // Act 2: unlocks are asked from their own standing spot; keepers are faced across their counter.
+      if (name in ACT2_PLACE) {
+        const f = ACT2_PLACE[name as keyof typeof ACT2_PLACE];
+        const face = ({ groveLilies: { x: 39, z: -223 }, canopyVines: { x: 106, z: -218 }, canopyRope: { x: 106, z: -227.5 }, causewayGate: SHORTCUT_GATE } as Record<string, { x: number; z: number }>)[name];
+        return place(f.x, f.z, face.x, face.z);
+      }
+      if (name in SERVICES) {
+        const k = SERVICES[name as ServiceId].keeper;
+        return place(k.x + Math.sin(k.yaw) * 1.7, k.z + Math.cos(k.yaw) * 1.7, k.x, k.z);
+      }
       const near =
         name === "river"
           ? { x: t.x - 0.2, z: t.z }
@@ -133,6 +173,19 @@ export function installE2eHook(seed: number) {
     /** Slow or freeze the game clock (0 = paused) for visual captures. */
     timeScale(k: number) {
       rt.timeScale = Math.max(0, k);
+    },
+    /** Act 2: stand near an enemy (by spawn index), facing it. */
+    nearEnemy(i: number, dist = 3) {
+      const e = cb.enemies[i];
+      const a = Math.atan2(rt.player.x - e.x, rt.player.z - e.z);
+      return place(e.x + Math.sin(a) * dist, e.z + Math.cos(a) * dist, e.x, e.z);
+    },
+    /** Act 2: set the live HP (tests of damage, eating and knock-outs). */
+    setHp(hp: number) {
+      cb.vitals = { ...cb.vitals, hp };
+    },
+    setMp(id: keyof typeof cb.vitals.mp, mp: number) {
+      cb.vitals = { ...cb.vitals, mp: { ...cb.vitals.mp, [id]: mp } };
     },
     mapleHome() {
       rt.maple.x = MAPLE.x;

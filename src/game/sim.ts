@@ -1,9 +1,9 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
-import { gateOpen, objective } from "./logic/progress";
+import { companions, gateOpen, objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { PICK_TIME, animate, rt, type MonsterRt } from "./runtime";
-import { keyboardMove } from "../input/keyboard";
-import { PLAYER_R, gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
+import { keyboardMove, keys } from "../input/keyboard";
+import { gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
 import { CAVE, LAVA, MONSTER_STONE, RIVER, shoreZ } from "./world/island";
 import { findFocus } from "./flow/focus";
 import { talkTo } from "./flow/encounter";
@@ -12,6 +12,9 @@ import { isRunning } from "./flow/script";
 import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
+import { cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
+import { lumoHidden, startAct2Scene } from "./flow/act2";
+import { CLIFF_FOOT_Z } from "./world/lowland";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
 
@@ -37,9 +40,14 @@ export function tick(dt: number) {
   const picking = rt.player.action?.kind === "pick" && rt.time - rt.player.action.t0 < PICK_TIME;
   movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen && !picking);
 
+  const act2 = g.progress.act2.started;
   for (const id of LIVE_MONSTERS) {
     const m = rt.monsters[id];
+    // Act 2: friends who are not the active one travel with the party.
+    if (act2 && id !== "lumo" && g.progress.monsters[id].friend && id !== g.progress.active && ["wander", "idle", "eat", "sleep", "play", "follow"].includes(m.mode)) m.mode = "party";
+    if (mounted(id)) continue;
     if (m.mode === "follow") follow(m, dt);
+    else if (m.mode === "party") partyFollow(m, dt);
     else if (m.mode === "talk" || m.mode === "script") faceLook(m, dt);
     else homeLife(m, dt);
     m.lift = 0;
@@ -47,6 +55,10 @@ export function tick(dt: number) {
     if (MONSTERS[id].can.includes("fly") && (m.mode === "follow" || m.mode === "talk") && m.airTarget < 0.3) m.airTarget = 0.35;
     m.air += (m.airTarget - m.air) * Math.min(1, dt * 2.5);
   }
+
+  // Act 2's fights (held J repeats the basic attack).
+  cb.hold = keys.has("KeyJ") || cb.touchHold;
+  combatTick(dt);
 
   // Food grows back. It is collectible from the moment it reappears; the
   // pop-in animation plays after that, never before.
@@ -81,7 +93,8 @@ export function tick(dt: number) {
 
   // Ambience follows the player.
   const p = rt.player;
-  audio.setNearness(1 - Math.min(1, Math.max(0, (shoreZ(p.x) - p.z) / 12)), 1 - Math.min(1, Math.abs(p.x - (RIVER.x0 + RIVER.x1) / 2) / 14));
+  if (p.z < CLIFF_FOOT_Z + 1) audio.setNearness(1 - Math.min(1, Math.max(0, (p.z + 323) / 22)), 0);
+  else audio.setNearness(1 - Math.min(1, Math.max(0, (shoreZ(p.x) - p.z) / 12)), 1 - Math.min(1, Math.abs(p.x - (RIVER.x0 + RIVER.x1) / 2) / 14));
 }
 
 // ------------------------------------------------------------ player
@@ -96,7 +109,9 @@ function monsterObstacles(): Obstacles[] {
   for (let i = 0; i < LIVE_MONSTERS.length; i++) {
     const id = LIVE_MONSTERS[i];
     const c = circles[i];
-    c.x = id === active ? 1e6 : rt.monsters[id].x;
+    // The companion, a friend travelling with the party, or one in its combat position never blocks the player.
+    const m = rt.monsters[id];
+    c.x = id === active || m.mode === "party" || mounted(id) || (id === "lumo" && lumoHidden()) ? 1e6 : m.x;
     c.z = rt.monsters[id].z;
     c.r = MONSTERS[id].radius;
   }
@@ -137,20 +152,23 @@ function movePlayer(dt: number, canMove: boolean) {
   }
   const rx = -fz;
   const rz = fx;
-  const wx = (fx * iy + rx * ix) * WALK;
-  const wz = (fz * iy + rz * ix) * WALK;
+  const walk = WALK * speedScale();
+  const wx = (fx * iy + rx * ix) * walk;
+  const wz = (fz * iy + rz * ix) * walk;
   const accel = 1 - Math.exp(-dt * 12);
   p.vx += (wx - p.vx) * accel;
   p.vz += (wz - p.vz) * accel;
   if (!canMove && Math.hypot(p.vx, p.vz) < 0.05) {
     p.vx = p.vz = 0;
   }
-  if (!p.frozen && (p.vx || p.vz)) {
-    const nx = p.x + p.vx * dt;
-    const nz = p.z + p.vz * dt;
-    const q = moveCircle(p.x, p.z, nx, nz, PLAYER_R, gatesOf(getGame().progress), false, monsterObstacles(), moveResult);
-    p.vx = (q.x - p.x) / dt;
-    p.vz = (q.z - p.z) / dt;
+  // A hit pushes the player back a little (Act 2).
+  const kx = cb.knock.x, kz = cb.knock.z;
+  if (!p.frozen && (p.vx || p.vz || Math.abs(kx) + Math.abs(kz) > 0.05)) {
+    const nx = p.x + (p.vx + kx) * dt;
+    const nz = p.z + (p.vz + kz) * dt;
+    const q = moveCircle(p.x, p.z, nx, nz, playerRadius(), gatesOf(getGame().progress), false, monsterObstacles(), moveResult);
+    p.vx = (q.x - p.x) / dt - kx;
+    p.vz = (q.z - p.z) / dt - kz;
     p.x = q.x;
     p.z = q.z;
   }
@@ -175,7 +193,48 @@ function movePlayer(dt: number, canMove: boolean) {
     p.y = ground + (seat.y - ground) * k + Math.sin(k * Math.PI) * 0.45;
     p.yaw = rt.monsters.bubbo.yaw;
   }
+  // Riding a friend in a fight: the friend stands under the player, who sits on its back.
+  const ride = rideK();
+  if (ride > 0 && !p.riding) {
+    const f = getGame().progress.active as MonsterId;
+    mountPose(f);
+    const seat = riderSeatY();
+    if (seat !== null) {
+      const e = ride * ride * (3 - 2 * ride);
+      p.y = p.y + (seat - p.y) * e + Math.sin(e * Math.PI) * 0.45;
+    }
+  }
   if (p.climbY !== null) p.y = p.climbY;
+}
+
+/** Act 2: friends who are not active walk with the party, a little further back during fights. */
+function partyFollow(m: MonsterRt, dt: number) {
+  const p = rt.player;
+  if (p.frozen || p.climbY !== null) {
+    faceLook(m, dt);
+    return;
+  }
+  const g = getGame().progress;
+  const list = companions(g).filter((id) => id !== g.active);
+  const slot = Math.max(0, list.indexOf(m.id));
+  const back = (inHostileZone() ? 3.4 : 2.3) + Math.floor(slot / 2) * 1.4;
+  const side = (slot % 2 ? 1 : -1) * (1.2 + Math.floor(slot / 2) * 0.5);
+  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+  const sx = p.x - fx * back + fz * side;
+  const sz = p.z - fz * back - fx * side;
+  const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
+  if (dPlayer > 15) {
+    poofTo(m.id, sx, sz);
+    return;
+  }
+  const dSpot = Math.hypot(sx - m.x, sz - m.z);
+  if (dSpot < 0.8 || (dPlayer < 2.6 && dSpot < 2)) {
+    m.speed = 0;
+    if (p.speed < 0.2) turn(m, Math.atan2(p.x - m.x, p.z - m.z), dt, 3);
+    return;
+  }
+  const stuck = walkTo(m, sx, sz, Math.min(6.4, 1.4 + dSpot * 1.5), dt);
+  if (stuck && dPlayer > 6 && isWalkable(sx, sz, gatesOf(g), MONSTERS[m.id].radius)) poofTo(m.id, sx, sz);
 }
 
 // ------------------------------------------------------------ monsters
@@ -237,7 +296,11 @@ function homeLife(m: MonsterRt, dt: number) {
   }
 
   // Lumo belongs to the garden. The four powers wake it; it never wanders
-  // out through the gate or naps again after that moment.
+  // out through the gate or naps again after that moment. Act 2: the raiders have it.
+  if (m.id === "lumo" && lumoHidden()) {
+    m.mode = "idle";
+    return;
+  }
   if (m.id === "lumo") {
     m.x = def.home.x;
     m.z = def.home.z;
@@ -380,4 +443,6 @@ function autoTriggers() {
     void stoneEnding();
   }
   if (objective(g.progress).id === "finale") void finaleEnding();
+  // A finished save: walking up to Lumo in the garden starts Act 2.
+  if (objective(g.progress).id === "act2Start" && Math.hypot(p.x - rt.monsters.lumo.x, p.z - rt.monsters.lumo.z) < 5) void startAct2Scene();
 }

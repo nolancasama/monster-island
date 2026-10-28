@@ -11,6 +11,18 @@ import { companionSpot, poofTo } from "./companion";
 import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
 import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
+import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, LILY_PADS, SHORTCUT_GATE } from "../world/lowland";
+
+type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
+const A2 = ACT2_OBSTACLE_PLACE;
+/** Act 2's unlocks: where to stand, and what is said when no friend can help. */
+export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
+  groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
+  canopyVines: { x: A2.canopyVines.x, z: A2.canopyVines.z, alone: { en: "The gap is too wide!", ja: "すきまが ひろすぎる! しょくぶつを そだてる ともだちに きこう" } },
+  canopyRope: { x: A2.canopyRope.x, z: A2.canopyRope.z, alone: { en: "The rope bridge is on the other side!", ja: "つりばしが むこうがわに まいてある! とべる ともだちに きこう" } },
+  causewayGate: { x: A2.causewayGate.x, z: A2.causewayGate.z, alone: { en: "Thorns hold the gate shut!", ja: "いばらが とびらを ふさいでいる! ひを つけられる ともだちに きこう" } }
+};
+const act2Face = Object.fromEntries((Object.keys(A2) as Act2Obstacle[]).map((id) => [id, A2[id].face])) as Record<Act2Obstacle, Vec2>;
 
 /**
  * Obstacles: the student asks the companion the obstacle's question. The
@@ -33,6 +45,7 @@ export const PHASE3_PLACE = {
 
 const PLACE: Record<ObstacleId, { x: number; z: number; alone: { en: string; ja: string } }> = {
   ...PHASE3_PLACE,
+  ...ACT2_PLACE,
   bridge: {
     x: BRIDGE.x,
     z: BRIDGE.z1 + 1.2,
@@ -58,6 +71,7 @@ const PLACE: Record<ObstacleId, { x: number; z: number; alone: { en: string; ja:
 /** What the player faces at each obstacle, and the point the shot frames. */
 const FACE: Record<ObstacleId, Vec2> = {
   ...PHASE3_PLACE,
+  ...act2Face,
   lava: LAVA,
   cave: CAVE,
   fallenPalm: FALLEN_PALM,
@@ -67,6 +81,7 @@ const FACE: Record<ObstacleId, Vec2> = {
 };
 const FRAME: Record<ObstacleId, Vec2> = {
   ...PHASE3_PLACE,
+  ...act2Face,
   lava: LAVA,
   cave: CAVE,
   fallenPalm: FALLEN_PALM,
@@ -76,7 +91,7 @@ const FRAME: Record<ObstacleId, Vec2> = {
 };
 
 /** From Phase 2 on the student thanks the monster after its power has worked. */
-const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"]);
+const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope", "causewayGate"]);
 
 /** How the hint names an ability ("Who can help?", "とべる モンスター"). */
 const NEED_WORD: Partial<Record<AbilityId, { en: string; ja: string }>> = {
@@ -206,6 +221,7 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   else if (id === "river") await ferry(monster);
   else if (id === "bridge") await weaveBridge(monster);
   else if (id === "cliff") await flyRope(monster);
+  else if (id in ACT2_PLACE) await act2Power(id as Act2Obstacle, monster);
   else await phase3Power(id, monster);
 }
 
@@ -396,6 +412,57 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
 }
 
 /** Fly a monster to a point at a height above the ground there (eased). */
+/**
+ * Act 2's powers, each a visible permanent change: Bubbo raises lily pads to
+ * the islet, Leafy weaves a vine bridge, Puff flies the rolled-up rope bridge
+ * across, Ember burns the thorns off the shortcut gate (which then rises).
+ */
+async function act2Power(id: Act2Obstacle, monster: MonsterId) {
+  const place = A2[id];
+  const target = place.face;
+  const m = rt.monsters[monster];
+  const gy = groundY(target.x, target.z);
+  m.mode = "script";
+  m.look = target;
+  // Beside the player, toward the obstacle; the camera frames both from the side.
+  const side = id === "groveLilies" ? { x: 0.4, z: 1.6 } : id === "causewayGate" ? { x: 1.8, z: -0.6 } : { x: 1.4, z: 0.3 };
+  m.x = place.x + side.x;
+  m.z = place.z + side.z;
+  m.yaw = Math.atan2(target.x - m.x, target.z - m.z);
+  const camSide = id === "groveLilies" ? { x: 4, z: 7 } : id === "causewayGate" ? { x: 6.5, z: -6 } : { x: -6.5, z: 2.5 };
+  shot({ x: target.x + camSide.x, y: gy + 3.6, z: target.z + camSide.z }, { x: target.x, y: gy + 0.6, z: target.z });
+  animate(monster, "power");
+  audio.play(id === "groveLilies" ? "splash" : id === "canopyVines" ? "vines" : id === "canopyRope" ? "whoosh" : "burst");
+  if (id === "canopyRope") {
+    const g = CANOPY_GAPS.canopyRope;
+    await glide(monster, { x: g.x + 0.6, z: g.z0 - 0.6 }, 3.4, 1.2);
+  }
+  const t0 = rt.time;
+  let burst = -1;
+  for (;;) {
+    const k = Math.min(1, (rt.time - t0) / 2.2);
+    rt.act2Unlock[id] = k;
+    if (Math.floor(k * 5) > burst) {
+      burst = Math.floor(k * 5);
+      if (id === "groveLilies") {
+        const pad = LILY_PADS[Math.min(LILY_PADS.length - 1, burst)];
+        effect("splash", pad.x, gy, pad.z);
+      } else if (id === "causewayGate") effect("sparkle", SHORTCUT_GATE.x, gy + 1.2, SHORTCUT_GATE.z);
+      else effect(id === "canopyVines" ? "leaves" : "sparkle", target.x, gy + 0.6, target.z);
+    }
+    if (k === 1) break;
+    await wait(30);
+  }
+  updateProgress((p) => solve(p, id));
+  if (id === "canopyRope") await glide(monster, { x: place.x + side.x, z: place.z + side.z }, 0.35, 1);
+  if (id === "causewayGate") audio.play("stones");
+  animate(monster, "friend");
+  audio.voice(monster, "excited");
+  m.look = { x: rt.player.x, z: rt.player.z };
+  frameTwo(rt.player, m);
+  await say(monster, "We did it!", "やったね!");
+}
+
 async function glide(id: MonsterId, to: Vec2, air: number, seconds: number) {
   const m = rt.monsters[id];
   const from = { x: m.x, z: m.z, y: groundY(m.x, m.z) + m.air };

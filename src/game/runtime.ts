@@ -38,7 +38,7 @@ export interface MonsterRt {
   /** Walk-cycle phase. */
   step: number;
   /** wander/idle/eat/sleep/play: on its own at home. talk: in a conversation. follow: companion. script: a cutscene moves it. */
-  mode: "wander" | "idle" | "eat" | "sleep" | "play" | "talk" | "follow" | "script";
+  mode: "wander" | "idle" | "eat" | "sleep" | "play" | "talk" | "follow" | "script" | "party";
   target: Vec2 | null;
   /** Mode ends at this rt.time. */
   until: number;
@@ -123,7 +123,7 @@ export const rt = {
     /** Going over the cliff lip at the top of the climb (0 = on the face, 0..1 = the mantle). */
     mantle: 0,
     /** Short gesture: give food, cheer. */
-    action: null as null | { kind: "give" | "cheer" | "pick"; t0: number; food?: FoodId; depth?: number }
+    action: null as null | { kind: "give" | "cheer" | "pick" | "ko"; t0: number; food?: FoodId; depth?: number }
   },
   /** Keyboard + joystick intent, camera space: x = right, y = forward. */
   joy: { x: 0, y: 0, active: false },
@@ -168,6 +168,16 @@ export const rt = {
   pillars: { gateLeaf: 0, gateDrop: 0, gateWing: 0, gateFlame: 0 } as Partial<Record<ObstacleId, number>>,
   gate: 0,
   starGlow: 0,
+  /** Act 2: the raiders' airship and its glowing cage (the kidnapping scene). */
+  ship: { visible: false, x: 0, y: 0, z: 0, yaw: 0, scale: 1, chain: 0, cage: { x: 0, y: 0, z: 0, closed: 0, visible: false } },
+  /** Act 2: the rope down the sanctuary's cliff (0 = not there, 1 = tied). */
+  cliffRope: 0,
+  /** Act 2 permanent unlocks, animated by the friends' powers (0..1). */
+  act2Unlock: { groveLilies: 0, canopyVines: 0, canopyRope: 0, causewayGate: 0 } as Partial<Record<ObstacleId, number>>,
+  /** Opened chests' lids (id -> 0..1). */
+  chestLid: new Map<string, number>(),
+  /** Act 2 scene stage, read-only through __mi.state() for captures and acceptance waits. */
+  act2Scene: "idle" as "idle" | "celebrate" | "arrive" | "capture" | "escape" | "reveal" | "quest" | "done",
   /** Read-only through __mi.state(), for scene capture and acceptance waits. */
   finale: "idle" as "idle" | "rise" | "maple" | "complete",
   /** Monster Stone symbols lit (0..1 per symbol). */
@@ -222,6 +232,12 @@ export function resetRuntime() {
   rt.ropeCarried = false;
   rt.bramble = rt.brambleTarget = 1;
   rt.lava = rt.cave = rt.gate = rt.starGlow = 0;
+  rt.ship.visible = false;
+  rt.ship.cage.visible = false;
+  rt.cliffRope = 0;
+  for (const id of Object.keys(rt.act2Unlock) as ObstacleId[]) rt.act2Unlock[id] = 0;
+  rt.chestLid.clear();
+  rt.act2Scene = "idle";
   rt.caveWarned = false;
   for (const id of Object.keys(rt.pillars) as ObstacleId[]) rt.pillars[id] = 0;
   rt.finale = "idle";

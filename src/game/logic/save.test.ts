@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SAVE_KEY, SAVE_KEY_V1, SAVE_KEY_V2, decodeSave, encodeSave } from "./save";
+import { SAVE_KEY, SAVE_KEY_V1, SAVE_KEY_V2, SAVE_KEY_V3, decodeSave, encodeSave } from "./save";
 import { befriend, describeLine, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { CAMP, CLIFF_TOP_SPOT, SPAWN } from "../world/island";
@@ -30,23 +30,24 @@ describe("save / load", () => {
     p = describeLine(discover(p, "puff"), "puff", "size");
     const back = decodeSave(encodeSave(p, { x: 37, z: -30, yaw: 0 }, 900));
     expect(back?.progress).toEqual(p);
-    expect(back?.v).toBe(3);
+    expect(back?.v).toBe(4);
   });
 
   it("uses a new key while retaining both migration keys", () => {
-    expect(SAVE_KEY).toBe("mi.save.v3");
+    expect(SAVE_KEY).toBe("mi.save.v4");
+    expect(SAVE_KEY_V3).toBe("mi.save.v3");
     expect(SAVE_KEY_V2).toBe("mi.save.v2");
     expect(SAVE_KEY_V1).toBe("mi.save.v1");
   });
 
-  it("migrates v2 to v3 with all Phase 2 progress kept", () => {
+  it("migrates v2 to v4 with all Phase 2 progress kept", () => {
     let p = { ...solve(solve(solve(midGame(), "river"), "bridge"), "cliff"), endings: 2 };
     p = describeLine(discover(p, "puff"), "puff", "size");
     p = describeLine(p, "puff", "part");
     const { lumo: _lumo, ...monsters } = p.monsters;
     const player = { ...CLIFF_TOP_SPOT, yaw: 0.6 };
     const back = decodeSave(JSON.stringify({ v: 2, progress: { ...p, monsters }, player, seconds: 1200 }))!;
-    expect(back.v).toBe(3);
+    expect(back.v).toBe(4);
     expect(back.progress).toEqual(p);
     expect(back.player).toEqual(player);
     expect(back.seconds).toBe(1200);
@@ -60,7 +61,7 @@ describe("save / load", () => {
     p.monsters.ember = { ...p.monsters.ember, discovered: true, friend: true, invited: true, described: { size: true, part: true } };
     p.monsters.lumo = { ...p.monsters.lumo, discovered: true, friend: true, described: { name: true, size: true, part: true } };
     const back = decodeSave(encodeSave(p, { x: 70, z: -120, yaw: 0 }, 1800))!;
-    expect(back.v).toBe(3);
+    expect(back.v).toBe(4);
     expect(back.progress).toEqual(p);
   });
 
@@ -97,7 +98,7 @@ describe("save / load", () => {
       return JSON.stringify({ v: 1, progress: { ...rest, monsters, finished }, player: { x: 30, z: -2, yaw: 1 }, seconds: 640 });
     };
     const done = decodeSave(v1(true))!;
-    expect(done.v).toBe(3);
+    expect(done.v).toBe(4);
     expect(done.progress.endings).toBe(1);
     expect(done.progress.solved).toEqual(["fallenPalm", "river"]);
     expect(done.progress.monsters.leafy.friend).toBe(true);

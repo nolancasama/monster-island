@@ -6,6 +6,7 @@ import { Journal } from "./ui/Journal";
 import { TouchControls } from "./ui/TouchControls";
 import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, TitleScreen } from "./ui/Screens";
+import { Banner } from "./ui/Act2Hud";
 import { installKeyboard } from "./input/keyboard";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave } from "./game/flow/story";
@@ -107,6 +108,7 @@ export function App() {
       <Hud />
       <BottomPanels />
       <TouchControls />
+      <Banner />
       <Journal />
       <TitleScreen />
       <ResultsScreen />

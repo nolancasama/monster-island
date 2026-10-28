@@ -1,0 +1,977 @@
+import { COMBAT, ENEMIES, MAX_HP, type CompanionId, type MoveDef } from "./data/combat";
+import { FOODS } from "./data/foods";
+import { MONSTERS } from "./data/monsters";
+import { addCoins, addFood, addItem, afterKnockout, bestFood, changeZone, eatEffect, eatHelps, hurt, markTutorial, newZoneMemory, noteDefeat, regenMp, spendMp, type TutorialStep, type Vitals, type ZoneMemory } from "./logic/act2";
+import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
+import { effect, rt } from "./runtime";
+import { isRunning } from "./flow/script";
+import { ENEMY_SPAWNS, ZONES, zoneAt, type EnemyKind, type ZoneId } from "./world/lowland";
+import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
+import { monsterRootY } from "./ride";
+import { audio } from "../audio/audio";
+import type { FoodId, MonsterId } from "./types";
+
+/**
+ * Act 2's real-time fights, in the explorable world (no battle screen).
+ *
+ * - Areas: the lowland is split into zones (world/lowland.ts). Entering a
+ *   hostile zone puts the active friend in its combat position (on the
+ *   backpack, on a shoulder, or carrying the player); a safe zone (the camp,
+ *   the town) puts everyone back to following. The position depends on the
+ *   zone only, never on how near an enemy is, so it never flickers.
+ * - Attacks happen only when the player presses J (basic) or K (special):
+ *   friends never attack by themselves. Targeting is forgiving: the nearest
+ *   enemy in front, else the nearest close by.
+ * - Enemies notice, chase, wind up (visibly), lunge, recover, get knocked
+ *   back and stunned, and are knocked out with a dizzy spin and a poof,
+ *   dropping coins (and sometimes food or amber). They pause whenever a
+ *   conversation, prompt or scene is open.
+ * - One HP pool (the player's, also while riding) and each friend's own MP.
+ */
+
+export type EnemyState = "idle" | "alert" | "chase" | "windup" | "lunge" | "recover" | "stun" | "pulled" | "ko" | "gone" | "return";
+
+export interface EnemyRt {
+  /** Index into ENEMY_SPAWNS. */
+  i: number;
+  kind: EnemyKind;
+  zone: ZoneId;
+  homeX: number;
+  homeZ: number;
+  x: number;
+  z: number;
+  yaw: number;
+  /** Knock-back velocity (decays). */
+  kx: number;
+  kz: number;
+  hp: number;
+  state: EnemyState;
+  /** Seconds left in the current state (counts down only while the fight runs). */
+  timer: number;
+  /** Idle wander target. */
+  wander: { x: number; z: number } | null;
+  /** Lunge direction, locked at the wind-up. */
+  dx: number;
+  dz: number;
+  struck: boolean;
+  /** rt.time of the last hit (the scene flashes it) and of noticing the player ("!"). */
+  hitT: number;
+  alertT: number;
+  /** A vine pull: where it is dragged from and to. */
+  pull: { fx: number; fz: number; tx: number; tz: number; t: number } | null;
+  step: number;
+}
+
+export interface Shot {
+  id: number;
+  shape: MoveDef["shape"];
+  owner: CompanionId;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vz: number;
+  y1: number;
+  life: number;
+  age: number;
+  radius: number;
+  damage: number;
+  knock: number;
+  stun: number;
+  size: number;
+}
+
+export interface Drop {
+  id: number;
+  kind: "coin" | "food" | "amber";
+  food?: FoodId;
+  value: number;
+  x: number;
+  y: number;
+  z: number;
+  vy: number;
+  vx: number;
+  vz: number;
+  t0: number;
+  magnet: boolean;
+}
+
+/** Short-lived attack shapes for the scene (vines, jets, gusts, bursts, hits). */
+export interface Fx {
+  id: number;
+  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat";
+  x: number;
+  y: number;
+  z: number;
+  /** Direction (whip/jet/gust) or a second point (pull). */
+  ax: number;
+  az: number;
+  yaw: number;
+  size: number;
+  t0: number;
+  life: number;
+}
+
+export interface Stance {
+  /** The friend in its combat position (null: everyone follows). */
+  friend: CompanionId | null;
+  /** 0 = following, 1 = in position (eases over the hop on/off). */
+  k: number;
+  /** Where the friend was when the hop on began (the blend's start). */
+  fromX: number;
+  fromZ: number;
+  /** A friend hopping off (after a switch), shown easing back down. */
+  leaving: CompanionId | null;
+  leaveK: number;
+}
+
+let nextId = 1;
+const MOUNT_TIME = 0.4;
+
+function spawnEnemy(i: number): EnemyRt {
+  const s = ENEMY_SPAWNS[i];
+  return {
+    i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
+    hp: ENEMIES[s.kind].hp, state: "idle", timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
+    hitT: -10, alertT: -10, pull: null, step: 0
+  };
+}
+
+export const cb = {
+  /** Live HP and MP (written into progress when the game saves). */
+  vitals: { hp: MAX_HP, mp: { leafy: 100, bubbo: 100, puff: 100, ember: 100 } } as Vitals,
+  enemies: ENEMY_SPAWNS.map((_, i) => spawnEnemy(i)),
+  zones: newZoneMemory() as ZoneMemory,
+  shots: [] as Shot[],
+  drops: [] as Drop[],
+  fx: [] as Fx[],
+  stance: { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 } as Stance,
+  /** rt.time when each move is ready again. */
+  ready: { basic: 0, special: 0 },
+  /** The friend's last move (the scene animates it). */
+  move: null as null | { friend: CompanionId; kind: "basic" | "special"; t0: number; tx: number; tz: number },
+  /** Held J (keyboard) or the held touch button: basic attacks repeat. */
+  hold: false,
+  /** The touch attack button is held down. */
+  touchHold: false,
+  /** The player cannot be hurt again until this rt.time. */
+  safeUntil: 0,
+  hurtT: -10,
+  /** Player knock-back velocity. */
+  knock: { x: 0, z: 0 },
+  knockedOut: false,
+  /** Enemies knocked out in the tutorial forest this visit (the special's lesson comes after a few). */
+  kos: 0,
+  /** Coins waiting to be added to progress (batched: one store update per pickup burst). */
+  pendingCoins: 0,
+  lastMpWarn: -10
+};
+
+/** Called with the live fight when a knock-out happens (the flow owns the scene). */
+export const hooks = { knockout: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void) };
+
+/** Back to a clean fight: from saved progress (load) or after a new game. */
+export function resetCombat() {
+  const p = getGame().progress;
+  cb.vitals = { hp: p.act2.hp, mp: { ...p.act2.mp } };
+  cb.enemies = ENEMY_SPAWNS.map((_, i) => spawnEnemy(i));
+  cb.zones = newZoneMemory();
+  cb.shots = [];
+  cb.drops = [];
+  cb.fx = [];
+  cb.stance = { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 };
+  cb.ready = { basic: 0, special: 0 };
+  cb.move = null;
+  cb.hold = false;
+  cb.safeUntil = 0;
+  cb.knock = { x: 0, z: 0 };
+  cb.knockedOut = false;
+  cb.kos = 0;
+  cb.pendingCoins = 0;
+}
+
+export function act2Live(): boolean {
+  return getGame().progress.act2.started;
+}
+
+/** The zone the player is in (null on the ledge, the rope, or anywhere south of the cliff). */
+export function currentZone(): ZoneId | null {
+  return cb.zones.current;
+}
+
+export function inHostileZone(): boolean {
+  const z = cb.zones.current;
+  return z !== null && ZONES[z].hostile;
+}
+
+// ------------------------------------------------------------ stance
+
+/** Is this friend in (or hopping into) its combat position? */
+export function mounted(id: MonsterId): boolean {
+  return cb.stance.friend === id && cb.stance.k > 0;
+}
+
+/** The player is riding (Bubbo or Ember in combat): 0..1 of the hop on. */
+export function rideK(): number {
+  const f = cb.stance.friend;
+  return f && COMBAT[f].stance === "ride" ? cb.stance.k : 0;
+}
+
+/** The friend carrying the player, if any. */
+export function steed(): CompanionId | null {
+  const f = cb.stance.friend;
+  return f && COMBAT[f].stance === "ride" && cb.stance.k > 0.5 ? f : null;
+}
+
+/** Collision radius of the player (a ridden friend is wider). */
+export function playerRadius(): number {
+  const s = steed();
+  return s ? Math.max(PLAYER_R, MONSTERS[s].radius) : PLAYER_R;
+}
+
+/** Riding is a little quicker than walking. */
+export function speedScale(): number {
+  return steed() ? 1.18 : 1;
+}
+
+/** Seats on each rider (in the friend's frame): back = behind its centre, up = above its root. */
+export const RIDE_SEAT: Record<"bubbo" | "ember", { back: number; up: number }> = {
+  bubbo: { back: 0.2, up: 0.82 },
+  ember: { back: 0.67, up: 0.95 }
+};
+
+/** Where a perched friend sits on the player, in the player's frame (x right, z forward). */
+const PERCH: Record<"leafy" | "puff", { x: number; y: number; z: number; scale: number }> = {
+  leafy: { x: 0, y: 0.74, z: -0.43, scale: 0.5 },
+  puff: { x: 0.44, y: 1.1, z: -0.04, scale: 0.5 }
+};
+
+export interface MountPose {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  scale: number;
+}
+
+/**
+ * Where a friend in (or hopping into) its combat position is drawn. Riders:
+ * the friend stands where the player is and the player sits on it. Perched
+ * friends: on the player's backpack or shoulder, smaller. Null when it follows.
+ */
+export function mountPose(id: MonsterId): MountPose | null {
+  const s = cb.stance;
+  const leaving = s.leaving === id && s.leaveK > 0;
+  if (!(s.friend === id && s.k > 0) && !leaving) return null;
+  const k = leaving ? s.leaveK : s.k;
+  const p = rt.player;
+  const m = rt.monsters[id];
+  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+  const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+  const e = k * k * (3 - 2 * k);
+  const solved = getGame().progress.solved;
+  if (id === "leafy" || id === "puff") {
+    const c = PERCH[id];
+    let x = p.x + rx * c.x + fx * c.z;
+    let z = p.z + rz * c.x + fz * c.z;
+    let y = p.y + c.y;
+    // Puff flies out to the target and back for each attack.
+    const mv = cb.move;
+    if (id === "puff" && mv && mv.friend === "puff" && !leaving) {
+      const t = (rt.time - mv.t0) / (mv.kind === "special" ? 0.9 : 0.5);
+      if (t < 1) {
+        const out = Math.sin(t * Math.PI) * (mv.kind === "special" ? 1.6 : 1.1);
+        const dx = mv.tx - x, dz = mv.tz - z, d = Math.hypot(dx, dz) || 1;
+        x += (dx / d) * out;
+        z += (dz / d) * out;
+        y += Math.sin(t * Math.PI) * (mv.kind === "special" ? 1.2 : 0.4);
+      }
+    }
+    if (id === "puff") y += Math.sin(rt.time * 9) * 0.03;
+    const ground = standY(s.fromX, s.fromZ, solved);
+    // The hop: from where it stood, up in an arc, onto the player.
+    const from = { x: s.fromX, y: ground, z: s.fromZ };
+    return {
+      x: from.x + (x - from.x) * e,
+      y: from.y + (y - from.y) * e + Math.sin(e * Math.PI) * 0.6,
+      z: from.z + (z - from.z) * e,
+      yaw: p.yaw,
+      scale: 1 + (c.scale - 1) * e
+    };
+  }
+  // Riders: the friend stands under the player (its seat is behind its centre).
+  const seat = RIDE_SEAT[id as "bubbo" | "ember"];
+  const x = p.x + fx * seat.back;
+  const z = p.z + fz * seat.back;
+  const cx = s.fromX + (x - s.fromX) * e;
+  const cz = s.fromZ + (z - s.fromZ) * e;
+  m.x = cx;
+  m.z = cz;
+  return { x: cx, y: monsterRootY(m, solved, rt.time), z: cz, yaw: p.yaw, scale: 1 };
+}
+
+/** The rider's seat height (absolute), for the player's body. */
+export function riderSeatY(): number | null {
+  const f = cb.stance.friend;
+  if (!f || COMBAT[f].stance !== "ride") return null;
+  const m = rt.monsters[f];
+  return monsterRootY(m, getGame().progress.solved, rt.time) + RIDE_SEAT[f as "bubbo" | "ember"].up;
+}
+
+function updateStance(dt: number) {
+  const g = getGame();
+  const s = cb.stance;
+  const active = g.progress.active as CompanionId | null;
+  // Scenes (conversations, powers, the rope) take the friend off; play puts it back.
+  const want = inHostileZone() && active && !isRunning() && rt.player.climbY === null && !cb.knockedOut ? active : null;
+  if (s.leaving) {
+    s.leaveK = Math.max(0, s.leaveK - dt / MOUNT_TIME);
+    if (s.leaveK <= 0) s.leaving = null;
+  }
+  if (s.friend && s.friend !== want) {
+    // Off: the friend drops beside the player and follows again.
+    const off = s.friend;
+    if (s.k > 0.05 && want !== null) {
+      s.leaving = off;
+      s.leaveK = s.k;
+    }
+    const m = rt.monsters[off];
+    const p = rt.player;
+    m.x = p.x - Math.sin(p.yaw) * 1.3 - Math.cos(p.yaw) * 0.9;
+    m.z = p.z - Math.cos(p.yaw) * 1.3 + Math.sin(p.yaw) * 0.9;
+    if (COMBAT[off].stance === "ride") {
+      m.x = p.x + Math.cos(p.yaw) * 1.2;
+      m.z = p.z - Math.sin(p.yaw) * 1.2;
+    }
+    if (m.mode === "script" || m.mode === "talk") {
+      /* a scene owns it now */
+    } else m.mode = "follow";
+    if (s.k > 0.05) audio.play("mount");
+    s.friend = null;
+    s.k = 0;
+  }
+  if (!s.friend && want) {
+    const m = rt.monsters[want];
+    s.friend = want;
+    s.k = 0;
+    s.fromX = m.x;
+    s.fromZ = m.z;
+    m.mode = "script";
+    m.look = null;
+    effect("sparkle", m.x, standY(m.x, m.z, g.progress.solved) + 0.8, m.z);
+    audio.play("mount");
+    audio.voice(want, "excited");
+  }
+  if (s.friend) {
+    s.k = Math.min(1, s.k + dt / MOUNT_TIME);
+    const m = rt.monsters[s.friend];
+    m.mode = "script";
+    // A rider walks for the player; a friend perched on the player keeps its feet still.
+    m.speed = COMBAT[s.friend].stance === "ride" ? rt.player.speed : 0;
+    m.step = rt.player.step;
+    m.yaw = rt.player.yaw;
+  }
+}
+
+// ------------------------------------------------------------ attacks
+
+function friendNow(): CompanionId | null {
+  const s = cb.stance;
+  return s.friend && s.k >= 0.95 ? s.friend : null;
+}
+
+function canFight(): boolean {
+  const g = getGame();
+  return g.screen === "game" && g.mode === "explore" && !g.journalOpen && !g.settingsOpen && !isRunning() && !cb.knockedOut && act2Live();
+}
+
+const alive = (e: EnemyRt) => e.state !== "ko" && e.state !== "gone";
+
+/** Forgiving aim: the nearest enemy roughly in front, or failing that the nearest close by. */
+export function pickTarget(range: number): EnemyRt | null {
+  const p = rt.player;
+  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+  let best: EnemyRt | null = null;
+  let bestScore = Infinity;
+  for (const e of cb.enemies) {
+    if (!alive(e) || e.zone !== cb.zones.current) continue;
+    const dx = e.x - p.x, dz = e.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d > range) continue;
+    const facing = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
+    if (facing < -0.25 && d > 3.2) continue;
+    const score = d - facing * 2.5;
+    if (score < bestScore) {
+      bestScore = score;
+      best = e;
+    }
+  }
+  return best;
+}
+
+function upgraded(f: CompanionId) {
+  return getGame().progress.act2.upgrades.includes(f);
+}
+
+/** Origin of a friend's attack (its mouth or hands). */
+function originOf(f: CompanionId): { x: number; y: number; z: number } {
+  const pose = mountPose(f);
+  const p = rt.player;
+  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+  if (!pose) return { x: p.x, y: p.y + 1, z: p.z };
+  if (f === "leafy") return { x: pose.x, y: pose.y + 0.45, z: pose.z };
+  if (f === "puff") return { x: pose.x + fx * 0.2, y: pose.y + 0.2, z: pose.z + fz * 0.2 };
+  if (f === "bubbo") return { x: pose.x + fx * 0.6, y: pose.y + 0.45, z: pose.z + fz * 0.6 };
+  return { x: pose.x + fx * 0.5, y: pose.y + 1.2, z: pose.z + fz * 0.5 };
+}
+
+function aimAt(target: EnemyRt | null, range: number): { x: number; z: number } {
+  const p = rt.player;
+  if (target) {
+    // Turn to face it (only when standing; on the move the friend aims for us).
+    if (p.speed < 0.6) p.yaw = Math.atan2(target.x - p.x, target.z - p.z);
+    return { x: target.x, z: target.z };
+  }
+  return { x: p.x + Math.sin(p.yaw) * range, z: p.z + Math.cos(p.yaw) * range };
+}
+
+/** J: the active friend's basic attack (free; repeats while held). */
+export function basicAttack(): boolean {
+  const f = friendNow();
+  if (!f || !canFight() || rt.time < cb.ready.basic) return false;
+  const move = COMBAT[f].basic;
+  const up = upgraded(f);
+  const size = up ? COMBAT[f].upgrade.size : 1;
+  const dmg = move.damage * (up ? COMBAT[f].upgrade.damage : 1);
+  const range = move.range * (move.shape === "whip" ? size : 1);
+  const target = pickTarget(move.shape === "whip" ? range + 1.5 : move.range);
+  const aim = aimAt(target, range);
+  cb.ready.basic = rt.time + move.cooldown;
+  cb.move = { friend: f, kind: "basic", t0: rt.time, tx: aim.x, tz: aim.z };
+  const o = originOf(f);
+  const dx = aim.x - rt.player.x, dz = aim.z - rt.player.z;
+  const yaw = Math.atan2(dx, dz);
+  if (move.shape === "whip") {
+    // A sweeping vine: everything in a wide arc in front, out to its reach.
+    const p = rt.player;
+    pushFx("whip", o.x, o.y, o.z, Math.sin(yaw), Math.cos(yaw), yaw, range);
+    for (const e of cb.enemies) {
+      if (!alive(e) || e.zone !== cb.zones.current) continue;
+      const ex = e.x - p.x, ez = e.z - p.z;
+      const d = Math.hypot(ex, ez);
+      if (d > range + ENEMIES[e.kind].radius) continue;
+      const facing = d > 0.01 ? (ex * Math.sin(yaw) + ez * Math.cos(yaw)) / d : 1;
+      if (facing > 0.2 || d < 1) hit(e, dmg, move.knock, move.stun, ex / (d || 1), ez / (d || 1), f);
+    }
+    audio.play("whip");
+  } else {
+    const angles = COMBAT[f].upgrade.twin && up ? [-0.14, 0.14] : [0];
+    for (const a of angles) {
+      const y2 = yaw + a;
+      cb.shots.push({
+        id: nextId++, shape: move.shape, owner: f, x: o.x, y: o.y, z: o.z, y1: target ? standY(target.x, target.z, getGame().progress.solved) + 0.55 : o.y - 0.4,
+        vx: Math.sin(y2) * move.speed!, vz: Math.cos(y2) * move.speed!, life: move.range / move.speed!, age: 0,
+        radius: move.radius * size, damage: dmg, knock: move.knock, stun: move.stun, size
+      });
+    }
+    audio.play(move.shape === "fireball" ? "fireball" : move.shape === "wind" ? "wind" : "bubble");
+  }
+  return true;
+}
+
+/** K: the active friend's special (costs MP; a short cooldown). */
+export function specialAttack(): boolean {
+  const f = friendNow();
+  if (!f || !canFight() || rt.time < cb.ready.special) return false;
+  const move = COMBAT[f].special;
+  const spent = spendMp(cb.vitals, f, move.cost);
+  if (!spent) {
+    if (rt.time - cb.lastMpWarn > 1.5) {
+      cb.lastMpWarn = rt.time;
+      audio.play("error");
+      toast({ en: "Not enough MP!", ja: `${MONSTERS[f].name}の MPが たりない! たべものを たべよう`, icon: f, tone: "warn" }, 1800);
+    }
+    return false;
+  }
+  cb.vitals = spent;
+  cb.ready.special = rt.time + move.cooldown;
+  const p = rt.player;
+  const target = pickTarget(move.shape === "burst" ? move.range : move.range + 1);
+  const aim = aimAt(target, move.range);
+  const yaw = Math.atan2(aim.x - p.x, aim.z - p.z);
+  const ux = Math.sin(yaw), uz = Math.cos(yaw);
+  cb.move = { friend: f, kind: "special", t0: rt.time, tx: aim.x, tz: aim.z };
+  const o = originOf(f);
+  const inZone = cb.enemies.filter((e) => alive(e) && e.zone === cb.zones.current);
+  if (move.shape === "pull") {
+    // Vine Pull: the vine catches the target and drags it to the player, stunned.
+    if (target) {
+      const tx = p.x + ux * 1.7, tz = p.z + uz * 1.7;
+      target.pull = { fx: target.x, fz: target.z, tx, tz, t: 0 };
+      target.state = "pulled";
+      target.timer = 0.4;
+      pushFx("pull", o.x, o.y, o.z, target.x, target.z, yaw, 1);
+      hit(target, move.damage, 0, move.stun, ux, uz, f);
+    } else pushFx("pull", o.x, o.y, o.z, aim.x, aim.z, yaw, 1);
+    audio.play("vines");
+  } else if (move.shape === "jet") {
+    // Water Jet: a straight beam; everything along it is pushed away.
+    pushFx("jet", o.x, o.y, o.z, ux, uz, yaw, move.range);
+    for (const e of inZone) {
+      const ex = e.x - p.x, ez = e.z - p.z;
+      const along = ex * ux + ez * uz;
+      const across = Math.abs(ex * uz - ez * ux);
+      if (along > -0.3 && along < move.range && across < move.radius + ENEMIES[e.kind].radius) hit(e, move.damage, move.knock, move.stun, ux, uz, f);
+    }
+    audio.play("splash");
+  } else if (move.shape === "gust") {
+    // Strong Gust: a wide cone that blows enemies far back and dizzies them.
+    pushFx("gust", o.x, o.y, o.z, ux, uz, yaw, move.range);
+    for (const e of inZone) {
+      const ex = e.x - p.x, ez = e.z - p.z;
+      const d = Math.hypot(ex, ez);
+      if (d > move.range) continue;
+      const facing = d > 0.01 ? (ex * ux + ez * uz) / d : 1;
+      if (facing > 0.55 || d < 1.2) hit(e, move.damage, move.knock, move.stun, ex / (d || 1), ez / (d || 1), f);
+    }
+    audio.play("whoosh");
+  } else {
+    // Flame Burst: a ring of fire all round the player.
+    pushFx("burst", p.x, p.y + 0.3, p.z, 0, 0, yaw, move.range);
+    for (const e of inZone) {
+      const ex = e.x - p.x, ez = e.z - p.z;
+      const d = Math.hypot(ex, ez);
+      if (d < move.range + ENEMIES[e.kind].radius) hit(e, move.damage, move.knock, move.stun, ex / (d || 1), ez / (d || 1), f);
+    }
+    audio.play("burst");
+  }
+  learn("special");
+  return true;
+}
+
+function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
+  const life = kind === "whip" ? 0.3 : kind === "pull" ? 0.45 : kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+  cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
+  if (cb.fx.length > 24) cb.fx.shift();
+}
+
+function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number, uz: number, _by: CompanionId) {
+  if (!alive(e)) return;
+  const def = ENEMIES[e.kind];
+  e.hp -= damage;
+  e.hitT = rt.time;
+  e.kx += ux * knock * def.weight * 2.2;
+  e.kz += uz * knock * def.weight * 2.2;
+  pushFx("hit", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.6, e.z, 0, 0, 0, 1);
+  audio.play("hit");
+  learn("attack");
+  if (e.hp <= 0) {
+    knockOut(e);
+    return;
+  }
+  // A hit interrupts a wind-up; specials leave it dizzy for longer.
+  if (e.state !== "pulled") {
+    e.state = "stun";
+    e.timer = Math.max(stun, 0.25);
+  }
+}
+
+function knockOut(e: EnemyRt) {
+  const def = ENEMIES[e.kind];
+  e.state = "ko";
+  e.timer = 0.9;
+  e.hp = 0;
+  cb.zones = noteDefeat(cb.zones, e.zone, e.i);
+  if (e.zone === "forest1") cb.kos++;
+  audio.play("ko");
+  // Rewards pop out: coins always, sometimes food or amber.
+  const coins = def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1));
+  const pieces = Math.min(4, Math.max(1, Math.round(coins / 3)));
+  for (let k = 0; k < pieces; k++) dropAt(e.x, e.z, "coin", Math.round(coins / pieces));
+  if (Math.random() < def.foodChance) {
+    const foods: FoodId[] = ["apples", "fish", "berries", "meat"];
+    dropAt(e.x, e.z, "food", 1, foods[Math.floor(Math.random() * foods.length)]);
+  }
+  if (Math.random() < def.amberChance) dropAt(e.x, e.z, "amber", 1);
+  hint("coins");
+}
+
+function dropAt(x: number, z: number, kind: Drop["kind"], value: number, food?: FoodId) {
+  const a = Math.random() * Math.PI * 2;
+  const v = 1.2 + Math.random() * 1.4;
+  cb.drops.push({ id: nextId++, kind, food, value, x, z, y: standY(x, z, getGame().progress.solved) + 0.5, vy: 4 + Math.random() * 1.5, vx: Math.cos(a) * v, vz: Math.sin(a) * v, t0: rt.time, magnet: false });
+  if (cb.drops.length > 60) cb.drops.shift();
+}
+
+// ------------------------------------------------------------ eating
+
+/** F / tapping a food in the bag: eat it (HP for the player, MP for the friend who loves it). */
+export function eat(food: FoodId | null = bestFood(cb.vitals, getGame().progress.bag, getGame().progress.active as CompanionId | null)): boolean {
+  const g = getGame();
+  if (!act2Live() || g.mode !== "explore" || isRunning() || cb.knockedOut) return false;
+  if (!food) {
+    toast({ en: "You're fine! / No food that helps.", ja: "いまは たべなくて だいじょうぶ (または たべものが ない)", tone: "info" }, 1800);
+    return false;
+  }
+  if ((g.progress.bag[food] ?? 0) < 1) return false;
+  if (!eatHelps(cb.vitals, food)) {
+    toast({ en: "You're full!", ja: "HPも MPも いっぱい!", icon: food, tone: "info" }, 1600);
+    return false;
+  }
+  cb.vitals = eatEffect(cb.vitals, food);
+  updateProgress((p) => ({ ...p, bag: { ...p.bag, [food]: (p.bag[food] ?? 1) - 1 } }));
+  const p = rt.player;
+  pushFx("eat", p.x, p.y + 1.6, p.z, 0, 0, 0, 1);
+  audio.play("munch");
+  rt.player.action = { kind: "cheer", t0: rt.time };
+  toast({ en: `Yum! ${FOODS[food].word}`, ja: `${FOODS[food].ja}を たべた! HPと MPが ふえた`, icon: food, tone: "good" }, 1600);
+  learn("eat");
+  return true;
+}
+
+// ------------------------------------------------------------ tutorial hints
+
+const HINT_OF: Partial<Record<TutorialStep, HintKey>> = { attack: "attack", coins: "coins", special: "special", eat: "eat", switch: "switchAct2" };
+
+/** Show a tutorial hint (once understood it never comes back). */
+export function hint(step: TutorialStep) {
+  const g = getGame();
+  if (g.progress.act2.tutorial.includes(step)) return;
+  const key = HINT_OF[step];
+  if (key && g.hint !== key) setGame({ hint: key });
+}
+
+/** A lesson was understood: mark it and clear its hint. */
+export function learn(step: TutorialStep) {
+  const g = getGame();
+  if (g.progress.act2.tutorial.includes(step)) {
+    if (g.hint === HINT_OF[step]) setGame({ hint: null });
+    return;
+  }
+  updateProgress((p) => markTutorial(p, step));
+  if (getGame().hint === HINT_OF[step]) setGame({ hint: null });
+}
+
+// ------------------------------------------------------------ the frame
+
+export function combatTick(dt: number) {
+  const g = getGame();
+  if (g.screen !== "game" || !act2Live()) return;
+  const paused = g.journalOpen || g.settingsOpen;
+  const p = rt.player;
+  // Areas (null on the rope and anywhere south of the cliff).
+  const zone = p.climbY === null ? zoneAt(p.x, p.z) : null;
+  if (zone !== cb.zones.current) {
+    const before = cb.zones.current;
+    const { mem, respawn } = changeZone(cb.zones, zone, rt.playTime);
+    cb.zones = mem;
+    if (before) sendHome(before);
+    if (respawn) respawnZone(respawn);
+    if (zone) hooks.enterZone?.(zone);
+  }
+  updateStance(paused ? 0 : dt);
+  if (paused) return;
+  if (!cb.knockedOut) cb.vitals = regenMp(cb.vitals, dt);
+  // Held J repeats the basic attack.
+  if (cb.hold) basicAttack();
+  const live = g.mode === "explore" && !isRunning();
+  for (const e of cb.enemies) updateEnemy(e, dt, live);
+  separate();
+  if (live) updateShots(dt);
+  updateDrops(dt);
+  // Player knock-back decays.
+  cb.knock.x *= Math.exp(-dt * 7);
+  cb.knock.z *= Math.exp(-dt * 7);
+  cb.fx = cb.fx.filter((f) => rt.time - f.t0 < f.life);
+  if (cb.move && rt.time - cb.move.t0 > 1) cb.move = null;
+}
+
+function sendHome(zone: ZoneId) {
+  for (const e of cb.enemies) {
+    if (e.zone !== zone || !alive(e)) continue;
+    if (e.state !== "idle") e.state = "return";
+    e.hp = ENEMIES[e.kind].hp;
+  }
+}
+
+/** A fresh crowd in an area: everyone back at home, full health, patrols reset. */
+function respawnZone(zone: ZoneId) {
+  for (const e of cb.enemies) if (e.zone === zone) Object.assign(e, spawnEnemy(e.i));
+}
+
+function moveEnemy(e: EnemyRt, tx: number, tz: number, speed: number, dt: number): number {
+  const dx = tx - e.x, dz = tz - e.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.05) return 0;
+  const step = Math.min(d, speed * dt);
+  return stepTo(e, e.x + (dx / d) * step, e.z + (dz / d) * step, dt, Math.atan2(dx, dz));
+}
+
+const moveOut = { x: 0, z: 0 };
+function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | null): number {
+  const q = moveCircle(e.x, e.z, nx, nz, ENEMIES[e.kind].radius, gatesOf(getGame().progress), false, undefined, moveOut);
+  const moved = Math.hypot(q.x - e.x, q.z - e.z);
+  e.x = q.x;
+  e.z = q.z;
+  e.step += moved * 2.4;
+  if (face !== null) {
+    let d = face - e.yaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    e.yaw += d * Math.min(1, dt * 8);
+  }
+  return moved;
+}
+
+function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
+  if (e.state === "gone") return;
+  const def = ENEMIES[e.kind];
+  const p = rt.player;
+  if (e.state === "ko") {
+    // Dizzy spin, a hop, then a poof: it runs off home (no fall, no hurt).
+    e.timer -= dt;
+    e.yaw += dt * 14;
+    if (e.timer <= 0) {
+      e.state = "gone";
+      effect("poof", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.4, e.z);
+      audio.play("poof");
+    }
+    return;
+  }
+  if (!live) return;
+  // Knock-back slides it along the ground (still blocked by scenery).
+  if (Math.abs(e.kx) + Math.abs(e.kz) > 0.05) {
+    stepTo(e, e.x + e.kx * dt, e.z + e.kz * dt, dt, null);
+    e.kx *= Math.exp(-dt * 6);
+    e.kz *= Math.exp(-dt * 6);
+  }
+  const here = cb.zones.current === e.zone && !cb.knockedOut;
+  const dPlayer = Math.hypot(p.x - e.x, p.z - e.z);
+  const dHome = Math.hypot(e.x - e.homeX, e.z - e.homeZ);
+  e.timer -= dt;
+  switch (e.state) {
+    case "idle": {
+      if (here && dPlayer < def.notice) {
+        e.state = "alert";
+        e.timer = 0.55;
+        e.alertT = rt.time;
+        audio.play("alert");
+        if (e.zone === "forest1") hint("attack");
+        if (e.zone === "forest1" && e.kind === "snapjaw" && cb.kos >= 2) hint("special");
+        return;
+      }
+      // Pottering about near home.
+      if (!e.wander && e.timer <= 0) {
+        const a = Math.random() * Math.PI * 2;
+        e.wander = { x: e.homeX + Math.cos(a) * 2, z: e.homeZ + Math.sin(a) * 2 };
+      }
+      if (e.wander && moveEnemy(e, e.wander.x, e.wander.z, def.speed * 0.35, dt) < 1e-4) {
+        e.wander = null;
+        e.timer = 1.5 + Math.random() * 2.5;
+      }
+      return;
+    }
+    case "alert":
+      e.yaw = Math.atan2(p.x - e.x, p.z - e.z);
+      if (e.timer <= 0) e.state = "chase";
+      return;
+    case "chase":
+      if (!here || dHome > def.leash) {
+        e.state = "return";
+        return;
+      }
+      if (dPlayer < def.windupAt) {
+        e.state = "windup";
+        e.timer = def.windup;
+        e.dx = (p.x - e.x) / (dPlayer || 1);
+        e.dz = (p.z - e.z) / (dPlayer || 1);
+        e.yaw = Math.atan2(e.dx, e.dz);
+        return;
+      }
+      moveEnemy(e, p.x, p.z, def.speed, dt);
+      return;
+    case "windup":
+      if (e.timer <= 0) {
+        e.state = "lunge";
+        e.timer = 0.32;
+        e.struck = false;
+        audio.play("snap");
+      }
+      return;
+    case "lunge": {
+      stepTo(e, e.x + e.dx * def.lunge * dt, e.z + e.dz * def.lunge * dt, dt, null);
+      if (!e.struck && here && Math.hypot(p.x - e.x, p.z - e.z) < def.reach * 0.6 + playerRadius() + def.radius * 0.5) {
+        e.struck = true;
+        hurtPlayer(def.damage, e.dx, e.dz);
+      }
+      if (e.timer <= 0) {
+        e.state = "recover";
+        e.timer = def.recover;
+      }
+      return;
+    }
+    case "recover":
+    case "stun":
+      if (e.timer <= 0) e.state = here ? "chase" : "return";
+      return;
+    case "pulled": {
+      const pl = e.pull;
+      if (pl) {
+        pl.t = Math.min(1, pl.t + dt / 0.4);
+        const k = pl.t * pl.t * (3 - 2 * pl.t);
+        stepTo(e, pl.fx + (pl.tx - pl.fx) * k, pl.fz + (pl.tz - pl.fz) * k, dt, null);
+        if (pl.t >= 1) {
+          e.pull = null;
+          e.state = "stun";
+          e.timer = COMBAT.leafy.special.stun;
+        }
+      } else e.state = "stun";
+      return;
+    }
+    case "return":
+      if (here && dPlayer < def.notice * 0.8 && dHome < def.leash * 0.7) {
+        e.state = "chase";
+        return;
+      }
+      if (moveEnemy(e, e.homeX, e.homeZ, def.speed * 0.8, dt) < 1e-4 || dHome < 0.3) {
+        e.state = "idle";
+        e.timer = 1;
+        e.hp = def.hp;
+      }
+      return;
+  }
+}
+
+/** Enemies never stand inside each other or inside the player. */
+function separate() {
+  const p = rt.player;
+  const pr = playerRadius();
+  const list = cb.enemies.filter((e) => alive(e) && e.zone === cb.zones.current);
+  for (let a = 0; a < list.length; a++) {
+    const e = list[a];
+    const r = ENEMIES[e.kind].radius;
+    const dx = e.x - p.x, dz = e.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d < r + pr && d > 1e-4) stepTo(e, p.x + (dx / d) * (r + pr), p.z + (dz / d) * (r + pr), 0.016, null);
+    for (let b = a + 1; b < list.length; b++) {
+      const o = list[b];
+      const rr = r + ENEMIES[o.kind].radius;
+      const ox = o.x - e.x, oz = o.z - e.z;
+      const od = Math.hypot(ox, oz);
+      if (od < rr && od > 1e-4) {
+        const push = (rr - od) / 2;
+        stepTo(o, o.x + (ox / od) * push, o.z + (oz / od) * push, 0.016, null);
+        stepTo(e, e.x - (ox / od) * push, e.z - (oz / od) * push, 0.016, null);
+      }
+    }
+  }
+}
+
+function hurtPlayer(n: number, ux: number, uz: number) {
+  if (rt.time < cb.safeUntil || cb.knockedOut) return;
+  cb.vitals = hurt(cb.vitals, n);
+  cb.safeUntil = rt.time + 1.1;
+  cb.hurtT = rt.time;
+  cb.knock.x = ux * 5;
+  cb.knock.z = uz * 5;
+  audio.play("hurt");
+  if (cb.vitals.hp <= 0) {
+    cb.knockedOut = true;
+    hooks.knockout?.();
+  }
+}
+
+/** After the knock-out scene: HP back, everything else kept, the area calm again. */
+export function wakeUp() {
+  cb.vitals = afterKnockout(cb.vitals);
+  cb.knockedOut = false;
+  cb.safeUntil = rt.time + 2;
+  for (const e of cb.enemies) if (alive(e) && e.state !== "idle") e.state = "return";
+}
+
+function updateShots(dt: number) {
+  const solved = getGame().progress.solved;
+  for (const s of cb.shots) {
+    s.age += dt;
+    s.x += s.vx * dt;
+    s.z += s.vz * dt;
+    s.y += (s.y1 - s.y) * Math.min(1, dt * 4);
+    for (const e of cb.enemies) {
+      if (!alive(e) || e.zone !== cb.zones.current) continue;
+      const r = ENEMIES[e.kind].radius + s.radius;
+      if (Math.abs(e.x - s.x) > r || Math.abs(e.z - s.z) > r || Math.hypot(e.x - s.x, e.z - s.z) > r) continue;
+      const v = Math.hypot(s.vx, s.vz) || 1;
+      hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner);
+      // Big bubbles and big fireballs splash the enemies next to the one they hit.
+      if (s.size > 1.3) {
+        for (const o of cb.enemies) if (o !== e && alive(o) && o.zone === e.zone && Math.hypot(o.x - e.x, o.z - e.z) < 1.8) hit(o, s.damage * 0.5, s.knock * 0.6, s.stun, (o.x - e.x) / 1.8, (o.z - e.z) / 1.8, s.owner);
+      }
+      s.life = 0;
+      break;
+    }
+    // Into a wall or the ground ahead: it pops.
+    if (s.y < standY(s.x, s.z, solved) + 0.1) s.life = 0;
+  }
+  cb.shots = cb.shots.filter((s) => s.age < s.life);
+}
+
+function updateDrops(dt: number) {
+  const p = rt.player;
+  const solved = getGame().progress.solved;
+  let coins = 0;
+  const kept: Drop[] = [];
+  for (const d of cb.drops) {
+    const dx = p.x - d.x, dz = p.z - d.z;
+    const dist = Math.hypot(dx, dz);
+    if (!cb.knockedOut && rt.time - d.t0 > 0.45 && dist < 3.2) d.magnet = true;
+    if (d.magnet) {
+      const sp = 9 * dt;
+      d.x += (dx / (dist || 1)) * Math.min(dist, sp);
+      d.z += (dz / (dist || 1)) * Math.min(dist, sp);
+      d.y += (p.y + 0.8 - d.y) * Math.min(1, dt * 8);
+      if (dist < 0.6) {
+        if (collect(d)) {
+          if (d.kind === "coin") coins += d.value;
+          continue;
+        }
+        d.magnet = false;
+      }
+    } else {
+      const ground = standY(d.x, d.z, solved) + 0.3;
+      d.vy -= 14 * dt;
+      d.y += d.vy * dt;
+      d.x += d.vx * dt;
+      d.z += d.vz * dt;
+      d.vx *= Math.exp(-dt * 3);
+      d.vz *= Math.exp(-dt * 3);
+      if (d.y < ground) {
+        d.y = ground;
+        d.vy = Math.abs(d.vy) > 1.5 ? -d.vy * 0.35 : 0;
+      }
+    }
+    if (rt.time - d.t0 < 60) kept.push(d);
+  }
+  cb.drops = kept;
+  if (coins) {
+    updateProgress((pr) => addCoins(pr, coins));
+    audio.play("coin");
+    learn("coins");
+  }
+}
+
+/** Pick up one drop (coins are summed by the caller). False when it cannot be taken (full bag). */
+function collect(d: Drop): boolean {
+  if (d.kind === "coin") return true;
+  if (d.kind === "amber") {
+    updateProgress((p) => addItem(p, "amber", 1));
+    audio.play("sparkle");
+    toast({ en: "+1 amber!", ja: "こはくを みつけた! おやつの ざいりょうだよ", icon: "amber", tone: "good" }, 2200);
+    return true;
+  }
+  const food = d.food!;
+  const res = addFood(getGame().progress, food, 1);
+  if (!res.added) return false;
+  updateProgress(() => res.progress);
+  audio.play("pick");
+  toast({ en: `+1 ${FOODS[food].word}`, ja: FOODS[food].ja, icon: food, tone: "good" }, 1400);
+  return true;
+}

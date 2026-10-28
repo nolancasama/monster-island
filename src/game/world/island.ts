@@ -1,5 +1,6 @@
 import type { FoodId, Vec2 } from "../types";
 import { makeRng } from "../logic/rng";
+import { basinFraction, lowlandY } from "./lowland";
 
 /** Scene placements and their small, ground-plane collision proxies share one transform. */
 export interface Placement { x: number; z: number; yaw?: number; scale?: number }
@@ -222,10 +223,18 @@ export function volcanoFloor(x: number, z: number): number {
 /** Walkable-looking ground: the trail, Ember's slope, the tunnel, the courtyard and the round garden. */
 const VOLCANO_FLOORS: Area[] = [...VOLCANO_PATH, EMBER_SLOPE, CAVE_PASSAGE, COURTYARD];
 
+/**
+ * Act 2: the lookout ledge through a gap in the garden's north-east rim, at
+ * the garden's height. Its north edge is the cliff's lip: the floor stops
+ * there sharply (no fade), and the lowland lies 14 m below.
+ */
+export const LEDGE = { x0: 72.5, x1: 79, z0: -151.2, z1: -143 };
+
 export function volcanoMask(x: number, z: number): number {
   if (z > -48 || z < -154 || x < 27 || x > 87) return 0;
   let d = Math.max(0, Math.hypot(x - GARDEN.x, z - GARDEN.z) - GARDEN.r);
   for (const a of VOLCANO_FLOORS) d = Math.min(d, outside(x, z, a));
+  if (z >= LEDGE.z0) d = Math.min(d, outside(x, z, LEDGE));
   return 1 - smooth(d / 3);
 }
 
@@ -325,7 +334,10 @@ export function massifY(x: number, z: number): number {
   const across = Math.abs(x - TUNNEL.x);
   const ridge = volcanoFloor(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof + 2.6 - 0.75 * Math.max(0, across - 3.5) - 1.2 * along;
   y = Math.max(y, ridge);
-  return Math.max(y, coneY(Math.hypot(x - VOLCANO.x, z - VOLCANO.z)));
+  y = Math.max(y, coneY(Math.hypot(x - VOLCANO.x, z - VOLCANO.z)));
+  // North of the sanctuary's shelf the island continues as the Act 2 lowland.
+  const basin = basinFraction(x, z);
+  return basin > 0 ? y + (lowlandY(x, z) - y) * basin : y;
 }
 
 export interface FoodSource {
@@ -418,7 +430,11 @@ export const VOLCANO_ROCKS: VolcanoRock[] = (() => {
     const a = (i / 25) * Math.PI * 2;
     const x = 70 + Math.cos(a) * 12, z = -136 + Math.sin(a) * 12.5;
     if (z > SANCTUARY_GATE.z - 0.5) continue;
-    add(x, z, 2.1 + rand(), 2.6 + rand() * 1.2, 540 + i);
+    const r = 2.1 + rand(), h = 2.6 + rand() * 1.2;
+    // Two north-east rocks leave the gap out to the lookout ledge (the random
+    // sequence is still drawn, so every other rock keeps its shape).
+    if (i === 20 || i === 21) continue;
+    add(x, z, r, h, 540 + i);
   }
   return rocks;
 })();

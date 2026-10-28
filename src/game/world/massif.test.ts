@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CAVE_PASSAGE, COURTYARD, GARDEN, SEA_Y, TUNNEL, VOLCANO, VOLCANO_CONE, VOLCANO_PATH, EMBER_SLOPE, forestMask, groundY, inTunnel, massifY, tunnelCoverY, volcanoFloor, volcanoMask } from "./island";
 import { PLAYER_R, isWalkable, moveCircle, type Gates } from "./collision";
+import { BASIN } from "./lowland";
 
 const all: Gates = { solved: ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"], forest: true, volcano: true };
 
@@ -45,9 +46,19 @@ describe("the island's north is one landmass", () => {
     for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
       // Far out from the sanctuary, in every direction north of the forest, it is sea.
       const x = 74 + Math.cos(a) * 75, z = -112 + Math.sin(a) * 75;
-      if (z > -60 || x < 30) continue;
+      // North of the sanctuary the island goes on as Act 2's lowland (tested below).
+      if (z > -60 || x < 30 || (x > BASIN.x0 && x < BASIN.x1 && z < -150)) continue;
       expect(massifY(x, z), `${x.toFixed(0)},${z.toFixed(0)}`).toBeLessThan(SEA_Y);
     }
+  });
+
+  it("the lowland below the sanctuary is land that ends in the sea on its three open sides", () => {
+    for (const [x, z] of [[76, -200], [50, -230], [106, -222], [76, -305]]) expect(groundY(x, z), `${x},${z}`).toBeGreaterThan(SEA_Y + 0.5);
+    for (let z = -170; z > BASIN.z0; z -= 20) {
+      expect(massifY(BASIN.x0 + 1, z), `west ${z}`).toBeLessThan(SEA_Y);
+      expect(massifY(BASIN.x1 - 1, z), `east ${z}`).toBeLessThan(SEA_Y);
+    }
+    for (let x = BASIN.x0 + 4; x < BASIN.x1; x += 10) expect(massifY(x, BASIN.z0 + 4), `north ${x}`).toBeLessThan(SEA_Y);
   });
 
   it("the garden stands on a shelf above the land around it", () => {

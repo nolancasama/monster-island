@@ -6,6 +6,9 @@ import { gatesOf, nearestWalkable } from "../world/collision";
 import { audio } from "../../audio/audio";
 import type { MonsterId } from "../types";
 import { LAVA } from "../world/island";
+import { learn } from "../combat";
+
+const learnSwitch = () => learn("switch");
 
 /** Teleport a monster with a little poof (far switches, getting unstuck, going home). */
 export function poofTo(id: MonsterId, x: number, z: number) {
@@ -46,13 +49,20 @@ export function switchTo(id: MonsterId, quiet = false) {
   const before = g.progress.active;
   if (MONSTERS[id].companion === false || !g.progress.monsters[id].friend || before === id) return;
   updateProgress((p) => setActive(p, id));
+  const act2 = g.progress.act2.started;
   if (before) {
     const old = rt.monsters[before];
-    old.mode = "wander";
     old.target = null;
-    const home = MONSTERS[before].home;
-    if (Math.hypot(old.x - home.x, old.z - home.z) > 8) poofTo(before, home.x, home.z);
+    if (act2) {
+      // Act 2: everyone travels together; the old companion falls in with the party.
+      old.mode = "party";
+    } else {
+      old.mode = "wander";
+      const home = MONSTERS[before].home;
+      if (Math.hypot(old.x - home.x, old.z - home.z) > 8) poofTo(before, home.x, home.z);
+    }
   }
+  if (act2) learnSwitch();
   const m = rt.monsters[id];
   m.mode = "follow";
   m.target = null;

@@ -63,3 +63,18 @@ export const SEATED = {
   knee: 1.3,
   arm: { x: -0.75, z: -0.12 }
 };
+
+/**
+ * Piggyback on Ember (Act 2): Ember stands upright, so the rider sits
+ * against its back (game/combat.ts RIDE_SEAT), thighs round its sides and
+ * hands on its shoulders. Checked against Ember's shapes in ember-ride.test.ts.
+ */
+export const SEATED_EMBER = {
+  drop: 0.47,
+  lean: 0.12,
+  thigh: { x: -1.1, y: 0.75, z: -1.2 },
+  knee: 1.45,
+  arm: { x: -0.55, z: 0.05 }
+};
+/** Ember's tail swings back between the rider's legs while carrying the player (rotation.y). */
+export const EMBER_TAIL_RIDE = -0.85;

@@ -364,7 +364,8 @@ describe("Volcano and Sanctuary", () => {
       expect(companions(friend)).not.toContain("lumo");
       expect(setActive(friend, "lumo").active).toBe("leafy");
       expect(objective(friend)).toEqual({ id: "finale" });
-      expect(objective({ ...friend, endings: 3 })).toEqual({ id: "explore" });
+      // The finished prologue leads on to Act 2 (the raiders take Lumo).
+      expect(objective({ ...friend, endings: 3 })).toEqual({ id: "act2Start" });
     }
   });
 });

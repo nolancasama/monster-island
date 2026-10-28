@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { NpcId } from "./data/town";
 import type { FoodId, MonsterId } from "./types";
 import type { PhraseId } from "./logic/english";
 import { newProgress, type DescribeLine, type Progress } from "./logic/progress";
@@ -24,7 +25,7 @@ export interface Settings {
 
 export type MicState = "unknown" | "ready" | "blocked" | "unsupported";
 
-export type Speaker = "maple" | "self" | "game" | MonsterId;
+export type Speaker = "maple" | "self" | "game" | MonsterId | NpcId;
 
 export interface Choice {
   id: PhraseId;
@@ -80,7 +81,7 @@ export interface Line {
 
 export interface Focus {
   id: string;
-  kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign" | "rope";
+  kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign" | "rope" | "chest" | "rest" | "npc" | "cliffRope";
   verb: string;
   noun: string;
   x: number;
@@ -95,7 +96,11 @@ export interface Toast {
   tone: "good" | "info" | "warn" | "chapter";
 }
 
-export type HintKey = "move" | "talk" | "journal" | "switch" | "micBlocked" | null;
+export type HintKey =
+  | "move" | "talk" | "journal" | "switch" | "micBlocked"
+  // Act 2's tutorial: each shows until understood, then never again.
+  | "attack" | "coins" | "special" | "eat" | "switchAct2"
+  | null;
 
 export interface GameState {
   screen: Screen;
@@ -124,6 +129,10 @@ export interface GameState {
   journalPulse: boolean;
   /** Seconds played, for the results card. */
   seconds: number;
+  /** A big centred story banner ("NEW QUEST: Rescue Lumo!"); play goes on underneath. */
+  banner: { title: string; sub?: string; ja?: string; tone: "quest" | "clear" | "place" } | null;
+  /** An open town panel (quick shop, the trainer's list). */
+  panel: "shop" | "trainer" | null;
 }
 
 const SETTINGS_KEY = "mi.settings.v1";
@@ -175,8 +184,18 @@ export const useGame = create<GameState>(() => ({
   discovering: null,
   friendCard: null,
   journalPulse: false,
-  seconds: 0
+  seconds: 0,
+  banner: null,
+  panel: null
 }));
+
+let bannerTimer = 0;
+/** Show a story banner for a few seconds. */
+export function banner(b: NonNullable<GameState["banner"]>, ms = 4200) {
+  setGame({ banner: b });
+  window.clearTimeout(bannerTimer);
+  bannerTimer = window.setTimeout(() => setGame({ banner: null }), ms);
+}
 
 export const setGame = useGame.setState;
 export const getGame = useGame.getState;

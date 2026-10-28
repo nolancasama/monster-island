@@ -7,6 +7,8 @@ import { FarLand, River, Rocks, Sea, SkyAndLights, Terrain, Vegetation } from ".
 import { Props } from "./Props";
 import { Forest } from "./Forest";
 import { Volcano } from "./Volcano";
+import { Lowland } from "./Lowland";
+import { CombatScene } from "./Combat";
 import { Maple, Player } from "./Characters";
 import { Monsters } from "./Monsters";
 import { Effects } from "./Effects";
@@ -98,6 +100,8 @@ export function GameScene() {
       </BeachDetail>
       <Forest />
       <Volcano />
+      <Lowland />
+      <CombatScene />
       <Player />
       <Maple />
       <Monsters />
