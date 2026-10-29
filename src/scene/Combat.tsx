@@ -2,14 +2,16 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
-import { getGame } from "../game/store";
-import { cb, type EnemyRt, type Fx } from "../game/combat";
-import { ENEMIES } from "../game/data/combat";
-import { zoneAt, ENEMY_SPAWNS, type EnemyKind } from "../game/world/lowland";
+import { getGame, useGame } from "../game/store";
+import { cb, combatZoneAt, currentCombatZone, type EnemyRt, type Fx } from "../game/combat";
+import { ENEMIES, type CloudEnemyKind, type EnemyKind } from "../game/data/combat";
+import { ENEMY_SPAWNS, type EnemyKind as LowlandEnemyKind } from "../game/world/lowland";
+import { CLOUD_ENEMY_SPAWNS } from "../game/world/cloudisle";
 import { standY } from "../game/world/collision";
 import { additiveSprite, flatMat, glowTexture, shadowMaterial } from "./materials";
 import { airshipGeometry, cageGeometry, coinGeometry, enemyGeometry, propellerGeometry } from "./models/lowland";
 import { foodGeometry } from "./models/props";
+import { cloudEnemyGeometry } from "./models/cloudEnemies";
 import type { FoodId } from "../game/types";
 
 /**
@@ -41,22 +43,31 @@ function textSprite(text: string, color: string): THREE.SpriteMaterial {
 const ALERT = textSprite("!", "#e8483f");
 const STARS = textSprite("★", "#ffd23f");
 
-function Enemy({ e }: { e: EnemyRt }) {
-  const geo = useMemo(() => enemyGeometry(e.kind), [e.kind]);
+function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
+  const geo = useMemo(() => ["stormCrab", "windSprite", "raiderDrone", "thunderBeetle"].includes(kind) ? cloudEnemyGeometry(kind as CloudEnemyKind) : enemyGeometry(kind as LowlandEnemyKind), [kind]);
   const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), []);
   const shadow = useMemo(() => shadowMaterial(0.3), []);
   const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Mesh>(null);
   const alert = useRef<THREE.Sprite>(null);
   const stars = useRef<THREE.Group>(null);
-  const def = ENEMIES[e.kind];
+  const tell = useRef<THREE.Mesh>(null);
+  const def = ENEMIES[kind];
+  const ring = kind === "thunderBeetle";
+  const hovering = kind === "windSprite" || kind === "raiderDrone";
+  const tellGeo = useMemo(() => {
+    const g = ring ? new THREE.RingGeometry(0.9, 1, 32) : new THREE.PlaneGeometry(1, 1);
+    g.rotateX(-Math.PI / 2);
+    if (!ring) g.translate(0, 0, 0.5);
+    return g;
+  }, [ring]);
   useFrame(() => {
     const g = root.current;
     const m = body.current;
     if (!g || !m) return;
     const p = rt.player;
     const near = Math.hypot(p.x - e.x, p.z - e.z) < VIEW;
-    g.visible = e.zone === cb.zones.current && e.state !== "gone" && near && getGame().progress.act2.started;
+    g.visible = e.zone === currentCombatZone() && e.state !== "gone" && near && getGame().progress.act2.started;
     if (!g.visible) return;
     const t = rt.time;
     const y = standY(e.x, e.z, getGame().progress.solved);
@@ -67,6 +78,7 @@ function Enemy({ e }: { e: EnemyRt }) {
     let lean = 0;
     let scale = 1;
     let shake = 0;
+    if (hovering) hop = Math.sin(t * 4 + e.i) * 0.13;
     if (e.state === "windup") {
       // The tell: it crouches, shakes and glows red before it lunges.
       const k = 1 - e.timer / def.windup;
@@ -89,7 +101,20 @@ function Enemy({ e }: { e: EnemyRt }) {
     // A hit flashes it white; the wind-up glows it red.
     const flash = Math.max(0, 1 - (t - e.hitT) / 0.18);
     const warn = e.state === "windup" ? 0.35 + Math.sin(t * 22) * 0.25 : 0;
-    mat.emissive.setRGB(flash + warn, flash * 0.9, flash * 0.9);
+    mat.emissive.setRGB(flash + warn, flash * 0.9 + (ring ? warn * 0.8 : 0), flash * 0.9 + (ring ? warn * 0.6 : 0));
+    if (tell.current) {
+      tell.current.visible = e.state === "windup" || (ring && e.state === "lunge");
+      if (ring) {
+        tell.current.scale.setScalar(def.reach);
+        (tell.current.material as THREE.MeshBasicMaterial).opacity = e.state === "lunge" ? 0.85 : 0.2 + Math.max(0, 1 - e.timer / def.windup) * 0.4;
+      } else if (kind === "raiderDrone") {
+        tell.current.rotation.y = Math.atan2(e.dx, e.dz) - e.yaw;
+        tell.current.scale.set(0.045, 1, def.lunge * 0.48);
+      } else if (kind === "stormCrab") {
+        tell.current.rotation.y = Math.atan2(e.dx, e.dz) - e.yaw;
+        tell.current.scale.set(0.4, 1, def.lunge * 0.32);
+      }
+    }
     if (alert.current) {
       alert.current.visible = t - e.alertT < 1.1 && e.state !== "ko";
       alert.current.position.y = 1.5 + (e.kind === "shellback" ? 0.2 : 0);
@@ -103,6 +128,11 @@ function Enemy({ e }: { e: EnemyRt }) {
   return (
     <group ref={root}>
       <mesh ref={body} geometry={geo} material={mat} />
+      {(ring || kind === "raiderDrone" || kind === "stormCrab") && (
+        <mesh ref={tell} geometry={tellGeo} position={[0, 0.06, 0]} visible={false}>
+          <meshBasicMaterial color={ring ? "#aadeff" : kind === "raiderDrone" ? "#ff3e4b" : "#ffbb6b"} transparent opacity={0.6} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} material={shadow}>
         <planeGeometry args={[def.radius * 2.4, def.radius * 2.4]} />
       </mesh>
@@ -117,19 +147,21 @@ function Enemy({ e }: { e: EnemyRt }) {
 }
 
 function Enemies() {
+  const world = useGame((g) => g.progress.act3.world);
+  const spawns = world === "cloud" ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
   // cb.enemies is replaced on reset: render by spawn index and look the live record up each frame.
   return (
     <>
-      {ENEMY_SPAWNS.map((_, i) => (
-        <EnemySlot key={i} i={i} kind={ENEMY_SPAWNS[i].kind} />
+      {spawns.map((s, i) => (
+        <EnemySlot key={`${world}-${i}`} i={i} kind={s.kind} />
       ))}
     </>
   );
 }
 
-function EnemySlot({ i }: { i: number; kind: EnemyKind }) {
+function EnemySlot({ i, kind }: { i: number; kind: EnemyKind }) {
   const proxy = useMemo(() => new Proxy({} as EnemyRt, { get: (_t, k) => (cb.enemies[i] as unknown as Record<string | symbol, unknown>)[k] }), [i]);
-  return <Enemy e={proxy} />;
+  return <Enemy e={proxy} kind={kind} />;
 }
 
 const MAX_COINS = 60;
@@ -152,7 +184,7 @@ function Drops() {
     let a = 0;
     let f = 0;
     for (const d of cb.drops) {
-      if (zoneAt(d.x, d.z) !== cb.zones.current) continue;
+      if (combatZoneAt(d.x, d.z) !== currentCombatZone()) continue;
       o.position.set(d.x, d.y + Math.sin(rt.time * 4 + d.id) * 0.05, d.z);
       o.rotation.set(0, rt.time * 4 + d.id, 0);
       o.scale.setScalar(1);

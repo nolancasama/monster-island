@@ -16,6 +16,7 @@ import { cb, resetCombat } from "../combat";
 import { CLIFF_ROPE, CHESTS, zoneAt } from "../world/lowland";
 import { gatherParty, kidnapScene, placeMapleForAct2, startAct2Scene } from "./act2";
 import type { ObstacleId } from "../types";
+import { cloudZoneAt } from "../world/cloudisle";
 
 /**
  * Starting, continuing, saving, the intro with Professor Maple, Maple's
@@ -31,13 +32,17 @@ let lastSaved = "";
 export function saveNow() {
   const g = getGame();
   if (g.screen === "title") return;
+  // Until the single sea cut, a reload returns to the departure harbour.
+  // Never persist an unfinished voyage's offshore home-world coordinates.
+  if (rt.voyage.active && rt.world === "home") return;
   const p = rt.player;
   // Never save mid-ride or mid-climb: resume at the bank or the foot of the rope instead.
   // The cliff rope below the sanctuary resumes on its ledge.
   const climbAt = p.z < -140 ? CLIFF_ROPE.top : { x: ROPE.x, z: ROPE.z + 1.4 };
   const at = p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
   // Act 2's live HP and MP are written in with the rest of the progress.
-  const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: zoneAt(p.x, p.z) } } : g.progress;
+  const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: g.progress.act3.world === "cloud" ? g.progress.act2.zone : zoneAt(p.x, p.z) },
+    act3: { ...g.progress.act3, area: g.progress.act3.world === "cloud" ? cloudZoneAt(p.x,p.z) ?? "cloudDock" : g.progress.act3.area } } : g.progress;
   const text = encodeSave(progress, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
   if (text === lastSaved) return;
   lastSaved = text;
@@ -64,6 +69,7 @@ export function hasSaved(): boolean {
 
 /** Put the world in line with saved progress (palm moved, stones up, bridge fixed, rope up, companion beside you). */
 function applyWorld(p: Progress) {
+  rt.world = p.act3.world;
   rt.palm = rt.palmTarget = p.solved.includes("fallenPalm") ? 1 : 0;
   rt.vines = rt.palm;
   rt.stones = rt.stonesTarget = p.solved.includes("river") ? 1 : 0;
@@ -135,7 +141,8 @@ export async function newGame() {
     journalPulse: false,
     fade: 1,
     banner: null,
-    panel: null
+    panel: null,
+    drawing: false
   });
   resetCombat();
   rt.camera.snap = true;
@@ -148,6 +155,7 @@ export async function continueGame() {
   if (!save) return newGame();
   resetRuntime();
   const p = save.progress;
+  rt.world = p.act3.world;
   const gates = gatesOf(p);
   const spot = Number.isFinite(save.player.x) && isWalkable(save.player.x, save.player.z, gates, PLAYER_R) ? save.player : SPAWN;
   const safe = nearestWalkable(spot.x, spot.z, PLAYER_R, gates);
@@ -240,7 +248,7 @@ export function talkToMaple(): Promise<void> {
     else if (o.id === "market") phase3Hint = ["Buy food at the market: I want apples, please.", "おみせで「I want apples, please.」と いって かおう!"];
     else if (o.id === "kitchen") phase3Hint = ["Make a monster treat in the kitchen!", "キッチンで モンスターの おやつを つくろう!"];
     else if (o.id === "harbor") phase3Hint = ["Ask at the harbor office: Where is the ship?", "みなとの じむしょで「Where is the ship?」と きこう!"];
-    else if (o.id === "act2Done") phase3Hint = ["Lumo is on Cloud Isle. We'll sail there soon!", "ルモは クラウドじまに いる。もうすぐ ふねで いこう!"];
+    else if (o.id === "act2Done") phase3Hint = ["Sail with Captain Gull to Cloud Isle and find Lumo!", "ガルせんちょうと クラウドじまへ いって ルモを さがそう!"];
     if (phase3Hint) {
       await say("maple", ...phase3Hint);
       m.talking = false;

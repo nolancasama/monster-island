@@ -67,10 +67,11 @@ export function CameraRig() {
     const c = rt.camera;
     const g = getGame();
     const p = rt.player;
+    const cloud = g.screen === "game" && g.progress.act3.world === "cloud";
     const rope = g.screen === "game" && p.climbY !== null && p.z < -140;
     const wasRope = c.framing === "rope";
     const leavingRope = !rope && (wasRope || c.shot !== null && c.shot === ropeShot.current);
-    const lowland = g.screen === "game" && !rope && (c.mode === "follow" || leavingRope) && inLowland(p.x, p.z);
+    const lowland = !cloud && g.screen === "game" && !rope && (c.mode === "follow" || leavingRope) && inLowland(p.x, p.z);
     if (rope && !wasRope) {
       ropeAge.current = 0;
       ropeOffset.set(pos.current.x - p.x, pos.current.y - p.y, pos.current.z - p.z);
@@ -105,12 +106,12 @@ export function CameraRig() {
       want.current.set(c.shot.pos.x, c.shot.pos.y, c.shot.pos.z);
       wantLook.current.set(c.shot.target.x, c.shot.target.y, c.shot.target.z);
     } else {
-      c.framing = lowland ? "lowland" : "orbit";
+      c.framing = cloud ? "cloud" : lowland ? "lowland" : "orbit";
       // There is no room behind the player at the foot of the cliff, so over
       // the last few metres the view tips down onto the player (same heading).
       const nearCliff = lowland ? THREE.MathUtils.smoothstep(p.z, CLIFF_ROPE.foot.z - 6, CLIFF_ROPE.foot.z - 1) : 0;
-      if (lowland) {
-        c.yaw = LOWLAND_CAMERA.yaw;
+      if (lowland || cloud) {
+        c.yaw = cloud ? Math.PI : LOWLAND_CAMERA.yaw;
         c.pitch = LOWLAND_CAMERA.pitch + (1.15 - LOWLAND_CAMERA.pitch) * nearCliff;
         c.dist = LOWLAND_CAMERA.dist - 2 * nearCliff;
       }
@@ -119,7 +120,7 @@ export function CameraRig() {
       // closer and lower, and stays under the roof. It blends in and out
       // over about a second, and the yaw it leaves behind is the yaw it
       // used, so leaving never swings the view (or the controls) around.
-      const inside = !lowland && Math.abs(p.x - TUNNEL.x) < TUNNEL.half + 0.6 && p.z < TUNNEL.z1 + 0.8 && p.z > TUNNEL.z0 - 1.2;
+      const inside = !cloud && !lowland && Math.abs(p.x - TUNNEL.x) < TUNNEL.half + 0.6 && p.z < TUNNEL.z1 + 0.8 && p.z > TUNNEL.z0 - 1.2;
       tunnel.current += ((inside ? 1 : 0) - tunnel.current) * Math.min(1, dt * 2.5);
       let k = tunnel.current < 0.002 ? 0 : tunnel.current;
       if (k > 0) {
@@ -129,12 +130,12 @@ export function CameraRig() {
       const dist = c.dist + (3.4 - c.dist) * k;
       const pitch = c.pitch + (0.24 - c.pitch) * k;
       const horiz = dist * Math.cos(pitch);
-      const ahead = lowland ? LOWLAND_CAMERA.ahead * (1 - nearCliff) : 0;
-      want.current.set(p.x + Math.sin(c.yaw) * horiz, ty + dist * Math.sin(pitch), p.z - ahead + Math.cos(c.yaw) * horiz);
-      wantLook.current.set(p.x, ty, p.z - ahead);
+      const ahead = lowland || cloud ? LOWLAND_CAMERA.ahead * (1 - nearCliff) : 0;
+      want.current.set(p.x + Math.sin(c.yaw) * (horiz - ahead), ty + dist * Math.sin(pitch), p.z + Math.cos(c.yaw) * (horiz - ahead));
+      wantLook.current.set(p.x - Math.sin(c.yaw) * ahead, ty, p.z - Math.cos(c.yaw) * ahead);
       // A camera inside the passage (just outside its portals the orbit can
       // swing in) stays under the roof and between the walls.
-      if (inTunnel(want.current.x, want.current.z, -0.2)) k = Math.max(k, 1);
+      if (!cloud && inTunnel(want.current.x, want.current.z, -0.2)) k = Math.max(k, 1);
       if (k > 0) {
         const roof = tunnelRoof - 0.55;
         const side = TUNNEL.half - 0.6;
@@ -168,7 +169,7 @@ export function CameraRig() {
           }
         }
         want.current.y += Math.min(1.5, up);
-      } else if (k < 1) {
+      } else if (!cloud && k < 1) {
         // Against the mountain (the volcano's flank, the ridge) the orbit
         // comes in closer rather than climbing tens of metres up the rock;
         // small things like the beach ridge are still risen over.
@@ -215,8 +216,12 @@ export function CameraRig() {
     // view slides up by half its height (at most 30% of the screen), so the
     // monster being talked to stays above the panel. No perspective change.
     const cam = camera as THREE.PerspectiveCamera;
+    // The mountain's real beacon and the nearby player need a taller sky view
+    // than the lowland. Physical follow offsets remain exactly the same.
+    const fov = cloud ? 80 : 55;
+    if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const h = window.innerHeight;
-    const wantShift = g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0;
+    const wantShift = (cloud && c.framing === "cloud" ? -h * .2 : 0) + (g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0);
     shift.current += (wantShift - shift.current) * Math.min(1, dt * 5);
     if (Math.abs(shift.current) > 0.5) {
       cam.setViewOffset(window.innerWidth, h, 0, shift.current, window.innerWidth, h);

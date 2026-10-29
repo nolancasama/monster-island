@@ -2,12 +2,13 @@ import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
 import { inLowland } from "./world/lowland";
+import { region } from "./world/region";
 
 export const LOWLAND_CAMERA = { yaw: 0, pitch: 0.55, dist: 10, ahead: 3 };
 
 /** The cliff rope and basin use authored framing rather than pointer orbit. */
 export function fixedCamera() {
-  return (rt.player.climbY !== null && rt.player.z < -140) || inLowland(rt.player.x, rt.player.z);
+  return region.world === "cloud" || (rt.player.climbY !== null && rt.player.z < -140) || inLowland(rt.player.x, rt.player.z);
 }
 
 /**
@@ -104,6 +105,11 @@ function monsterStart(id: MonsterId): MonsterRt {
 }
 
 export const rt = {
+  get world() { return region.world; },
+  set world(value: "home" | "cloud") { region.world = value; },
+  voyage: { active: false, x: 0, y: 0, z: 0, yaw: 0, sail: 0, stage: "idle" },
+  act3Scene: "idle",
+  kikoTrail: 0,
   /** Real seconds since load (animation). */
   time: 0,
   /** Test hook only: slows or freezes the clock for frame-by-frame captures. */
@@ -143,7 +149,7 @@ export const rt = {
     shot: null as CameraShot | null,
     snap: false,
     /** Semantic framing and transition completion, exposed read-only by the capture hook. */
-    framing: "orbit" as "orbit" | "lowland" | "rope" | "shot" | "title" | "results",
+    framing: "orbit" as "orbit" | "lowland" | "cloud" | "rope" | "shot" | "title" | "results",
     settled: false,
     pos: { x: 0, y: 6, z: 6 } as Vec3,
     target: { x: 0, y: 1, z: 0 } as Vec3
@@ -214,6 +220,12 @@ export function animate(id: MonsterId, kind: MonsterAnim) {
 export const PICK_TIME = 0.7;
 
 export function resetRuntime() {
+  rt.world = "home";
+  rt.voyage.active = false;
+  rt.voyage.sail = 0;
+  rt.voyage.stage = "idle";
+  rt.act3Scene = "idle";
+  rt.kikoTrail = 0;
   const p = rt.player;
   p.x = SPAWN.x;
   p.z = SPAWN.z;

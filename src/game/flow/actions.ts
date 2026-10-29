@@ -8,6 +8,7 @@ import { talkTo } from "./encounter";
 import { climbRope, useObstacle } from "./obstacles";
 import { cliffTopEnding, readSign, stoneEnding, talkToMaple } from "./story";
 import { switchTo } from "./companion";
+import { cloudInteract } from "./act3";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
 import { climbCliff, lookAtLockedGate, openChestScene, readForkSign, restAtCamp, talkToKeeper } from "./act2";
@@ -18,6 +19,7 @@ import type { MonsterId, ObstacleId } from "../types";
 export function interact(f: Focus | null = getGame().focus) {
   const g = getGame();
   if (!f || g.mode !== "explore" || isRunning()) return;
+  if (g.progress.act3.world === "cloud") { void cloudInteract(f); return; }
   if (g.hint === "talk" || g.hint === "move") setGame({ hint: null });
   switch (f.kind) {
     case "monster":

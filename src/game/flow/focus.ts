@@ -7,6 +7,8 @@ import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIG
 import type { Vec2 } from "../types";
 import { ACT2_PLACE, PHASE3_PLACE } from "./obstacles";
 import { lumoHidden } from "./act2";
+import { cloudCandidates } from "./act3";
+import { CLOUD_SPAWNS, HOLLOW } from "../world/cloudisle";
 import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, zoneAt, type ServiceId } from "../world/lowland";
 import { obstacleAvailable } from "../logic/progress";
 import type { ObstacleId } from "../types";
@@ -34,6 +36,7 @@ interface Candidate {
 function candidates(): Candidate[] {
   const g = getGame();
   const p = g.progress;
+  if (p.act3.world === "cloud") return cloudCandidates();
   const out: Candidate[] = [];
   const add = (focus: Focus, reach = INTERACT_RANGE) => out.push({ focus, reach });
   if (p.metMaple) add({ id: "maple", kind: "maple", verb: "Talk to", noun: "Maple", x: rt.maple.x, z: rt.maple.z }, 2.5);
@@ -129,6 +132,11 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
   const p = g.progress;
   const o = objective(p);
   switch (o.id) {
+    case "act2Done": return { ...SERVICES.harbor.keeper, y: 2.4 };
+    case "cloudCoast": return { ...CLOUD_SPAWNS.stormbreakCoast, y: 2.4 };
+    case "cloudHollow": return { ...HOLLOW.entrance, y: 2.4 };
+    case "cloudFamily": return { ...HOLLOW.tala, y: 2.4 };
+    case "cloudObservatory": return { ...CLOUD_SPAWNS.windfallJunction, y: 2.4 };
     case "meetMaple":
       return null;
     case "findMonster":

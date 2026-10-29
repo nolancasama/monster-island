@@ -1,6 +1,8 @@
 import type { FoodId, Vec2 } from "../types";
 import { makeRng } from "../logic/rng";
 import { basinFraction, lowlandY } from "./lowland";
+import { region } from "./region";
+import { cloudY } from "./cloudisle";
 
 /** Scene placements and their small, ground-plane collision proxies share one transform. */
 export interface Placement { x: number; z: number; yaw?: number; scale?: number }
@@ -76,6 +78,7 @@ export function inRiver(x: number, z: number, margin = 0): boolean {
 }
 
 export function groundY(x: number, z: number): number {
+  if (region.world === "cloud") return cloudY(x, z);
   const d = z - shoreZ(x);
   const inland = 0.35;
   let y: number;

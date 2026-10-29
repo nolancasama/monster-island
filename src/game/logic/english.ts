@@ -61,7 +61,9 @@ export type PhraseId =
   | "cmdPull"
   | "cmdPush"
   | "cmdBlow"
-  | "cmdBurn";
+  | "cmdBurn"
+  | "yesLetsGo" | "raiseSail" | "turnLeft" | "itsWindy" | "itsSunny" | "itsRainy" | "look"
+  | "imAFriend" | "yesItIs" | "whereLumo";
 
 const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
 const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
@@ -167,6 +169,16 @@ const color = (id: PhraseId, c: ColorId, distractors: PhraseId[]): Phrase => ({
 const can = (id: PhraseId, a: AbilityId | "help", en: string): Phrase => ({ id, en, keys: [CAN_Q, ABILITY_WORDS[a]] });
 
 export const PHRASES: Record<PhraseId, Phrase> = {
+  yesLetsGo: { id: "yesLetsGo", en: "Yes, let's go!", keys: [YES, GO], forbid: NO },
+  raiseSail: { id: "raiseSail", en: "Raise the sail!", keys: [["raise", "rays", "rise", "reis", "raiseu"], ["sail", "sale", "sails", "sell", "seiru"]] },
+  turnLeft: { id: "turnLeft", en: "Turn left!", keys: [["turn", "tern", "tan", "turns"], ["left", "leff", "refuto", "lift"]] },
+  itsWindy: { id: "itsWindy", en: "It's windy.", keys: [["windy", "wind", "windi", "window", "uindi"]] },
+  itsSunny: { id: "itsSunny", en: "It's sunny.", keys: [["sunny", "sun", "sani", "sonny"]] },
+  itsRainy: { id: "itsRainy", en: "It's rainy.", keys: [["rainy", "rain", "reini", "raining"]] },
+  look: { id: "look", en: "Look!", keys: [["look", "looks", "luk", "rook", "ruku"]] },
+  imAFriend: { id: "imAFriend", en: "I'm a friend.", keys: [["friend", "friends", "frend", "furendo"]] },
+  yesItIs: { id: "yesItIs", en: "Yes, it is!", keys: [YES], forbid: NO },
+  whereLumo: { id: "whereLumo", en: "Where is Lumo?", keys: [WHERE, ["lumo", "lumo's", "lumi", "r umo", "rumo", "luminous"]] },
   itsYellow: color("itsYellow", "yellow", ["itsOrange", "itsPurple"]),
   canFire: can("canFire", "fire", "Can you make fire?"),
   whatsYourName: {

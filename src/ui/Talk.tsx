@@ -6,6 +6,7 @@ import { MaplePortrait, NpcPortrait, Portrait, SelfPortrait } from "./Portraits"
 import { NPCS, type NpcId } from "../game/data/town";
 import { UI } from "./i18n";
 import type { MonsterId } from "../game/types";
+import { FAMILY, type FamilyId } from "../game/data/family";
 
 export function Ja({ children }: { children: React.ReactNode }) {
   const on = useGame((s) => s.settings.japanese);
@@ -18,9 +19,13 @@ export function Ja({ children }: { children: React.ReactNode }) {
 }
 
 const NAME: Record<string, string> = { maple: "Professor Maple", self: "You", game: "" };
-export const speakerName = (by: Speaker) => NAME[by] ?? NPCS[by as NpcId]?.name ?? MONSTERS[by as MonsterId]?.name ?? "";
+export const speakerName = (by: Speaker) => NAME[by] ?? FAMILY[by as FamilyId]?.name ?? NPCS[by as NpcId]?.name ?? MONSTERS[by as MonsterId]?.name ?? "";
 
 export function SpeakerFace({ by, size }: { by: Speaker; size: number }) {
+  if (by in FAMILY) {
+    const f = FAMILY[by as FamilyId];
+    return <svg width={size} height={size} viewBox="0 0 64 64" aria-label={f.name}><circle cx="32" cy="32" r="31" fill={f.color}/><path d="M10 63 Q12 42 32 43 Q52 42 54 63" fill={f.color}/><ellipse cx="32" cy="28" rx="18" ry="21" fill="#d8a27a"/><path d="M14 26 Q10 4 32 5 Q54 5 50 26 L43 16 19 19Z" fill={f.hair}/><circle cx="25" cy="29" r="2"/><circle cx="39" cy="29" r="2"/><path d="M26 38 Q32 42 38 38" fill="none" stroke="#713e35" strokeWidth="2"/>{by === "bo" && <path d="M17 38 Q32 60 47 38 L32 46Z" fill={f.hair}/>}</svg>;
+  }
   if (by === "maple") return <MaplePortrait size={size} />;
   if (by in NPCS) return <NpcPortrait id={by as NpcId} size={size} />;
   if (by === "self") return <SelfPortrait size={size} />;

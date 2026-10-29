@@ -15,6 +15,7 @@ import { fixedCamera, rt } from "./game/runtime";
 import { tts } from "./audio/tts";
 import { audio } from "./audio/audio";
 import { bottomPanel } from "./scene/CameraRig";
+import { CloudStory } from "./ui/CloudStory";
 
 /** Drag anywhere on the 3D view to turn the camera; the wheel zooms. */
 function useCameraDrag(ref: React.RefObject<HTMLDivElement | null>) {
@@ -107,6 +108,7 @@ export function App() {
       <GameScene />
       <Hud />
       <BottomPanels />
+      <CloudStory />
       <TouchControls />
       <Banner />
       <Journal />

@@ -790,3 +790,48 @@ of view if measurement shows the need (not needed in Phase 2).
   Lava uses yellow-white fissures, pulsing emissive colour and six instanced
   steam puffs. Lumo's undiscovered objective names the legendary monster in
   English and Japanese using the existing objective state.
+
+## 2026-10-29 — Act 3 decisions made while building (slice A)
+
+- Cloud Isle is a separate physical world. Only its scene or the home scene
+  mounts. North is +z with fixed yaw π; collision, heights, zone encounters,
+  checkpoints and save projection all select the active world. Existing home
+  terrain, camera offsets, encounters and balance are preserved.
+- Dock → Coast → waterfall Hollow → family back tunnel → Junction is the
+  playable route. The raider road stays permanently blocked. Both mountain
+  route mouths have see-through barriers; the real observatory and beacon are
+  distant geometry. Zone, enemy, chest, puzzle and pickup tables can be extended
+  by later slices without replacing this region.
+- The lowland follow offsets remain pitch .55, distance 10 m, look-ahead 3 m.
+  Cloud Isle uses an 80° vertical lens and a modest upward lens shift so the
+  nearby player and the actual summit silhouette fit together. The original
+  55° lens crops the horizon at this pitch. Home framing is unchanged. Cloud
+  fog starts at 38 m and ends at 260 m with a darker storm colour; the longer
+  end keeps the real summit visible during the offshore reveal.
+- The first voyage saves the departure harbour until its one sea fade. At
+  that fade all four English beats are complete, voyageDone is recorded and
+  the physical world swaps. An interrupted arrival reloads at valid Cloud
+  ground without replay. Completed trips use the short two-way boat fade.
+  Enemy memories survive boat travel and keep the existing 12-second rule.
+- Wind lanes move loose props and projectiles. A sprite puff deals light
+  damage without translating the player, following the accepted wind rule.
+  Cloud attacks keep at most four enemies awake, including when a sleeping
+  enemy is struck. Environmental powers spend no MP.
+- The three optional errands can be completed in slice A: the bag is inside
+  the windmill sea cave, three logs lie in the Junction, and glow moss grows
+  on the accessible Canopy route-mouth lip. The closed route beyond that lip
+  belongs to a later slice. Hand-ins permanently repair the shelf, improve
+  the cooking area, and brighten the lantern with extra bedding.
+- Stew is stored in act3.stew, outside ordinary FoodId favourites. One fish
+  cooks one stew, carry limit three; the bag deliberately restores 50 HP and
+  40 MP to every friend. The F key and quick-eat button retain their existing
+  favourite-food behavior.
+- The Hollow becomes the Cloud wake destination as soon as it is found;
+  using the mats restores all vitals and records its checkpoint. Trust,
+  drawing and tunnel unlocks are monotonic and validated in order. Old v4
+  saves gain defaults, and every Act 3 field is discarded without the harbour
+  lead. Reserved observatory and beacon fields are present for later slices.
+- Browser acceptance is authored in tests/e2e/act3.spec.ts, including both
+  viewport sizes and touch controls. This order's validation commands do not
+  run that browser suite; screenshots and measured render reports are produced
+  by it when browser acceptance is requested, rather than fabricated here.

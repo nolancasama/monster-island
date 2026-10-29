@@ -14,6 +14,9 @@ import { Monsters } from "./Monsters";
 import { Effects } from "./Effects";
 import { CameraRig } from "./CameraRig";
 import { CollisionOverlay } from "./CollisionOverlay";
+import { useGame } from "../game/store";
+import { CloudIsle } from "./CloudIsle";
+import { VoyageBoat } from "./VoyageBoat";
 
 const collisionDebugAllowed = import.meta.env.DEV || new URLSearchParams(window.location.search).get("e2e") === "1";
 
@@ -78,6 +81,7 @@ function BeachDetail({ children }: { children: ReactNode }) {
 }
 
 export function GameScene() {
+  const cloud = useGame((s) => s.screen === "game" && s.progress.act3.world === "cloud");
   return (
     <Canvas
       className="scene"
@@ -88,6 +92,7 @@ export function GameScene() {
     >
       <Clock />
       <AdaptiveDpr />
+      {cloud ? <CloudIsle /> : <>
       <SkyAndLights />
       <Terrain />
       <Sea />
@@ -101,13 +106,15 @@ export function GameScene() {
       <Forest />
       <Volcano />
       <Lowland />
+      <Maple />
+      </>}
+      <VoyageBoat />
       <CombatScene />
       <Player />
-      <Maple />
       <Monsters />
       <Effects />
       <CameraRig />
-      {collisionDebugAllowed ? <CollisionOverlay /> : null}
+      {collisionDebugAllowed && !cloud ? <CollisionOverlay /> : null}
     </Canvas>
   );
 }

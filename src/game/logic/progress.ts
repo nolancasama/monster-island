@@ -3,6 +3,7 @@ import { FOODS, islandFoods } from "../data/foods";
 import type { AbilityId, Bag, FoodId, MonsterId, ObstacleId } from "../types";
 import type { PhraseId } from "./english";
 import { ACT2_OBSTACLES, act2Objective, bagMax, newAct2, prologueComplete, type Act2, type Act2Objective } from "./act2";
+import { newAct3, type Act3 } from "./act3";
 
 /**
  * The saved game: what the student has learned and unlocked. Pure functions
@@ -36,6 +37,7 @@ export interface Progress {
   said: PhraseId[];
   /** Act 2: The Hunt for Lumo (untouched until the prologue is complete). */
   act2: Act2;
+  act3: Act3;
 }
 
 const emptyRecord = (): MonsterRecord => ({ discovered: false, asked: {}, friend: false, canKnown: {}, described: {} });
@@ -43,7 +45,7 @@ const emptyRecord = (): MonsterRecord => ({ discovered: false, asked: {}, friend
 export function newProgress(): Progress {
   const monsters = {} as Record<MonsterId, MonsterRecord>;
   for (const id of MONSTER_ORDER) monsters[id] = emptyRecord();
-  return { monsters, active: null, bag: {}, solved: [], metMaple: false, endings: 0, said: [], act2: newAct2() };
+  return { monsters, active: null, bag: {}, solved: [], metMaple: false, endings: 0, said: [], act2: newAct2(), act3: newAct3() };
 }
 
 // ------------------------------------------------------------ monster answers
@@ -296,6 +298,7 @@ export type Objective =
   | { id: "askBack"; monster: MonsterId }
   | { id: "finale" }
   | { id: "explore" }
+  | { id: "cloudCoast" | "cloudHollow" | "cloudFamily" | "cloudObservatory" }
   | Act2Objective;
 
 /** Where each live monster can be reached from (the obstacle that guards it). */
@@ -322,6 +325,9 @@ function befriendStep(p: Progress, id: MonsterId): Objective | null {
  * Each phase is finished, ending included, before the next one is mentioned.
  */
 export function objective(p: Progress): Objective {
+  if (p.act2.harbor && p.act3.world === "cloud") {
+    return { id: !p.act3.cleared.includes("stormbreakCoast") ? "cloudCoast" : !p.act3.hollowFound ? "cloudHollow" : !p.act3.family.tunnelOpen ? "cloudFamily" : "cloudObservatory" };
+  }
   if (!p.metMaple) return { id: "meetMaple" };
   for (const id of monstersOfPhase(1)) {
     const step = befriendStep(p, id);

@@ -146,8 +146,8 @@ function Page({ id }: { id: MonsterId }) {
       )}
       {id === "lumo" && progress.act2.lumoTaken && (
         <p className="j-taken" data-testid="journal-lumo-taken">
-          <b>{progress.act2.harbor ? "Lumo is on Cloud Isle!" : "Taken by the sky raiders!"}</b>{" "}
-          <Ja>{progress.act2.harbor ? "ルモは クラウドじまに いる! たすけに いこう" : "そらの とうぞくに つれて いかれた! たすけに いこう"}</Ja>
+          <b>{progress.act3.family.drawingSeen ? "Reach the Ancient Observatory and find Lumo" : progress.act2.harbor ? "Sail with Captain Gull to Cloud Isle!" : "Taken by the sky raiders!"}</b>{" "}
+          <Ja>{progress.act3.family.drawingSeen ? "こだいの てんもんだいへ いって ルモを さがそう" : progress.act2.harbor ? "ガルせんちょうと クラウドじまへ!" : "そらの とうぞくに つれて いかれた! たすけに いこう"}</Ja>
         </p>
       )}
       {r.friend && def.companion !== false && (

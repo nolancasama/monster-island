@@ -1,5 +1,8 @@
 import type { FoodId, MonsterId, Text } from "../types";
-import type { EnemyKind } from "../world/lowland";
+import type { EnemyKind as LowlandEnemyKind } from "../world/lowland";
+
+export type CloudEnemyKind = "stormCrab" | "windSprite" | "raiderDrone" | "thunderBeetle";
+export type EnemyKind = LowlandEnemyKind | CloudEnemyKind;
 
 /**
  * Act 2 combat as data: each companion's two moves, the enemies, food
@@ -102,7 +105,11 @@ export interface EnemyDef {
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   gloomlet: { name: { en: "Gloomlet", ja: "グルームレット" }, hp: 20, damage: 6, speed: 2.2, lunge: 4.2, notice: 7, leash: 13, windupAt: 2, reach: 1.3, windup: 0.75, recover: 1.1, coins: [2, 4], foodChance: 0.08, amberChance: 0.02, radius: 0.42, weight: 1 },
   snapjaw: { name: { en: "Snapjaw", ja: "スナップジョー" }, hp: 44, damage: 10, speed: 2.7, lunge: 6.5, notice: 8, leash: 14, windupAt: 3, reach: 1.5, windup: 0.85, recover: 1.3, coins: [5, 7], foodChance: 0.12, amberChance: 0.04, radius: 0.55, weight: 0.8 },
-  shellback: { name: { en: "Shellback", ja: "シェルバック" }, hp: 80, damage: 14, speed: 1.5, lunge: 3.5, notice: 7, leash: 12, windupAt: 2.2, reach: 1.8, windup: 1.0, recover: 1.5, coins: [10, 14], foodChance: 0.2, amberChance: 0.15, radius: 0.75, weight: 0.35 }
+  shellback: { name: { en: "Shellback", ja: "シェルバック" }, hp: 80, damage: 14, speed: 1.5, lunge: 3.5, notice: 7, leash: 12, windupAt: 2.2, reach: 1.8, windup: 1.0, recover: 1.5, coins: [10, 14], foodChance: 0.2, amberChance: 0.15, radius: 0.75, weight: 0.35 },
+  stormCrab: { name: { en: "Storm Crab", ja: "ストームクラブ" }, hp: 48, damage: 10, speed: 2.1, lunge: 7, notice: 8, leash: 15, windupAt: 3.6, reach: 1.5, windup: 0.85, recover: 1.4, coins: [5, 8], foodChance: 0.12, amberChance: 0.04, radius: 0.62, weight: 0.65 },
+  windSprite: { name: { en: "Wind Sprite", ja: "かぜのせい" }, hp: 30, damage: 5, speed: 2, lunge: 0, notice: 9, leash: 15, windupAt: 7, reach: 0.6, windup: 0.9, recover: 1.8, coins: [4, 7], foodChance: 0.12, amberChance: 0.03, radius: 0.42, weight: 1.1 },
+  raiderDrone: { name: { en: "Raider Drone", ja: "レイダードローン" }, hp: 45, damage: 10, speed: 2.5, lunge: 10, notice: 9, leash: 16, windupAt: 5.5, reach: 1.2, windup: 1.05, recover: 1.6, coins: [6, 9], foodChance: 0.08, amberChance: 0.06, radius: 0.5, weight: 0.85 },
+  thunderBeetle: { name: { en: "Thunder Beetle", ja: "サンダービートル" }, hp: 65, damage: 12, speed: 1.6, lunge: 0, notice: 8, leash: 13, windupAt: 3, reach: 2.8, windup: 1.1, recover: 1.8, coins: [8, 12], foodChance: 0.16, amberChance: 0.1, radius: 0.7, weight: 0.45 }
 };
 
 export const MAX_HP = 100;

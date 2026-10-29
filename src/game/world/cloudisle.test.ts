@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vitest";
+import {
+  CLOUD_CHESTS, CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS,
+  CLOUD_SPAWNS, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS,
+  cloudMove, cloudNearestWalkable, cloudWalkable, cloudWindAt, cloudY, cloudZoneAt,
+  type CloudArea, type CloudGates,
+} from "./cloudisle";
+
+const OPEN: CloudGates = { cleared: ["stormbreakCoast"], solved: ["coastWindmill", "coastCrate"], tunnelOpen: true };
+function flood(gates: CloudGates, radius = .35, avoid: CloudArea[] = []) {
+  const step = .6, start = [0, Math.round(CLOUD_DOCK.spawn.z / step)], queue = [start];
+  const seen = new Set<string>([start.join(",")]);
+  while (queue.length) {
+    const [x, z] = queue.pop()!;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, nz = z + dz, px = nx * step, pz = nz * step, key = `${nx},${nz}`;
+      if (seen.has(key) || !cloudWalkable(px, pz, gates, radius)) continue;
+      const area = cloudZoneAt(px, pz); if (area && avoid.includes(area)) continue;
+      const p = cloudMove(x * step, z * step, px, pz, radius, gates);
+      if (Math.hypot(p.x - px, p.z - pz) > .05) continue;
+      seen.add(key); queue.push([nx, nz]);
+    }
+  }
+  return (x: number, z: number, radius = 1.1) => {
+    for (const key of seen) {
+      const [a, b] = key.split(",").map(Number);
+      if (Math.hypot(a * step - x, b * step - z) < radius) return true;
+    }
+    return false;
+  };
+}
+
+describe("Cloud Isle slice A ground", () => {
+  it("joins dock, coast, Hollow, back tunnel and the junction with real circle moves", () => {
+    const reach = flood(OPEN);
+    for (const p of Object.values(CLOUD_SPAWNS)) expect(reach(p.x, p.z), `${p.x},${p.z}`).toBe(true);
+    for (const p of [HOLLOW.rest, HOLLOW.tala, HOLLOW.bo, HOLLOW.kiko, CLOUD_DOCK.gull]) expect(reach(p.x, p.z)).toBe(true);
+    for (const p of [...CLOUD_PICKUPS, ...CLOUD_CHESTS]) expect(reach(p.x, p.z), p.id).toBe(true);
+    for (const m of ROUTE_MOUTHS) expect(reach(m.x, m.z, 2)).toBe(true);
+  });
+  it("requires the coast first clear, including mounted edge approaches, and always allows retreat", () => {
+    for (const radius of [.35, .7]) {
+      const g = { ...OPEN, cleared: [] };
+      const reach = flood(g, radius);
+      expect(reach(HOLLOW.center.x, HOLLOW.center.z)).toBe(false);
+      for (const e of CLOUD_ENEMY_SPAWNS) expect(reach(e.x, e.z, 1.5)).toBe(true);
+      for (let x = -12; x <= 12; x += .3) expect(cloudWalkable(x, COAST_GATE.z, g, radius)).toBe(false);
+      expect(cloudMove(0, 42, 0, 46, radius, g).z).toBeLessThan(COAST_GATE.z);
+      expect(cloudMove(0, 42, 0, 46, radius, OPEN).z).toBeCloseTo(46);
+      expect(cloudMove(0, 42, 0, 39, radius, g).z).toBeCloseTo(39);
+    }
+  });
+  it("needs the family's tunnel and never opens the raider road or future routes", () => {
+    expect(flood({ ...OPEN, tunnelOpen: false })(0, 90)).toBe(false);
+    expect(flood(OPEN, .35, ["hiddenHollow"])(0, 90)).toBe(false);
+    for (const radius of [.35, .7]) {
+      for (let x = 1; x <= 9; x += .3) expect(cloudWalkable(x, RAIDER_BARRICADE.z, OPEN, radius)).toBe(false);
+      expect(cloudMove(5, 55, 5, 60, radius, OPEN).z).toBeLessThan(RAIDER_BARRICADE.z);
+    }
+    for (const m of ROUTE_MOUTHS) expect(cloudWalkable(m.x, m.z + 4, OPEN, .35)).toBe(false);
+    expect(cloudWalkable(0, 137, OPEN, .35)).toBe(false);
+  });
+  it("keeps both optional coves closed until their own free ability puzzle", () => {
+    expect(flood({ ...OPEN, solved: [] })(-17, 30)).toBe(false);
+    expect(flood({ ...OPEN, solved: [] })(17, 39)).toBe(false);
+    for (const p of Object.values(CLOUD_OBSTACLE_PLACE)) expect(flood({ ...OPEN, solved: [] })(p.x, p.z, 1.2)).toBe(true);
+  });
+  it("puts enemies in the coast, and projects invalid saved ground without jumping a gate", () => {
+    for (const e of CLOUD_ENEMY_SPAWNS) {
+      expect(cloudZoneAt(e.x, e.z)).toBe(e.zone);
+      expect(cloudWalkable(e.x, e.z, OPEN, .5)).toBe(true);
+    }
+    const p = cloudNearestWalkable(999, -999, .35, {});
+    expect(cloudWalkable(p.x, p.z, {}, .35)).toBe(true);
+    expect(cloudNearestWalkable(NaN, Infinity, .35, {})).toEqual(CLOUD_DOCK.spawn);
+    expect(cloudY(0, 90)).toBeGreaterThan(cloudY(0, 0));
+  });
+  it("supplies wind acceleration only as a projectile/light-prop query", () => {
+    expect(cloudWindAt(-4, 20).x).toBeGreaterThan(0);
+    expect(cloudWindAt(2, 34).x).toBeLessThan(0);
+    expect(cloudWindAt(-13, 57)).toEqual({ x: 0, z: 0 });
+  });
+});

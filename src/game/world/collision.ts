@@ -1,4 +1,6 @@
 import type { ObstacleId } from "../types";
+import { region } from "./region";
+import { cloudMove, cloudNearestWalkable, cloudSolids, cloudWalkable, cloudY, type CloudGates } from "./cloudisle";
 import {
   EARLY_OVERLOOK,
   CROSSING,
@@ -66,6 +68,7 @@ export const PLAYER_R = 0.35;
 export const STATIC_OBSTACLES: Obstacles = { circles: [], boxes: [], shapes: STATIC_SOLIDS };
 
 export interface Gates {
+  cloud?: CloudGates;
   solved: readonly ObstacleId[];
   /** The Phase 1 ending has played: the bramble is gone and the forest path is open. */
   forest?: boolean;
@@ -79,7 +82,8 @@ export interface Gates {
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
-export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] } }): Gates {
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] }; act3?: { world: string; cleared: readonly string[]; puzzles: readonly string[]; family: {tunnelOpen:boolean} } }): Gates {
+  if (p.act3?.world === "cloud") return { solved: p.solved, act2: true, cloud: { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen } };
   const act2 = p.act2?.started === true;
   const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared);
   return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared };
@@ -104,6 +108,7 @@ export const BRAMBLE_BLOCK: Box = { x0: FOREST_PATH.x0 - 1, x1: FOREST_PATH.x1 +
 const solidCache: SolidShape[][] = [];
 const obstacleCache: Obstacles[][] = [];
 export function solidsFor(gates: Gates): readonly SolidShape[] {
+  if (gates.cloud) return cloudSolids();
   const key = keyOf(gates);
   if (solidCache[key]) return solidCache[key];
   const solids = [...STATIC_SOLIDS, PALM_SOLIDS[gates.solved.includes("fallenPalm") ? "resting" : "fallen"]];
@@ -120,6 +125,7 @@ const LOWLAND_OBSTACLES: Obstacles[] = [{ circles: [], boxes: [], shapes: lowlan
 const inLowlandSet = (z: number) => z < CLIFF_FOOT_Z + 0.5;
 
 export function obstaclesFor(gates: Gates, z = 0): Obstacles[] {
+  if (gates.cloud) return [{ circles: [], boxes: [], shapes: cloudSolids() }];
   if (inLowlandSet(z)) return LOWLAND_OBSTACLES;
   const key = keyOf(gates);
   return obstacleCache[key] ??= [{ circles: [], boxes: [], shapes: solidsFor(gates) }];
@@ -159,6 +165,7 @@ export function inSanctuary(_x: number, z: number): boolean {
  * Swimmers (Bubbo) may also use the river.
  */
 export function isWalkable(x: number, z: number, gates: Gates = CLOSED, m = 0, swimmer = false): boolean {
+  if (gates.cloud) return cloudWalkable(x, z, gates.cloud, m);
   return onLand(x, z, gates, m, swimmer) && !blocked(x, z, m, gates);
 }
 
@@ -298,6 +305,7 @@ export function moveCircle(
   extra: Obstacles[] = EMPTY,
   out = { x: 0, z: 0 }
 ): { x: number; z: number } {
+  if (gates.cloud) return cloudMove(x0, z0, x1, z1, r, gates.cloud, out);
   const sets = obstaclesFor(gates, z0);
   const count = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.15));
   const dx = (x1 - x0) / count, dz = (z1 - z0) / count;
@@ -332,6 +340,7 @@ export function moveCircle(
  * must never be sent to the beach. Loading a save passes `toSpawn`.
  */
 export function nearestWalkable(x: number, z: number, r: number, gates: Gates = CLOSED, swimmer = false, toSpawn = false): { x: number; z: number } {
+  if (gates.cloud) return cloudNearestWalkable(x, z, r, gates.cloud);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return { x: SPAWN.x, z: SPAWN.z };
   if (isWalkable(x, z, gates, r, swimmer)) return { x, z };
   for (let ring = 1; ring <= 40; ring++) {
@@ -354,6 +363,7 @@ export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED):
 
 /** Height a walker stands at: the ground, or the stepping stones' tops once they are up. */
 export function standY(x: number, z: number, solved: readonly ObstacleId[]): number {
+  if (region.world === "cloud") return cloudY(x, z);
   const y = groundY(x, z);
   if (z < CLIFF_FOOT_Z + 1) return Math.max(y, lowlandDeckY(x, z, solved));
   if (onPier(x, z)) return Math.max(y, groundY(PIER.x, PIER.z0) + PIER.deckY);
@@ -394,6 +404,7 @@ export const STONE_TOP = -0.2;
 
 /** Water level under a point (sea or river), or null on land. */
 export function waterLevel(x: number, z: number): number | null {
+  if (region.world === "cloud") return null;
   if (inRiver(x, z, 0)) return -0.3;
   if (z > shoreZ(x)) return SEA_Y;
   return null;

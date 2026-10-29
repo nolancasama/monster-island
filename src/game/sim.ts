@@ -14,6 +14,7 @@ import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
 import { companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
 import { lumoHidden, startAct2Scene } from "./flow/act2";
+import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
@@ -93,6 +94,7 @@ export function tick(dt: number) {
 
   // Ambience follows the player.
   const p = rt.player;
+  if (g.progress.act3.world === "cloud") { audio.setNearness(.35, 0); return; }
   if (p.z < CLIFF_FOOT_Z + 1) audio.setNearness(1 - Math.min(1, Math.max(0, (p.z + 323) / 22)), 0);
   else audio.setNearness(1 - Math.min(1, Math.max(0, (shoreZ(p.x) - p.z) / 12)), 1 - Math.min(1, Math.abs(p.x - (RIVER.x0 + RIVER.x1) / 2) / 14));
 }
@@ -123,6 +125,7 @@ function monsterObstacles(): Obstacles[] {
 
 function movePlayer(dt: number, canMove: boolean) {
   const p = rt.player;
+  if (rt.voyage.active) { p.x = rt.voyage.x; p.z = rt.voyage.z; p.y = rt.voyage.y + .75; p.vx = p.vz = p.speed = 0; return; }
   let ix = 0;
   let iy = 0;
   if (canMove) {
@@ -422,6 +425,7 @@ function follow(m: MonsterRt, dt: number) {
 /** Walking up close to an undiscovered monster starts the encounter; reaching the stone ends the slice. */
 function autoTriggers() {
   const g = getGame();
+  if (g.progress.act3.world === "cloud") { cloudTriggers(); return; }
   const p = rt.player;
   if (Math.hypot(p.x - CAVE.x, p.z - CAVE.z) > 5) rt.caveWarned = false;
   if (g.progress.solved.includes("lava") && !g.progress.solved.includes("cave") && !rt.caveWarned && Math.abs(p.x - CAVE.x) < 2.4 && p.z < CAVE.z + 1.7 && p.z > CAVE.z - 1) {

@@ -17,6 +17,7 @@ import { poofTo } from "./companion";
 import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
 import type { FoodId, MonsterId } from "../types";
+import { cloudKnockout, sailWithGull } from "./act3";
 
 /**
  * Act 2's scripted moments: the raiders take Lumo (once), the rope down the
@@ -399,6 +400,7 @@ const CHECKPOINT_SPOT: Record<Checkpoint, { x: number; z: number; yaw: number }>
 };
 
 hooks.knockout = () => {
+  if (cloudKnockout()) return;
   void run(async () => {
     const pl = rt.player;
     pl.frozen = true;
@@ -653,7 +655,7 @@ function harborOffice(): Promise<void> {
     faceKeeper("harbor");
     const a = getGame().progress.act2;
     if (a.harbor) {
-      await say("harbor", "My boat to Cloud Isle is almost ready. Come back soon!", "クラウドじまへの ふねは もうすぐ でるよ。また きてね!");
+      await sailWithGull();
       return;
     }
     await say("harbor", "Ahoy! I'm Captain Gull. Can I help you?", "やあ! キャプテン・ガルだ。なにか ようかな?");
@@ -673,7 +675,7 @@ function harborOffice(): Promise<void> {
     rt.maple.talking = false;
     await say("harbor", "My boat leaves soon. Get ready, then come back!", "わたしの ふねが もうすぐ でる。じゅんびを して、また きてね!");
     updateProgress((p) => hearLead(p));
-    banner({ title: "NEW LEAD: Cloud Isle!", sub: "Lumo was taken to Cloud Isle. The next chapter is coming soon!", ja: "てがかり: ルモは クラウドじまに いる! つぎの しょうは もうすぐ", tone: "quest" }, 5200);
+    banner({ title: "NEW LEAD: Cloud Isle!", sub: "Sail with Captain Gull to find Lumo!", ja: "ガルせんちょうと クラウドじまへ! ルモを さがそう!", tone: "quest" }, 5200);
     audio.play("chest");
     saveNow();
   });

@@ -88,7 +88,11 @@ export function objectiveText(o: Objective): Text {
     case "harbor":
       return { en: "Ask at the harbor: Where is the ship?", ja: "みなとの じむしょで ふねの ことを きこう" };
     case "act2Done":
-      return { en: "Lumo is on Cloud Isle! (To be continued)", ja: "ルモは クラウドじまに いる! (つづく)" };
+      return { en: "Sail with Captain Gull to Cloud Isle!", ja: "ガルせんちょうと クラウドじまへ いこう!" };
+    case "cloudCoast": return { en: "Clear Stormbreak Coast!", ja: "あらしの かいがんの てきを たおそう!" };
+    case "cloudHollow": return { en: "Follow the footprints behind the waterfall", ja: "あしあとを たどって たきの うらへ" };
+    case "cloudFamily": return { en: "Meet the hidden family", ja: "かくれがの かぞくと はなそう" };
+    case "cloudObservatory": return { en: "Reach the Ancient Observatory and find Lumo", ja: "こだいの てんもんだいへ いって ルモを さがそう" };
     default:
       return { en: "Explore the island!", ja: "しまを たんけんしよう!" };
   }

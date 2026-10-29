@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { NpcId } from "./data/town";
+import type { FamilyId } from "./data/family";
 import type { FoodId, MonsterId } from "./types";
 import type { PhraseId } from "./logic/english";
 import { newProgress, type DescribeLine, type Progress } from "./logic/progress";
@@ -25,7 +26,7 @@ export interface Settings {
 
 export type MicState = "unknown" | "ready" | "blocked" | "unsupported";
 
-export type Speaker = "maple" | "self" | "game" | MonsterId | NpcId;
+export type Speaker = "maple" | "self" | "game" | MonsterId | NpcId | FamilyId;
 
 export interface Choice {
   id: PhraseId;
@@ -133,6 +134,7 @@ export interface GameState {
   banner: { title: string; sub?: string; ja?: string; tone: "quest" | "clear" | "place" } | null;
   /** An open town panel (quick shop, the trainer's list). */
   panel: "shop" | "trainer" | null;
+  drawing: boolean;
 }
 
 const SETTINGS_KEY = "mi.settings.v1";
@@ -186,7 +188,8 @@ export const useGame = create<GameState>(() => ({
   journalPulse: false,
   seconds: 0,
   banner: null,
-  panel: null
+  panel: null,
+  drawing: false
 }));
 
 let bannerTimer = 0;

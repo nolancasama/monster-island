@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { setGame, useGame } from "../game/store";
-import { stageStatus, cb, basicAttack, eat, inHostileZone, specialAttack } from "../game/combat";
+import { stageStatus, cloudStageStatus, cb, basicAttack, eat, inHostileZone, specialAttack } from "../game/combat";
 import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
 import { FOODS } from "../game/data/foods";
 import { favouriteFood } from "../game/logic/act2";
@@ -192,13 +192,14 @@ function Coins() {
 
 /** Act 2's HUD pieces shown while exploring. */
 export function Act2Hud() {
+  const cloudSafe = useGame((s) => s.progress.act3.world === "cloud" && !["stormbreakCoast", "windfallJunction"].includes(s.progress.act3.area));
   const started = useGame((s) => s.progress.act2.started);
   const mode = useGame((s) => s.mode);
   const screen = useGame((s) => s.screen);
   if (!started || screen !== "game") return null;
   return (
     <>
-      {mode === "explore" && <Vitals />}
+      {mode === "explore" && !cloudSafe && <Vitals />}
       {mode === "explore" && <Coins />}
       {mode === "explore" && <StageCounter />}
       <Moves />
@@ -329,7 +330,7 @@ function StageCounter() {
   const [fn] = useState(() => () => {
     const el = ref.current;
     if (!el) return;
-    const status = stageStatus();
+    const status = cloudStageStatus() ?? stageStatus();
     el.hidden = !status;
     if (!status) return;
     let hint = "";

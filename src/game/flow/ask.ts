@@ -5,6 +5,7 @@ import { noteSaid } from "../logic/progress";
 import { getGame, setGame, updateProgress, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
 import { MONSTERS } from "../data/monsters";
 import { NPCS, type NpcId } from "../data/town";
+import { FAMILY, type FamilyId } from "../data/family";
 import type { MonsterId } from "../types";
 import { recognition, HARD_ERRORS } from "../../audio/recognition";
 import { tts } from "../../audio/tts";
@@ -26,6 +27,8 @@ import { audio } from "../../audio/audio";
  */
 
 export interface AskRequest {
+  /** Chapter 3 always keeps the forgiving Tap path beside speech. */
+  tapAlways?: boolean;
   kind: "command" | "choice";
   /** Accepted sentences (a command accepts only the first). */
   options: PhraseId[];
@@ -81,6 +84,7 @@ function voiceOf(by: Speaker): { pitch: number; rate: number } {
   if (by === "self") return { pitch: 1.3, rate: 0.95 };
   if (by === "game") return { pitch: 1.1, rate: 0.9 };
   if (by in NPCS) return NPCS[by as NpcId].voice;
+  if (by in FAMILY) return FAMILY[by as FamilyId].voice;
   return MONSTERS[by as MonsterId].voice;
 }
 
@@ -128,7 +132,7 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
     status: "ready",
     heard: "",
     misses: 0,
-    buttons: !mic,
+    buttons: !mic || req.tapAlways === true,
     wrongId: null,
     matched: null,
     cancellable: Boolean(req.cancellable),

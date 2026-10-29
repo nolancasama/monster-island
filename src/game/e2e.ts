@@ -11,6 +11,11 @@ import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
 import { cb, companionVisible, stageStatus } from "./combat";
+import { travelCombat } from "./combat";
+import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, type CloudAreaId } from "./world/cloudisle";
+import { newAct3, type Act3 } from "./logic/act3";
+import { decodeSave, encodeSave } from "./logic/save";
+import { cloudView } from "../scene/CloudIsle";
 import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
 
 /**
@@ -29,6 +34,17 @@ export function installE2eHook(seed: number) {
     return p;
   };
   const target = (name: string): { x: number; z: number } | null => {
+    if (getGame().progress.act3.world === "cloud") {
+      if (name.startsWith("cloud:")) return CLOUD_SPAWNS[name.slice(6) as CloudAreaId] ?? null;
+      if (name in CLOUD_SPAWNS) return CLOUD_SPAWNS[name as CloudAreaId];
+      if (name === "cloudGull") return CLOUD_DOCK.gull;
+      if (name === "cloudDockRest") return CLOUD_DOCK.rest;
+      if (name === "hollowRest") return HOLLOW.rest;
+      if (name === "tala" || name === "bo" || name === "kiko") return HOLLOW[name];
+      if (name in CLOUD_OBSTACLE_PLACE) return CLOUD_OBSTACLE_PLACE[name as keyof typeof CLOUD_OBSTACLE_PLACE];
+      const pickup = [...CLOUD_PICKUPS, ...CLOUD_CHESTS].find(p => p.id === name);
+      if (pickup) return pickup;
+    }
     if (name === "maple") return { x: rt.maple.x, z: rt.maple.z };
     if (name === "palm") return { x: FALLEN_PALM.x - 1, z: FALLEN_PALM.z };
     if (name === "river") return CROSSING.west;
@@ -122,7 +138,8 @@ export function installE2eHook(seed: number) {
           panel: g.panel,
           banner: g.banner?.title ?? null,
           hint: g.hint
-        }
+        },
+        act3: { scene: rt.act3Scene, world: rt.world, voyage: {...rt.voyage}, area: g.progress.act3.area, zone: cb.cloudZones.current, drawing: g.drawing, view: { ...cloudView }, mountedWorlds: cloudView.visible ? ["cloud"] : ["home"] }
       };
     },
     /** Stand next to a named thing (a monster, a food, maple, palm, river, stone), facing it. */
@@ -185,6 +202,22 @@ export function installE2eHook(seed: number) {
     },
     set(patch: Record<string, unknown>) {
       setGame(patch as never);
+    },
+    /** Additive fixture; use the real save validator and matching physical world. */
+    setAct3(patch: Partial<Act3>) {
+      const g = getGame(), a = g.progress.act3 ?? newAct3();
+      const next = {...a,...patch,family:{...a.family,...patch.family},errands:{...a.errands,...patch.errands}};
+      const at = next.world !== a.world ? CLOUD_DOCK.spawn : rt.player;
+      const validated = decodeSave(encodeSave({...g.progress,act3:next},{x:at.x,z:at.z,yaw:rt.player.yaw},rt.playTime));
+      if (!validated) throw new Error("Invalid Act 3 fixture");
+      rt.world = validated.progress.act3.world;
+      rt.player.x = validated.player.x; rt.player.z = validated.player.z;
+      setGame({progress:validated.progress}); travelCombat(); rt.camera.snap = true;
+    },
+    cloudArea(area: CloudAreaId) {
+      if (getGame().progress.act3.world !== "cloud" || !CLOUD_SPAWNS[area]) throw new Error("Cloud world must be active");
+      const at = CLOUD_SPAWNS[area];
+      return place(at.x,at.z,at.x,at.z+1);
     },
     /** Slow or freeze the game clock (0 = paused) for visual captures. */
     timeScale(k: number) {

@@ -1,114 +1,80 @@
 # Current State
 
-## Development work (not merged, not deployed)
+## Live
+`main` = `201990a`, deployed by Pages run 40871708332 (2026-10-29).
+https://nolancasama.github.io/monster-island/
 
-**`feature/act2-continuity-polish`** (from `main` `1a92801`), awaiting the
-user's review. It is built from `main`, not from
-`feature/physical-stage-passages`, whose opaque fade-through chambers this
-brief superseded. That branch stays unmerged and can be deleted. The design
-is in `DESIGN_DECISIONS.md`, "2026-10-29 — Act 2 continuity polish".
-- **Continuous lowland:** the panorama mesh and zone-gated detail are gone.
-  One real landscape is drawn by distance with a constant fog band (55–260 m).
-  Bank shoulders open at the exits and the fork. Gates are see-through
-  lattices that still block until the first clear. Enemies stay drawn and
-  simulated only in the active zone.
-- **Fixed lowland camera:** heading 0 (south, along the route), pitch 0.55,
-  10 m, 3 m look-ahead. Drag and wheel are ignored there. It tips down over
-  the last 5 m before the rope foot, because the cliff leaves no room
-  behind. The rope keeps one framing both ways. The prologue island keeps its
-  drag-orbit camera (a deliberate change from the brief).
-- **Eat button:** shows the active friend's favourite food, its count and its
-  effect. It never eats another friend's food. Toasts report only what
-  changed. The bag still eats anything.
-- **Treasure chest:** a finished model (`src/scene/models/chest.ts`,
-  `src/scene/Chest.tsx`) for all seven chests.
-- Evidence: `tests/e2e/continuity.spec.ts` writes 84 views to
-  `.tmp/shots/continuity/` with `render-report.json`. Baseline captures are in
-  `.tmp/shots/before/`. Gameplay views stay ≤119 calls / ≤133k triangles. The
-  mirrored "-back" inspection views reach 154k triangles; gameplay can no
-  longer look north.
+Live: the prologue, Act 2 "The Hunt for Lumo" (kidnapping, lowland, real-time
+combat, Port Town, harbour lead), the forest expansion (larger stages,
+permanent first-clear exits) and the continuity polish (one continuous
+lowland drawn by distance with constant fog, see-through gates, fixed lowland
+camera, honest Eat button, finished chests). The decisions are in
+`DESIGN_DECISIONS.md` (2026-10-29 sections) and `docs/ACT2_FOREST_EXPANSION.md`.
+Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
 
-`main` (`1a92801`) already contains the forest expansion
-([Act 2 expansion](docs/ACT2_FOREST_EXPANSION.md)): larger stages, permanent
-first-clear exits, active-only hostile-zone companions. Whether Pages
-redeployed after that merge has not been checked this session.
+**Private preview:** https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr
+(Act 2 build before the expansion; microphone blocked inside it). Use the
+live site for Chromebook testing.
 
-## Status
-**Act 2 is live.** With the user's approval, `feature/act2-hunt-for-lumo`
-was fast-forwarded into `main` on 2026-10-29 (`02bc281`). The Pages workflow
-(run 40781012500) passed its tests, built and deployed. The live site serves
-the tested bundle (`index-BdbnZuVW.js`).
-Pages: https://nolancasama.github.io/monster-island/
-
-Act 2 "The Hunt for Lumo" is complete for its first chapter. The original
-adventure becomes the prologue. After Lumo comes the kidnapping cutscene
-(airship, cage, reveal), Maple's quest, the rope down the sanctuary cliff,
-the Primeval Forest tutorial, Fern Camp, then Flooded Grove / Ancient Canopy,
-the Ruined Causeway with its shortcut gate, the Coastal Path and Port Town:
-market, kitchen with the first treat upgrade, trainer, inn, and the harbour's
-lead (Cloud Isle). Combat is real time in the world (J/K, held J, 1–4 switch,
-F eats). One HP pool, MP per friend, coins, food, respawns after 12 s away.
-Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten. A
-finished save gets "NEW! Act 2" on the title. What was accepted, changed and
-decided is in `DESIGN_DECISIONS.md` (the two 2026-10-29 sections at the top).
-
-Commits: `924b5c3` (milestones 1–2), `c064537` (3), `e4d1b48` (4: tunnel
-render budget, camera spec fix, decisions).
-
-**Private preview** (the same build as the live game):
-https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr. Its saves are kept apart
-from the live game's, and the microphone is blocked inside it (Tap mode). The
-live game is now the place to test on Chromebooks, with a real microphone.
-The older preview (https://claude.ai/artifact/8tLLTpHHi369KVjLZUi1M5) is a
-pre-Act 2 build (`e3d6d3c`).
-
-## Verified 2026-10-29 (branch, `e4d1b48`)
-- `npx tsc --noEmit` clean; `npm test` 129 unit tests pass.
-- Full `npx playwright test`: 15/15 pass in 9.0 min on an idle machine,
-  including `act2.spec.ts` (6 tests) and the updated camera/volcano specs.
-- The camera spec failed 3 times in a row before the fix. Cause: the lowland
-  was drawn while the camera was in the tunnel, which halved the tunnel's
-  frame rate. The spec also measured the follow camera's catch-up along with
-  the move. Its fixed version was checked with one known-good pass and one
-  known-bad fail (Left and Right keys swapped).
-- Render budget at the tunnel views is back to `main`'s (50–59 calls, ~40k
-  triangles). Lowland views 39–112 calls, ≤108k triangles; sanctuary views
-  up to 120 calls.
-- Visuals judged by Claude from screenshots: the whole Act 2 sequence at
-  1366×768 (`.tmp/shots/act2-1366x768`). Clean combat-position views at
-  1280×800 (`.tmp/shots/ride-1280x800`): Ember piggyback, Bubbo, Leafy on
-  the backpack, Puff on the shoulder, no visible intersections, the HUD
-  fits.
-- GitHub `test.yml` passed on the branch (run 40778698063, `8582a65`:
-  typecheck, unit tests, build and the Playwright suite).
+## In development: Act 3 "Cloud Isle: Above the Storm"
+Branch `feature/act3-cloud-isle` (from `main` `201990a`). It is not pushed yet.
+- **Spec:** `docs/ACT3_CLOUD_ISLE.md` (frozen; it wins over the external
+  brief). The changes to the brief are in `DESIGN_DECISIONS.md`, "Act 3 Cloud
+  Isle: brief accepted, with these changes". Commit `2c9d994`.
+- **Build plan:** three sequential Codex slices, because they share the save,
+  runtime and flow files:
+  - **A** — voyage + boat travel, dock, Stormbreak Coast, four enemies, Hidden
+    Hollow and the family, stew, errands, back tunnel, junction stub, additive
+    `act3` save.
+  - **B** — Windfall Junction, Skyroot Canopy, Thunder Grotto.
+  - **C** — Observatory dial, Storm Beacon boss, resolution, aftermath, full
+    e2e and screenshots.
+- **Slice A:** implemented by Codex. It is **uncommitted** in the working tree
+  and under review.
+  - New modules: `world/cloudisle.ts`, `scene/CloudIsle.tsx`, `flow/act3.ts`,
+    `logic/act3.ts`, `ui/CloudStory.tsx`, `scene/models/cloudEnemies.ts`,
+    `data/family.ts`, `tests/e2e/act3.spec.ts`.
+  - Observed: `tsc` clean, 178 unit tests, build OK. `act3.spec.ts` 3/3 at
+    1366×768 and 1280×800 (touch-only too). Shots in `.tmp/shots/act3/`, max
+    93 draw calls / 38k triangles.
+  - The full regression suite was running when this was written.
+  - Save review: `readAct3` gates every field on its prerequisites and
+    projects Cloud Isle positions onto valid ground.
+- **Slice A visual defects to fix (folded into slice B's order):**
+  - The "Raise the sail!" shot is blocked by the sail.
+  - The voyage is a calm, sunny sea: no storm build-up, and no rocks for
+    "Turn left!".
+  - The Hollow is an open-air floor with void edges, not an enclosed cave
+    behind a waterfall.
+  - The reveal beat has no screenshot.
+  - The summit's storm ring reads as a mushroom cap (slice C owns the summit).
+- **Slice B must also extend** the `readAct3` puzzle filter in
+  `logic/save.ts`, which only knows the two coast puzzles.
 
 ## Known Issues
-- Nothing has been tested on a real Chromebook (SwiftShader only): speech
-  for Phase 2–3 and the town sentences, TTS voices, audio levels, fight
-  difficulty and pacing, GPU frame rate in the town.
-- The whole Act 2 sequence was captured at 1366×768 only. At 1280×800 only
-  the combat positions were captured.
-- The Playwright suite renders in SwiftShader on the CPU: another heavy
+- Nothing has been tested on a real Chromebook (SwiftShader only): speech,
+  TTS voices, audio levels, fight difficulty, GPU frame rate. The continuity
+  polish roughly doubled the triangles at lowland stage views (≤133k).
+  Check the frame rate on a school Chromebook.
+- The Playwright suite renders in SwiftShader on the CPU: a heavy background
   process causes timeouts that look like product failures. Check CPU load
   before diagnosing a red run.
-- The cliff wall's colliders are one box; the seeded rocks at its foot are
-  not individually solid. The ravine's water is the sea plane showing through.
+- The cliff wall's colliders are one box. The ravine's water is the sea plane
+  showing through.
+- `feature/physical-stage-passages` was superseded by the continuity polish
+  and can be deleted.
 
 ## Next Steps
-0. User review of `feature/act2-continuity-polish`, especially the lowland
-   camera angle and how much of each neighbouring stage shows. Then merge
-   on approval. The triangle count roughly doubled at stage views
-   (≤36k → ≤133k), because neighbours are now drawn. Check the frame rate on
-   a real Chromebook before deploying.
-1. Play the live game on a school Chromebook: title → "NEW! Act 2" (or
-   Continue a finished save and walk up to Lumo) → kidnapping → rope at the
-   lookout → forest tutorial → a route → town → market, kitchen, harbour.
-   Check the speech for the town sentences, the fight difficulty and the
-   town's frame rate.
-2. Polish from classroom feedback. The next chapter (Cloud Isle) is not
-   planned yet.
+1. Finish the slice A review (full suite result). Then commit slice A.
+2. Run slice B (routes + slice A visual fixes) through the router, then
+   review it.
+3. Run slice C (observatory, boss, ending, full acceptance), then review it.
+   Push the branch and write the final report: summary, files, commits,
+   screenshots, tests, limitations, Chromebook test steps.
+4. Merge to `main` (deploy) only with the user's approval.
+5. Play the live game on a school Chromebook (Act 2 + continuity polish).
 
 ## Codex / Delegated Work
-None pending. On the continuity branch, Codex built the food HUD, the chest
-and the continuity/camera slice through the router. Claude reviewed all three
-and tuned the camera angle and cliff-foot framing. All of it is committed.
+- Slice A (Codex, gpt-6.1-sol high, chain `800893f9`): done and uncommitted
+  in the tree. Claude is reviewing it. Do not re-delegate it.
+- Work orders: `.ai/work-order-act3a.json`; result `.ai/result-act3a.json`.

@@ -16,6 +16,7 @@ import { rt } from "../game/runtime";
 import { eat } from "../game/combat";
 import { Act2Hud } from "./Act2Hud";
 import type { MonsterId } from "../game/types";
+import { eatCloudStew } from "../game/flow/act3";
 
 /** How high a monster floats (a flier up in its tree carries its label with it). */
 const rtAir = (id: string) => rt.monsters[id as MonsterId]?.air ?? 0;
@@ -43,7 +44,7 @@ function Bag() {
   const bag = progress.bag;
   const mode = useGame((s) => s.mode);
   const has = islandFoods(progress).filter((f) => (bag[f] ?? 0) > 0);
-  if (!has.length || mode !== "explore") return null;
+  if ((!has.length && !progress.act3.stew) || mode !== "explore") return null;
   // Act 2: tapping a food eats it (HP for the player, MP for the friend who loves it).
   if (progress.act2.started) {
     return (
@@ -54,6 +55,7 @@ function Bag() {
             <b>{bag[f]}</b>
           </button>
         ))}
+        {progress.act3.stew > 0 && <button className="bag-item eatable" title="Stew: +50 HP, +40 MP to every friend / みんな げんきに" onClick={eatCloudStew} data-testid="bag-stew"><span aria-hidden="true">🥣</span><span>Stew<Ja>シチュー</Ja></span><b>{progress.act3.stew}</b></button>}
       </div>
     );
   }

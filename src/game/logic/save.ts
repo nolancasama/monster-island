@@ -7,6 +7,8 @@ import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
+import { newAct3, type Act3 } from "./act3";
+import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
  * Versioned save. A save of an unknown version, or one that does not parse,
@@ -100,6 +102,49 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   return a;
 }
 
+/** Additive v4 chapter data; the harbour lead is the authority for every field. */
+function readAct3(raw: unknown, p: Progress): Act3 {
+  const a = newAct3();
+  if (!p.act2.harbor || !isObj(raw)) return a;
+  const list = <T extends string>(v: unknown, valid: readonly T[]): T[] => Array.isArray(v)
+    ? [...new Set(v.filter((x): x is T => typeof x === "string" && (valid as readonly string[]).includes(x)))] : [];
+  a.voyageDone = raw.voyageDone === true;
+  // Cloud saves are already on the far side of the crossing, including a
+  // reload during arrival. Do not replay the voyage on Continue.
+  if (raw.world === "cloud") a.voyageDone = true;
+  a.world = raw.world === "cloud" ? "cloud" : "home";
+  if (!a.voyageDone) return a;
+  a.cleared = list(raw.cleared, CLOUD_STAGES);
+  a.hollowFound = a.cleared.includes("stormbreakCoast") && raw.hollowFound === true;
+  const f = isObj(raw.family) ? raw.family : {};
+  a.family.met = a.hollowFound && f.met === true;
+  a.family.trusted = a.family.met && f.trusted === true;
+  a.family.drawingSeen = a.family.trusted && f.drawingSeen === true;
+  a.family.tunnelOpen = a.family.drawingSeen && f.tunnelOpen === true;
+  a.puzzles = list(raw.puzzles, CLOUD_PUZZLES).filter((id) => p.monsters[id === "coastWindmill" ? "puff" : "leafy"].friend);
+  a.chests = list(raw.chests, CLOUD_CHESTS.map((c) => c.id));
+  // Reserve the later mountain fields and validate their prerequisites.
+  // Slice A provides no interaction that writes these milestones.
+  a.observatoryLamps = a.family.tunnelOpen ? list(raw.observatoryLamps, COMPANION_IDS).filter((id) => p.monsters[id].friend) : [];
+  a.beaconDefeated = a.observatoryLamps.length === COMPANION_IDS.length && raw.beaconDefeated === true;
+  a.skyFortressClue = a.beaconDefeated && raw.skyFortressClue === true;
+  a.family.aftermathSeen = a.beaconDefeated && f.aftermathSeen === true;
+  const e = isObj(raw.errands) ? raw.errands : {};
+  a.errands.pickups = list(e.pickups, CLOUD_PICKUPS.map((pickup) => pickup.id));
+  a.errands.bag = a.errands.pickups.some((id) => CLOUD_PICKUPS.find((pickup) => pickup.id === id)?.kind === "bag");
+  a.errands.firewood = Math.min(3, a.errands.pickups.filter((id) => CLOUD_PICKUPS.find((pickup) => pickup.id === id)?.kind === "firewood").length);
+  a.errands.moss = a.errands.pickups.some((id) => CLOUD_PICKUPS.find((pickup) => pickup.id === id)?.kind === "moss");
+  a.errands.bagRewarded = a.family.trusted && a.errands.bag && e.bagRewarded === true;
+  a.errands.firewoodRewarded = a.family.trusted && a.errands.firewood === 3 && e.firewoodRewarded === true;
+  a.errands.mossRewarded = a.family.trusted && a.errands.moss && e.mossRewarded === true;
+  a.stew = a.family.trusted ? Math.max(0, Math.min(3, Math.floor(num(raw.stew, 0)))) : 0;
+  const area = CLOUD_AREAS.find((id) => id === raw.area);
+  a.area = area ?? "cloudDock";
+  if ((a.area === "hiddenHollow" && !a.hollowFound) || ((a.area === "backTunnel" || a.area === "windfallJunction") && !a.family.tunnelOpen)) a.area = "stormbreakCoast";
+  a.checkpoint = raw.checkpoint === "hollow" && a.hollowFound ? "hollow" : "dock";
+  return a;
+}
+
 export function decodeSave(text: string | null): SaveData | null {
   if (!text) return null;
   let raw: unknown;
@@ -130,6 +175,7 @@ export function decodeSave(text: string | null): SaveData | null {
   p.said = Array.isArray(src.said) ? (src.said as unknown[]).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES) : [];
   // Act 2 (v4 only), then its permanent unlocks, which need the chapter to have begun.
   p.act2 = readAct2(raw.v === VERSION ? src.act2 : null, p);
+  p.act3 = readAct3(raw.v === VERSION ? src.act3 : null, p);
   for (const id of ACT2_OBSTACLES) if (solved.includes(id) && obstacleAvailable(p, id)) p.solved.push(id);
   if (p.act2.started && isObj(src.act2) && !Array.isArray(src.act2.cleared) && solved.includes("causewayGate")) p.act2.cleared = [...new Set([...p.act2.cleared, "forest1", "grove", "canopy"] as const)];
   if (isObj(src.bag)) {
@@ -148,7 +194,21 @@ export function decodeSave(text: string | null): SaveData | null {
   }
   // Validate position after migration and progression sanitization, against the
   // same solids and gates movement uses. Progress and the v3 format stay intact.
-  const safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);
+  let safe;
+  if (p.act3.world === "cloud") {
+    let x = num(pl.x, NaN), z = num(pl.z, NaN);
+    // A position in valid but story-locked ground is still invalid for this
+    // save. Keep it on the accessible side before projecting out of solids.
+    const zone = cloudZoneAt(x, z);
+    if ((!p.act3.cleared.includes("stormbreakCoast") && z > 43.7)
+      || (!p.act3.family.tunnelOpen && (zone === "backTunnel" || zone === "windfallJunction"))) {
+      ({ x, z } = CLOUD_SPAWNS[p.act3.area]);
+    }
+    safe = cloudNearestWalkable(x, z, PLAYER_R, { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen });
+    p.act3.area = cloudZoneAt(safe.x, safe.z) ?? "cloudDock";
+  } else {
+    safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);
+  }
   return {
     v: VERSION,
     progress: p,

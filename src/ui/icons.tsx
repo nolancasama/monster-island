@@ -5,6 +5,9 @@ import type { MonsterId } from "../game/types";
 /** Inline SVG icons: no icon fonts, no downloads. */
 
 const PATHS: Record<string, ReactNode> = {
+  cloudWind: <><path d="M8 20h34q16 0 9-10M5 32h46q14 0 5 9M12 44h20q13 0 7 10" fill="none" stroke="#9bd8df" strokeWidth="5" strokeLinecap="round"/></>,
+  cloudSun: <><circle cx="32" cy="32" r="13" fill="#ffcf56"/>{[0,1,2,3,4,5,6,7].map(i=><path key={i} d="M32 5v7" transform={`rotate(${i*45} 32 32)`} stroke="#ffcf56" strokeWidth="4"/>)}</>,
+  cloudRain: <><path d="M13 35q-15-18 5-22 9-16 23-2 24 0 14 24Z" fill="#9baebc"/><path d="M18 42l-5 10m20-10-5 10m20-10-5 10" stroke="#68b7f3" strokeWidth="4"/></>,
   apples: (
     <>
       <path d="M32 18c-6-6-20-4-20 12 0 14 10 24 20 22 10 2 20-8 20-22 0-16-14-18-20-12z" fill="#e83a35" />
