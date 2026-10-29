@@ -1,7 +1,7 @@
 import type { Progress } from "./progress";
 import { addCoins, addFood, addItem, rested, type Vitals } from "./act2";
 import { COMPANION_IDS, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ENEMY_SPAWNS, type CloudAreaId, type CloudStageId, type CloudPuzzleId } from "../world/cloudisle";
+import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ENEMY_SPAWNS, type CloudAreaId, type CloudStageId, type CloudPuzzleId } from "../world/cloudisle";
 
 export type { CloudAreaId, CloudStageId, CloudPuzzleId } from "../world/cloudisle";
 
@@ -122,7 +122,7 @@ export function claimErrand(p: Progress, id: ErrandId): Progress {
 
 export function solveCloudPuzzle(p: Progress, id: CloudPuzzleId): Progress {
   if (!allowed(p) || p.act3.puzzles.includes(id)) return p;
-  const friend = id === "coastWindmill" ? "puff" : "leafy";
+  const friend = CLOUD_PUZZLE_RULES[id].friend;
   return p.monsters[friend].friend ? patch(p, { puzzles: [...p.act3.puzzles, id] }) : p;
 }
 
@@ -137,7 +137,7 @@ export function openCloudChest(p: Progress, id: string, placements: readonly Clo
 }
 
 export function clearCloudStage(p: Progress, zone: CloudStageId, defeated: readonly number[], spawns: readonly { zone: string }[] = CLOUD_ENEMY_SPAWNS): Progress {
-  if (!allowed(p) || p.act3.cleared.includes(zone)) return p;
+  if (!allowed(p) || !CLOUD_STAGES.includes(zone) || p.act3.cleared.includes(zone)) return p;
   const required = spawns.flatMap((enemy, index) => enemy.zone === zone ? [index] : []);
   return required.length && required.every((id) => defeated.includes(id)) ? patch(p, { cleared: [...p.act3.cleared, zone] }) : p;
 }

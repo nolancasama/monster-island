@@ -14,6 +14,8 @@ import { additiveSprite, flatMat, occluderMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { npcGeometry } from "./models/lowland";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
+import { voyageStorm } from "./voyageWeather";
+import { CloudRoutes } from "./CloudRoutes";
 
 export const CLOUD_FOG = { color: "#71818c", near: 38, far: 260 };
 export const cloudView = { visible: false, fog: CLOUD_FOG, barriers: { coast: 0, tunnel: 0 } };
@@ -23,7 +25,7 @@ const dark = "#394b53", stone = "#65706e", timber = "#66513d";
 
 function CloudSky() {
   const { scene } = useThree();
-  const hemi = useRef<THREE.HemisphereLight>(null), ambient = useRef<THREE.AmbientLight>(null);
+  const hemi = useRef<THREE.HemisphereLight>(null), ambient = useRef<THREE.AmbientLight>(null), sun = useRef<THREE.DirectionalLight>(null);
   useEffect(() => {
     const oldBackground = scene.background, oldFog = scene.fog;
     scene.background = new THREE.Color(CLOUD_FOG.color);
@@ -32,12 +34,16 @@ function CloudSky() {
   }, [scene]);
   useFrame((_, dt) => {
     const warm = getGame().progress.act3.area === "hiddenHollow";
-    if (hemi.current) hemi.current.intensity = THREE.MathUtils.damp(hemi.current.intensity, warm ? .8 : 1.05, 2, dt);
-    if (ambient.current) ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, warm ? .35 : .18, 2, dt);
+    const cave = getGame().progress.act3.area === "thunderGrotto";
+    if (hemi.current) hemi.current.intensity = THREE.MathUtils.damp(hemi.current.intensity, cave ? .15 : warm ? .8 : 1.05, 2, dt);
+    if (ambient.current) ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, cave ? .1 : warm ? .35 : .18, 2, dt);
+    if (sun.current) sun.current.intensity = cave ? 0 : 1.65;
+    (scene.background as THREE.Color).set(cave ? "#182a3a" : CLOUD_FOG.color);
+    if (scene.fog instanceof THREE.Fog) { scene.fog.color.set(cave ? "#182a3a" : CLOUD_FOG.color); scene.fog.near = cave ? 18 : CLOUD_FOG.near; scene.fog.far = cave ? 60 : CLOUD_FOG.far; }
   });
   return <>
     <hemisphereLight ref={hemi} args={["#bbcbd8", "#7b7565", 1.05]} />
-    <directionalLight position={[-35, 60, -15]} color="#d0d7dd" intensity={1.65} />
+    <directionalLight ref={sun} position={[-35, 60, -15]} color="#d0d7dd" intensity={1.65} />
     <ambientLight ref={ambient} color="#d7d0be" intensity={.18} />
   </>;
 }
@@ -54,11 +60,14 @@ function onGround(x: number, z: number) { return shapes.some(s => inShape(s, x, 
  * lowered rock skirts; there is no second panorama mesh. */
 function terrainTiles(): THREE.BufferGeometry[] {
   const out: THREE.BufferGeometry[] = [];
-  for (let iz = -1; iz < 4; iz++) for (let ix = -1; ix < 1; ix++) {
+  for (let iz = -1; iz < 5; iz++) for (let ix = -2; ix < 2; ix++) {
     const positions: number[] = [], colors: number[] = [];
     const color = new THREE.Color();
     for (let z = iz * 32; z < iz * 32 + 32; z++) for (let x = ix * 32; x < ix * 32 + 32; x++) {
       if (!onGround(x + .5, z + .5) || z < -3) continue;
+      // The canopy's actual branches/bridges and cave's floor are their sole
+      // ground representation. Never fill the scripted glide gap with land.
+      if (z >= 104 && z < 126 && x < -12 || z >= 100 && x > 9) continue;
       if (x + .5 > -14.8 && x + .5 < -12.5 && z > 20 && z < 32) continue;
       color.set(z > 50 && x < -4 ? "#85745f" : z < 12 ? "#8b8875" : "#6a7868");
       color.multiplyScalar(.92 + Math.sin(x * 23 + z * 15) * .055);
@@ -92,14 +101,11 @@ function landscapeGeometry() {
   }
   // The raider road is deliberately a dead end, visible alongside the shelter.
   b.box(6, 8, 10, 5, 0, 61, dark);
-  // Waterfall cliff and the giant tree's roots form the Hollow's actual shell.
-  b.box(3.5, 11, 17, -23, 1, 57, dark);
-  b.box(3, 11, 14, -3, 1, 58, dark);
-  b.box(22, 5, 4, -13, 9.2, 65.5, dark);
+  // Entrance pillars belong to the cliff; the continuous interior is drawn
+  // separately so its walls never dissolve through the scenery material.
   b.box(3.5, 10, 3, -16, 3, 49.8, stone);
   b.box(3.5, 10, 3, -5, 3, 49.8, stone);
   b.box(14, 2.5, 3, -10, 13, 50, stone);
-  b.box(17, .22, 11, -13, 3.95, 58, "#a18a6a");
   // The back tunnel has side ribs and a high roof, open towards the lens.
   for (let i = 1; i < BACK_TUNNEL.length; i++) {
     const [ax, az] = BACK_TUNNEL[i - 1], [bx, bz] = BACK_TUNNEL[i];
@@ -109,13 +115,13 @@ function landscapeGeometry() {
     b.box(6.8, 1, len + 1, mx, y + 4.5, mz, dark, yaw);
   }
   // Real mountain mass beyond this slice; these are not alternate copies.
-  for (const [x, z, h, r] of [[-23, 119, 23, 19], [25, 124, 20, 21], [0, 146, 31, 22], [0, 169, 44, 18]]) {
+  for (const [x, z, h, r] of [[-46, 124, 23, 15], [49, 124, 20, 15], [0, 153, 31, 15], [0, 169, 44, 18]]) {
     b.cone(r, h, x, 1, z, "#4c5e64", 7);
   }
   // Giant tree with a wind-bent trunk above the shelter.
   b.cylAt(1.5, 15, [-15, 19, 61], [0, 0, -.17], "#4d473b", 7);
   for (const dx of [-5, 0, 5]) b.sphere(6, -18 + dx, 27 + Math.abs(dx) * .2, 61, "#425d53", [1.5, .6, 1], 7);
-  for (let i = 0; i < 5; i++) b.cylAt(.35, 8, [-20 + i * 3, 12, 58], [.35, 0, -.35 + i * .16], timber, 6);
+  for (let i = 0; i < 5; i++) b.cylAt(.5, 7, [-20 + i * 3, 17, 58], [.35, 0, -.35 + i * .16], timber, 6);
   // Dock is intact; the old pier beside it is shattered.
   b.box(3, .3, 9, 0, .5, -5, timber);
   for (const x of [-1.3, 1.3]) for (const z of [-8, -4, 0]) b.cyl(.13, .16, 2, x, -.7, z, timber, 6);
@@ -158,6 +164,52 @@ function crate(b: PartBuilder, x: number, y: number, z: number, s = 1) {
   b.box(.7 * s, .1 * s, .05, x, y + .43 * s, z - .53 * s, "#c1ae77", .5);
   // A crescent is a real open arc, never a filled circular badge.
   b.add(new THREE.TorusGeometry(.19 * s, .045 * s, 4, 12, Math.PI * 1.45), "#eee0ab", [x, y + .62 * s, z - .535 * s], [0, 0, -.7]);
+}
+
+function hollowShellGeometry() {
+  const b = new PartBuilder();
+  // The floor runs behind every wall, including the camera-side cutaway.
+  b.box(30, .5, 26, -13, 3.5, 56, "#817765");
+  b.box(2.5, 12, 24, -25.5, 3.8, 57, "#555954");
+  b.box(2.5, 12, 24, -.5, 3.8, 57, "#5e6057");
+  // The only opening at the rear is the family's existing back tunnel.
+  b.box(9.5, 12, 2, -22.5, 3.8, 66, "#555954");
+  b.box(13, 12, 2, -5.5, 3.8, 66, "#5b5d53");
+  b.box(6, 5, 2, -15, 10.5, 66, "#555954");
+  // A high rock ceiling stays above both follow and conversation cameras.
+  b.box(29, 2.5, 22, -13, 14.3, 58, "#484c46");
+  for (let i = 0; i < 7; i++) {
+    const x = -23 + i * 3.3;
+    b.cylAt(.42, 17, [x, 14.1 + Math.sin(i) * .3, 57], [Math.PI / 2, 0, -.14 + i * .045], timber, 6);
+    b.add(new THREE.DodecahedronGeometry(2.5, 0), "#626257", [x, 7.2, 65.2], [.2, i, .3], [1, 1.25, .45]);
+  }
+  for (const x of [-24, -2]) for (const z of [51, 57, 63]) {
+    b.add(new THREE.DodecahedronGeometry(2.6, 0), "#67695d", [x, 6.8, z], [.1, z, .2], [.4, 1.5, 1.25]);
+  }
+  return b.build();
+}
+
+function HollowShell() {
+  const shell = useMemo(hollowShellGeometry, []), front = useRef<THREE.Mesh>(null);
+  const facade = useMemo(() => {
+    const b = new PartBuilder();
+    b.box(13, 10.5, 2, -19, 4, 49.3, "#555954");
+    b.box(7, 10.5, 2, -3.5, 4, 49.3, "#555954");
+    b.box(7, 3.5, 2, -10, 11, 49.3, "#555954");
+    return b.build();
+  }, []);
+  useFrame(() => {
+    // The near wall is cut away only when the lens is outside it. The side
+    // walls, rear wall and ceiling continue to close the whole visible room.
+    if (front.current) front.current.visible = rt.camera.pos.z > 50.5;
+  });
+  return <>
+    <mesh geometry={shell} material={flatMat} />
+    <mesh ref={front} geometry={facade} material={flatMat} />
+    {/* Normal +z: from inside, this is the bright back of the waterfall;
+        from the approach it cannot sit between the lens and the family. */}
+    <mesh position={[-10, 8.1, 50.4]}><planeGeometry args={[5.5, 8.2]} /><meshBasicMaterial color="#cce8e0" transparent opacity={.78} /></mesh>
+  </>;
 }
 function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
   const b = new PartBuilder(1);
@@ -295,8 +347,8 @@ function Barriers() {
     <mesh ref={cr} geometry={coast} material={flatMat} position={ground(0, COAST_GATE.z)} />
     <mesh ref={tr} geometry={tunnel} material={flatMat} position={ground(-15, 64)} />
     <mesh geometry={road} material={flatMat} position={ground(RAIDER_BARRICADE.x, RAIDER_BARRICADE.z)} />
-    {ROUTE_MOUTHS.map((m, i) => <mesh key={i} geometry={tunnel} material={flatMat} position={ground(m.x, m.z)} />)}
-    <mesh geometry={coast} material={flatMat} position={[0, OBSERVATORY.y + 4, OBSERVATORY.z - 6]} scale={[.45, 1.3, 1]} />
+    <mesh geometry={coast} material={flatMat} position={[0, OBSERVATORY.y, 134]} scale={[.55, 1.6, 1]} />
+    <mesh position={[0, OBSERVATORY.y + 2.3, 135]}><boxGeometry args={[7.4, 4.6, .3]} /><meshLambertMaterial color="#303e4a" /></mesh>
     {/* Warm stone is retained behind the moved gate, with sight through its ribs. */}
     {a.family.tunnelOpen && <mesh geometry={tunnel} material={flatMat} position={ground(-19, 63, -.3)} rotation={[0, .8, Math.PI / 2]} scale={[.45, .4, .5]} />}
   </>;
@@ -406,7 +458,7 @@ function CoastProps() {
   </>;
 }
 
-function PickupsAndChests() {
+function PickupsAndChests({ inside }: { inside: boolean }) {
   const a = useGame(s => s.progress.act3);
   const base = useMemo(chestBaseGeometry, []), lid = useMemo(chestLidGeometry, []);
   const glow = useMemo(() => additiveSprite("#d4efae", .55), []);
@@ -418,13 +470,57 @@ function PickupsAndChests() {
     return { bag: bag.build(), firewood: wood.build(), moss: moss.build() };
   }, []);
   return <>
-    {CLOUD_PICKUPS.filter(p => !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
-    {CLOUD_CHESTS.map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
+    {CLOUD_PICKUPS.filter(p => inside === (p.x > 9 && p.z > 100) && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
+    {CLOUD_CHESTS.filter(c => inside === (c.id === "cloudCrystalChest")).map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
   </>;
 }
 
 /** Shared by the departure quay and Cloud Isle; voyage animation uses the
  * same physical boat and sail, driven by the four English beats. */
+function CloudSea({ crossing = false }: { crossing?: boolean }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const geometry = useMemo(() => {
+    const g = new THREE.PlaneGeometry(700, 700, 60, 60);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }, []);
+  const mat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#526d78", flatShading: true }), []);
+  const fair = useMemo(() => new THREE.Color("#1e74b4"), []), stormy = useMemo(() => new THREE.Color("#344e5c"), []);
+  useFrame(() => {
+    if (!ref.current) return;
+    ref.current.visible = !crossing || rt.voyage.active && rt.world === "home";
+    if (!ref.current.visible) return;
+    const v = rt.voyage, storm = crossing ? voyageStorm() : 1;
+    const cx = crossing ? v.x : 0, cz = crossing ? v.z : 60;
+    ref.current.position.set(cx, -.4, cz);
+    mat.color.copy(fair).lerp(stormy, storm);
+    const p = geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i) + cx, z = p.getZ(i) + cz;
+      p.setY(i, (.035 + storm * .24) * Math.sin(x * .29 + z * .16 + rt.time * 1.8)
+        + storm * .1 * Math.sin(z * .57 - rt.time * 2.1));
+    }
+    p.needsUpdate = true;
+  });
+  return <mesh ref={ref} geometry={geometry} material={mat} position={[0, -.4, 60]} />;
+}
+
+function VoyageRocks() {
+  const ref = useRef<THREE.Mesh>(null);
+  const geometry = useMemo(() => {
+    const b = new PartBuilder();
+    // These fixed rocks are straight ahead at the Turn left prompt. The
+    // following boat leg passes to their port side, leaving visible clearance.
+    for (const [dx, dz, r, h] of [[0, 0, 2.6, 2.8], [-2.7, -2.5, 1.9, 2.1], [2.5, -4, 2.2, 3.4]]) {
+      b.add(new THREE.DodecahedronGeometry(r, 0), "#59616a", [PIER2.x + dx, h * .3, PIER2.z0 - 44 + dz], [.3, dx, .2], [1, h / r, 1]);
+      b.torus(r * .85, .07, [PIER2.x + dx, -.18, PIER2.z0 - 44 + dz], [Math.PI / 2, 0, 0], "#b0c9cc");
+    }
+    return b.build();
+  }, []);
+  useFrame(() => { if (ref.current) ref.current.visible = rt.voyage.active && rt.world === "home"; });
+  return <mesh ref={ref} geometry={geometry} material={flatMat} />;
+}
+
 export function CloudBoat() {
   const root = useRef<THREE.Group>(null), sail = useRef<THREE.Mesh>(null), keeper = useRef<THREE.Mesh>(null);
   const hull = useMemo(() => {
@@ -451,7 +547,7 @@ export function CloudBoat() {
     }
     if (sail.current) sail.current.scale.y = v.active ? Math.max(.03, v.sail) : 1;
   });
-  return <group ref={root}><mesh geometry={hull} material={flatMat} /><mesh ref={sail} geometry={cloth} material={clothMat} position={[0, 6.4, -.1]} /><mesh ref={keeper} geometry={gull} material={flatMat} position={[.65, .75, 1.9]} rotation={[0, Math.PI, 0]} /></group>;
+  return <><CloudSea crossing /><VoyageRocks /><group ref={root}><mesh geometry={hull} material={flatMat} /><mesh ref={sail} geometry={cloth} material={clothMat} position={[0, 6.4, -.1]} /><mesh ref={keeper} geometry={gull} material={flatMat} position={[.65, .75, 1.9]} rotation={[0, Math.PI, 0]} /></group></>;
 }
 
 function RaiderAirship() {
@@ -471,23 +567,28 @@ function RaiderAirship() {
 
 export function CloudIsle() {
   const a = useGame(s => s.progress.act3);
+  const inside = a.area === "thunderGrotto";
   const land = useMemo(terrainTiles, []), landscape = useMemo(landscapeGeometry, []);
   const room = useMemo(() => shelterGeometry("base"), []), shelf = useMemo(() => shelterGeometry("bag"), []), kitchen = useMemo(() => shelterGeometry("wood"), []), bedding = useMemo(() => shelterGeometry("moss"), []);
   const gull = useMemo(() => npcGeometry(NPCS.harbor), []);
   useEffect(() => { cloudView.visible = true; return () => { cloudView.visible = false; }; }, []);
   return <group>
     <CloudSky />
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -.4, 60]}><planeGeometry args={[700, 700]} /><meshLambertMaterial color="#526d78" /></mesh>
+    <group visible={!inside}>
+    <CloudSea />
     {land.map((g, i) => <mesh key={i} geometry={g} material={flatMat} />)}
     <mesh geometry={landscape} material={occluderMat} />
+    <HollowShell />
     <mesh geometry={room} material={flatMat} />
     {a.errands.bagRewarded && <mesh geometry={shelf} material={flatMat} />}
     {a.errands.firewoodRewarded && <mesh geometry={kitchen} material={flatMat} />}
     {a.errands.mossRewarded && <mesh geometry={bedding} material={flatMat} />}
-    <Vegetation /><Barriers /><WindAndWater /><CoastProps /><PickupsAndChests />
+    <Vegetation /><Barriers /><WindAndWater /><CoastProps />
     <FamilyMember who="tala" /><FamilyMember who="bo" /><FamilyMember who="kiko" /><DiscoveryTrail />
     <mesh geometry={gull} material={flatMat} position={ground(CLOUD_DOCK.gull.x, CLOUD_DOCK.gull.z)} rotation={[0, Math.PI, 0]} />
     <RaiderAirship />
+    </group>
+    <PickupsAndChests inside={inside} /><CloudRoutes inside={inside} />
   </group>;
 }
 

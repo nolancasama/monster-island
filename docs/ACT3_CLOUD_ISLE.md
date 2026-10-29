@@ -81,7 +81,8 @@ Isle. Cinematics may move the camera.
   The family's back tunnel is the "safer route" the parent knows. So the
   family is needed to progress, the shelter is never cut off by enemies, and
   it stays hidden from the road.
-- **Zones:** Dock (safe, rest point: Gull's boat), Coast (hostile), Hollow
+- **Zones:** Dock (safe, knock-out wake point at Gull's boat; no healing
+  there since the gameplay polish brief made rest a resource), Coast (hostile), Hollow
   (safe, rest + checkpoint), Junction (hostile, light: exploration and one
   chest, no gate), Canopy and Grotto (hostile, gated at their far ends),
   Observatory (hostile + main puzzle), Beacon (boss arena).

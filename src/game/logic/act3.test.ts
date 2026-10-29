@@ -3,7 +3,7 @@ import { newProgress, type Progress } from "./progress";
 import { bestFood, findPort, hearLead, markDescended, startAct2 } from "./act2";
 import { claimErrand, clearCloudStage, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, discoverHollow, eatStew, markFamily, newAct3, openCloudChest, restCloud, solveCloudPuzzle, travelCloud } from "./act3";
 import { decodeSave, encodeSave } from "./save";
-import { CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_PICKUPS, CLOUD_SPAWNS, cloudWalkable } from "../world/cloudisle";
+import { CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_PICKUPS, CLOUD_SPAWNS, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, cloudWalkable, type CloudPuzzleId } from "../world/cloudisle";
 import type { MonsterId } from "../types";
 
 function harbor(): Progress {
@@ -74,6 +74,44 @@ describe("Cloud Isle travel and family", () => {
     const opened = openCloudChest(solved, "cloudSeaChest");
     expect(opened.act2.coins).toBe(p.act2.coins + 20);
     expect(openCloudChest(opened, "cloudSeaChest")).toBe(opened);
+  });
+
+  it("uses each route puzzle's own friend without spending MP", () => {
+    for (const id of ["canopyVine", "canopyGlide", "canopyGust", "grottoRaft", "grottoBoiler"] as const) {
+      const p = hollow(), friend = CLOUD_PUZZLE_RULES[id].friend;
+      const tired = { ...p, act2: { ...p.act2, ...vitals(50, 0) } };
+      const absent = { ...tired, monsters: { ...p.monsters, [friend]: { ...p.monsters[friend], friend: false } } };
+      expect(solveCloudPuzzle(absent, id)).toBe(absent);
+      const solved = solveCloudPuzzle(tired, id);
+      expect(solved.act3.puzzles).toContain(id);
+      expect(solved.act2.mp).toEqual(tired.act2.mp);
+      expect(solveCloudPuzzle(solved, id)).toBe(solved);
+    }
+  });
+
+  it("clears each six-enemy branch independently and keeps its exit open", () => {
+    for (const route of ["skyrootCanopy", "thunderGrotto"] as const) {
+      const p = hollow();
+      const ids = CLOUD_ENEMY_SPAWNS.flatMap((spawn, i) => spawn.zone === route ? [i] : []);
+      expect(ids).toHaveLength(6);
+      expect(clearCloudStage(p, route, [...ids.slice(0, 5), ids[0]])).toBe(p);
+      const cleared = clearCloudStage(p, route, ids);
+      expect(cleared.act3.cleared).toEqual(["stormbreakCoast", route]);
+      expect(clearCloudStage(cleared, route, [])).toBe(cleared);
+    }
+    const junction = CLOUD_ENEMY_SPAWNS.filter(s => s.zone === "windfallJunction");
+    expect(junction).toHaveLength(3);
+    expect(junction.every(s => s.kind === "windSprite")).toBe(true);
+  });
+
+  it("keeps the canopy chest behind Puff's optional gust puzzle", () => {
+    const p = hollow();
+    expect(openCloudChest(p, "cloudCanopyChest")).toBe(p);
+    const solved = solveCloudPuzzle(p, "canopyGust");
+    const opened = openCloudChest(solved, "cloudCanopyChest");
+    expect(opened.act2.coins).toBe(p.act2.coins + 30);
+    expect(openCloudChest(opened, "cloudCanopyChest")).toBe(opened);
+    expect(openCloudChest(p, "cloudCrystalChest").act3.chests).toContain("cloudCrystalChest");
   });
 });
 
@@ -161,5 +199,80 @@ describe("additive Cloud Isle v4 saves", () => {
     expect(loaded.player.z).toBeLessThan(43.7);
     const nonfinite = JSON.parse(JSON.stringify(raw)); nonfinite.player = {};
     expect(decodeSave(JSON.stringify(nonfinite))!.player).toEqual({ ...CLOUD_DOCK.spawn, yaw: 0 });
+  });
+
+  it("round-trips each route, its clear, required abilities, chest and moss", () => {
+    for (const route of ["skyrootCanopy", "thunderGrotto"] as const) {
+      let p = hollow();
+      for (const id of CLOUD_ROUTE_REQUIRED[route]) p = solveCloudPuzzle(p, id);
+      if (route === "skyrootCanopy") p = solveCloudPuzzle(p, "canopyGust");
+      p = clearCloudStage(p, route, CLOUD_ENEMY_SPAWNS.map((_, i) => i));
+      p = collectErrandPickup(p, route === "skyrootCanopy" ? "canopyMoss" : "grottoMoss");
+      p = collectErrandPickup(p, route === "skyrootCanopy" ? "canopyWood" : "grottoWood");
+      p = openCloudChest(p, route === "skyrootCanopy" ? "cloudCanopyChest" : "cloudCrystalChest");
+      p = { ...p, act3: { ...p.act3, area: route } };
+      const point = { x: route === "skyrootCanopy" ? -20 : 20, z: 124, yaw: 1 };
+      expect(save(p, point).progress).toEqual(p);
+      expect(save(p, point).player).toEqual(point);
+      const approach = { ...p, act3: { ...p.act3, area: "observatoryApproach" as const } };
+      expect(save(approach, { x: 0, z: 132, yaw: 1 }).progress.act3.area).toBe("observatoryApproach");
+    }
+  });
+
+  it("validates the new puzzle friends individually on reload", () => {
+    const base = hollow();
+    const all: CloudPuzzleId[] = ["canopyVine", "canopyGlide", "canopyGust", "grottoRaft", "grottoBoiler"];
+    for (const friend of ["leafy", "puff", "bubbo", "ember"] as const) {
+      const p = { ...base, monsters: { ...base.monsters, [friend]: { ...base.monsters[friend], friend: false } },
+        act3: { ...base.act3, puzzles: [...all, ...all] } };
+      // Ember is also a prerequisite of the prologue cave. Removing that
+      // friendship invalidates the harbour lead and therefore this chapter.
+      expect(save(p).progress.act3.puzzles).toEqual(friend === "ember" ? [] : all.filter(id => CLOUD_PUZZLE_RULES[id].friend !== friend));
+    }
+  });
+
+  it("rejects route progress before the tunnel while retaining slice A pickup semantics", () => {
+    const base = travelCloud(completeVoyage(harbor()), "cloud");
+    const raw = JSON.parse(encodeSave(base, { x: 20, z: 124, yaw: 1 }, 0));
+    Object.assign(raw.progress.act3, { area: "thunderGrotto", cleared: ["skyrootCanopy", "thunderGrotto"],
+      puzzles: ["grottoRaft", "grottoBoiler"], chests: ["cloudCrystalChest", "cloudCanopyChest", "bad"],
+      errands: { pickups: ["grottoMoss", "canopyMoss", "canopyWood", "grottoWood", "junctionWood1"] } });
+    const loaded = decodeSave(JSON.stringify(raw))!;
+    expect(loaded.progress.act3).toMatchObject({ cleared: [], puzzles: [], chests: [], area: "stormbreakCoast",
+      errands: { pickups: ["junctionWood1"], firewood: 1, moss: false } });
+    expect(loaded.player.z).toBeLessThan(43.7);
+  });
+
+  it("projects saves behind every missing required puzzle back to that route's entrance", () => {
+    for (const route of ["skyrootCanopy", "thunderGrotto"] as const) {
+      const point = { x: route === "skyrootCanopy" ? -20 : 20, z: 124, yaw: 1 };
+      for (const missing of CLOUD_ROUTE_REQUIRED[route]) {
+        let p = hollow();
+        for (const id of CLOUD_ROUTE_REQUIRED[route]) if (id !== missing) p = solveCloudPuzzle(p, id);
+        p = { ...p, act3: { ...p.act3, area: route } };
+        const loaded = save(p, point);
+        expect(loaded.player).toEqual({ ...CLOUD_SPAWNS[route], yaw: 1 });
+      }
+    }
+  });
+
+  it("keeps the shared approach locked until a clear route and all its required puzzles", () => {
+    const base = hollow();
+    const approach = { x: 0, z: 132, yaw: 1 };
+    let p: Progress = { ...base, act3: { ...base.act3, area: "observatoryApproach" } };
+    expect(save(p, approach).player).toEqual({ ...CLOUD_SPAWNS.windfallJunction, yaw: 1 });
+    p = clearCloudStage(p, "skyrootCanopy", CLOUD_ENEMY_SPAWNS.map((_, i) => i));
+    expect(save(p, approach).player.z).toBeLessThan(100);
+    p = solveCloudPuzzle(solveCloudPuzzle(p, "canopyVine"), "canopyGlide");
+    expect(save(p, approach).player).toEqual(approach);
+    expect(save(p, { x: 12, z: 130, yaw: 1 }).player).toEqual({ x: 12, z: 130, yaw: 1 });
+  });
+
+  it("resumes an interrupted glide on a marked pad rather than over the gap", () => {
+    let p = hollow();
+    p = solveCloudPuzzle(solveCloudPuzzle(p, "canopyVine"), "canopyGlide");
+    p = { ...p, act3: { ...p.act3, area: "skyrootCanopy" } };
+    expect(save(p, { x: -20, z: 119, yaw: 1 }).player).toEqual({ x: -20, z: 117.4, yaw: 1 });
+    expect(save(p, { x: -20, z: 120, yaw: 1 }).player).toEqual({ x: -20, z: 121.6, yaw: 1 });
   });
 });

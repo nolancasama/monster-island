@@ -8,7 +8,7 @@ import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
 import { newAct3, type Act3 } from "./act3";
-import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
+import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
  * Versioned save. A save of an unknown version, or one that does not parse,
@@ -121,8 +121,16 @@ function readAct3(raw: unknown, p: Progress): Act3 {
   a.family.trusted = a.family.met && f.trusted === true;
   a.family.drawingSeen = a.family.trusted && f.drawingSeen === true;
   a.family.tunnelOpen = a.family.drawingSeen && f.tunnelOpen === true;
-  a.puzzles = list(raw.puzzles, CLOUD_PUZZLES).filter((id) => p.monsters[id === "coastWindmill" ? "puff" : "leafy"].friend);
-  a.chests = list(raw.chests, CLOUD_CHESTS.map((c) => c.id));
+  // Route progress cannot precede the family's back tunnel. Coast saves keep
+  // their original prerequisites, while each new ability checks its own friend.
+  a.cleared = a.cleared.filter(id => id === "stormbreakCoast" || a.family.tunnelOpen);
+  a.puzzles = list(raw.puzzles, CLOUD_PUZZLES).filter(id => p.monsters[CLOUD_PUZZLE_RULES[id].friend].friend
+    && (id === "coastWindmill" || id === "coastCrate" || a.family.tunnelOpen));
+  a.chests = list(raw.chests, CLOUD_CHESTS.map((c) => c.id)).filter(id => {
+    const chest = CLOUD_CHESTS.find(c => c.id === id)!;
+    return (!chest.puzzle || a.puzzles.includes(chest.puzzle))
+      && (id !== "cloudCanopyChest" && id !== "cloudCrystalChest" || a.family.tunnelOpen);
+  });
   // Reserve the later mountain fields and validate their prerequisites.
   // Slice A provides no interaction that writes these milestones.
   a.observatoryLamps = a.family.tunnelOpen ? list(raw.observatoryLamps, COMPANION_IDS).filter((id) => p.monsters[id].friend) : [];
@@ -130,7 +138,8 @@ function readAct3(raw: unknown, p: Progress): Act3 {
   a.skyFortressClue = a.beaconDefeated && raw.skyFortressClue === true;
   a.family.aftermathSeen = a.beaconDefeated && f.aftermathSeen === true;
   const e = isObj(raw.errands) ? raw.errands : {};
-  a.errands.pickups = list(e.pickups, CLOUD_PICKUPS.map((pickup) => pickup.id));
+  a.errands.pickups = list(e.pickups, CLOUD_PICKUPS.map((pickup) => pickup.id)).filter(id =>
+    a.family.tunnelOpen || !["canopyMoss", "grottoMoss", "canopyWood", "grottoWood"].includes(id));
   a.errands.bag = a.errands.pickups.some((id) => CLOUD_PICKUPS.find((pickup) => pickup.id === id)?.kind === "bag");
   a.errands.firewood = Math.min(3, a.errands.pickups.filter((id) => CLOUD_PICKUPS.find((pickup) => pickup.id === id)?.kind === "firewood").length);
   a.errands.moss = a.errands.pickups.some((id) => CLOUD_PICKUPS.find((pickup) => pickup.id === id)?.kind === "moss");
@@ -140,9 +149,40 @@ function readAct3(raw: unknown, p: Progress): Act3 {
   a.stew = a.family.trusted ? Math.max(0, Math.min(3, Math.floor(num(raw.stew, 0)))) : 0;
   const area = CLOUD_AREAS.find((id) => id === raw.area);
   a.area = area ?? "cloudDock";
-  if ((a.area === "hiddenHollow" && !a.hollowFound) || ((a.area === "backTunnel" || a.area === "windfallJunction") && !a.family.tunnelOpen)) a.area = "stormbreakCoast";
+  if ((a.area === "hiddenHollow" && !a.hollowFound) || ((a.area === "backTunnel" || a.area === "windfallJunction"
+    || a.area === "skyrootCanopy" || a.area === "thunderGrotto" || a.area === "observatoryApproach") && !a.family.tunnelOpen)) a.area = "stormbreakCoast";
+  if (a.area === "observatoryApproach" && !observatoryApproachUnlocked(a)) a.area = "windfallJunction";
   a.checkpoint = raw.checkpoint === "hollow" && a.hollowFound ? "hollow" : "dock";
   return a;
+}
+
+function observatoryApproachUnlocked(a: Act3): boolean {
+  return Object.entries(CLOUD_ROUTE_REQUIRED).some(([route, puzzles]) => a.cleared.includes(route as typeof a.cleared[number])
+    && puzzles.every(id => a.puzzles.includes(id)));
+}
+
+/** Valid floor beyond a puzzle can still be unreachable floor. Check the side
+ * of every route crossing as well as collision at the saved point itself. */
+function cloudSavePositionUnlocked(a: Act3, x: number, z: number): boolean {
+  if (!a.cleared.includes("stormbreakCoast") && z > 43.7) return false;
+  const zone = cloudZoneAt(x, z);
+  if (zone === "backTunnel" || zone === "windfallJunction" || zone === "skyrootCanopy" || zone === "thunderGrotto" || zone === "observatoryApproach") {
+    if (!a.family.tunnelOpen) return false;
+  }
+  if (zone === "observatoryApproach") return observatoryApproachUnlocked(a);
+  if (zone === "skyrootCanopy" || zone === "thunderGrotto") {
+    const gate = CLOUD_ROUTE_GATES.find(g => g.zone === zone)!;
+    // The tail of either branch is reachable from the shared approach, even
+    // when that branch's own far gate still blocks the descent.
+    if (z > gate.z) return observatoryApproachUnlocked(a);
+    for (const puzzle of CLOUD_ROUTE_REQUIRED[zone]) {
+      const barrier = CLOUD_PUZZLE_BARRIERS.find(b => b.puzzle === puzzle)!;
+      if (z >= barrier.z0 - PLAYER_R && !a.puzzles.includes(puzzle)) return false;
+    }
+    const gust = CLOUD_PUZZLE_BARRIERS.find(b => b.puzzle === "canopyGust")!;
+    if (zone === "skyrootCanopy" && x < gust.x1 && z >= gust.z0 && z <= gust.z1 && !a.puzzles.includes(gust.puzzle)) return false;
+  }
+  return true;
 }
 
 export function decodeSave(text: string | null): SaveData | null {
@@ -197,14 +237,21 @@ export function decodeSave(text: string | null): SaveData | null {
   let safe;
   if (p.act3.world === "cloud") {
     let x = num(pl.x, NaN), z = num(pl.z, NaN);
+    // An autosave during the authored hop resumes on its nearest marked pad.
+    if (x < -12 && z > 118.15 && z < 120.85 && p.act3.puzzles.includes("canopyGlide")) {
+      ({ x, z } = z < 119.5 ? CANOPY_GLIDE.from : CANOPY_GLIDE.to);
+    }
     // A position in valid but story-locked ground is still invalid for this
     // save. Keep it on the accessible side before projecting out of solids.
-    const zone = cloudZoneAt(x, z);
-    if ((!p.act3.cleared.includes("stormbreakCoast") && z > 43.7)
-      || (!p.act3.family.tunnelOpen && (zone === "backTunnel" || zone === "windfallJunction"))) {
+    if (!cloudSavePositionUnlocked(p.act3, x, z)) {
       ({ x, z } = CLOUD_SPAWNS[p.act3.area]);
+      // A route-labelled save may itself lie beyond a missing puzzle.
+      if (!cloudSavePositionUnlocked(p.act3, x, z)) ({ x, z } = CLOUD_SPAWNS.windfallJunction);
     }
     safe = cloudNearestWalkable(x, z, PLAYER_R, { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen });
+    if (!cloudSavePositionUnlocked(p.act3, safe.x, safe.z)) {
+      safe = { ...CLOUD_SPAWNS[p.act3.family.tunnelOpen ? "windfallJunction" : "stormbreakCoast"] };
+    }
     p.act3.area = cloudZoneAt(safe.x, safe.z) ?? "cloudDock";
   } else {
     safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);

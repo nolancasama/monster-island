@@ -4,7 +4,7 @@ import { COMPANION_IDS } from "../data/combat";
 import { cb, hooks, travelCombat, wakeUp } from "../combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, effect, rt } from "../runtime";
-import { CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
+import { CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
 import { PIER2, SERVICES } from "../world/lowland";
 import { gatesOf, nearestWalkable, PLAYER_R } from "../world/collision";
 import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, discoverHollow, eatStew, markFamily, openCloudChest, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
@@ -102,10 +102,16 @@ function boatPose() {
   pl.x = v.x; pl.z = v.z; pl.y = v.y + .75; pl.yaw = v.yaw;
   COMPANION_IDS.forEach((id, i) => {
     const m = rt.monsters[id]; m.mode = "script";
-    m.x = v.x + (i % 2 ? 1 : -1) * .85; m.z = v.z + Math.floor(i / 2) * 1.25;
+    const side = (i % 2 ? 1 : -1) * .85, back = .6 + Math.floor(i / 2) * 1.1;
+    m.x = v.x + Math.cos(v.yaw) * side - Math.sin(v.yaw) * back;
+    m.z = v.z - Math.sin(v.yaw) * side - Math.cos(v.yaw) * back;
     m.air = m.airTarget = 0; m.look = null;
   });
-  shot({ x: v.x + 7, y: 4.8, z: v.z + (rt.world === "home" ? 9 : -9) }, { x: v.x, y: 1.5, z: v.z });
+  // A broadside stern view clears the entire sail and keeps the crew, mast
+  // and the water ahead together, including while Gull rounds the rocks.
+  const forwardX = Math.sin(v.yaw), forwardZ = Math.cos(v.yaw);
+  shot({ x: v.x + Math.cos(v.yaw) * 11 - forwardX * 13, y: v.y + 8.5, z: v.z - Math.sin(v.yaw) * 11 - forwardZ * 13 },
+    { x: v.x + forwardX * 3, y: v.y + 3, z: v.z + forwardZ * 3 });
 }
 async function boatLeg(seconds: number, x: number, z: number) {
   const v = rt.voyage, sx = v.x, sz = v.z, yaw = Math.atan2(x - sx, z - sz);
@@ -139,13 +145,19 @@ export function cloudCandidates(): Array<{ focus: Focus; reach: number }> {
   }
   for (const c of CLOUD_CHESTS) if (!a.chests.includes(c.id)) add(c.id, "the chest", c, "Open", "chest", 2.2);
   for (const pickup of CLOUD_PICKUPS) if (!a.errands.pickups.includes(pickup.id)) add(pickup.id, pickup.kind === "bag" ? "Kiko's bag" : pickup.kind === "moss" ? "glow moss" : "firewood", pickup, "Get", "food", 1.8);
-  for (const [id, at] of Object.entries(CLOUD_OBSTACLE_PLACE)) if (!a.puzzles.includes(id as CloudPuzzleId)) add(id, id === "coastWindmill" ? "the windmill crane" : "the crate", at, "Look at", "obstacle");
+  for (const [id, at] of Object.entries(CLOUD_OBSTACLE_PLACE)) if (!a.puzzles.includes(id as CloudPuzzleId)) add(id, CLOUD_PUZZLE_RULES[id as CloudPuzzleId].noun, at, "Look at", "obstacle");
+  if (a.puzzles.includes("canopyGlide")) {
+    add("glideForward", "the glide pad", CANOPY_GLIDE.from, "Glide from", "obstacle", 1.5);
+    add("glideBack", "the glide pad", CANOPY_GLIDE.to, "Glide from", "obstacle", 1.5);
+  }
   add("raiderRoad", "the raider barricade", {x:5,z:55}, "Look at", "sign");
   add("junctionRoutes", "the mountain routes", {x:0,z:96}, "Look at", "sign");
+  add("observatoryEntrance", "the closed observatory", {x:0,z:133}, "Look at", "sign");
   return out;
 }
 
 export function cloudInteract(f: Focus) {
+  if (f.id === "glideForward" || f.id === "glideBack") return run(() => glideCanopy(f.id === "glideBack"));
   if (f.id === "cloudGull") return run(sailWithGull);
   if (f.id === "hollowRest" || f.id === "cloudDockRest") return run(async () => {
     if (f.id === "hollowRest") await say("bo", "Have a rest.", "ゆっくり やすんでね。");
@@ -171,8 +183,12 @@ export function cloudInteract(f: Focus) {
     await say("game", "Treasure! Supplies for the journey!", "たからばこ! たびの じゅんびに つかおう!");
   });
   return run(async () => {
-    await say("self", f.id === "raiderRoad" ? "The raider road is blocked. We need another way." : "Skyroot Canopy. Thunder Grotto. The observatory is up there. The routes are closed for now.",
-      f.id === "raiderRoad" ? "とうぞくの みちは とおれない。ほかの みちを さがそう。" : "そらの もりと かみなりの どうくつ。うえに てんもんだいが ある。いまは みちが しまっている。");
+    if (f.id === "observatoryEntrance") {
+      await say("self", "The Ancient Observatory. The entrance is closed. Lumo must be inside!", "古代の天文台だ。入口は閉まっている。ルモは中にいるのかな！");
+      return;
+    }
+    await say("self", f.id === "raiderRoad" ? "The raider road is blocked. We need another way." : "Skyroot Canopy to the west. Thunder Grotto to the east. Either route leads to the observatory!",
+      f.id === "raiderRoad" ? "とうぞくの みちは とおれない。ほかの みちを さがそう。" : "西は空根の樹冠、東は雷の洞窟。どちらも天文台へ続いている！");
   });
 }
 
@@ -246,10 +262,10 @@ async function familyScene() {
 function cloudObstacle(id: CloudPuzzleId) {
   return run(async () => {
     const p = getGame().progress, active = p.active;
-    const required = id === "coastWindmill" ? "puff" : "leafy";
+    const rule = CLOUD_PUZZLE_RULES[id], required = rule.friend;
     frameTwo(rt.player,CLOUD_OBSTACLE_PLACE[id].face,1);
     if (!active || !p.monsters[active].friend) { await say("self","A friend can help here.","ともだちに たすけて もらおう。"); return; }
-    const needs = id === "coastWindmill" ? "fly" : "grow";
+    const needs = rule.need;
     const answer = await ask({kind:"choice",options:["canHelp","canSwim","canFire"],tapAlways:true,cancellable:true,help:"ともだちに「Can you help me?」と きこう"});
     if (!answer) return;
     const ability = CAN_QUESTION[answer];
@@ -258,13 +274,38 @@ function cloudObstacle(id: CloudPuzzleId) {
     animate(active,yes ? "yes" : "no");
     await say(active,yes ? "Yes, I can!" : "No, I can't.",yes ? "できるよ!" : "できないよ!");
     if (!yes || active !== required || answer !== "canHelp") return;
-    await command(id === "coastWindmill" ? "cmdBlow" : "cmdPull",id === "coastWindmill" ? "パフに「Blow!」と いおう" : "リーフィに「Pull!」と いおう");
+    await command(rule.command, `${MONSTERS[required].name}に お願いしよう`);
     // Environmental abilities are free, including at zero MP.
     animate(active,"power"); audio.play("vines");
-    updateProgress(pr => solveCloudPuzzle(pr,id)); await wait(1100);
-    await say("game",id === "coastWindmill" ? "The windmill turns! The crane lowers a plank to the sea cave." : "The crate holds the plate! The side cove is open.",id === "coastWindmill" ? "ふうしゃが まわって どうくつへ いたの はしが おりた!" : "はこが スイッチに のって よこの いりえが ひらいた!");
+    updateProgress(pr => solveCloudPuzzle(pr,id));
+    if (id === "canopyGlide") await glideCanopy(false);
+    else await wait(1100);
+    await say("game",rule.result.en,rule.result.ja ?? "道が開いた！");
     await command("thankYou","ともだちに おれいを いおう");
   });
+}
+
+/** One authored hop between two pads. There is no aerial steering, MP cost,
+ * or persistent flying state; the reverse pad always permits retreat. */
+async function glideCanopy(back: boolean) {
+  const from = back ? CANOPY_GLIDE.to : CANOPY_GLIDE.from, to = back ? CANOPY_GLIDE.from : CANOPY_GLIDE.to;
+  const p = rt.player, puff = rt.monsters.puff;
+  // The transport pad calls Puff back as the one active friend in this
+  // hostile route, including when returning after exploring with another.
+  if (getGame().progress.active !== "puff") updateProgress(pr => ({ ...pr, active: "puff" }));
+  p.frozen = true; p.vx = p.vz = 0;
+  puff.mode = "script";
+  try {
+    await over(1.8, k => {
+      p.x = lerp(from.x, to.x, k); p.z = lerp(from.z, to.z, k);
+      p.climbY = cloudY(p.x, p.z) + Math.sin(k * Math.PI) * 2;
+      puff.x = p.x + .8; puff.z = p.z; puff.air = 1 + Math.sin(k * Math.PI);
+      shot({x:p.x + 7,y:cloudY(p.x,p.z)+6,z:p.z-7},{x:p.x,y:p.climbY+1,z:p.z});
+    });
+  } finally {
+    p.climbY = null; p.frozen = false; puff.air = 0; puff.mode = "follow";
+    rt.camera.mode = "follow"; rt.camera.shot = null; rt.camera.snap = true;
+  }
 }
 
 export function eatCloudStew() {
@@ -279,6 +320,11 @@ export function eatCloudStew() {
 /** Story triggers are separate from collision and never run in fights. */
 export function cloudTriggers() {
   const a = getGame().progress.act3;
+  if (a.puzzles.includes("canopyGlide") && Math.abs(rt.player.x - CANOPY_GLIDE.from.x) < 1.6) {
+    const p = rt.player;
+    if (p.z > 117.2 && p.z < 118.7 && p.vz > .1) { void run(() => glideCanopy(false)); return; }
+    if (p.z > 120.3 && p.z < 121.8 && p.vz < -.1) { void run(() => glideCanopy(true)); return; }
+  }
   if (a.cleared.includes("stormbreakCoast") && !a.hollowFound && rt.kikoTrail === 0) {
     void run(async () => {
       rt.act3Scene = "trail";

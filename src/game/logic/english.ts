@@ -62,6 +62,7 @@ export type PhraseId =
   | "cmdPush"
   | "cmdBlow"
   | "cmdBurn"
+  | "cmdFly" | "cmdSplash"
   | "yesLetsGo" | "raiseSail" | "turnLeft" | "itsWindy" | "itsSunny" | "itsRainy" | "look"
   | "imAFriend" | "yesItIs" | "whereLumo";
 
@@ -230,7 +231,9 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   cmdPull: { id: "cmdPull", en: "Pull!", keys: [COMMAND_WORDS.pull], distractors: ["cmdPush", "cmdBlow"] },
   cmdPush: { id: "cmdPush", en: "Push!", keys: [COMMAND_WORDS.push], distractors: ["cmdPull", "cmdBurn"] },
   cmdBlow: { id: "cmdBlow", en: "Blow!", keys: [COMMAND_WORDS.blow], distractors: ["cmdBurn", "cmdPull"] },
-  cmdBurn: { id: "cmdBurn", en: "Burn!", keys: [COMMAND_WORDS.burn], distractors: ["cmdBlow", "cmdPush"] }
+  cmdBurn: { id: "cmdBurn", en: "Burn!", keys: [COMMAND_WORDS.burn], distractors: ["cmdBlow", "cmdPush"] },
+  cmdFly: { id: "cmdFly", en: "Fly!", keys: [ABILITY_WORDS.fly], distractors: ["cmdPull", "cmdBurn"] },
+  cmdSplash: { id: "cmdSplash", en: "Splash!", keys: [["splash", "splashes", "splashu", "supurasshu", "splish", "sprash"]], distractors: ["cmdPull", "cmdFly"] }
 };
 
 /** The quantity in a heard shopping sentence ("I want three apples"), if any. */

@@ -43,7 +43,7 @@ describe("Cloud Isle combat", () => {
     for (const e of cb.enemies) Object.assign(e, { x: 0, z: 22, state: "idle" });
     combatTick(0.016);
     expect(cb.enemies.filter(e => e.state === "alert")).toHaveLength(4);
-    expect(cb.enemies.filter(e => e.state === "idle")).toHaveLength(2);
+    expect(cb.enemies.filter(e => e.zone === "stormbreakCoast" && e.state === "idle")).toHaveLength(2);
   });
 
   it("a basic hit interrupts a crab charge while retaining its frontal armour", () => {
@@ -55,6 +55,27 @@ describe("Cloud Isle combat", () => {
     expect(basicAttack()).toBe(true);
     expect(e.state).toBe("stun");
     expect(e.hp).toBe(42.5);
+  });
+
+  it("keeps electric panels safe before their pulse, then deals light damage without knock-back", () => {
+    for (const e of cb.enemies) e.state = "gone";
+    Object.assign(rt.player, { x: 17, z: 115 });
+    cb.safeUntil = 0;
+    rt.time = 4;
+    combatTick(.016);
+    expect(cb.vitals.hp).toBe(100);
+    rt.time = 6.39;
+    combatTick(.016);
+    expect(cb.vitals.hp).toBe(100);
+    rt.time = 6.41;
+    combatTick(.016);
+    expect(cb.vitals.hp).toBe(95);
+    expect(cb.knock).toEqual({ x: 0, z: 0 });
+    // Ordinary hit protection also prevents frame-rate-dependent damage.
+    rt.time = 6.5;
+    combatTick(.016);
+    expect(cb.vitals.hp).toBe(95);
+    expect(rt.player).toMatchObject({ x: 17, z: 115 });
   });
 
   it("damages a fifth sleeping enemy without waking a fifth attacker", () => {

@@ -186,11 +186,11 @@ export function CameraRig() {
         want.current.y += Math.min(up, 8) * (1 - k);
       }
     }
-    if (!rope && !lowland) {
+    if (!rope && !lowland && !rt.voyage.active) {
       const floor = Math.max(groundY(want.current.x, want.current.z), -0.4) + 0.7;
       if (want.current.y < floor) want.current.y = floor;
     }
-    if (!ready.current || c.snap && !rope && !leavingRope) {
+    if (!ready.current || rt.voyage.active || c.snap && !rope && !leavingRope) {
       pos.current.copy(want.current);
       look.current.copy(wantLook.current);
       ready.current = true;
@@ -207,7 +207,7 @@ export function CameraRig() {
     } else {
       pos.current.lerp(want.current, k);
       look.current.lerp(wantLook.current, k);
-      if (!lowland) pos.current.y = Math.max(pos.current.y, groundY(pos.current.x, pos.current.z) + 0.7);
+      if (!lowland && !rt.voyage.active) pos.current.y = Math.max(pos.current.y, groundY(pos.current.x, pos.current.z) + 0.7);
       c.settled = pos.current.distanceTo(want.current) < 0.08 && look.current.distanceTo(wantLook.current) < 0.08;
     }
     camera.position.copy(pos.current);
@@ -218,7 +218,7 @@ export function CameraRig() {
     const cam = camera as THREE.PerspectiveCamera;
     // The mountain's real beacon and the nearby player need a taller sky view
     // than the lowland. Physical follow offsets remain exactly the same.
-    const fov = cloud ? 80 : 55;
+    const fov = cloud ? 80 : rt.voyage.active ? 65 : 55;
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const h = window.innerHeight;
     const wantShift = (cloud && c.framing === "cloud" ? -h * .2 : 0) + (g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0);

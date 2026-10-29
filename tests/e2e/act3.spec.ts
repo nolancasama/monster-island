@@ -3,9 +3,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { newAct3, type Act3 } from "../../src/game/logic/act3";
-import { CLOUD_ENEMY_SPAWNS } from "../../src/game/world/cloudisle";
+import { CLOUD_ENEMY_SPAWNS, CLOUD_PUZZLE_RULES, CLOUD_ELECTRIC_PANELS, type CloudPuzzleId } from "../../src/game/world/cloudisle";
 
-type CloudState = MiState & { progress: MiState["progress"] & { act3: Act3 }; act3: { world: string; scene: string; drawing: boolean; zone: string; voyage: {active:boolean;stage:string}; mountedWorlds: string[] } };
+type CloudState = MiState & { progress: MiState["progress"] & { act3: Act3 }; act3: { world: string; scene: string; drawing: boolean; zone: string; voyage: {active:boolean;stage:string}; mountedWorlds: string[]; electricPanels: Array<{active:boolean}> } };
 const cloudState = (page: Page) => state(page) as Promise<CloudState>;
 const folder = ".tmp/shots/act3";
 
@@ -42,8 +42,8 @@ async function defeat(page: Page, i: number, touch: boolean) {
 
 for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
   const label=`${size.width}x${size.height}`, touch=size.width===1280;
-  test(`slice A voyage, family, errands and return travel ${label}${touch ? " touch only" : ""}`,async({page})=>{
-    test.setTimeout(420_000);
+  test(`Act 3 voyage, family, both mountain routes and return travel ${label}${touch ? " touch only" : ""}`,async({page})=>{
+    test.setTimeout(600_000);
     await page.setViewportSize(size); await seed(page);
     const errors=await boot(page); await chooseMode(page,"tap");
     await page.getByTestId("btn-continue").click();
@@ -59,16 +59,57 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
       expect(s.perf.triangles,`${name} triangles`).toBeLessThanOrEqual(140_000);
       expect(s.act3.mountedWorlds).toHaveLength(1);
     };
+    const solve = async (id: CloudPuzzleId) => {
+      const rule = CLOUD_PUZZLE_RULES[id];
+      await hook(page,"set",{progress:{...(await cloudState(page)).progress,active:rule.friend}});
+      await hook(page,"setMp",rule.friend,0);
+      await use(page,id,touch); await tap(page,"canHelp");
+      await waitFor(page,s=>Boolean(s.prompt?.choices.includes(rule.command)));
+      await shot(`${id}-before`);
+      // Freeze regeneration at the command itself to prove the free ability
+      // works at exactly zero MP, regardless of SwiftShader frame duration.
+      await hook(page,"timeScale",0);
+      try {
+        await hook(page,"setMp",rule.friend,0);
+        expect((await state(page)).act2.mp[rule.friend]).toBe(0);
+        await tap(page,rule.command);
+      } finally { await hook(page,"timeScale",1); }
+      await tap(page,"thankYou");
+      await waitFor(page,s=>s.mode==="explore");
+      expect((await cloudState(page)).progress.act3.puzzles).toContain(id);
+      await shot(`${id}-after`);
+    };
+    const move = async (x: number,z: number) => {
+      const at = await hook(page,"moveTo",x,z) as {x:number;z:number};
+      expect(Math.hypot(at.x-x,at.z-z),`walk to ${x},${z}`).toBeLessThan(.1);
+      await hook(page,"renderFrames",3);
+    };
+    const clearBand = async (area: string,minZ: number,maxZ: number) => {
+      for (const [i,e] of CLOUD_ENEMY_SPAWNS.entries()) if(e.zone===area && e.z>=minZ && e.z<maxZ) {
+        await defeat(page,i,touch);
+        expect((await state(page)).micState).not.toBe("listening");
+      }
+    };
 
     await use(page,"harbor",touch); await tap(page,"yesLetsGo");
     for(const beat of ["raiseSail","turnLeft"]){await waitFor(page,s=>Boolean(s.prompt?.choices.includes(beat)));await shot(beat);await tap(page,beat);}
     await waitFor(page,s=>Boolean(s.prompt?.choices.includes("itsWindy"))); await shot("weather");
-    await tap(page,"itsSunny"); await tap(page,"itsWindy"); await tap(page,"look");
+    await tap(page,"itsSunny"); await tap(page,"itsWindy");
+    // Observe and pause in the renderer's own frame: fast-mode reveal lasts only
+    // a few frames, so a round trip after tapping Look can miss the airship.
+    const reveal = page.waitForFunction(() => {
+      const api=(window as unknown as {__mi:{state():CloudState;timeScale(k:number):void}}).__mi;
+      const s=api.state();
+      if(s.act3.voyage.stage==="reveal" && s.act2.ship.visible && Math.abs(s.act2.ship.x)<15) {api.timeScale(0);return true;}
+      return false;
+    },undefined,{polling:"raf",timeout:60_000});
+    await tap(page,"look"); await reveal;
+    try {await shot("reveal");} finally {await hook(page,"timeScale",1);}
     await waitFor(page,s=>s.mode==="explore" && (s as CloudState).progress.act3.world==="cloud",60_000,"landed on Cloud Isle");
     expect((await cloudState(page)).progress.act3.voyageDone).toBe(true); await shot("dock");
     await hook(page,"cloudArea","stormbreakCoast");
     await waitFor(page,s=>s.mode==="explore" && (s as CloudState).act3.zone==="stormbreakCoast"); await shot("coast");
-    for(let i=0;i<CLOUD_ENEMY_SPAWNS.length;i++) await defeat(page,i,touch);
+    await clearBand("stormbreakCoast",0,100);
     await waitFor(page,s=>(s as CloudState).progress.act3.cleared.includes("stormbreakCoast"));
     await hook(page,"cloudArea","hiddenHollow");
     await waitFor(page,s=>Boolean(s.prompt?.choices.includes("imAFriend"))); await shot("discovery"); await tap(page,"imAFriend");
@@ -91,9 +132,67 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     await use(page,"kikoBag",touch); await hook(page,"cloudArea","hiddenHollow"); await use(page,"kiko",touch); await waitFor(page,s=>s.mode==="explore");
     await hook(page,"cloudArea","backTunnel"); await shot("tunnel");
     await hook(page,"cloudArea","windfallJunction"); await waitFor(page,s=>(s as CloudState).act3.zone==="windfallJunction"); await shot("junction");
+    await use(page,"cloudJunctionChest",touch); await waitFor(page,s=>s.mode==="explore");
     for(const pickup of ["junctionWood1","junctionWood2","junctionWood3","canopyMouthMoss"]) await use(page,pickup,touch);
     await hook(page,"cloudArea","hiddenHollow"); await use(page,"tala",touch); await waitFor(page,s=>s.mode==="explore");
     expect((await cloudState(page)).progress.act3.errands).toMatchObject({bagRewarded:true,firewoodRewarded:true,mossRewarded:true}); await shot("hollow-upgraded");
+
+    for(const route of [
+      {area:"skyrootCanopy",x:-20,first:"canopyVine",second:"canopyGlide",moss:"canopyMoss",wood:"canopyWood",chest:"cloudCanopyChest"},
+      {area:"thunderGrotto",x:20,first:"grottoRaft",second:"grottoBoiler",moss:"grottoMoss",wood:"grottoWood",chest:"cloudCrystalChest"},
+    ] as const) {
+      await hook(page,"cloudArea","windfallJunction");
+      // Route mouths are immediately open; no Junction clear or gate is needed.
+      await move(route.x/2,99); await move(route.x,106);
+      await waitFor(page,s=>(s as CloudState).act3.zone===route.area); await shot(route.area);
+      await use(page,route.wood,touch); await clearBand(route.area,104,110);
+      await hook(page,"teleport",route.x,108);
+      const firstBlocked=await hook(page,"moveTo",route.x,113) as {z:number}; expect(firstBlocked.z).toBeLessThan(110);
+      await solve(route.first); await move(route.x,114);
+      await clearBand(route.area,110,120); await use(page,route.moss,touch);
+      await hook(page,"teleport",route.x,117);
+      const secondBlocked=await hook(page,"moveTo",route.x,123) as {z:number}; expect(secondBlocked.z).toBeLessThan(119);
+      await solve(route.second);
+      if(route.area==="skyrootCanopy") {
+        const s=await state(page); expect(s.player.z).toBeGreaterThan(120.5);
+        expect(s.player.riding).toBe(false); expect(s.player.climbing).toBe(false);
+      }
+      await move(route.x,123);
+      const gateBlocked=await hook(page,"moveTo",route.x/2,131) as {z:number}; expect(gateBlocked.z).toBeLessThan(127);
+      await clearBand(route.area,120,130);
+      await waitFor(page,s=>(s as CloudState).progress.act3.cleared.includes(route.area));
+      if(route.area==="skyrootCanopy") await solve("canopyGust");
+      await use(page,route.chest,touch); await waitFor(page,s=>s.mode==="explore");
+      expect((await cloudState(page)).progress.act3.chests).toContain(route.chest);
+      if(route.area==="thunderGrotto") {
+        // Defeated enemies cannot interfere with this stationary panel probe.
+        const panel=CLOUD_ELECTRIC_PANELS[0];
+        await hook(page,"teleport",panel.x,panel.z); await hook(page,"setHp",100);
+        await waitFor(page,s=>!(s as CloudState).act3.electricPanels[0].active);
+        await hook(page,"timeScale",0);
+        try {await shot("electric-safe");} finally {await hook(page,"timeScale",1);}
+        const before=await state(page);
+        await waitFor(page,s=>s.act2.hp<before.act2.hp,15_000,"electric panel light damage");
+        const after=await state(page);
+        expect(before.act2.hp-after.act2.hp).toBeLessThanOrEqual(10);
+        expect(Math.hypot(after.player.x-before.player.x,after.player.z-before.player.z)).toBeLessThan(.05);
+        await hook(page,"timeScale",0);
+        try {await shot("electric-active");} finally {await hook(page,"timeScale",1);}
+      }
+      await hook(page,"teleport",route.x,123); await shot(`${route.area}-clear`);
+      // Reload the actual autosave inside a solved route, with no fixture reset.
+      await page.waitForTimeout(5200); await page.reload(); await page.getByTestId("btn-continue").click(); await waitFor(page,s=>s.mode==="explore");
+      if(touch) await hook(page,"set",{touch:true});
+      expect((await cloudState(page)).act3.zone).toBe(route.area);
+      expect((await cloudState(page)).progress.act3.puzzles).toEqual(expect.arrayContaining([route.first,route.second]));
+      await shot(`${route.area}-reload`);
+      await move(route.x,124); await move(route.x/2,131); await move(0,132);
+      await waitFor(page,s=>(s as CloudState).act3.zone==="observatoryApproach"); await shot(`observatory-from-${route.area}`);
+      const closedEntrance=await hook(page,"moveTo",0,137) as {z:number}; expect(closedEntrance.z).toBeLessThan(135); // the closed door is at z 137
+      // The cleared route allows walking back to the Junction without a cut.
+      await move(0,132); await move(route.x/2,131); await move(route.x,124);
+      await move(route.x,106); await move(route.x/2,99); await move(0,90);
+    }
 
     // Autosave, Continue and boats exercise the actual persistent world, never a replay fixture.
     await page.waitForTimeout(5200); await page.reload(); await page.getByTestId("btn-continue").click(); await waitFor(page,s=>s.mode==="explore");

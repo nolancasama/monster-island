@@ -27,6 +27,7 @@ import { flatMat, occluderMat, smoothMat } from "./materials";
 import { bouldersGeometry, bushGeometry, jungleTreeGeometry, palmsGeometry, rockGeometry } from "./models/nature";
 import { massifTiles, seaStacksGeometry } from "./models/highlands";
 import { PartBuilder } from "./partBuilder";
+import { voyageStorm } from "./voyageWeather";
 
 const sstep = (a: number, b: number, v: number) => {
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
@@ -38,6 +39,8 @@ const sstep = (a: number, b: number, v: number) => {
 /** Sky dome, fog and the fixed light set (hemisphere + sun + ambient): bright tropical midday. */
 export function SkyAndLights() {
   const { scene, gl } = useThree();
+  const sun = useRef<THREE.Mesh>(null), daylight = useRef<THREE.DirectionalLight>(null);
+  const lastStorm = useRef(0);
   const dome = useMemo(() => {
     const g = new THREE.SphereGeometry(420, 24, 14);
     const pos = g.attributes.position;
@@ -53,6 +56,8 @@ export function SkyAndLights() {
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
     return g;
   }, []);
+  const fairSky = useMemo(() => Float32Array.from(dome.attributes.color.array), [dome]);
+  const weatherColor = useMemo(() => new THREE.Color(), []);
   const domeMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }), []);
   useEffect(() => {
     const bg = new THREE.Color("#cdeeff");
@@ -60,16 +65,32 @@ export function SkyAndLights() {
     scene.fog = new THREE.Fog("#cdeeff", 70, 260);
     gl.setClearColor(bg);
   }, [scene, gl]);
+  useFrame(() => {
+    const storm = voyageStorm(), color = dome.attributes.color as THREE.BufferAttribute;
+    if (storm === 0 && lastStorm.current === 0) return;
+    lastStorm.current = storm;
+    weatherColor.set("#71818c");
+    for (let i = 0; i < color.count; i++) {
+      color.setXYZ(i, THREE.MathUtils.lerp(fairSky[i * 3], weatherColor.r, storm), THREE.MathUtils.lerp(fairSky[i * 3 + 1], weatherColor.g, storm), THREE.MathUtils.lerp(fairSky[i * 3 + 2], weatherColor.b, storm));
+    }
+    color.needsUpdate = true;
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.color.set("#cdeeff").lerp(weatherColor, storm);
+      scene.fog.near = THREE.MathUtils.lerp(70, 38, storm);
+    }
+    if (sun.current) sun.current.visible = storm < .45;
+    if (daylight.current) daylight.current.intensity = THREE.MathUtils.lerp(2.3, 1.2, storm);
+  });
   return (
     <group>
       <mesh geometry={dome} material={domeMat} renderOrder={-10} />
-      <mesh position={[-140, 260, 200]} renderOrder={-9}>
+      <mesh ref={sun} position={[-140, 260, 200]} renderOrder={-9}>
         <circleGeometry args={[16, 24]} />
         <meshBasicMaterial color="#fff6dc" fog={false} />
       </mesh>
       <Clouds />
       <hemisphereLight args={["#d8ecff", "#c8a878", 1.15]} />
-      <directionalLight color="#fff4e0" intensity={2.3} position={[-40, 55, 30]} />
+      <directionalLight ref={daylight} color="#fff4e0" intensity={2.3} position={[-40, 55, 30]} />
       <ambientLight color="#ffffff" intensity={0.16} />
     </group>
   );
@@ -218,6 +239,9 @@ export function Sea() {
   }, []);
   const foam = useFoam();
   useFrame(() => {
+    // The crossing owns a subdivided sea around the moving boat. Normal
+    // home-island water resumes unchanged as soon as the voyage is over.
+    mat.visible = !rt.voyage.active;
     const t = rt.time;
     const p = near.attributes.position as THREE.BufferAttribute;
     const arr = p.array as Float32Array;

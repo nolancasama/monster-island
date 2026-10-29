@@ -6,7 +6,7 @@ import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
 import { effect, rt } from "./runtime";
 import { isRunning } from "./flow/script";
 import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/lowland";
-import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, cloudWindAt, cloudZoneAt, type CloudAreaId } from "./world/cloudisle";
+import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
 import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
@@ -47,7 +47,7 @@ const activeSpawns = () => onCloudIsle() ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
 
 /** The wind lanes bend projectiles and loose drops, never player movement. */
 function projectileWind(x: number, z: number): { x: number; z: number } {
-  return onCloudIsle() ? cloudWindAt(x, z) : { x: 0, z: 0 };
+  return onCloudIsle() ? cloudWindAt(x, z, getGame().progress.act3.puzzles) : { x: 0, z: 0 };
 }
 
 export interface EnemyRt {
@@ -667,7 +667,7 @@ function knockOut(e: EnemyRt) {
     const zone = e.zone as CloudAreaId;
     const list = cb.cloudZones.defeated[zone] ?? [];
     cb.cloudZones.defeated[zone] = list.includes(e.i) ? list : [...list, e.i];
-    next = zone === "stormbreakCoast" ? clearCloudStage(before, zone, cb.cloudZones.defeated[zone] ?? []) : before;
+    next = CLOUD_STAGES.includes(zone as CloudStageId) ? clearCloudStage(before, zone as CloudStageId, cb.cloudZones.defeated[zone] ?? []) : before;
   } else {
     cb.zones = noteDefeat(cb.zones, e.zone as ZoneId, e.i);
     next = clearStage(before, e.zone as ZoneId, cb.zones.defeated[e.zone as ZoneId] ?? []);
@@ -801,6 +801,10 @@ export function combatTick(dt: number) {
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack();
   const live = g.mode === "explore" && !isRunning();
+  if (live && zone === "thunderGrotto" && CLOUD_ELECTRIC_PANELS.some(panel =>
+    Math.abs(p.x - panel.x) < panel.w / 2 && Math.abs(p.z - panel.z) < panel.d / 2 && electricPanelActive(rt.time, panel.phase))) {
+    hurtPlayer(5, 0, 0, 0);
+  }
   for (const e of cb.enemies) if (e.zone === zone) updateEnemy(e, dt, live);
   if (live && zone && inHostileZone()) {
     const fighting = cb.enemies.some((e) => e.zone === zone && alive(e) && ["alert", "chase", "windup", "lunge"].includes(e.state));
@@ -1172,7 +1176,7 @@ export function stageStatus() {
 
 export function cloudStageStatus() {
   const zone = currentCloudZone();
-  if (!onCloudIsle() || zone !== "stormbreakCoast" || getGame().progress.act3.cleared.includes(zone)) return null;
+  if (!onCloudIsle() || !zone || !CLOUD_STAGES.includes(zone as CloudStageId) || getGame().progress.act3.cleared.includes(zone as CloudStageId)) return null;
   const defeated = cb.cloudZones.defeated[zone] ?? [];
   const remaining = CLOUD_ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !defeated.includes(i)), 0);
   const last = remaining === 1 ? cb.enemies.find((e) => e.zone === zone && alive(e)) : null;

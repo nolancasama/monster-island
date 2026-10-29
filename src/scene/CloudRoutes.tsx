@@ -1,0 +1,182 @@
+import { useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import { rt } from "../game/runtime";
+import { useGame } from "../game/store";
+import { CANOPY_GLIDE, CLOUD_ELECTRIC_PANELS, CLOUD_ROUTE_GATES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
+import { flatMat, additiveSprite } from "./materials";
+import { PartBuilder } from "./partBuilder";
+
+const at = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
+const bark = "#626652", rock = "#293c50";
+function span(b: PartBuilder, ax: number, az: number, bx: number, bz: number, width: number, color: string, dy = -.25, height = .4) {
+  const len = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az);
+  // Short sections follow precisely the same height function as collision.
+  for (let i = 0; i < Math.ceil(len); i++) {
+    const t = (i + .5) / Math.ceil(len), x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+    b.box(width, height, len / Math.ceil(len) + .15, x, cloudY(x, z) + dy, z, color, yaw);
+  }
+}
+function canopyGeometry() {
+  const b = new PartBuilder();
+  span(b, -9, 99, -20, 106, 5.5, bark);
+  span(b, -20, 124, -10, 131, 5.5, bark);
+  span(b, -10, 131, 0, 132, 5.5, "#8c907d");
+  span(b, -26, 122, -32, 123, 4, bark);
+  for (const [z0, z1] of [[104, 109.5], [111.5, 118.5], [120.5, 126]]) {
+    span(b, -20, z0, -20, z1, 14, "#707d64", -.28, .28);
+    for (const x of [-26, -22, -18, -14]) {
+      span(b, x, z0, x, z1, 3, "#6f775e", -.8, .8);
+      // Heavy tapered roots beneath the walking tops make the height readable.
+      b.cylAt(.8, z1 - z0, [x, cloudY(x, (z0 + z1) / 2) - 1, (z0 + z1) / 2], [Math.PI / 2, 0, 0], bark, 7);
+    }
+  }
+  b.cyl(3, 3.2, .4, -32, cloudY(-32, 123) - .4, 123, bark, 8);
+  for (const [x, z] of [[-30, 106], [-30, 116], [-11, 114], [-29, 127]]) {
+    const y = cloudY(x, z);
+    b.cyl(1.2, 2.2, 21, x, y - 14, z, "#535c50", 7);
+    b.cylAt(.5, 12, [x + 2, y - 1.8, z], [0, 0, -1.1], bark, 6);
+    for (let i = 0; i < 3; i++) b.sphere(3, x - 2 + i * 2, y + 9 + i * .3, z, "#708371", [1.8, .45, 1.4], 7);
+    // Hanging vines sit at the edges, never between camera and walker.
+    for (const dx of [-1, 1]) b.cyl(.045, .045, 7, x + dx * 1.2, y + 1, z, "#82946b", 5);
+  }
+  for (const p of [CANOPY_GLIDE.from, CANOPY_GLIDE.to]) {
+    b.cyl(1.25, 1.4, .1, p.x, cloudY(p.x, p.z) + .05, p.z, "#c4cda1", 8);
+    b.torus(.85, .08, at(p.x, p.z, .18), [Math.PI / 2, 0, 0], "#e6dfb0");
+    // Feather-shaped pad marker.
+    b.boxAt(.22, .04, .85, at(p.x, p.z, .2), [0, -.5, 0], "#526f68");
+  }
+  // Junction ruins frame both mouths and the actual observatory above them.
+  for (const side of [-1, 1]) {
+    b.cyl(.7, 1, 2.8, side * 6.5, 11, 94, "#929381", 6);
+    b.boxAt(2.1, .15, .65, [side * 6.5, 13.6, 94], [0, side * .55, 0], "#c4b78c");
+  }
+  b.cyl(2.1, 2.3, .12, 0, 11, 91, "#858a78", 8);
+  return b.build();
+}
+function bridgeGeometry() {
+  const b = new PartBuilder();
+  for (let z = 109.5; z <= 111.6; z += .28) b.box(14, .18, .25, -20, cloudY(-20, z) + .02, z, "#adab7d");
+  for (const x of [-26.6, -13.4]) {
+    b.cylAt(.075, 3.2, [x, cloudY(x, 110.5) + .8, 110.5], [Math.PI / 2, 0, 0], "#829664", 5);
+    for (const z of [109.3, 111.7]) b.cyl(.09, .14, 1.2, x, cloudY(x, z), z, "#829664", 5);
+  }
+  return b.build();
+}
+function grottoGeometry() {
+  const b = new PartBuilder();
+  // A closed shell, with high ceiling above every gameplay camera. Portals
+  // are at the southwest and northwest corners; exterior draws separately.
+  for (let z = 96; z < 135; z++) {
+    const y = cloudY(20, z);
+    b.box(30, .8, 1.05, 24, y - .82, z + .5, "#344656");
+    for (const x of [9, 39]) b.box(2.5, 42, 1.1, x, 9, z + .5, rock);
+  }
+  b.box(32, 2, 41, 24, 49, 115.5, "#233344");
+  b.box(26, 42, 2, 27, 9, 96, rock);
+  b.box(20, 42, 2, 30, 9, 134.8, rock);
+  for (const [x, z] of [[12, 103], [29, 108], [30, 117], [12, 123], [36, 126], [22, 132]]) {
+    const y = cloudY(x, z);
+    b.add(new THREE.DodecahedronGeometry(2.6, 0), "#354b60", [x, y + 2.2, z], [0, z, .2], [1, 1.8, 1]);
+    for (let i = 0; i < 3; i++) b.add(new THREE.ConeGeometry(.35 + i * .06, 1.7 + i * .4, 5), "#69bbc9", [x + (i - 1) * .65, y + 1 + i * .2, z - 1.6], [0, i, -.18 + i * .15]);
+  }
+  // Underground pool and waterfall share the room; no outdoor sea drawn here.
+  b.box(14, .08, 2.2, 20, cloudY(20, 110.5) + .05, 110.5, "#307a94");
+  b.box(2, 11, .12, 34, cloudY(34, 112) + 1, 112, "#75b9ca");
+  b.cyl(2.6, 3.2, .08, 33, cloudY(33, 112), 112, "#3d8ca5", 12);
+  // Basin, channels, boiler and overhead pipes: old raider machinery.
+  b.cyl(1, 1.2, .8, 23.8, cloudY(23.8, 108), 108, "#6d7b80", 8);
+  for (const z of [108, 117]) {
+    b.cyl(.85, 1, 1.8, 25.8, cloudY(25.8, z), z, "#716d5e", 8);
+    b.cyl(.22, .22, 3, 25.8, cloudY(25.8, z) + 1.7, z, "#8e8972", 6);
+    b.torus(.7, .1, at(25.8, z, 1.2), [Math.PI / 2, 0, 0], "#d0a36a");
+  }
+  for (let z = 113; z < 125; z += 2) b.box(.22, .22, 2.1, 27.2, cloudY(27.2, z) + 2.4, z, "#ad8e66");
+  for (const p of CLOUD_ELECTRIC_PANELS) {
+    b.box(p.w + .3, .12, p.d + .3, p.x, cloudY(p.x, p.z), p.z, "#747e7c");
+    for (const dx of [-1, 1]) b.box(.12, .13, p.d, p.x + dx * (p.w / 2 - .2), cloudY(p.x, p.z) + .05, p.z, "#c3b687");
+  }
+  return b.build();
+}
+function mouthsGeometry() {
+  const b = new PartBuilder();
+  for (const [x, z] of [[12, 101], [12, 129]]) {
+    const y = cloudY(x, z);
+    for (const dx of [-3.2, 3.2]) b.box(1.5, 8, 3, x + dx, y - 1, z, rock);
+    b.box(8, 2, 3, x, y + 6, z, rock);
+    b.box(5, 5.5, .1, x + 1, y + .1, z + 1.5, "#142536");
+  }
+  return b.build();
+}
+function RouteGate({ x, z, open }: { x: number; z: number; open: boolean }) {
+  const geo = useMemo(() => {
+    const b = new PartBuilder();
+    for (let x = -6; x <= 6; x++) b.box(.14, 2.5, .16, x, 0, 0, "#a8a082");
+    for (const y of [.4, 1.7]) b.box(12.2, .13, .15, 0, y, 0, "#817b68");
+    return b.build();
+  }, []);
+  return <mesh geometry={geo} material={flatMat} position={at(x, z, open ? -3 : 0)} />;
+}
+function ElectricPanels() {
+  const refs = useRef<Array<THREE.Mesh | null>>([]);
+  useFrame(() => CLOUD_ELECTRIC_PANELS.forEach((p, i) => {
+    const mesh = refs.current[i]; if (!mesh) return;
+    const phase = electricPanelPhase(rt.time, p.phase), mat = mesh.material as THREE.MeshBasicMaterial;
+    mat.color.set(phase >= 2.4 ? "#b5e7ff" : phase >= 1.8 ? "#ddae62" : "#375b70");
+    mat.opacity = phase >= 2.4 ? .9 : phase >= 1.8 ? .45 + Math.sin(rt.time * 14) * .2 : .6;
+  }));
+  return <>{CLOUD_ELECTRIC_PANELS.map((p, i) => <mesh key={i} ref={m => { refs.current[i] = m; }} position={at(p.x, p.z, .16)} rotation={[-Math.PI / 2, 0, 0]}>
+    <planeGeometry args={[p.w - .5, p.d - .25]} /><meshBasicMaterial transparent color="#375b70" />
+  </mesh>)}</>;
+}
+function RouteWind({ stopped }: { stopped: boolean }) {
+  const ref = useRef<THREE.InstancedMesh>(null), dummy = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    for (let i = 0; i < 32; i++) {
+      const gust = i >= 20, t = (rt.time * .3 + i / 20) % 1;
+      const x = gust ? -29 + (t - .5) * 4 : -26 + t * 14, z = gust ? 123 + Math.sin(i * 7) : 103 + (i * 2.37) % 24;
+      dummy.position.set(x, cloudY(x, z) + .5 + i % 3 * .4, z);
+      dummy.scale.setScalar(gust && stopped ? 0 : Math.sin(t * Math.PI)); dummy.updateMatrix(); ref.current?.setMatrixAt(i, dummy.matrix);
+    }
+    if (ref.current) ref.current.instanceMatrix.needsUpdate = true;
+  });
+  return <instancedMesh ref={ref} args={[undefined, undefined, 32]} frustumCulled={false}><boxGeometry args={[1.5, .025, .04]} /><meshBasicMaterial color="#c4d9cc" transparent opacity={.4} depthWrite={false} /></instancedMesh>;
+}
+function Steam({ lit }: { lit: boolean }) {
+  const ref = useRef<THREE.InstancedMesh>(null), dummy = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    for (let i = 0; i < 12; i++) {
+      const t = (rt.time * .35 + i / 6) % 1, x = i < 6 ? 14 : 26;
+      dummy.position.set(x + Math.sin(i * 3) * .2, cloudY(x, 117) + t * 3.5, 117);
+      dummy.scale.setScalar((.15 + t * .35) * (i < 6 || lit ? 1 : 0)); dummy.updateMatrix(); ref.current?.setMatrixAt(i, dummy.matrix);
+    }
+    if (ref.current) ref.current.instanceMatrix.needsUpdate = true;
+  });
+  return <instancedMesh ref={ref} args={[undefined, undefined, 12]} frustumCulled={false}><icosahedronGeometry args={[1, 0]} /><meshBasicMaterial color="#7ca3b2" transparent opacity={.25} depthWrite={false} /></instancedMesh>;
+}
+
+/** Geometry is shared with the real route; inside the cave only this room and
+ * its two mouths mount. Outdoor scenery is hidden by CloudIsle's parent. */
+export function CloudRoutes({ inside }: { inside: boolean }) {
+  const a = useGame(s => s.progress.act3);
+  const canopy = useMemo(canopyGeometry, []), bridge = useMemo(bridgeGeometry, []), grotto = useMemo(grottoGeometry, []), mouths = useMemo(mouthsGeometry, []);
+  const glow = useMemo(() => additiveSprite("#78d9ff", .6), []), fire = useMemo(() => additiveSprite("#ffac55", .8), []);
+  const vine = a.puzzles.includes("canopyVine"), raft = a.puzzles.includes("grottoRaft"), boiler = a.puzzles.includes("grottoBoiler");
+  return <>
+    {!inside && <><mesh geometry={canopy} material={flatMat} /><mesh geometry={mouths} material={flatMat} />
+      {vine && <mesh geometry={bridge} material={flatMat} />}
+      {!vine && <mesh geometry={bridge} material={flatMat} position={[-7, -12, 0]} rotation={[0, 0, -.12]} />}
+      <RouteWind stopped={a.puzzles.includes("canopyGust")} />
+    </>}
+    {inside && <>
+      <mesh geometry={grotto} material={flatMat} /><ElectricPanels /><Steam lit={boiler} />
+      <pointLight position={at(20, 115, 5)} color="#67bfe6" intensity={8} distance={29} decay={1} />
+      <pointLight position={at(25, 117, 2)} color="#ffad61" intensity={boiler ? 8 : 2} distance={13} decay={1} />
+      {[[12, 103], [29, 108], [30, 117], [12, 123], [36, 126]].map(([x, z]) => <sprite key={`${x},${z}`} material={glow} position={at(x, z, 1.7)} scale={[3, 3, 1]} />)}
+      <sprite material={fire} position={at(25.8, 117, 1)} scale={boiler ? [2, 2, 1] : [.5, .5, 1]} />
+      <mesh position={at(20, 110.5, raft ? .18 : -1)}><boxGeometry args={[14, .25, 2.4]} /><meshLambertMaterial color="#9a8965" /></mesh>
+      {!boiler && <RouteGate x={20} z={119.5} open={false} />}
+    </>}
+    {CLOUD_ROUTE_GATES.filter(g => inside === (g.zone === "thunderGrotto")).map(g => <RouteGate key={g.zone} x={g.x} z={g.z} open={a.cleared.includes(g.zone)} />)}
+  </>;
+}

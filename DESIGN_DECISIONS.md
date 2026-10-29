@@ -835,3 +835,40 @@ of view if measurement shows the need (not needed in Phase 2).
   viewport sizes and touch controls. This order's validation commands do not
   run that browser suite; screenshots and measured render reports are produced
   by it when browser acceptance is requested, rather than fabricated here.
+
+**Slice B extensions (2026-10-29):**
+
+- The two Junction mouths are open immediately, with three wind sprites and
+  no Junction clear gate. Each mountain route has six enemies and its own
+  permanent far gate. Both gates join one approach to the closed Observatory;
+  the entrance and interior remain reserved for slice C. The original three
+  Junction logs and mouth moss retain their IDs and remain collectible.
+- West rises early through broad roots, vine bridges and marked glide pads;
+  east stays low in an enclosed blue crystal cave before its exit climbs to
+  the same approach. Cave occupancy hides outdoor geometry, lights and props.
+  Cave floors, walls and a high ceiling enclose gameplay views; only its
+  two mouths connect the view to the outside.
+- Puzzle rules now name their friend, ability and English command in one
+  table. Leafy's vine bridge and Puff's pad-to-pad hop are required in the
+  Canopy; Bubbo's raft basin and Ember's boiler gate are required in the Grotto.
+  Puff's optional gust opens the branch chest. Every environmental ability
+  remains free at zero MP. The hop permits no steering and supports the return
+  direction; an interrupted hop reloads at a marked pad.
+- Electric panels repeat four-second cycles: 1.8 seconds dark, .6 seconds
+  amber warning (both safe), then 1.6 seconds blue-white and active. They deal
+  five HP using the shared damage grace period and apply no knock-back.
+- Voyage camera poses follow the hull immediately from a clear broadside,
+  bypassing land camera collision while at sea. Fixed rocks occupy the
+  original forward heading; Gull's existing left-turn leg clears them. Sky,
+  fog, lighting and vertex sea swell darken continuously offshore, keeping
+  Port Town fair and preserving the single sea fade and slice A story order.
+- The Hollow has continuous opaque side/rear walls, a floor extending behind
+  them and a high root ceiling. Its near facade cuts away when behind the
+  lens; the interior waterfall curtain faces inward. Family props, collision,
+  checkpoints and permanent errand upgrades keep their existing behavior.
+- Browser acceptance now captures the airship reveal and every new route,
+  mechanism, panel state and approach at both sizes, with render-budget
+  assertions and route reloads (68 views, at most 118 calls / 60k triangles).
+  The closed-entrance check asserts the player stops short of the door
+  (z < 135, door at 137): player centres may sit a few tenths past a walk
+  rectangle's edge, so the rectangle's own edge (134) was too tight a limit.

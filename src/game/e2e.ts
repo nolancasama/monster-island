@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
 import { cb, companionVisible, stageStatus } from "./combat";
 import { travelCombat } from "./combat";
-import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, type CloudAreaId } from "./world/cloudisle";
+import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ELECTRIC_PANELS, electricPanelActive, HOLLOW, type CloudAreaId } from "./world/cloudisle";
 import { newAct3, type Act3 } from "./logic/act3";
 import { decodeSave, encodeSave } from "./logic/save";
 import { cloudView } from "../scene/CloudIsle";
@@ -139,7 +139,7 @@ export function installE2eHook(seed: number) {
           banner: g.banner?.title ?? null,
           hint: g.hint
         },
-        act3: { scene: rt.act3Scene, world: rt.world, voyage: {...rt.voyage}, area: g.progress.act3.area, zone: cb.cloudZones.current, drawing: g.drawing, view: { ...cloudView }, mountedWorlds: cloudView.visible ? ["cloud"] : ["home"] }
+        act3: { scene: rt.act3Scene, world: rt.world, voyage: {...rt.voyage}, area: g.progress.act3.area, zone: cb.cloudZones.current, drawing: g.drawing, view: { ...cloudView }, mountedWorlds: cloudView.visible ? ["cloud"] : ["home"], electricPanels: CLOUD_ELECTRIC_PANELS.map(p => ({...p, active: electricPanelActive(rt.time, p.phase)})) }
       };
     },
     /** Stand next to a named thing (a monster, a food, maple, palm, river, stone), facing it. */
