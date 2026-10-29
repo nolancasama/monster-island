@@ -137,6 +137,9 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
     case "cloudHollow": return { ...HOLLOW.entrance, y: 2.4 };
     case "cloudFamily": return { ...HOLLOW.tala, y: 2.4 };
     case "cloudObservatory": return { ...CLOUD_SPAWNS.windfallJunction, y: 2.4 };
+    case "cloudDial": return { x: 0, z: 145, y: 2.4 };
+    case "cloudBeacon": return { x: 0, z: 155, y: 2.4 };
+    case "skyFortress": return null;
     case "meetMaple":
       return null;
     case "findMonster":

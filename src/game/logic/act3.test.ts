@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { newProgress, type Progress } from "./progress";
 import { bestFood, findPort, hearLead, markDescended, startAct2 } from "./act2";
-import { claimErrand, clearCloudStage, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, discoverHollow, eatStew, markFamily, newAct3, openCloudChest, restCloud, solveCloudPuzzle, travelCloud } from "./act3";
+import { claimErrand, clearCloudStage, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, discoverHollow, eatStew, markFamily, newAct3, openCloudChest, restCloud, solveCloudPuzzle, travelCloud, observatoryReached, reachObservatory, observatoryLiftReady, defeatBeacon, discoverSkyFortress } from "./act3";
 import { decodeSave, encodeSave } from "./save";
-import { CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_PICKUPS, CLOUD_SPAWNS, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, cloudWalkable, type CloudPuzzleId } from "../world/cloudisle";
+import { CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_PICKUPS, CLOUD_SPAWNS, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, OBSERVATORY_PUZZLES, cloudWalkable, type CloudPuzzleId } from "../world/cloudisle";
 import type { MonsterId } from "../types";
 
 function harbor(): Progress {
@@ -26,6 +26,90 @@ function hollow(): Progress {
 }
 
 const vitals = (hp = 100, mp = 100) => ({ hp, mp: { leafy: mp, bubbo: mp, puff: mp, ember: mp } });
+
+function observatory(): Progress {
+  let p = hollow();
+  for (const id of CLOUD_ROUTE_REQUIRED.skyrootCanopy) p = solveCloudPuzzle(p, id);
+  p = clearCloudStage(p, "skyrootCanopy", CLOUD_ENEMY_SPAWNS.map((_, i) => i));
+  p = { ...p, act3: { ...p.act3, area: "ancientObservatory" } };
+  p = reachObservatory(p);
+  return clearCloudStage(p, "ancientObservatory", CLOUD_ENEMY_SPAWNS.map((_, i) => i));
+}
+
+describe("Observatory dial and chapter completion", () => {
+  it("removes the dock's free heal while keeping the dock as the initial wake point", () => {
+    const base = travelCloud(completeVoyage(harbor()), "cloud");
+    const hurt = { ...base, act2: { ...base.act2, ...vitals(7, 0) } };
+    expect(restCloud(hurt)).toBe(hurt);
+    expect(cloudWakeArea(hurt)).toBe("dock");
+  });
+
+  it("records the reached entrance as a wake point and offers rest there", () => {
+    const base = hollow();
+    expect(reachObservatory(base)).toBe(base);
+    const p = observatory();
+    expect(observatoryReached(p.act3)).toBe(true);
+    expect(cloudWakeArea(p)).toBe("observatory");
+    const hurt = { ...p, act2: { ...p.act2, ...vitals(3, 0) }, act3: { ...p.act3, area: "observatoryApproach" as const } };
+    expect(restCloud(hurt).act2).toMatchObject(vitals());
+    expect(restCloud(hurt).act3.checkpoint).toBe("observatory");
+  });
+
+  it("accepts every mechanism order exactly once and keeps all four powers free at zero MP", () => {
+    const permutations = <T,>(items: readonly T[]): T[][] => items.length
+      ? items.flatMap((item, i) => permutations(items.filter((_, j) => i !== j)).map(tail => [item, ...tail])) : [[]];
+    for (const order of permutations(OBSERVATORY_PUZZLES)) {
+      const base = observatory();
+      let p = { ...base, act2: { ...base.act2, ...vitals(40, 0) } };
+      for (let i = 0; i < order.length; i++) {
+        const id = order[i], friend = CLOUD_PUZZLE_RULES[id].friend;
+        p = solveCloudPuzzle(p, id);
+        expect(p.act3.observatoryLamps).toContain(friend);
+        expect(p.act3.observatoryLamps).toHaveLength(i + 1);
+        expect(observatoryLiftReady(p.act3)).toBe(i === 3);
+        expect(solveCloudPuzzle(p, id)).toBe(p);
+      }
+      expect(p.act2).toMatchObject(vitals(40, 0));
+    }
+  });
+
+  it("needs the clear, reachable observatory and each mechanism's own friend", () => {
+    for (const id of OBSERVATORY_PUZZLES) {
+      const p = observatory(), friend = CLOUD_PUZZLE_RULES[id].friend;
+      const absent = { ...p, monsters: { ...p.monsters, [friend]: { ...p.monsters[friend], friend: false } } };
+      expect(solveCloudPuzzle(absent, id)).toBe(absent);
+      const uncleared = { ...p, act3: { ...p.act3, cleared: p.act3.cleared.filter(stage => stage !== "ancientObservatory") } };
+      expect(solveCloudPuzzle(uncleared, id)).toBe(uncleared);
+      expect(solveCloudPuzzle(hollow(), id).act3.observatoryLamps).toEqual([]);
+    }
+  });
+
+  it("requires all four observatory enemies and preserves the first clear", () => {
+    const done = observatory();
+    const p = { ...done, act3: { ...done.act3, cleared: done.act3.cleared.filter(id => id !== "ancientObservatory") } };
+    const ids = CLOUD_ENEMY_SPAWNS.flatMap((e, i) => e.zone === "ancientObservatory" ? [i] : []);
+    expect(ids).toHaveLength(4);
+    expect(clearCloudStage(p, "ancientObservatory", [...ids.slice(0, 3), ids[0]])).toBe(p);
+    const cleared = clearCloudStage(p, "ancientObservatory", ids);
+    expect(cleared.act3.cleared).toContain("ancientObservatory");
+    expect(clearCloudStage(cleared, "ancientObservatory", [])).toBe(cleared);
+  });
+
+  it("gates the ending, records the fortress clue and keeps travel in both directions", () => {
+    let p = observatory();
+    expect(defeatBeacon(p)).toBe(p);
+    expect(discoverSkyFortress(p)).toBe(p);
+    for (const id of OBSERVATORY_PUZZLES) p = solveCloudPuzzle(p, id);
+    p = defeatBeacon(p);
+    expect(p.act3).toMatchObject({ beaconDefeated: true, skyFortressClue: false });
+    expect(defeatBeacon(p)).toBe(p);
+    p = markFamily(discoverSkyFortress(p), "aftermathSeen");
+    expect(p.act3).toMatchObject({ skyFortressClue: true, family: { aftermathSeen: true } });
+    expect(p.act2.lumoTaken).toBe(true);
+    p = travelCloud(travelCloud(p, "home"), "cloud");
+    expect(p.act3).toMatchObject({ world: "cloud", area: "cloudDock", skyFortressClue: true, beaconDefeated: true });
+  });
+});
 
 describe("Cloud Isle travel and family", () => {
   it("requires the harbour lead and never completes the voyage through ordinary travel", () => {
@@ -274,5 +358,63 @@ describe("additive Cloud Isle v4 saves", () => {
     p = { ...p, act3: { ...p.act3, area: "skyrootCanopy" } };
     expect(save(p, { x: -20, z: 119, yaw: 1 }).player).toEqual({ x: -20, z: 117.4, yaw: 1 });
     expect(save(p, { x: -20, z: 120, yaw: 1 }).player).toEqual({ x: -20, z: 121.6, yaw: 1 });
+  });
+
+  it("round-trips observatory clear, partial lamps, entrance checkpoint and valid interior ground", () => {
+    let p = observatory();
+    p = solveCloudPuzzle(solveCloudPuzzle(p, "obsEmber"), "obsLeafy");
+    const point = { x: -3, z: 145, yaw: 1 };
+    const loaded = save(p, point);
+    expect(loaded.progress).toEqual(p);
+    expect(loaded.player).toEqual(point);
+    expect(cloudWakeArea(loaded.progress)).toBe("observatory");
+    const outside = { ...p, act3: { ...p.act3, area: "stormBeacon" as const } };
+    const blocked = save(outside, { x: 0, z: 169, yaw: 1 });
+    expect(blocked.progress.act3.area).toBe("ancientObservatory");
+    expect(blocked.player).toEqual({ ...CLOUD_SPAWNS.ancientObservatory, yaw: 1 });
+  });
+
+  it("loads the arena with persistent dial progress and no saved boss damage, then retains the ending at home", () => {
+    let p = observatory();
+    for (const id of OBSERVATORY_PUZZLES) p = solveCloudPuzzle(p, id);
+    p = { ...p, act3: { ...p.act3, area: "stormBeacon" } };
+    const point = { x: 0, z: 165, yaw: 1 };
+    expect(save(p, point).progress).toEqual(p);
+    expect(save(p, point).player).toEqual(point);
+    expect(Object.keys(save(p, point).progress.act3)).not.toContain("pylons");
+    p = markFamily(discoverSkyFortress(defeatBeacon(p)), "aftermathSeen");
+    expect(save(p, point).progress).toEqual(p);
+    p = travelCloud(p, "home");
+    expect(save(p, { x: 76, z: -300, yaw: 1 }).progress).toEqual(p);
+    const returned = travelCloud(save(p, { x: 76, z: -300, yaw: 1 }).progress, "cloud");
+    expect(returned.act3).toMatchObject({ world: "cloud", beaconDefeated: true, skyFortressClue: true, family: { aftermathSeen: true } });
+  });
+
+  it("rejects forged observatory and ending fields before their route, clear, lamp and friend prerequisites", () => {
+    const forge = (p: Progress, override: Record<string, unknown>) => {
+      const raw = JSON.parse(encodeSave(p, { x: 0, z: 145, yaw: 1 }, 0));
+      Object.assign(raw.progress.act3, { observatoryLamps: ["leafy", "bubbo", "puff", "ember", "leafy", "bad"],
+        beaconDefeated: true, skyFortressClue: true, checkpoint: "observatory",
+        family: { ...p.act3.family, aftermathSeen: true }, ...override });
+      return decodeSave(JSON.stringify(raw))!.progress.act3;
+    };
+    const early = hollow();
+    expect(forge(early, { cleared: [...early.act3.cleared, "ancientObservatory"], puzzles: [...OBSERVATORY_PUZZLES] })).toMatchObject({
+      cleared: ["stormbreakCoast"], observatoryLamps: [], beaconDefeated: false, skyFortressClue: false,
+      family: { aftermathSeen: false }, checkpoint: "dock",
+    });
+    const base = observatory();
+    expect(forge(base, { puzzles: ["canopyVine", "canopyGlide", ...OBSERVATORY_PUZZLES.slice(0, 3)] })).toMatchObject({
+      observatoryLamps: ["leafy", "bubbo", "puff"], beaconDefeated: false, skyFortressClue: false, family: { aftermathSeen: false },
+    });
+    const missingFriend = { ...base, monsters: { ...base.monsters, bubbo: { ...base.monsters.bubbo, friend: false } } };
+    expect(forge(missingFriend, { puzzles: ["canopyVine", "canopyGlide", ...OBSERVATORY_PUZZLES] })).toMatchObject({
+      observatoryLamps: ["leafy", "puff", "ember"], beaconDefeated: false, skyFortressClue: false,
+    });
+    const noClear = forge(base, { cleared: base.act3.cleared.filter(id => id !== "ancientObservatory"),
+      puzzles: [...base.act3.puzzles, ...OBSERVATORY_PUZZLES] });
+    expect(noClear.observatoryLamps).toEqual([]);
+    expect(noClear.puzzles.some(id => (OBSERVATORY_PUZZLES as readonly string[]).includes(id))).toBe(false);
+    expect(noClear.beaconDefeated).toBe(false);
   });
 });

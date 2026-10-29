@@ -82,8 +82,8 @@ export interface Gates {
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
-export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] }; act3?: { world: string; cleared: readonly string[]; puzzles: readonly string[]; family: {tunnelOpen:boolean} } }): Gates {
-  if (p.act3?.world === "cloud") return { solved: p.solved, act2: true, cloud: { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen } };
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] }; act3?: { world: string; cleared: readonly string[]; puzzles: readonly string[]; family: {tunnelOpen:boolean}; observatoryLamps?: readonly string[] } }): Gates {
+  if (p.act3?.world === "cloud") return { solved: p.solved, act2: true, cloud: { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen, observatoryLamps: p.act3.observatoryLamps } };
   const act2 = p.act2?.started === true;
   const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared);
   return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared };

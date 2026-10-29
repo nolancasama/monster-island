@@ -6,6 +6,7 @@ import { getGame } from "../game/store";
 import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from "../game/world/island";
 
 import { CLIFF_ROPE, MOSSY_BOULDERS, inLowland } from "../game/world/lowland";
+import { BEACON_ARENA } from "../game/logic/beacon";
 
 const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
@@ -38,6 +39,8 @@ export function CameraRig() {
   const ropeOffset = useMemo(() => new THREE.Vector3(), []);
   const ropeLook = useMemo(() => new THREE.Vector3(), []);
   const ropeShot = useRef(rt.camera.shot);
+  /** Cloud Isle heading; in the beacon arena it turns to sit outward from the player. */
+  const cloudYaw = useRef(Math.PI);
 
   /** Raise the endpoint until the whole target-to-camera line clears the ground and the big rocks. */
   const lift = (target: THREE.Vector3, candidate: THREE.Vector3): number => {
@@ -110,8 +113,18 @@ export function CameraRig() {
       // There is no room behind the player at the foot of the cliff, so over
       // the last few metres the view tips down onto the player (same heading).
       const nearCliff = lowland ? THREE.MathUtils.smoothstep(p.z, CLIFF_ROPE.foot.z - 6, CLIFF_ROPE.foot.z - 1) : 0;
+      if (cloud) {
+        // The weather machine stands in the arena's middle: the lens sits on the
+        // far side of the player from it, so the mast is the backdrop and never
+        // between lens and player. From the lift (south) this equals Math.PI.
+        const ax = p.x - BEACON_ARENA.x, az = p.z - BEACON_ARENA.z, r = Math.hypot(ax, az);
+        const arena = r < BEACON_ARENA.radius + 1 && p.y > BEACON_ARENA.y - 3;
+        const target = arena && r > 2.5 ? Math.atan2(ax, az) : arena ? cloudYaw.current : Math.PI;
+        const d = Math.atan2(Math.sin(target - cloudYaw.current), Math.cos(target - cloudYaw.current));
+        cloudYaw.current += d * Math.min(1, dt * 3);
+      }
       if (lowland || cloud) {
-        c.yaw = cloud ? Math.PI : LOWLAND_CAMERA.yaw;
+        c.yaw = cloud ? cloudYaw.current : LOWLAND_CAMERA.yaw;
         c.pitch = LOWLAND_CAMERA.pitch + (1.15 - LOWLAND_CAMERA.pitch) * nearCliff;
         c.dist = LOWLAND_CAMERA.dist - 2 * nearCliff;
       }

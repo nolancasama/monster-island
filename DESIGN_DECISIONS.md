@@ -872,3 +872,56 @@ of view if measurement shows the need (not needed in Phase 2).
   The closed-entrance check asserts the player stops short of the door
   (z < 135, door at 137): player centres may sit a few tenths past a walk
   rectangle's edge, so the rectangle's own edge (134) was too tight a limit.
+
+**Slice C extensions (2026-10-29):**
+
+- Either completed mountain route enters the same ruined Observatory. Reaching
+  its entrance records the summit checkpoint without healing; the entrance
+  rest restores the party deliberately. Gull's boat remains a wake point with
+  the existing minimum 60 HP recovery and no longer offers free rest. The
+  Hollow's mats retain their free rest.
+- Four raiders guard the dial. After their first clear, Leafy's lever,
+  Bubbo's water wheel, Puff's turbine and Ember's steam valve use the existing
+  Can-you / command / thank-you exchange. The lamps are permanent, order-free,
+  friend-checked and free at zero MP. The four lamps power an inclined lift
+  on brass rails; the interaction carries the player up, with retreat retained.
+- Officer Squall's weather machine has one three-part power pool. Each pylon
+  cycles through a shield, a 2.4-second charge and a six-second opening. One
+  manual hit while exposed removes exactly one third. Bubbo can short a charge
+  early; Puff can cancel the one-second gust by attacking along its streaks.
+  Lightning gives 1.2 seconds to leave two small rings. Gust movement stops
+  well inside the rim, lightning deals 12 HP, and only two wind sprites join
+  after the second pylon. Boss abilities remain usable at zero MP; the earlier
+  regions' combat economy is unchanged.
+- Fight attempts are transient: loss, arena exit or reload reconstructs the
+  three pylons. Observatory clear, lamps, items and checkpoints survive. The
+  boss outcome and Sky Fortress clue are separate milestones so an interrupted
+  resolution resumes safely. Lumo remains captured throughout.
+- The resolution drives the existing kidnapping airship and cage runtime and
+  renderer. Squall is roped aboard while dizzy; Lumo glows in the cage as the
+  ship heads north to a distant Sky Fortress. The objective and journal retain
+  “Find the Sky Fortress” even after sailing home. Gull offers the bigger-boat
+  next-chapter line at either dock without removing return travel.
+- Summit weather is a slowly rotating ring of instanced cloud puffs with
+  occasional lightning, leaving a large open centre. Victory disperses the
+  ring and permanently brightens Cloud Isle's sky, fog, sea and light. The
+  family's patched roof, entrance sunlight and relaxed idles accompany the
+  bilingual promise and sunny-weather aftermath exchange.
+- Grotto panels retain their four-second timing. Opaque dark safe faces,
+  amber warning faces and blue-white active faces with a few instanced sparks
+  and a short procedural crackle make the three states distinct.
+- Browser acceptance is extended through the ending, retry, reload and two-way
+  boats at both viewport sizes (146 views, at most 120 calls / 66k triangles).
+- **Fixes after acceptance:**
+  - **Arena camera.** Inside the beacon arena, the camera's heading turns to
+    sit on the far side of the player from the weather machine (damped,
+    radial). Cloud Isle's fixed north heading put the lens inside the mast
+    whenever the player stood north of it, at the third pylon. From the lift
+    the radial heading equals the normal one, so the hand-over doesn't turn.
+  - **Pylon aim.** A pylon within 3.5 m in front of the player beats a nearer
+    wind sprite. Before, a hovering sprite took every swing at the pylon.
+  - **Far detail.** The officer and the pylons (lights, shields) are drawn
+    within 90 m only. From the boat they were specks costing 10 draw calls,
+    and the reveal went over budget (130 calls).
+  - **Test server.** The browser suite serves the built `dist`
+    (`npm run preview`), so run `npm run build` before Playwright.

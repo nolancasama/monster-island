@@ -89,6 +89,7 @@ function Moves() {
   const progress = useGame((s) => s.progress);
   const touch = useGame((s) => s.touch);
   const mode = useGame((s) => s.mode);
+  const beacon = progress.act3.world === "cloud" && progress.act3.area === "stormBeacon";
   const [, force] = useState(0);
   // Re-check the hostile area a few times a second (the buttons show only where fights happen).
   useEffect(() => {
@@ -142,7 +143,7 @@ function Moves() {
           aria-label={c.special.word}
         >
           <span className="move-word">{c.special.word}</span>
-          <small>{c.special.cost} MP</small>
+          <small>{beacon ? "0 MP" : `${c.special.cost} MP`}</small>
         </button>
         <button
           className="move-btn basic"
@@ -166,7 +167,7 @@ function Moves() {
         <kbd>J</kbd> {c.basic.word}
       </span>
       <span>
-        <kbd>K</kbd> {c.special.word} <small>{c.special.cost} MP</small>
+        <kbd>K</kbd> {c.special.word} <small>{beacon ? "0 MP" : `${c.special.cost} MP`}</small>
       </span>
       {eatButton}
     </div>
@@ -192,7 +193,7 @@ function Coins() {
 
 /** Act 2's HUD pieces shown while exploring. */
 export function Act2Hud() {
-  const cloudSafe = useGame((s) => s.progress.act3.world === "cloud" && !["stormbreakCoast", "windfallJunction"].includes(s.progress.act3.area));
+  const cloudSafe = useGame((s) => s.progress.act3.world === "cloud" && !["stormbreakCoast", "windfallJunction", "ancientObservatory", "stormBeacon"].includes(s.progress.act3.area));
   const started = useGame((s) => s.progress.act2.started);
   const mode = useGame((s) => s.mode);
   const screen = useGame((s) => s.screen);
@@ -202,11 +203,39 @@ export function Act2Hud() {
       {mode === "explore" && !cloudSafe && <Vitals />}
       {mode === "explore" && <Coins />}
       {mode === "explore" && <StageCounter />}
+      {mode === "explore" && <BeaconBar />}
       <Moves />
       <ShopPanel />
       <TrainerPanel />
     </>
   );
+}
+
+/** One machine power bar; the pylons are the three clearly explained targets. */
+function BeaconBar() {
+  const box = useRef<HTMLDivElement>(null), fill = useRef<HTMLDivElement>(null), hint = useRef<HTMLDivElement>(null);
+  const [fn] = useState(() => () => {
+    if (!box.current) return;
+    const b = cb.beacon;
+    box.current.hidden = !b.active;
+    if (fill.current) {
+      fill.current.style.width = `${b.power / 3 * 100}%`;
+      fill.current.parentElement?.setAttribute("aria-valuenow", `${b.power}`);
+    }
+    if (hint.current) hint.current.textContent = b.attack === "gustTell" ? "Wind! Puff can stop it! · パフで かぜを とめよう！"
+      : b.attack === "lightningTell" ? "Step out of the glowing rings! · ひかる わから はなれよう！"
+      : b.pylons.some(p => p.phase === "exposed") ? "Hit a glowing pylon! · ひかる とうを こうげき！"
+      : b.pylons.some(p => p.phase === "charging") ? "Charging! Bubbo can Splash! · バボの みずで とめよう！"
+      : "Watch the pylons' shields! · とうの シールドを みよう！";
+  });
+  useLive(fn);
+  return <div ref={box} hidden className="panel ui" data-testid="beacon-boss" style={{ position: "absolute", top: 74, left: "50%", transform: "translateX(-50%)", width: "min(440px, 48vw)", padding: "9px 14px", textAlign: "center" }}>
+    <b>Officer Squall — Storm Beacon <Ja>スコール隊長・嵐の灯台</Ja></b>
+    <div className="vital-bar" role="meter" aria-label="Weather machine power" aria-valuemin={0} aria-valuemax={3} style={{ marginTop: 5 }}>
+      <div ref={fill} className="vital-fill" data-testid="beacon-power" style={{ width: "100%", background: "linear-gradient(#dfbeff,#8174d9)", transition: "width .35s" }} />
+    </div>
+    <div ref={hint} style={{ fontSize: 12, marginTop: 4 }} />
+  </div>;
 }
 
 /** A big story banner in the middle of the screen. */

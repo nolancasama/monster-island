@@ -109,6 +109,8 @@ export const rt = {
   set world(value: "home" | "cloud") { region.world = value; },
   voyage: { active: false, x: 0, y: 0, z: 0, yaw: 0, sail: 0, stage: "idle" },
   act3Scene: "idle",
+  /** Officer Squall's rescue rope ascent during the Cloud Isle resolution. */
+  squallLift: 0,
   kikoTrail: 0,
   /** Real seconds since load (animation). */
   time: 0,
@@ -225,6 +227,7 @@ export function resetRuntime() {
   rt.voyage.sail = 0;
   rt.voyage.stage = "idle";
   rt.act3Scene = "idle";
+  rt.squallLift = 0;
   rt.kikoTrail = 0;
   const p = rt.player;
   p.x = SPAWN.x;

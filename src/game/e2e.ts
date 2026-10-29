@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
 import { cb, companionVisible, stageStatus } from "./combat";
 import { travelCombat } from "./combat";
-import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ELECTRIC_PANELS, electricPanelActive, HOLLOW, type CloudAreaId } from "./world/cloudisle";
+import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ELECTRIC_PANELS, electricPanelActive, electricPanelPhase, HOLLOW, OBSERVATORY, type CloudAreaId } from "./world/cloudisle";
 import { newAct3, type Act3 } from "./logic/act3";
 import { decodeSave, encodeSave } from "./logic/save";
 import { cloudView } from "../scene/CloudIsle";
@@ -38,7 +38,8 @@ export function installE2eHook(seed: number) {
       if (name.startsWith("cloud:")) return CLOUD_SPAWNS[name.slice(6) as CloudAreaId] ?? null;
       if (name in CLOUD_SPAWNS) return CLOUD_SPAWNS[name as CloudAreaId];
       if (name === "cloudGull") return CLOUD_DOCK.gull;
-      if (name === "cloudDockRest") return CLOUD_DOCK.rest;
+      if (name === "observatoryRest") return OBSERVATORY.rest;
+      if (name === "beaconLift") return OBSERVATORY.lift;
       if (name === "hollowRest") return HOLLOW.rest;
       if (name === "tala" || name === "bo" || name === "kiko") return HOLLOW[name];
       if (name in CLOUD_OBSTACLE_PLACE) return CLOUD_OBSTACLE_PLACE[name as keyof typeof CLOUD_OBSTACLE_PLACE];
@@ -139,7 +140,7 @@ export function installE2eHook(seed: number) {
           banner: g.banner?.title ?? null,
           hint: g.hint
         },
-        act3: { scene: rt.act3Scene, world: rt.world, voyage: {...rt.voyage}, area: g.progress.act3.area, zone: cb.cloudZones.current, drawing: g.drawing, view: { ...cloudView }, mountedWorlds: cloudView.visible ? ["cloud"] : ["home"], electricPanels: CLOUD_ELECTRIC_PANELS.map(p => ({...p, active: electricPanelActive(rt.time, p.phase)})) }
+        act3: { scene: rt.act3Scene, world: rt.world, voyage: {...rt.voyage}, area: g.progress.act3.area, zone: cb.cloudZones.current, drawing: g.drawing, view: { ...cloudView }, mountedWorlds: cloudView.visible ? ["cloud"] : ["home"], squallLift: rt.squallLift, beacon: { ...cb.beacon, pylons: cb.beacon.pylons.map(p => ({...p})), gust: {...cb.beacon.gust}, rings: cb.beacon.rings.map(p => ({...p})) }, electricPanels: CLOUD_ELECTRIC_PANELS.map(p => ({...p, phase: electricPanelPhase(rt.time, p.phase), active: electricPanelActive(rt.time, p.phase)})) }
       };
     },
     /** Stand next to a named thing (a monster, a food, maple, palm, river, stone), facing it. */
@@ -185,6 +186,9 @@ export function installE2eHook(seed: number) {
     follow() {
       rt.camera.mode = "follow";
       rt.camera.shot = null;
+      rt.camera.snap = true;
+    },
+    snapCamera() {
       rt.camera.snap = true;
     },
     setCamera(yaw: number, pitch: number, dist: number) {

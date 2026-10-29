@@ -1,7 +1,7 @@
 import type { Progress } from "./progress";
 import { addCoins, addFood, addItem, rested, type Vitals } from "./act2";
 import { COMPANION_IDS, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ENEMY_SPAWNS, type CloudAreaId, type CloudStageId, type CloudPuzzleId } from "../world/cloudisle";
+import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ENEMY_SPAWNS, CLOUD_ROUTE_REQUIRED, OBSERVATORY_PUZZLES, type CloudAreaId, type CloudStageId, type CloudPuzzleId } from "../world/cloudisle";
 
 export type { CloudAreaId, CloudStageId, CloudPuzzleId } from "../world/cloudisle";
 
@@ -78,9 +78,35 @@ export function cloudWakeArea(p: Progress): "dock" | "hollow" | "observatory" {
 export function restCloud(p: Progress): Progress {
   if (!allowed(p) || p.act3.world !== "cloud") return p;
   const checkpoint = p.act3.area === "hiddenHollow" && p.act3.hollowFound ? "hollow"
-    : p.act3.area === "cloudDock" ? "dock" : null;
+    : (p.act3.area === "observatoryApproach" || p.act3.area === "ancientObservatory") && observatoryReached(p.act3) ? "observatory" : null;
   if (!checkpoint) return p;
   return { ...patch(p, { checkpoint }), act2: { ...p.act2, ...rested() } };
+}
+
+/** Either fully traversed mountain branch reaches the common entrance. */
+export function observatoryReached(a: Act3): boolean {
+  return a.family.tunnelOpen && Object.entries(CLOUD_ROUTE_REQUIRED).some(([route, puzzles]) =>
+    a.cleared.includes(route as CloudStageId) && puzzles.every(id => a.puzzles.includes(id)));
+}
+
+/** Arrival records the boss wake point without granting an unsolicited heal. */
+export function reachObservatory(p: Progress): Progress {
+  return !allowed(p) || !observatoryReached(p.act3) || p.act3.checkpoint === "observatory"
+    ? p : patch(p, { checkpoint: "observatory" });
+}
+
+export function observatoryLiftReady(a: Act3): boolean {
+  return a.cleared.includes("ancientObservatory") && COMPANION_IDS.every(id => a.observatoryLamps.includes(id));
+}
+
+/** Combat calls this only after the third real pylon hit. Lumo stays captured. */
+export function defeatBeacon(p: Progress): Progress {
+  return !allowed(p) || !observatoryLiftReady(p.act3) || p.act3.beaconDefeated
+    ? p : patch(p, { beaconDefeated: true });
+}
+
+export function discoverSkyFortress(p: Progress): Progress {
+  return !allowed(p) || !p.act3.beaconDefeated || p.act3.skyFortressClue ? p : patch(p, { skyFortressClue: true });
 }
 
 export type CookStewResult = { ok: true; progress: Progress } | { ok: false; reason: "fish" | "full" | "family" };
@@ -123,6 +149,11 @@ export function claimErrand(p: Progress, id: ErrandId): Progress {
 export function solveCloudPuzzle(p: Progress, id: CloudPuzzleId): Progress {
   if (!allowed(p) || p.act3.puzzles.includes(id)) return p;
   const friend = CLOUD_PUZZLE_RULES[id].friend;
+  if ((OBSERVATORY_PUZZLES as readonly string[]).includes(id)) {
+    if (!observatoryReached(p.act3) || !p.act3.cleared.includes("ancientObservatory") || !p.monsters[friend].friend) return p;
+    return patch(p, { puzzles: [...p.act3.puzzles, id], observatoryLamps: p.act3.observatoryLamps.includes(friend)
+      ? p.act3.observatoryLamps : [...p.act3.observatoryLamps, friend] });
+  }
   return p.monsters[friend].friend ? patch(p, { puzzles: [...p.act3.puzzles, id] }) : p;
 }
 
@@ -138,6 +169,7 @@ export function openCloudChest(p: Progress, id: string, placements: readonly Clo
 
 export function clearCloudStage(p: Progress, zone: CloudStageId, defeated: readonly number[], spawns: readonly { zone: string }[] = CLOUD_ENEMY_SPAWNS): Progress {
   if (!allowed(p) || !CLOUD_STAGES.includes(zone) || p.act3.cleared.includes(zone)) return p;
+  if (zone === "ancientObservatory" && !observatoryReached(p.act3)) return p;
   const required = spawns.flatMap((enemy, index) => enemy.zone === zone ? [index] : []);
   return required.length && required.every((id) => defeated.includes(id)) ? patch(p, { cleared: [...p.act3.cleared, zone] }) : p;
 }

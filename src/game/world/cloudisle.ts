@@ -7,15 +7,16 @@ import { nearestOnTrail, type WalkShape } from "./lowland";
 
 /** Cloud Isle is a separate world. North/up-mountain is +z. New slices append
  * zones and routes here; closed route mouths never imply playable ground. */
-export type CloudArea = "cloudDock" | "stormbreakCoast" | "hiddenHollow" | "backTunnel" | "windfallJunction" | "skyrootCanopy" | "thunderGrotto" | "observatoryApproach";
+export type CloudArea = "cloudDock" | "stormbreakCoast" | "hiddenHollow" | "backTunnel" | "windfallJunction" | "skyrootCanopy" | "thunderGrotto" | "observatoryApproach" | "ancientObservatory" | "stormBeacon";
 export type CloudAreaId = CloudArea;
-export const CLOUD_AREAS: CloudAreaId[] = ["cloudDock", "stormbreakCoast", "hiddenHollow", "backTunnel", "windfallJunction", "skyrootCanopy", "thunderGrotto", "observatoryApproach"];
-export const CLOUD_STAGES = ["stormbreakCoast", "skyrootCanopy", "thunderGrotto"] as const;
+export const CLOUD_AREAS: CloudAreaId[] = ["cloudDock", "stormbreakCoast", "hiddenHollow", "backTunnel", "windfallJunction", "skyrootCanopy", "thunderGrotto", "observatoryApproach", "ancientObservatory", "stormBeacon"];
+export const CLOUD_STAGES = ["stormbreakCoast", "skyrootCanopy", "thunderGrotto", "ancientObservatory"] as const;
 export type CloudStageId = typeof CLOUD_STAGES[number];
-export const CLOUD_PUZZLES = ["coastWindmill", "coastCrate", "canopyVine", "canopyGlide", "canopyGust", "grottoRaft", "grottoBoiler"] as const;
+export const CLOUD_PUZZLES = ["coastWindmill", "coastCrate", "canopyVine", "canopyGlide", "canopyGust", "grottoRaft", "grottoBoiler", "obsLeafy", "obsBubbo", "obsPuff", "obsEmber"] as const;
+export const OBSERVATORY_PUZZLES = ["obsLeafy", "obsBubbo", "obsPuff", "obsEmber"] as const;
 export type CloudPuzzleId = typeof CLOUD_PUZZLES[number];
 export type CloudEnemyKind = "stormCrab" | "windSprite" | "raiderDrone" | "thunderBeetle";
-export interface CloudGates { cleared?: readonly string[]; solved?: readonly string[]; tunnelOpen?: boolean }
+export interface CloudGates { cleared?: readonly string[]; solved?: readonly string[]; tunnelOpen?: boolean; observatoryLamps?: readonly string[] }
 const rect = (x0: number, x1: number, z0: number, z1: number): WalkShape => ({ kind: "rect", x0, x1, z0, z1 });
 const disc = (x: number, z: number, r: number): WalkShape => ({ kind: "disc", x, z, r });
 const trail = (pts: Array<[number, number]>, w: number): WalkShape => ({ kind: "trail", pts, w });
@@ -29,6 +30,7 @@ export const CLOUD_SPAWNS: Record<CloudArea, Vec2> = {
   cloudDock: CLOUD_DOCK.spawn, stormbreakCoast: { x: 0, z: 19 }, hiddenHollow: { x: -13, z: 55 },
   backTunnel: { x: -17, z: 72 }, windfallJunction: { x: 0, z: 89 },
   skyrootCanopy: { x: -20, z: 106 }, thunderGrotto: { x: 20, z: 106 }, observatoryApproach: { x: 0, z: 132 },
+  ancientObservatory: { x: 0, z: 138 }, stormBeacon: { x: 0, z: 160 },
 };
 export const COAST_TRAIL: Array<[number, number]> = [[0, 6], [0, 16], [3, 25], [-2, 35], [0, 44], [-5, 48], [-10, 50]];
 export const COAST_SEA_BRIDGE = trail([[-12, 24], [-17, 30]], 1.05);
@@ -46,8 +48,12 @@ export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile
   thunderGrotto: { id: "thunderGrotto", name: { en: "Thunder Grotto", ja: "雷の洞窟" }, hostile: true,
     walk: [trail([[9, 99], [20, 106]], 2.7), rect(13, 27, 104, 126), trail([[20, 124], [10, 131], [0, 132]], 2.7), trail([[26, 122], [31, 123]], 2), disc(32, 123, 3)] },
   observatoryApproach: { id: "observatoryApproach", name: { en: "Ancient Observatory — Entrance", ja: "古代の天文台・入口" }, hostile: false, walk: [rect(-9, 9, 130, 134)] },
+  ancientObservatory: { id: "ancientObservatory", name: { en: "Ancient Observatory", ja: "古代の天文台" }, hostile: true,
+    walk: [rect(-2.6, 2.6, 132, 139), rect(-10, 10, 137, 154), rect(-2.6, 2.6, 152, 158)] },
+  stormBeacon: { id: "stormBeacon", name: { en: "Storm Beacon", ja: "嵐の灯台" }, hostile: true,
+    walk: [rect(-2.6, 2.6, 155, 161), disc(0, 169, 12)] },
 };
-const ORDER: CloudArea[] = ["hiddenHollow", "backTunnel", "cloudDock", "windfallJunction", "observatoryApproach", "skyrootCanopy", "thunderGrotto", "stormbreakCoast"];
+const ORDER: CloudArea[] = ["hiddenHollow", "backTunnel", "cloudDock", "windfallJunction", "observatoryApproach", "stormBeacon", "ancientObservatory", "skyrootCanopy", "thunderGrotto", "stormbreakCoast"];
 function inside(s: WalkShape, x: number, z: number, m: number): boolean {
   if (s.kind === "rect") return x >= s.x0 + m && x <= s.x1 - m && z >= s.z0 + m && z <= s.z1 - m;
   if (s.kind === "disc") return Math.hypot(x - s.x, z - s.z) <= s.r - m;
@@ -59,7 +65,7 @@ export function cloudZoneAt(x: number, z: number): CloudArea | null {
 export const COAST_GATE = { x: 0, z: 44, half: 8, required: 6 };
 export const RAIDER_BARRICADE = { x: 5, z: 57, half: 3.1 };
 export const ROUTE_MOUTHS = [{ x: -10, z: 100, yaw: -.65 }, { x: 10, z: 100, yaw: .65 }];
-export const OBSERVATORY = { x: 0, z: 137, y: 22 };
+export const OBSERVATORY = { x: 0, z: 137, y: 22, entrance: { x: 0, z: 132 }, rest: { x: 3.8, z: 132 }, dial: { x: 0, z: 145.5 }, lift: { x: 0, z: 155 } };
 export const BEACON = { x: 0, z: 169, y: 37 };
 export const CLOUD_ROUTE_GATES = [
   { zone: "skyrootCanopy", x: -15, z: 127, half: 6, required: 6 },
@@ -88,6 +94,9 @@ const nearCut = (x: number, z: number, x0: number, x1: number, z0: number, z1: n
 export function cloudWalkable(x: number, z: number, g: CloudGates = {}, r = 0): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
   if (!ORDER.some(id => CLOUD_ZONES[id].walk.some(s => inside(s, x, z, r)))) return false;
+  // The four persistent lamps raise the only route onto the summit platform.
+  if (z > 154.5 - r && (!g.cleared?.includes("ancientObservatory")
+    || !["leafy", "bubbo", "puff", "ember"].every(id => g.observatoryLamps?.includes(id)))) return false;
   if (!(g.cleared?.includes("stormbreakCoast") || g.cleared?.includes("coast")) && nearCut(x, z, -12, 12, 43.7, 44.5, r)) return false;
   if (!g.tunnelOpen && nearCut(x, z, -23, -7, 64, 65, r)) return false;
   if (nearCut(x, z, 1, 9, 56.5, 57.5, r)) return false;
@@ -111,6 +120,8 @@ export function cloudWalkable(x: number, z: number, g: CloudGates = {}, r = 0): 
 }
 const smooth = (v: number) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
 export function cloudY(x: number, z: number): number {
+  if (z >= 160) return 37;
+  if (z >= 154) return 22 + smooth((z - 154) / 6) * 15;
   if (z < 8) return .8;
   const coast = .8 + smooth((z - 8) / 36) * 3.2;
   if (z <= 64) return coast;
@@ -135,6 +146,10 @@ export const CLOUD_OBSTACLE_PLACE = {
   canopyGust: { x: -26.4, z: 123, face: { x: -29, z: 123 } },
   grottoRaft: { x: 20, z: 107.5, face: { x: 20, z: 110 } },
   grottoBoiler: { x: 20, z: 117, face: { x: 20, z: 119 } },
+  obsLeafy: { x: -5.5, z: 141, face: { x: -6.5, z: 142 } },
+  obsBubbo: { x: 5.5, z: 141, face: { x: 6.5, z: 142 } },
+  obsPuff: { x: -5.5, z: 149, face: { x: -6.5, z: 150 } },
+  obsEmber: { x: 5.5, z: 149, face: { x: 6.5, z: 150 } },
 };
 export const CLOUD_PUZZLE_RULES: Record<CloudPuzzleId, { friend: CompanionId; need: AbilityId; command: PhraseId; noun: string; result: Text }> = {
   coastWindmill: { friend: "puff", need: "fly", command: "cmdBlow", noun: "the windmill crane", result: { en: "The windmill turns! The crane lowers a plank to the sea cave.", ja: "風車が回って、洞窟への橋が下りた！" } },
@@ -144,6 +159,10 @@ export const CLOUD_PUZZLE_RULES: Record<CloudPuzzleId, { friend: CompanionId; ne
   canopyGust: { friend: "puff", need: "fly", command: "cmdBlow", noun: "the gust lane", result: { en: "The gust stops! The branch chest is within reach.", ja: "強い風が止まった！枝の宝箱へ進めるよ。" } },
   grottoRaft: { friend: "bubbo", need: "swim", command: "cmdSplash", noun: "the raft basin", result: { en: "The basin fills! The raft floats across the pool.", ja: "水がたまって、いかだが浮かんだ！" } },
   grottoBoiler: { friend: "ember", need: "fire", command: "cmdBurn", noun: "the old boiler", result: { en: "Steam lifts the gate! The upper tunnel is open.", ja: "蒸気で門が上がった！奥の道へ進もう。" } },
+  obsLeafy: { friend: "leafy", need: "grow", command: "cmdPull", noun: "the observatory lever", result: { en: "The lever turns the gears! Leafy's dial lamp lights up.", ja: "レバーで歯車が動いた！リーフィのランプがついた。" } },
+  obsBubbo: { friend: "bubbo", need: "swim", command: "cmdSplash", noun: "the observatory water wheel", result: { en: "The water wheel spins! Bubbo's dial lamp lights up.", ja: "水車が回った！バボのランプがついた。" } },
+  obsPuff: { friend: "puff", need: "fly", command: "cmdBlow", noun: "the observatory turbine", result: { en: "The turbine spins! Puff's dial lamp lights up.", ja: "風車が回った！パフのランプがついた。" } },
+  obsEmber: { friend: "ember", need: "fire", command: "cmdBurn", noun: "the observatory steam valve", result: { en: "Steam opens the valve! Ember's dial lamp lights up.", ja: "蒸気で弁が開いた！エンバーのランプがついた。" } },
 };
 export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnemyKind }> = [
   { zone: "stormbreakCoast", kind: "stormCrab", x: -2, z: 16 },
@@ -159,6 +178,10 @@ export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnem
     { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? "windSprite" as const : "stormCrab" as const, x: side * 17, z },
     { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? "raiderDrone" as const : "thunderBeetle" as const, x: side * 24, z: z + (i === 2 ? 1 : .5) },
   ])),
+  { zone: "ancientObservatory", kind: "windSprite", x: -4, z: 139 },
+  { zone: "ancientObservatory", kind: "raiderDrone", x: 4, z: 142 },
+  { zone: "ancientObservatory", kind: "thunderBeetle", x: -4, z: 148 },
+  { zone: "ancientObservatory", kind: "windSprite", x: 4, z: 151 },
 ];
 export const CLOUD_CHESTS = [
   { id: "cloudSeaChest", x: -18, z: 30, yaw: .5, coins: 20, amber: 0, puzzle: "coastWindmill" as const },
@@ -193,7 +216,7 @@ export function cloudNearestWalkable(x: number, z: number, r: number, g: CloudGa
   if (cloudWalkable(x, z, g, r)) return { x, z };
   if (!Number.isFinite(x) || !Number.isFinite(z)) return { ...CLOUD_DOCK.spawn };
   let best: Vec2 = { ...CLOUD_DOCK.spawn }, distance = Infinity;
-  for (let pz = -8; pz <= 134; pz += .5) for (let px = -36; px <= 36; px += .5) {
+  for (let pz = -8; pz <= 181; pz += .5) for (let px = -36; px <= 36; px += .5) {
     if (!cloudWalkable(px, pz, g, r)) continue;
     const d = Math.hypot(px - x, pz - z);
     if (d < distance) { best = { x: px, z: pz }; distance = d; }

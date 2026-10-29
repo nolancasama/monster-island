@@ -54,7 +54,8 @@ export type SfxName =
   | "craft"
   | "rest"
   | "rumble"
-  | "cage";
+  | "cage"
+  | "crackle";
 
 /** Monster moods for vocalisations (the English itself is TTS). */
 export type Mood = "hello" | "happy" | "sad" | "excited" | "sleepy" | "surprised";
@@ -214,6 +215,10 @@ class AudioEngine {
     if (!this.ready()) return;
     const t = this.now;
     switch (name) {
+      case "crackle":
+        for (let i = 0; i < 4; i++) this.noiseBurst(t + i * .045, { filter: "highpass", freq: 2900, peak: .045, attack: .002, decay: .025 });
+        this.tone(1300, t, { to: 700, peak: .025, decay: .15, type: "sawtooth" });
+        break;
       case "correct":
         this.tone(midi(79), t, { peak: 0.14, decay: 0.3, type: "triangle" });
         this.tone(midi(84), t + 0.11, { peak: 0.14, decay: 0.5, type: "triangle" });

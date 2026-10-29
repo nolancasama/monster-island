@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   CLOUD_CHESTS, CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLES, CLOUD_ROUTE_REQUIRED,
-  CLOUD_SPAWNS, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS,
+  CLOUD_SPAWNS, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS, OBSERVATORY, BEACON,
   cloudMove, cloudNearestWalkable, cloudWalkable, cloudWindAt, cloudY, cloudZoneAt, electricPanelActive,
   type CloudArea, type CloudGates,
 } from "./cloudisle";
 
 const OPEN: CloudGates = { cleared: ["stormbreakCoast"], solved: ["coastWindmill", "coastCrate"], tunnelOpen: true };
-const ALL_OPEN: CloudGates = { ...OPEN, cleared: ["stormbreakCoast", "skyrootCanopy", "thunderGrotto"], solved: CLOUD_PUZZLES };
+const ALL_OPEN: CloudGates = { ...OPEN, cleared: ["stormbreakCoast", "skyrootCanopy", "thunderGrotto", "ancientObservatory"], solved: CLOUD_PUZZLES, observatoryLamps: ["leafy", "bubbo", "puff", "ember"] };
 function flood(gates: CloudGates, radius = .35, avoid: CloudArea[] = [], origin = CLOUD_DOCK.spawn) {
   const step = .6, start = [Math.round(origin.x / step), Math.round(origin.z / step)], queue = [start];
   const seen = new Set<string>([start.join(",")]);
@@ -53,14 +53,14 @@ describe("Cloud Isle slice A ground", () => {
       expect(cloudMove(0, 42, 0, 39, radius, g).z).toBeCloseTo(39);
     }
   });
-  it("needs the family's tunnel and never opens the raider road or observatory interior", () => {
+  it("needs the family's tunnel and never opens the raider road", () => {
     expect(flood({ ...OPEN, tunnelOpen: false })(0, 90)).toBe(false);
     expect(flood(OPEN, .35, ["hiddenHollow"])(0, 90)).toBe(false);
     for (const radius of [.35, .7]) {
       for (let x = 1; x <= 9; x += .3) expect(cloudWalkable(x, RAIDER_BARRICADE.z, OPEN, radius)).toBe(false);
       expect(cloudMove(5, 55, 5, 60, radius, OPEN).z).toBeLessThan(RAIDER_BARRICADE.z);
     }
-    expect(cloudWalkable(0, 137, ALL_OPEN, .35)).toBe(false);
+    expect(cloudWalkable(0, 137, ALL_OPEN, .35)).toBe(true);
   });
   it("keeps both optional coves closed until their own free ability puzzle", () => {
     expect(flood({ ...OPEN, solved: [] })(-17, 30)).toBe(false);
@@ -144,5 +144,51 @@ describe("Cloud Isle mountain routes", () => {
       expect(electricPanelActive(3.9-offset,offset)).toBe(true);
       expect(electricPanelActive(4-offset,offset)).toBe(false);
     }
+  });
+});
+
+describe("Ancient Observatory and Storm Beacon ground", () => {
+  for (const route of ["skyrootCanopy", "thunderGrotto"] as const) {
+    it(`joins ${route} to all four mechanisms, entrance rest and raised lift`, () => {
+      const other = route === "skyrootCanopy" ? "thunderGrotto" : "skyrootCanopy";
+      const gates = { ...ALL_OPEN, cleared: ["stormbreakCoast", route, "ancientObservatory"] };
+      for (const radius of [.35, .7]) {
+        const reach = flood(gates, radius, [other], CLOUD_SPAWNS.windfallJunction);
+        for (const id of ["obsLeafy", "obsBubbo", "obsPuff", "obsEmber"] as const) {
+          const at = CLOUD_OBSTACLE_PLACE[id];
+          expect(reach(at.x, at.z), id).toBe(true);
+        }
+        expect(reach(OBSERVATORY.rest.x, OBSERVATORY.rest.z)).toBe(true);
+        expect(reach(OBSERVATORY.lift.x, OBSERVATORY.lift.z)).toBe(true);
+        expect(reach(BEACON.x, BEACON.z)).toBe(true);
+        const retreat = flood(gates, radius, [other], { x: BEACON.x, z: BEACON.z });
+        expect(retreat(OBSERVATORY.entrance.x, OBSERVATORY.entrance.z)).toBe(true);
+      }
+    });
+  }
+
+  it("requires the clear and every distinct lamp at the lift, including mounted approaches", () => {
+    for (const radius of [.35, .7]) {
+      for (const missing of ["leafy", "bubbo", "puff", "ember"]) {
+        const gates = { ...ALL_OPEN, observatoryLamps: ALL_OPEN.observatoryLamps!.filter(id => id !== missing) };
+        expect(flood(gates, radius, [], CLOUD_SPAWNS.ancientObservatory)(0, 169), missing).toBe(false);
+        expect(cloudMove(0, 153, 0, 160, radius, gates).z).toBeLessThan(154.5);
+      }
+      const uncleared = { ...ALL_OPEN, cleared: ALL_OPEN.cleared!.filter(id => id !== "ancientObservatory") };
+      expect(cloudWalkable(0, 155, uncleared, radius)).toBe(false);
+    }
+  });
+
+  it("places four mixed enemies on the observatory floor and keeps the arena bounded", () => {
+    const enemies = CLOUD_ENEMY_SPAWNS.filter(e => e.zone === "ancientObservatory");
+    expect(enemies).toHaveLength(4);
+    expect(new Set(enemies.map(e => e.kind))).toEqual(new Set(["windSprite", "raiderDrone", "thunderBeetle"]));
+    expect(cloudY(0, 145)).toBe(22);
+    expect(cloudY(0, 155)).toBeGreaterThan(22);
+    expect(cloudY(0, 169)).toBe(37);
+    const pushed = cloudMove(10, 169, 30, 169, .35, ALL_OPEN);
+    expect(cloudWalkable(pushed.x, pushed.z, ALL_OPEN, .35)).toBe(true);
+    expect(pushed.x).toBeLessThan(12);
+    expect(cloudNearestWalkable(0, 169, .35, ALL_OPEN)).toEqual({ x: 0, z: 169 });
   });
 });

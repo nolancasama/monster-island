@@ -1,13 +1,13 @@
 import type { FamilyId } from "../data/family";
 import { MONSTERS } from "../data/monsters";
 import { COMPANION_IDS } from "../data/combat";
-import { cb, hooks, travelCombat, wakeUp } from "../combat";
+import { cb, hooks, resetBeaconFight, travelCombat, wakeUp } from "../combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, effect, rt } from "../runtime";
-import { CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
+import { CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, OBSERVATORY, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
 import { PIER2, SERVICES } from "../world/lowland";
 import { gatesOf, nearestWalkable, PLAYER_R } from "../world/collision";
-import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, discoverHollow, eatStew, markFamily, openCloudChest, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
+import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, defeatBeacon, discoverSkyFortress, discoverHollow, eatStew, markFamily, observatoryLiftReady, openCloudChest, reachObservatory, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
 import { rested } from "../logic/act2";
 import { canDo, recordCan } from "../logic/progress";
 import { CAN_QUESTION, type PhraseId } from "../logic/english";
@@ -35,6 +35,7 @@ const command = (id: PhraseId, help: string) => ask({ kind: "command", options: 
 export async function sailWithGull() {
   const p = getGame().progress;
   if (!p.act2.harbor) return;
+  if (p.act3.skyFortressClue) await say("harbor", "The Sky Fortress? We need a bigger boat... Next chapter!", "空の とりで？ もっと 大きな ふねが いるね……つぎの おはなしで！");
   const home = p.act3.world === "home";
   if (p.act3.voyageDone) {
     const answer = await ask({ kind: "command", options: ["yesLetsGo"], tapAlways: true, cancellable: true, readQuestion: true,
@@ -138,28 +139,40 @@ export function cloudCandidates(): Array<{ focus: Focus; reach: number }> {
   const out: Array<{ focus: Focus; reach: number }> = [];
   const add = (id: string, noun: string, at: {x:number;z:number}, verb = "Talk to", kind: Focus["kind"] = "npc", reach = 2.6) => out.push({focus:{id, noun, verb, kind, ...at},reach});
   add("cloudGull", "Captain Gull", CLOUD_DOCK.gull);
-  add("cloudDockRest", "on the boat", CLOUD_DOCK.rest, "Rest", "rest");
+  if (a.checkpoint === "observatory" || a.cleared.includes("ancientObservatory")) add("observatoryRest", "at the observatory entrance", OBSERVATORY.rest, "Rest", "rest");
   if (a.hollowFound) {
     add("tala", "Tala", HOLLOW.tala); add("bo", "Grandpa Bo", HOLLOW.bo); add("kiko", "Kiko", HOLLOW.kiko);
     add("hollowRest", "at the mats", HOLLOW.rest, "Rest", "rest");
   }
   for (const c of CLOUD_CHESTS) if (!a.chests.includes(c.id)) add(c.id, "the chest", c, "Open", "chest", 2.2);
   for (const pickup of CLOUD_PICKUPS) if (!a.errands.pickups.includes(pickup.id)) add(pickup.id, pickup.kind === "bag" ? "Kiko's bag" : pickup.kind === "moss" ? "glow moss" : "firewood", pickup, "Get", "food", 1.8);
-  for (const [id, at] of Object.entries(CLOUD_OBSTACLE_PLACE)) if (!a.puzzles.includes(id as CloudPuzzleId)) add(id, CLOUD_PUZZLE_RULES[id as CloudPuzzleId].noun, at, "Look at", "obstacle");
+  for (const [id, at] of Object.entries(CLOUD_OBSTACLE_PLACE)) if (!a.puzzles.includes(id as CloudPuzzleId) && (!id.startsWith("obs") || a.cleared.includes("ancientObservatory"))) add(id, CLOUD_PUZZLE_RULES[id as CloudPuzzleId].noun, at, "Look at", "obstacle");
   if (a.puzzles.includes("canopyGlide")) {
     add("glideForward", "the glide pad", CANOPY_GLIDE.from, "Glide from", "obstacle", 1.5);
     add("glideBack", "the glide pad", CANOPY_GLIDE.to, "Glide from", "obstacle", 1.5);
   }
   add("raiderRoad", "the raider barricade", {x:5,z:55}, "Look at", "sign");
   add("junctionRoutes", "the mountain routes", {x:0,z:96}, "Look at", "sign");
-  add("observatoryEntrance", "the closed observatory", {x:0,z:133}, "Look at", "sign");
+  add("observatoryEntrance", "the Ancient Observatory", {x:0,z:133}, "Look at", "sign");
+  add("beaconLift", "the Storm Beacon lift", OBSERVATORY.lift, "Use", "obstacle");
+  if (a.observatoryLamps.length === 4) add("beaconLiftDown", "the observatory lift", {x:0,z:159}, "Return on", "obstacle");
   return out;
 }
 
 export function cloudInteract(f: Focus) {
   if (f.id === "glideForward" || f.id === "glideBack") return run(() => glideCanopy(f.id === "glideBack"));
   if (f.id === "cloudGull") return run(sailWithGull);
-  if (f.id === "hollowRest" || f.id === "cloudDockRest") return run(async () => {
+  if (f.id === "beaconLift" || f.id === "beaconLiftDown") return run(async () => {
+    if (!observatoryLiftReady(getGame().progress.act3)) {
+      await say("self", "Four friends, four lamps. Light them all to raise the lift!", "４人の ともだちで ４つの ランプを ともして リフトを あげよう！"); return;
+    }
+    const down = f.id === "beaconLiftDown", start = {x:rt.player.x,z:rt.player.z};
+    rt.player.frozen = true;
+    await over(2.5, k => { rt.player.x = lerp(start.x,0,k); rt.player.z = lerp(start.z,down ? 153 : 160,k); });
+    rt.player.y = cloudY(rt.player.x,rt.player.z); rt.camera.snap = true;
+    saveNow();
+  });
+  if (f.id === "hollowRest" || f.id === "observatoryRest") return run(async () => {
     if (f.id === "hollowRest") await say("bo", "Have a rest.", "ゆっくり やすんでね。");
     cb.vitals = rested();
     updateProgress(p => restCloud(p));
@@ -184,7 +197,7 @@ export function cloudInteract(f: Focus) {
   });
   return run(async () => {
     if (f.id === "observatoryEntrance") {
-      await say("self", "The Ancient Observatory. The entrance is closed. Lumo must be inside!", "古代の天文台だ。入口は閉まっている。ルモは中にいるのかな！");
+      await say("self", "The Ancient Observatory! A safe place to rest at the entrance. Clear the raiders, then light the dial!", "古代の 天文台！ 入口で やすめるよ。とうぞくを たおして ダイヤルの あかりを ともそう！");
       return;
     }
     await say("self", f.id === "raiderRoad" ? "The raider road is blocked. We need another way." : "Skyroot Canopy to the west. Thunder Grotto to the east. Either route leads to the observatory!",
@@ -195,6 +208,11 @@ export function cloudInteract(f: Focus) {
 async function familyTalk(id: FamilyId) {
   if (!getGame().progress.act3.family.tunnelOpen) { await familyScene(); return; }
   frameTwo(rt.player, HOLLOW[id], 1);
+  if (getGame().progress.act3.beaconDefeated) {
+    if (id === "tala") { await say("tala", "The storm is gone. Thank you!", "あらしが やんだわ。ありがとう！"); return; }
+    if (id === "kiko") { await aftermath(); return; }
+    await say("bo", "Thank you, friends! The roof is mended, and we can rest in the sunshine.", "ありがとう、みんな！ やねも なおった。おひさまの ひかりで ゆっくり やすめるよ。");
+  }
   if (id === "bo") {
     const hasFish = (getGame().progress.bag.fish ?? 0) > 0;
     const answer = await ask({kind:"choice",options:hasFish ? ["yesIDo","noIDont"] : ["noIDont"],tapAlways:true,readQuestion:true,
@@ -276,8 +294,13 @@ function cloudObstacle(id: CloudPuzzleId) {
     if (!yes || active !== required || answer !== "canHelp") return;
     await command(rule.command, `${MONSTERS[required].name}に お願いしよう`);
     // Environmental abilities are free, including at zero MP.
-    animate(active,"power"); audio.play("vines");
+    animate(active,"power"); audio.play(id.startsWith("obs") ? active === "bubbo" ? "splash" : active === "puff" ? "whoosh" : active === "ember" ? "fireball" : "vines" : "vines");
     updateProgress(pr => solveCloudPuzzle(pr,id));
+    if (id.startsWith("obs")) {
+      effect("sparkle",0,22.6,145); audio.play("correct");
+      if (observatoryLiftReady(getGame().progress.act3)) { audio.play("stones"); toast({en:"Four lamps! The Storm Beacon lift is ready!",ja:"４つの ランプ！ 嵐の とうへの リフトが うごいた！",tone:"good"},4000); }
+      saveNow();
+    }
     if (id === "canopyGlide") await glideCanopy(false);
     else await wait(1100);
     await say("game",rule.result.en,rule.result.ja ?? "道が開いた！");
@@ -320,6 +343,8 @@ export function eatCloudStew() {
 /** Story triggers are separate from collision and never run in fights. */
 export function cloudTriggers() {
   const a = getGame().progress.act3;
+  if (a.beaconDefeated && !a.skyFortressClue) { void run(resolution); return; }
+  if (a.beaconDefeated && !a.family.aftermathSeen && cloudZoneAt(rt.player.x,rt.player.z) === "hiddenHollow") { void run(aftermath); return; }
   if (a.puzzles.includes("canopyGlide") && Math.abs(rt.player.x - CANOPY_GLIDE.from.x) < 1.6) {
     const p = rt.player;
     if (p.z > 117.2 && p.z < 118.7 && p.vz > .1) { void run(() => glideCanopy(false)); return; }
@@ -338,6 +363,7 @@ export function cloudTriggers() {
 
 hooks.cloudEnterZone = zone => {
   updateProgress(p => ({...p,act3:{...p.act3,area:zone}}));
+  if (zone === "observatoryApproach" || zone === "ancientObservatory") updateProgress(reachObservatory);
   const z = CLOUD_ZONES[zone];
   audio.setScene("forest"); audio.startMusic(z.hostile ? "danger" : "island");
   toast({en:z.name.en,ja:z.name.ja,tone:"info"},2200);
@@ -350,11 +376,70 @@ export function cloudKnockout(): boolean {
     rt.player.frozen = true; rt.player.action = {kind:"ko",t0:rt.time}; audio.play("ko"); await wait(1400);
     await say("game","Oh no! You need a rest.","ひとやすみ しよう。");
     const wake = cloudWakeArea(getGame().progress);
-    const target = wake === "dock" ? CLOUD_DOCK.spawn : CLOUD_SPAWNS.hiddenHollow;
+    const target = wake === "dock" ? CLOUD_DOCK.spawn : wake === "observatory" ? OBSERVATORY.entrance : CLOUD_SPAWNS.hiddenHollow;
     const safe = nearestWalkable(target.x,target.z,PLAYER_R,gatesOf(getGame().progress));
     rt.player.x = safe.x; rt.player.z = safe.z; rt.player.action = null; rt.camera.snap = true;
-    wakeUp(); gatherParty(); saveNow();
-    await say("game",wake === "dock" ? "You wake at Gull's boat. Your items are safe." : "You wake in the Hidden Hollow. Your items are safe.",wake === "dock" ? "ガルの ふねで めが さめた。どうぐは そのままだよ。" : "かくれがで めが さめた。どうぐは そのままだよ。");
+    resetBeaconFight(); wakeUp(); gatherParty(); saveNow();
+    await say("game",wake === "observatory" ? "You wake at the observatory entrance. Your lamps and items are safe. Try the beacon again!" : wake === "dock" ? "You wake at Gull's boat. Your items are safe." : "You wake in the Hidden Hollow. Your items are safe.",wake === "observatory" ? "天文台の 入口で めが さめた。ランプも どうぐも そのまま。もういちど ちょうせんしよう！" : wake === "dock" ? "ガルの ふねで めが さめた。どうぐは そのままだよ。" : "かくれがで めが さめた。どうぐは そのままだよ。");
   });
   return true;
 }
+
+async function aftermath() {
+  rt.act3Scene = "aftermath";
+  frameTwo(rt.player,HOLLOW.kiko,1.1);
+  await say("tala", "The storm is gone. Thank you!", "あらしが やんだわ。ありがとう！");
+  await say("bo", "Thank you, friends! We have mended the roof. What a lovely day!", "ありがとう、みんな！ やねも なおった。いい おてんきだね！");
+  await ask({kind:"command",options:["yesIWill"],tapAlways:true,readQuestion:true,
+    question:{by:"kiko",en:"Will you find Lumo?",ja:"ルモを みつけて くれる？"},help:"「Yes, I will!」 はい、みつけるよ！"});
+  await ask({kind:"command",options:["itsSunny"],tapAlways:true,readQuestion:true,
+    question:{by:"kiko",en:"How's the weather now?",ja:"いまは どんな てんき？"},help:"「It's sunny!」 はれて いるね！"});
+  updateProgress(p => markFamily(p,"aftermathSeen"));
+  rt.act3Scene = "idle"; saveNow();
+}
+
+/** Uses the kidnapping's shared ship and cage; Lumo remains a prisoner. A
+ * reload between victory and the clue resumes this short, harmless scene. */
+async function resolution() {
+  rt.player.frozen = true; rt.player.vx = rt.player.vz = 0;
+  updateProgress(defeatBeacon);
+  saveNow();
+  rt.act3Scene = "powerDown";
+  shot({x:13,y:47,z:153},{x:0,y:40,z:170});
+  audio.play("rumble");
+  await over(3, () => {});
+  rt.act3Scene = "stormBreak";
+  audio.play("whoosh");
+  await over(2,() => {});
+  await say("self", "The machine stopped! The storm is breaking!", "マシンが とまった！ あらしが はれて いく！");
+  const ship = rt.ship, cage = ship.cage;
+  ship.visible = true; ship.scale = 1; ship.x = 0; ship.y = 48; ship.z = 173; ship.yaw = Math.PI;
+  cage.visible = true; cage.closed = 1; cage.x = -2.3; cage.y = 46.4; cage.z = 173;
+  rt.act3Scene = "squallRope";
+  shot({x:10,y:43,z:161},{x:0,y:44,z:173});
+  audio.play("ko");
+  await over(4,k => { rt.squallLift = k * 10; });
+  rt.act3Scene = "lumoGlow";
+  shot({x:5,y:48.8,z:165},{x:cage.x,y:cage.y+1.3,z:cage.z});
+  audio.play("sparkle");
+  await over(2,() => {});
+  await say("self", "Lumo! The raider captain still has the cage!", "ルモ！ とうぞくの せんちょうが まだ かごを もっている！");
+  rt.act3Scene = "skyFortress";
+  const from = {x:ship.x,y:ship.y,z:ship.z};
+  await over(9,k => {
+    ship.x = lerp(from.x,0,k); ship.y = lerp(from.y,64,k); ship.z = lerp(from.z,247,k);
+    cage.x = ship.x-2.3; cage.y = ship.y-1.6; cage.z = ship.z;
+    shot({x:16,y:50,z:151},{x:0,y:59,z:225});
+  });
+  await over(2,() => {});
+  await say("self", "They are flying north to the Sky Fortress. We will find Lumo!", "きたの 空の とりでへ とんで いく。かならず ルモを みつけよう！");
+  updateProgress(discoverSkyFortress);
+  rt.act3Scene = "chapterClear";
+  audio.startMusic("celebrate"); audio.play("friend");
+  banner({title:"Chapter Clear! Lumo is going to the Sky Fortress!",sub:"Find the Sky Fortress",ja:"チャプタークリア！ ルモは 空の とりでへ！ 空の とりでを さがそう",tone:"quest"},8000);
+  saveNow();
+  await over(4,() => {});
+  ship.visible = false; cage.visible = false; rt.act3Scene = "idle";
+}
+
+hooks.beaconDefeated = () => { void run(resolution); };

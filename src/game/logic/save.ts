@@ -7,8 +7,8 @@ import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
-import { newAct3, type Act3 } from "./act3";
-import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
+import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
+import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
  * Versioned save. A save of an unknown version, or one that does not parse,
@@ -126,15 +126,18 @@ function readAct3(raw: unknown, p: Progress): Act3 {
   a.cleared = a.cleared.filter(id => id === "stormbreakCoast" || a.family.tunnelOpen);
   a.puzzles = list(raw.puzzles, CLOUD_PUZZLES).filter(id => p.monsters[CLOUD_PUZZLE_RULES[id].friend].friend
     && (id === "coastWindmill" || id === "coastCrate" || a.family.tunnelOpen));
+  // A four-enemy clear and its lamps stand only after a complete mountain route.
+  a.cleared = a.cleared.filter(id => id !== "ancientObservatory" || observatoryReached(a));
+  a.puzzles = a.puzzles.filter(id => !(OBSERVATORY_PUZZLES as readonly string[]).includes(id) || a.cleared.includes("ancientObservatory"));
   a.chests = list(raw.chests, CLOUD_CHESTS.map((c) => c.id)).filter(id => {
     const chest = CLOUD_CHESTS.find(c => c.id === id)!;
     return (!chest.puzzle || a.puzzles.includes(chest.puzzle))
       && (id !== "cloudCanopyChest" && id !== "cloudCrystalChest" || a.family.tunnelOpen);
   });
-  // Reserve the later mountain fields and validate their prerequisites.
-  // Slice A provides no interaction that writes these milestones.
-  a.observatoryLamps = a.family.tunnelOpen ? list(raw.observatoryLamps, COMPANION_IDS).filter((id) => p.monsters[id].friend) : [];
-  a.beaconDefeated = a.observatoryLamps.length === COMPANION_IDS.length && raw.beaconDefeated === true;
+  a.observatoryLamps = a.cleared.includes("ancientObservatory") ? list(raw.observatoryLamps, COMPANION_IDS).filter(id =>
+    p.monsters[id].friend && OBSERVATORY_PUZZLES.some(puzzle => CLOUD_PUZZLE_RULES[puzzle].friend === id && a.puzzles.includes(puzzle))) : [];
+  a.puzzles = a.puzzles.filter(id => !(OBSERVATORY_PUZZLES as readonly string[]).includes(id) || a.observatoryLamps.includes(CLOUD_PUZZLE_RULES[id].friend));
+  a.beaconDefeated = observatoryLiftReady(a) && raw.beaconDefeated === true;
   a.skyFortressClue = a.beaconDefeated && raw.skyFortressClue === true;
   a.family.aftermathSeen = a.beaconDefeated && f.aftermathSeen === true;
   const e = isObj(raw.errands) ? raw.errands : {};
@@ -150,15 +153,17 @@ function readAct3(raw: unknown, p: Progress): Act3 {
   const area = CLOUD_AREAS.find((id) => id === raw.area);
   a.area = area ?? "cloudDock";
   if ((a.area === "hiddenHollow" && !a.hollowFound) || ((a.area === "backTunnel" || a.area === "windfallJunction"
-    || a.area === "skyrootCanopy" || a.area === "thunderGrotto" || a.area === "observatoryApproach") && !a.family.tunnelOpen)) a.area = "stormbreakCoast";
-  if (a.area === "observatoryApproach" && !observatoryApproachUnlocked(a)) a.area = "windfallJunction";
-  a.checkpoint = raw.checkpoint === "hollow" && a.hollowFound ? "hollow" : "dock";
+    || a.area === "skyrootCanopy" || a.area === "thunderGrotto" || a.area === "observatoryApproach"
+    || a.area === "ancientObservatory" || a.area === "stormBeacon") && !a.family.tunnelOpen)) a.area = "stormbreakCoast";
+  if ((a.area === "observatoryApproach" || a.area === "ancientObservatory" || a.area === "stormBeacon") && !observatoryReached(a)) a.area = "windfallJunction";
+  if (a.area === "stormBeacon" && !observatoryLiftReady(a)) a.area = "ancientObservatory";
+  a.checkpoint = raw.checkpoint === "observatory" && observatoryReached(a) ? "observatory"
+    : raw.checkpoint === "hollow" && a.hollowFound ? "hollow" : "dock";
   return a;
 }
 
 function observatoryApproachUnlocked(a: Act3): boolean {
-  return Object.entries(CLOUD_ROUTE_REQUIRED).some(([route, puzzles]) => a.cleared.includes(route as typeof a.cleared[number])
-    && puzzles.every(id => a.puzzles.includes(id)));
+  return observatoryReached(a);
 }
 
 /** Valid floor beyond a puzzle can still be unreachable floor. Check the side
@@ -166,10 +171,12 @@ function observatoryApproachUnlocked(a: Act3): boolean {
 function cloudSavePositionUnlocked(a: Act3, x: number, z: number): boolean {
   if (!a.cleared.includes("stormbreakCoast") && z > 43.7) return false;
   const zone = cloudZoneAt(x, z);
-  if (zone === "backTunnel" || zone === "windfallJunction" || zone === "skyrootCanopy" || zone === "thunderGrotto" || zone === "observatoryApproach") {
+  if (zone === "backTunnel" || zone === "windfallJunction" || zone === "skyrootCanopy" || zone === "thunderGrotto"
+    || zone === "observatoryApproach" || zone === "ancientObservatory" || zone === "stormBeacon") {
     if (!a.family.tunnelOpen) return false;
   }
-  if (zone === "observatoryApproach") return observatoryApproachUnlocked(a);
+  if (zone === "observatoryApproach" || zone === "ancientObservatory") return observatoryReached(a);
+  if (zone === "stormBeacon") return observatoryReached(a) && observatoryLiftReady(a);
   if (zone === "skyrootCanopy" || zone === "thunderGrotto") {
     const gate = CLOUD_ROUTE_GATES.find(g => g.zone === zone)!;
     // The tail of either branch is reachable from the shared approach, even
@@ -248,7 +255,7 @@ export function decodeSave(text: string | null): SaveData | null {
       // A route-labelled save may itself lie beyond a missing puzzle.
       if (!cloudSavePositionUnlocked(p.act3, x, z)) ({ x, z } = CLOUD_SPAWNS.windfallJunction);
     }
-    safe = cloudNearestWalkable(x, z, PLAYER_R, { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen });
+    safe = cloudNearestWalkable(x, z, PLAYER_R, { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen, observatoryLamps: p.act3.observatoryLamps });
     if (!cloudSavePositionUnlocked(p.act3, safe.x, safe.z)) {
       safe = { ...CLOUD_SPAWNS[p.act3.family.tunnelOpen ? "windfallJunction" : "stormbreakCoast"] };
     }

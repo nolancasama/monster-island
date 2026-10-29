@@ -89,6 +89,9 @@ export function objectiveText(o: Objective): Text {
       return { en: "Ask at the harbor: Where is the ship?", ja: "みなとの じむしょで ふねの ことを きこう" };
     case "act2Done":
       return { en: "Sail with Captain Gull to Cloud Isle!", ja: "ガルせんちょうと クラウドじまへ いこう!" };
+    case "skyFortress": return { en: "Find the Sky Fortress", ja: "空の とりでを さがそう" };
+    case "cloudDial": return { en: "Light the four dial lamps", ja: "４人の ともだちと ランプを ともそう" };
+    case "cloudBeacon": return { en: "Stop Officer Squall's weather machine!", ja: "スコールの 天気マシンを とめよう！" };
     case "cloudCoast": return { en: "Clear Stormbreak Coast!", ja: "あらしの かいがんの てきを たおそう!" };
     case "cloudHollow": return { en: "Follow the footprints behind the waterfall", ja: "あしあとを たどって たきの うらへ" };
     case "cloudFamily": return { en: "Meet the hidden family", ja: "かくれがの かぞくと はなそう" };

@@ -8,6 +8,7 @@ import { isRunning } from "./flow/script";
 import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/lowland";
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
+import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
 import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
@@ -164,6 +165,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
 }
 
 export const cb = {
+  beacon: newBeacon(),
   /** Live HP and MP (written into progress when the game saves). */
   vitals: { hp: MAX_HP, mp: { leafy: 100, bubbo: 100, puff: 100, ember: 100 } } as Vitals,
   enemies: ENEMY_SPAWNS.map((_, i) => spawnEnemy(i)),
@@ -196,10 +198,18 @@ export const cb = {
 };
 
 /** Called with the live fight when a knock-out happens (the flow owns the scene). */
-export const hooks = { knockout: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void) };
+export const hooks = { knockout: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void) };
+
+/** No per-attempt boss progress is saved; checkpoints and lamps live in act3. */
+export function resetBeaconFight() {
+  cb.beacon = newBeacon();
+  cb.enemies = cb.enemies.filter(e => e.i < 10000);
+  cb.shots = cb.shots.filter(s => !s.hostile);
+}
 
 /** Back to a clean fight: from saved progress (load) or after a new game. */
 export function resetCombat() {
+  resetBeaconFight();
   worldEnemies = {};
   const p = getGame().progress;
   cb.vitals = { hp: p.act2.hp, mp: { ...p.act2.mp } };
@@ -495,6 +505,18 @@ function originOf(f: CompanionId): { x: number; y: number; z: number } {
 
 function aimAt(target: EnemyRt | null, range: number): { x: number; z: number } {
   const p = rt.player;
+  // The pylon is a world target, using the same forgiving aim as ordinary foes.
+  if (cb.beacon.active && currentCloudZone() === "stormBeacon") {
+    const best = BEACON_PYLONS.map((q, i) => ({ ...q, i, d: Math.hypot(q.x - p.x, q.z - p.z) }))
+      .filter(q => cb.beacon.pylons[q.i].phase !== "down" && q.d <= range + 1 &&
+        ((q.x - p.x) * Math.sin(p.yaw) + (q.z - p.z) * Math.cos(p.yaw) > -q.d * .25 || q.d < 3.2))
+      .sort((a, b) => a.d - b.d)[0];
+    // A pylon right in front of the player wins even when a wind sprite hovers closer.
+    if (best && (!target || best.d < 3.5 || best.d < Math.hypot(target.x - p.x, target.z - p.z))) {
+      if (p.speed < .6) p.yaw = Math.atan2(best.x - p.x, best.z - p.z);
+      return { x: best.x, z: best.z };
+    }
+  }
   if (target) {
     // Turn to face it (only when standing; on the move the friend aims for us).
     if (p.speed < 0.6) p.yaw = Math.atan2(target.x - p.x, target.z - p.z);
@@ -519,10 +541,12 @@ export function basicAttack(): boolean {
   const o = originOf(f);
   const dx = aim.x - rt.player.x, dz = aim.z - rt.player.z;
   const yaw = Math.atan2(dx, dz);
+  if (cb.beacon.active) cancelBeaconGust(cb.beacon, f, { x: dx, z: dz });
   if (move.shape === "whip") {
     // A sweeping vine: everything in a wide arc in front, out to its reach.
     const p = rt.player;
     pushFx("whip", o.x, o.y, o.z, Math.sin(yaw), Math.cos(yaw), yaw, range);
+    hitBeaconShape(f, range, Math.sin(yaw), Math.cos(yaw), "cone");
     for (const e of cb.enemies) {
       if (!alive(e) || e.zone !== currentCombatZone()) continue;
       const ex = e.x - p.x, ez = e.z - p.z;
@@ -552,7 +576,7 @@ export function specialAttack(): boolean {
   const f = friendNow();
   if (!f || !canFight() || rt.time < cb.ready.special) return false;
   const move = COMBAT[f].special;
-  const spent = spendMp(cb.vitals, f, move.cost);
+  const spent = onCloudIsle() && currentCloudZone() === "stormBeacon" ? cb.vitals : spendMp(cb.vitals, f, move.cost);
   if (!spent) {
     if (rt.time - cb.lastMpWarn > 1.5) {
       cb.lastMpWarn = rt.time;
@@ -568,6 +592,10 @@ export function specialAttack(): boolean {
   const aim = aimAt(target, move.range);
   const yaw = Math.atan2(aim.x - p.x, aim.z - p.z);
   const ux = Math.sin(yaw), uz = Math.cos(yaw);
+  if (cb.beacon.active) {
+    cancelBeaconGust(cb.beacon, f, { x: ux, z: uz });
+    hitBeaconShape(f, move.range, ux, uz, move.shape === "burst" ? "burst" : move.shape === "jet" || move.shape === "pull" ? "beam" : "cone");
+  }
   cb.move = { friend: f, kind: "special", t0: rt.time, tx: aim.x, tz: aim.z };
   const o = originOf(f);
   const inZone = cb.enemies.filter((e) => alive(e) && e.zone === currentCombatZone());
@@ -621,6 +649,73 @@ function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, a
   const life = kind === "whip" ? 0.3 : kind === "pull" ? 0.45 : kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
   cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
   if (cb.fx.length > 24) cb.fx.shift();
+}
+
+function strikePylon(index: number, friend: CompanionId) {
+  const result = strikeBeaconPylon(cb.beacon, index, friend);
+  if (result === "blocked") { audio.play("bump"); return; }
+  const p = BEACON_PYLONS[index];
+  effect(result === "shorted" ? "splash" : "sparkle", p.x, BEACON_ARENA.y + 1.6, p.z);
+  audio.play(result === "shorted" ? "splash" : "rumble");
+  if (result === "down") {
+    toast({ en: "Storm pylon down!", ja: "嵐の とうを とめた！", tone: "good" }, 1800);
+    if (cb.beacon.power === 0) {
+      cb.beacon.active = false;
+      cb.enemies = cb.enemies.filter(e => e.i < 10000);
+      cb.shots = [];
+      hooks.beaconDefeated?.();
+    }
+  }
+}
+
+function hitBeaconShape(friend: CompanionId, range: number, ux: number, uz: number, shape: "beam" | "cone" | "burst") {
+  if (!cb.beacon.active) return;
+  for (let i = 0; i < BEACON_PYLONS.length; i++) {
+    if (cb.beacon.pylons[i].phase === "down") continue;
+    const q = BEACON_PYLONS[i], dx = q.x - rt.player.x, dz = q.z - rt.player.z;
+    const distance = Math.hypot(dx, dz), along = dx * ux + dz * uz;
+    if (distance > range + 1) continue;
+    if (shape === "beam" && (along < -.3 || Math.abs(dx * uz - dz * ux) > 1.9)) continue;
+    if (shape === "cone" && along / (distance || 1) < .2 && distance > 1.5) continue;
+    strikePylon(i, friend);
+  }
+}
+
+function updateBeaconFight(dt: number, live: boolean, zone: CombatZone | null) {
+  const b = cb.beacon;
+  if (!onCloudIsle() || zone !== "stormBeacon") {
+    if (b.active) resetBeaconFight();
+    return;
+  }
+  if (getGame().progress.act3.beaconDefeated || cb.knockedOut || !live) return;
+  if (!b.active) b.active = true;
+  const before = b.attack;
+  tickBeacon(b, dt, rt.player);
+  if (before !== b.attack) {
+    if (b.attack === "gustTell") audio.play("wind");
+    if (b.attack === "lightningTell") audio.play("alert");
+    if (b.attack === "lightning") audio.play("snap");
+  }
+  if (b.attack === "gust" && !b.gustCancelled) {
+    // Clamp well inside the disc before moving: wind can never throw a child off.
+    const p = rt.player, cx = BEACON_ARENA.x, cz = BEACON_ARENA.z;
+    const nx = p.x + b.gust.x * dt * 3, nz = p.z + b.gust.z * dt * 3;
+    if (Math.hypot(nx - cx, nz - cz) < BEACON_ARENA.radius - 1.8 && cloudZoneAt(nx, nz) === "stormBeacon") {
+      p.x = nx; p.z = nz;
+    }
+  }
+  if (b.attack === "lightning" && b.rings.some(r => Math.hypot(rt.player.x - r.x, rt.player.z - r.z) < 2.05)) hurtPlayer(12, 0, 0, 0);
+  if (b.power === 1 && !b.spritesAdded) {
+    b.spritesAdded = true;
+    const source = CLOUD_ENEMY_SPAWNS.findIndex(s => s.kind === "windSprite");
+    for (let i = 0; i < 2; i++) {
+      const sprite = spawnEnemy(source, true);
+      const x = i === 0 ? -5 : 5, z = 174;
+      Object.assign(sprite, { i: 10000 + i, zone: "stormBeacon", x, z, homeX: x, homeZ: z, state: "alert", timer: 1.2, alertT: rt.time });
+      cb.enemies.push(sprite);
+    }
+    audio.play("alert");
+  }
 }
 
 function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number, uz: number, _by: CompanionId, basic = false) {
@@ -801,6 +896,7 @@ export function combatTick(dt: number) {
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack();
   const live = g.mode === "explore" && !isRunning();
+  updateBeaconFight(dt, live, zone);
   if (live && zone === "thunderGrotto" && CLOUD_ELECTRIC_PANELS.some(panel =>
     Math.abs(p.x - panel.x) < panel.w / 2 && Math.abs(p.z - panel.z) < panel.d / 2 && electricPanelActive(rt.time, panel.phase))) {
     hurtPlayer(5, 0, 0, 0);
@@ -836,7 +932,7 @@ function sendHome(zone: CombatZone) {
 
 /** A fresh crowd in an area: everyone back at home, full health, patrols reset. */
 function respawnZone(zone: CombatZone) {
-  for (const e of cb.enemies) if (e.zone === zone) Object.assign(e, spawnEnemy(e.i, onCloudIsle()));
+  for (const e of cb.enemies) if (e.zone === zone && e.i < 10000) Object.assign(e, spawnEnemy(e.i, onCloudIsle()));
 }
 
 function moveEnemy(e: EnemyRt, tx: number, tz: number, speed: number, dt: number): number {
@@ -1041,6 +1137,7 @@ function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
   audio.play("hurt");
   if (cb.vitals.hp <= 0) {
     cb.knockedOut = true;
+    if (onCloudIsle() && cb.beacon.active) resetBeaconFight();
     hooks.knockout?.();
   }
 }
@@ -1074,6 +1171,10 @@ function updateShots(dt: number) {
       }
       if (combatZoneAt(s.x, s.z) !== currentCombatZone()) s.life = 0;
       continue;
+    }
+    if (cb.beacon.active) {
+      const pylon = BEACON_PYLONS.findIndex((p, i) => cb.beacon.pylons[i].phase !== "down" && Math.hypot(p.x - s.x, p.z - s.z) < 1.05 + s.radius);
+      if (pylon >= 0) { strikePylon(pylon, s.owner); s.life = 0; continue; }
     }
     for (const e of cb.enemies) {
       if (!alive(e) || e.zone !== currentCombatZone()) continue;

@@ -4,8 +4,9 @@ import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./hel
 import { newProgress } from "../../src/game/logic/progress";
 import { newAct3, type Act3 } from "../../src/game/logic/act3";
 import { CLOUD_ENEMY_SPAWNS, CLOUD_PUZZLE_RULES, CLOUD_ELECTRIC_PANELS, type CloudPuzzleId } from "../../src/game/world/cloudisle";
+import { BEACON_PYLONS, type BeaconState, type PylonPhase } from "../../src/game/logic/beacon";
 
-type CloudState = MiState & { progress: MiState["progress"] & { act3: Act3 }; act3: { world: string; scene: string; drawing: boolean; zone: string; voyage: {active:boolean;stage:string}; mountedWorlds: string[]; electricPanels: Array<{active:boolean}> } };
+type CloudState = MiState & { progress: MiState["progress"] & { act3: Act3 }; act3: { world: string; scene: string; drawing: boolean; zone: string; voyage: {active:boolean;stage:string}; mountedWorlds: string[]; squallLift:number; beacon: BeaconState; electricPanels: Array<{active:boolean;phase:number}> } };
 const cloudState = (page: Page) => state(page) as Promise<CloudState>;
 const folder = ".tmp/shots/act3";
 
@@ -40,10 +41,35 @@ async function defeat(page: Page, i: number, touch: boolean) {
   throw new Error(`Cloud enemy ${i} survived 30 real attack attempts`);
 }
 
+/** Pause in the frame that shows the beat, before a CPU screenshot can miss it. */
+async function pauseAt(page: Page, wanted: {scene?: string; attack?: BeaconState["attack"]; pylon?: {i:number;phase:PylonPhase}; panel?: "safe"|"warning"|"active"; minShipZ?:number; minSquallLift?:number}) {
+  await page.waitForFunction(w => {
+    const api=(window as unknown as {__mi:{state():CloudState;timeScale(k:number):void}}).__mi;
+    const s=api.state(), b=s.act3.beacon, phase=s.act3.electricPanels[0]?.phase;
+    const matches=(!w.scene || s.act3.scene===w.scene) && (!w.attack || b.attack===w.attack) &&
+      (!w.pylon || b.pylons[w.pylon.i].phase===w.pylon.phase) &&
+      (!w.panel || (w.panel==="safe" ? phase<1.8 : w.panel==="warning" ? phase>=1.8 && phase<2.4 : phase>=2.4)) &&
+      (w.minShipZ===undefined || s.act2.ship.z>=w.minShipZ) &&
+      (w.minSquallLift===undefined || s.act3.squallLift>=w.minSquallLift);
+    if(matches) {api.timeScale(0);return true;}
+    return false;
+  },wanted,{polling:"raf",timeout:60_000});
+}
+
+async function attack(page: Page, touch: boolean) {
+  if(touch) {
+    await page.getByTestId("btn-basic").dispatchEvent("pointerdown");
+    await page.waitForTimeout(650);
+    await page.getByTestId("btn-basic").dispatchEvent("pointerup");
+  } else {
+    await page.keyboard.down("KeyJ"); await page.waitForTimeout(650); await page.keyboard.up("KeyJ");
+  }
+}
+
 for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
   const label=`${size.width}x${size.height}`, touch=size.width===1280;
-  test(`Act 3 voyage, family, both mountain routes and return travel ${label}${touch ? " touch only" : ""}`,async({page})=>{
-    test.setTimeout(600_000);
+  test(`Act 3 full chapter, both routes, boss retry, ending and return travel ${label}${touch ? " touch only" : ""}`,async({page})=>{
+    test.setTimeout(900_000);
     await page.setViewportSize(size); await seed(page);
     const errors=await boot(page); await chooseMode(page,"tap");
     await page.getByTestId("btn-continue").click();
@@ -51,7 +77,7 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     if(touch) await hook(page,"set",{touch:true});
     const report: Array<{name:string;calls:number;triangles:number;fps:number}> = [];
     const shot=async(name:string)=>{
-      await mkdir(folder,{recursive:true}); await hook(page,"renderFrames",3);
+      await mkdir(folder,{recursive:true}); await hook(page,"snapCamera"); await hook(page,"renderFrames",3);
       const s=await cloudState(page);
       await page.screenshot({path:`${folder}/${name}-${label}.png`});
       report.push({name:`${name}-${label}`,...s.perf});
@@ -76,7 +102,8 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
       } finally { await hook(page,"timeScale",1); }
       await tap(page,"thankYou");
       await waitFor(page,s=>s.mode==="explore");
-      expect((await cloudState(page)).progress.act3.puzzles).toContain(id);
+      if(id.startsWith("obs")) expect((await cloudState(page)).progress.act3.observatoryLamps).toContain(rule.friend);
+      else expect((await cloudState(page)).progress.act3.puzzles).toContain(id);
       await shot(`${id}-after`);
     };
     const move = async (x: number,z: number) => {
@@ -168,15 +195,16 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
         // Defeated enemies cannot interfere with this stationary panel probe.
         const panel=CLOUD_ELECTRIC_PANELS[0];
         await hook(page,"teleport",panel.x,panel.z); await hook(page,"setHp",100);
-        await waitFor(page,s=>!(s as CloudState).act3.electricPanels[0].active);
-        await hook(page,"timeScale",0);
+        await pauseAt(page,{panel:"safe"});
         try {await shot("electric-safe");} finally {await hook(page,"timeScale",1);}
+        await pauseAt(page,{panel:"warning"});
+        try {await shot("electric-warning");} finally {await hook(page,"timeScale",1);}
         const before=await state(page);
         await waitFor(page,s=>s.act2.hp<before.act2.hp,15_000,"electric panel light damage");
         const after=await state(page);
         expect(before.act2.hp-after.act2.hp).toBeLessThanOrEqual(10);
         expect(Math.hypot(after.player.x-before.player.x,after.player.z-before.player.z)).toBeLessThan(.05);
-        await hook(page,"timeScale",0);
+        await pauseAt(page,{panel:"active"});
         try {await shot("electric-active");} finally {await hook(page,"timeScale",1);}
       }
       await hook(page,"teleport",route.x,123); await shot(`${route.area}-clear`);
@@ -188,16 +216,142 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
       await shot(`${route.area}-reload`);
       await move(route.x,124); await move(route.x/2,131); await move(0,132);
       await waitFor(page,s=>(s as CloudState).act3.zone==="observatoryApproach"); await shot(`observatory-from-${route.area}`);
-      const closedEntrance=await hook(page,"moveTo",0,137) as {z:number}; expect(closedEntrance.z).toBeLessThan(135); // the closed door is at z 137
+      // Each permanent route gate joins the same open Observatory entrance.
+      await move(0,136); await move(0,139);
+      await waitFor(page,s=>(s as CloudState).act3.zone==="ancientObservatory");
+      await shot(`observatory-entry-${route.area}`);
       // The cleared route allows walking back to the Junction without a cut.
-      await move(0,132); await move(route.x/2,131); await move(route.x,124);
+      await move(0,136); await move(0,132); await move(route.x/2,131); await move(route.x,124);
       await move(route.x,106); await move(route.x/2,99); await move(0,90);
     }
+
+    await hook(page,"cloudArea","observatoryApproach");
+    await use(page,"observatoryRest",touch); await waitFor(page,s=>s.mode==="explore");
+    expect((await cloudState(page)).progress.act3.checkpoint).toBe("observatory");
+    await move(0,136); await move(0,139); await shot("observatory");
+    await clearBand("ancientObservatory",130,160);
+    await waitFor(page,s=>(s as CloudState).progress.act3.cleared.includes("ancientObservatory"));
+    // The lift remains closed until every friend's permanent lamp is lit.
+    await hook(page,"teleport",0,152);
+    expect((await hook(page,"moveTo",0,158) as {z:number}).z).toBeLessThan(155);
+    for(const id of ["obsPuff","obsLeafy","obsEmber","obsBubbo"] as const) await solve(id);
+    expect((await cloudState(page)).progress.act3.observatoryLamps).toEqual(expect.arrayContaining(["leafy","bubbo","puff","ember"]));
+    await hook(page,"teleport",0,148); await shot("observatory-dial-complete");
+    await page.waitForTimeout(5200); await page.reload(); await page.getByTestId("btn-continue").click(); await waitFor(page,s=>s.mode==="explore");
+    if(touch) await hook(page,"set",{touch:true});
+    expect((await cloudState(page)).act3.zone).toBe("ancientObservatory");
+    expect((await cloudState(page)).progress.act3.observatoryLamps).toHaveLength(4);
+    await shot("observatory-reload");
+
+    const ascend=async()=>{
+      await use(page,"beaconLift",touch);
+      await waitFor(page,s=>s.mode==="explore" && (s as CloudState).act3.beacon.active,30_000,"Storm Beacon fight starts");
+      expect((await state(page)).micState).not.toBe("listening");
+    };
+    const downPylon=async(i:number,name:string)=>{
+      if((await cloudState(page)).act3.beacon.pylons[i].phase==="down") return;
+      // Clicking the already-active friend's chip opens its chat, which blocks attacks.
+      if((await cloudState(page)).progress.active!=="leafy") await page.getByTestId("team-leafy").click();
+      const p=BEACON_PYLONS[i];
+      await hook(page,"teleport",p.x,p.z-2.3,0);
+      await pauseAt(page,{pylon:{i,phase:"exposed"}});
+      try {await shot(`${name}-exposed`);} finally {await hook(page,"timeScale",1);}
+      for(let attempt=0;attempt<6;attempt++) {
+        if((await cloudState(page)).act3.beacon.pylons[i].phase==="down") return;
+        await attack(page,touch);
+      }
+      expect((await cloudState(page)).act3.beacon.pylons[i].phase,`${name} real attack`).toBe("down");
+    };
+    await ascend(); await shot("beacon-arena");
+    await page.getByTestId("team-puff").click();
+    await hook(page,"teleport",0,165,Math.PI/2);
+    await pauseAt(page,{attack:"gustTell"});
+    try {
+      await shot("beacon-gust-telegraph");
+      const gust=(await cloudState(page)).act3.beacon.gust;
+      await hook(page,"teleport",0,165,Math.atan2(gust.x,gust.z));
+      await attack(page,touch);
+      expect((await cloudState(page)).act3.beacon.gustCancelled).toBe(true);
+    } finally {await hook(page,"timeScale",1);}
+    await shot("beacon-gust-cancelled");
+    await pauseAt(page,{attack:"lightningTell"});
+    try {await shot("beacon-lightning-telegraph");} finally {await hook(page,"timeScale",1);}
+    // One pylon falls, then a real marked lightning strike causes the loss.
+    await downPylon(0,"beacon-retry-first-pylon");
+    expect((await cloudState(page)).act3.beacon.power).toBe(2);
+    await pauseAt(page,{attack:"lightningTell"});
+    const ring=(await cloudState(page)).act3.beacon.rings[0];
+    await hook(page,"teleport",ring.x,ring.z); await hook(page,"setHp",1);
+    await hook(page,"timeScale",1);
+    await waitFor(page,s=>s.mode==="explore" && s.act2.hp>=60 && s.player.z<134,60_000,"wake at Observatory after lightning defeat");
+    expect((await cloudState(page)).act3.beacon.power).toBe(3);
+    expect((await cloudState(page)).act3.beacon.pylons.every(p=>p.phase!=="down")).toBe(true);
+    expect((await cloudState(page)).progress.act3.observatoryLamps).toHaveLength(4);
+    await shot("beacon-defeat-wake");
+
+    await ascend(); await downPylon(0,"beacon-before-reload");
+    await hook(page,"teleport",0,160); await page.waitForTimeout(5200);
+    await page.reload(); await page.getByTestId("btn-continue").click(); await waitFor(page,s=>s.mode==="explore");
+    if(touch) await hook(page,"set",{touch:true});
+    await waitFor(page,s=>(s as CloudState).act3.beacon.active);
+    expect((await cloudState(page)).act3.beacon.power).toBe(3);
+    expect((await cloudState(page)).act3.beacon.pylons.every(p=>p.phase!=="down")).toBe(true);
+    await shot("beacon-reload-clean");
+
+    // Bubbo's actual Splash rewards the charge telegraph before normal exposure.
+    await page.getByTestId("team-bubbo").click();
+    await hook(page,"teleport",BEACON_PYLONS[0].x,BEACON_PYLONS[0].z-3,0);
+    await pauseAt(page,{pylon:{i:0,phase:"charging"}});
+    try {await shot("beacon-pylon-charge");} finally {await hook(page,"timeScale",1);}
+    await attack(page,touch);
+    expect((await cloudState(page)).act3.beacon.pylons[0].shorted).toBe(true);
+    await downPylon(0,"beacon-pylon-1");
+    expect((await cloudState(page)).act3.beacon.power).toBe(2); await shot("beacon-pylon-1-down");
+    await downPylon(1,"beacon-pylon-2");
+    expect((await cloudState(page)).act3.beacon.power).toBe(1); await shot("beacon-pylon-2-down");
+    expect((await state(page)).act2.enemies.filter(e=>e.zone==="stormBeacon" && e.state!=="ko" && e.state!=="gone").length).toBeLessThanOrEqual(2);
+
+    // Hold each actual dialogue beat; fast-mode say() otherwise advances on
+    // a real 30ms timer even while the simulation is paused for screenshots.
+    await page.evaluate(()=>{const url=new URL(location.href);url.searchParams.delete("fast");history.replaceState(null,"",url);});
+    const resolution=(async()=>{
+      for(const beat of ["powerDown","stormBreak","squallRope","lumoGlow","skyFortress","chapterClear"]) {
+        await pauseAt(page,{scene:beat,...(beat==="squallRope" ? {minSquallLift:4} : {}),...(beat==="skyFortress" ? {minShipZ:225} : {})});
+        try {
+          await shot(`resolution-${beat}`);
+          if(beat==="powerDown") await shot("beacon-pylon-3-down");
+          if(beat==="lumoGlow") expect((await state(page)).act2.ship.cage).toBe(true);
+        } finally {await hook(page,"timeScale",1);}
+        if(beat==="stormBreak" || beat==="lumoGlow" || beat==="skyFortress") {
+          await expect(page.getByTestId("next")).toBeVisible({timeout:30_000});
+          await page.getByTestId("next").click();
+        }
+      }
+    })();
+    await downPylon(2,"beacon-pylon-3");
+    await resolution;
+    await waitFor(page,s=>s.mode==="explore" && (s as CloudState).progress.act3.skyFortressClue);
+    await page.evaluate(()=>{const url=new URL(location.href);url.searchParams.set("fast","1");history.replaceState(null,"",url);});
+    expect((await cloudState(page)).progress.act3.beaconDefeated).toBe(true);
+    expect((await state(page)).progress.act2.lumoTaken).toBe(true);
+    expect((await state(page)).objective.id).toBe("skyFortress");
+    await page.getByTestId("btn-journal").click(); await page.getByTestId("journal-tab-lumo").click();
+    await expect(page.getByTestId("journal-lumo-taken")).toContainText("Find the Sky Fortress");
+    await page.getByTestId("journal-close").click();
+    await hook(page,"cloudArea","hiddenHollow");
+    await waitFor(page,s=>Boolean(s.prompt?.choices.includes("yesIWill")));
+    await shot("aftermath-lumo-promise"); await tap(page,"yesIWill");
+    await waitFor(page,s=>Boolean(s.prompt?.choices.includes("itsSunny")));
+    await shot("aftermath-weather"); await tap(page,"itsSunny");
+    await waitFor(page,s=>s.mode==="explore" && (s as CloudState).progress.act3.family.aftermathSeen);
+    await shot("hollow-aftermath");
+    await hook(page,"cloudArea","cloudDock"); await shot("dock-cleared-sky");
 
     // Autosave, Continue and boats exercise the actual persistent world, never a replay fixture.
     await page.waitForTimeout(5200); await page.reload(); await page.getByTestId("btn-continue").click(); await waitFor(page,s=>s.mode==="explore");
     if(touch) await hook(page,"set",{touch:true});
     expect((await cloudState(page)).act3.world).toBe("cloud"); expect((await cloudState(page)).act3.voyage.active).toBe(false);
+    expect((await cloudState(page)).progress.act3).toMatchObject({beaconDefeated:true,skyFortressClue:true,family:{aftermathSeen:true}});
     await use(page,"cloudGull",touch); await tap(page,"yesLetsGo"); await waitFor(page,s=>s.mode==="explore" && (s as CloudState).act3.world==="home");
     await use(page,"harbor",touch); await tap(page,"yesLetsGo"); await waitFor(page,s=>s.mode==="explore" && (s as CloudState).act3.world==="cloud");
     expect((await cloudState(page)).progress.act3.family.tunnelOpen).toBe(true);

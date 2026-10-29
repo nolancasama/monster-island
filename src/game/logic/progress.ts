@@ -298,7 +298,7 @@ export type Objective =
   | { id: "askBack"; monster: MonsterId }
   | { id: "finale" }
   | { id: "explore" }
-  | { id: "cloudCoast" | "cloudHollow" | "cloudFamily" | "cloudObservatory" }
+  | { id: "cloudCoast" | "cloudHollow" | "cloudFamily" | "cloudObservatory" | "cloudDial" | "cloudBeacon" | "skyFortress" }
   | Act2Objective;
 
 /** Where each live monster can be reached from (the obstacle that guards it). */
@@ -325,7 +325,10 @@ function befriendStep(p: Progress, id: MonsterId): Objective | null {
  * Each phase is finished, ending included, before the next one is mentioned.
  */
 export function objective(p: Progress): Objective {
+  if (p.act3.skyFortressClue) return { id: "skyFortress" };
   if (p.act2.harbor && p.act3.world === "cloud") {
+    if (p.act3.observatoryLamps.length === 4) return { id: "cloudBeacon" };
+    if (p.act3.cleared.includes("ancientObservatory")) return { id: "cloudDial" };
     return { id: !p.act3.cleared.includes("stormbreakCoast") ? "cloudCoast" : !p.act3.hollowFound ? "cloudHollow" : !p.act3.family.tunnelOpen ? "cloudFamily" : "cloudObservatory" };
   }
   if (!p.metMaple) return { id: "meetMaple" };

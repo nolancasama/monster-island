@@ -5,8 +5,8 @@ import { rt } from "../game/runtime";
 import { getGame, useGame } from "../game/store";
 import { NPCS } from "../game/data/town";
 import {
-  BACK_TUNNEL, BEACON, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
-  CLOUD_ZONES, COAST_GATE, HOLLOW, OBSERVATORY, RAIDER_BARRICADE, ROUTE_MOUTHS,
+  BACK_TUNNEL, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
+  CLOUD_ZONES, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS,
   cloudY, type CloudGates,
 } from "../game/world/cloudisle";
 import { nearestOnTrail, PIER2, type WalkShape } from "../game/world/lowland";
@@ -16,6 +16,8 @@ import { npcGeometry } from "./models/lowland";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import { voyageStorm } from "./voyageWeather";
 import { CloudRoutes } from "./CloudRoutes";
+import { Observatory, SummitWeather, SkyFortress, CagedLumo, HollowAftermath } from "./Observatory";
+import { StormBeacon } from "./StormBeacon";
 
 export const CLOUD_FOG = { color: "#71818c", near: 38, far: 260 };
 export const cloudView = { visible: false, fog: CLOUD_FOG, barriers: { coast: 0, tunnel: 0 } };
@@ -35,11 +37,12 @@ function CloudSky() {
   useFrame((_, dt) => {
     const warm = getGame().progress.act3.area === "hiddenHollow";
     const cave = getGame().progress.act3.area === "thunderGrotto";
-    if (hemi.current) hemi.current.intensity = THREE.MathUtils.damp(hemi.current.intensity, cave ? .15 : warm ? .8 : 1.05, 2, dt);
-    if (ambient.current) ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, cave ? .1 : warm ? .35 : .18, 2, dt);
-    if (sun.current) sun.current.intensity = cave ? 0 : 1.65;
-    (scene.background as THREE.Color).set(cave ? "#182a3a" : CLOUD_FOG.color);
-    if (scene.fog instanceof THREE.Fog) { scene.fog.color.set(cave ? "#182a3a" : CLOUD_FOG.color); scene.fog.near = cave ? 18 : CLOUD_FOG.near; scene.fog.far = cave ? 60 : CLOUD_FOG.far; }
+    const clear = getGame().progress.act3.beaconDefeated;
+    if (hemi.current) hemi.current.intensity = THREE.MathUtils.damp(hemi.current.intensity, cave ? .15 : clear ? 1.3 : warm ? .8 : 1.05, 2, dt);
+    if (ambient.current) ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, cave ? .1 : clear ? .5 : warm ? .35 : .18, 2, dt);
+    if (sun.current) { sun.current.intensity = cave ? 0 : clear ? 2 : 1.65; sun.current.color.set(clear ? "#fff1ce" : "#d0d7dd"); }
+    (scene.background as THREE.Color).set(cave ? "#182a3a" : clear ? "#b8dced" : CLOUD_FOG.color);
+    if (scene.fog instanceof THREE.Fog) { scene.fog.color.set(cave ? "#182a3a" : clear ? "#b8dced" : CLOUD_FOG.color); scene.fog.near = cave ? 18 : CLOUD_FOG.near; scene.fog.far = cave ? 60 : clear ? 340 : CLOUD_FOG.far; }
   });
   return <>
     <hemisphereLight ref={hemi} args={["#bbcbd8", "#7b7565", 1.05]} />
@@ -67,7 +70,7 @@ function terrainTiles(): THREE.BufferGeometry[] {
       if (!onGround(x + .5, z + .5) || z < -3) continue;
       // The canopy's actual branches/bridges and cave's floor are their sole
       // ground representation. Never fill the scripted glide gap with land.
-      if (z >= 104 && z < 126 && x < -12 || z >= 100 && x > 9) continue;
+      if (z >= 134 || z >= 104 && z < 126 && x < -12 || z >= 100 && x > 9) continue;
       if (x + .5 > -14.8 && x + .5 < -12.5 && z > 20 && z < 32) continue;
       color.set(z > 50 && x < -4 ? "#85745f" : z < 12 ? "#8b8875" : "#6a7868");
       color.multiplyScalar(.92 + Math.sin(x * 23 + z * 15) * .055);
@@ -115,7 +118,7 @@ function landscapeGeometry() {
     b.box(6.8, 1, len + 1, mx, y + 4.5, mz, dark, yaw);
   }
   // Real mountain mass beyond this slice; these are not alternate copies.
-  for (const [x, z, h, r] of [[-46, 124, 23, 15], [49, 124, 20, 15], [0, 153, 31, 15], [0, 169, 44, 18]]) {
+  for (const [x, z, h, r] of [[-46, 124, 23, 15], [49, 124, 20, 15], [0, 153, 20, 15], [0, 169, 35, 12]]) {
     b.cone(r, h, x, 1, z, "#4c5e64", 7);
   }
   // Giant tree with a wind-bent trunk above the shelter.
@@ -137,23 +140,6 @@ function landscapeGeometry() {
     b.box(1.2, 5, 1.2, m.x - 2.6, 10.8, m.z, stone);
     b.box(1.2, 5, 1.2, m.x + 2.6, 10.8, m.z, stone);
     b.box(6.6, 1.2, 1.4, m.x, 15.6, m.z, stone);
-  }
-  const o = OBSERVATORY;
-  b.cyl(7, 9, 4, o.x, o.y, o.z, stone, 10);
-  for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4;
-    b.cyl(.5, .6, 7, Math.sin(a) * 6, o.y + 3.5, o.z + Math.cos(a) * 6, "#9a9988", 6);
-  }
-  b.sphere(7, 0, o.y + 11, o.z, "#617885", [1, .6, 1], 8);
-  b.torus(4, .18, [0, o.y + 14, o.z], [.6, 0, .3], "#beae72");
-  const k = BEACON;
-  b.cyl(3.6, 5, 5, k.x, k.y, k.z, stone, 8);
-  b.cyl(1.3, 2, 10, k.x, k.y + 5, k.z, "#3e434e", 6);
-  b.torus(3, .35, [k.x, k.y + 13, k.z], [Math.PI / 2, 0, 0], "#a58d62");
-  for (const dx of [-3, 3]) b.cone(.7, 4, dx, k.y + 13, k.z, "#343a46", 5);
-  for (let i = 0; i < 14; i++) {
-    const a = i * Math.PI * 2 / 14;
-    b.sphere(6, Math.cos(a) * 20, 37 + Math.sin(a * 3) * 1.4, k.z + Math.sin(a) * 15, "#65717e", [1.4, .46, 1], 7);
   }
   return b.build();
 }
@@ -293,9 +279,9 @@ function FamilyMember({ who }: { who: "tala" | "bo" | "kiko" }) {
       g.position.set(p.x, cloudY(p.x, p.z) + Math.sin(rt.time * 2.1 + p.x) * .018, p.z);
       const target = Math.atan2(rt.player.x - p.x, rt.player.z - p.z) + Math.PI;
       g.rotation.y += Math.atan2(Math.sin(target - g.rotation.y), Math.cos(target - g.rotation.y)) * .04;
-      g.rotation.z = Math.sin(rt.time * (who === "kiko" ? 2.6 : 1.2) + p.x) * (who === "kiko" ? .045 : .012);
+      g.rotation.z = Math.sin(rt.time * (who === "kiko" ? 2.6 : 1.2) + p.x) * (a.beaconDefeated ? .065 : who === "kiko" ? .045 : .012);
     }
-    if (arm.current) arm.current.rotation.x = Math.sin(rt.time * 2) * .13;
+    if (arm.current) arm.current.rotation.x = Math.sin(rt.time * 2) * (a.beaconDefeated ? .24 : .13);
   });
   return <group ref={ref} position={ground(p.x, p.z)}><group ref={arm}><mesh geometry={geo} material={flatMat} /></group></group>;
 }
@@ -347,8 +333,6 @@ function Barriers() {
     <mesh ref={cr} geometry={coast} material={flatMat} position={ground(0, COAST_GATE.z)} />
     <mesh ref={tr} geometry={tunnel} material={flatMat} position={ground(-15, 64)} />
     <mesh geometry={road} material={flatMat} position={ground(RAIDER_BARRICADE.x, RAIDER_BARRICADE.z)} />
-    <mesh geometry={coast} material={flatMat} position={[0, OBSERVATORY.y, 134]} scale={[.55, 1.6, 1]} />
-    <mesh position={[0, OBSERVATORY.y + 2.3, 135]}><boxGeometry args={[7.4, 4.6, .3]} /><meshLambertMaterial color="#303e4a" /></mesh>
     {/* Warm stone is retained behind the moved gate, with sight through its ribs. */}
     {a.family.tunnelOpen && <mesh geometry={tunnel} material={flatMat} position={ground(-19, 63, -.3)} rotation={[0, .8, Math.PI / 2]} scale={[.45, .4, .5]} />}
   </>;
@@ -490,7 +474,7 @@ function CloudSea({ crossing = false }: { crossing?: boolean }) {
     if (!ref.current) return;
     ref.current.visible = !crossing || rt.voyage.active && rt.world === "home";
     if (!ref.current.visible) return;
-    const v = rt.voyage, storm = crossing ? voyageStorm() : 1;
+    const v = rt.voyage, storm = crossing ? voyageStorm() : getGame().progress.act3.beaconDefeated ? .05 : 1;
     const cx = crossing ? v.x : 0, cz = crossing ? v.z : 60;
     ref.current.position.set(cx, -.4, cz);
     mat.color.copy(fair).lerp(stormy, storm);
@@ -550,21 +534,6 @@ export function CloudBoat() {
   return <><CloudSea crossing /><VoyageRocks /><group ref={root}><mesh geometry={hull} material={flatMat} /><mesh ref={sail} geometry={cloth} material={clothMat} position={[0, 6.4, -.1]} /><mesh ref={keeper} geometry={gull} material={flatMat} position={[.65, .75, 1.9]} rotation={[0, Math.PI, 0]} /></group></>;
 }
 
-function RaiderAirship() {
-  const ref = useRef<THREE.Group>(null);
-  const geometry = useMemo(() => { const b = new PartBuilder();
-    b.sphere(2.2, 0, 2, 0, "#657078", [2.4, 1, 1], 8); b.box(4.3, .7, 1.6, 0, -.1, 0, "#554f48");
-    for (const x of [-1.5, 1.5]) b.box(.08, 2, .08, x, .4, -.65, "#a19270");
-    b.add(new THREE.TorusGeometry(.7, .15, 5, 16, Math.PI * 1.45), "#e6ce8f", [0, 2, -2.1], [0, 0, -.7]); return b.build(); }, []);
-  useFrame(() => {
-    if (!ref.current) return;
-    const ship = rt.ship;
-    ref.current.visible = ship.visible && rt.voyage.active;
-    ref.current.position.set(ship.x, ship.y, ship.z); ref.current.rotation.y = ship.yaw; ref.current.scale.setScalar(ship.scale);
-  });
-  return <group ref={ref}><mesh geometry={geometry} material={flatMat} /></group>;
-}
-
 export function CloudIsle() {
   const a = useGame(s => s.progress.act3);
   const inside = a.area === "thunderGrotto";
@@ -586,7 +555,7 @@ export function CloudIsle() {
     <Vegetation /><Barriers /><WindAndWater /><CoastProps />
     <FamilyMember who="tala" /><FamilyMember who="bo" /><FamilyMember who="kiko" /><DiscoveryTrail />
     <mesh geometry={gull} material={flatMat} position={ground(CLOUD_DOCK.gull.x, CLOUD_DOCK.gull.z)} rotation={[0, Math.PI, 0]} />
-    <RaiderAirship />
+    <Observatory /><StormBeacon /><SummitWeather /><SkyFortress /><CagedLumo /><HollowAftermath />
     </group>
     <PickupsAndChests inside={inside} /><CloudRoutes inside={inside} />
   </group>;

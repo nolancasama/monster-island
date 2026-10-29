@@ -6,6 +6,7 @@ import { useGame } from "../game/store";
 import { CANOPY_GLIDE, CLOUD_ELECTRIC_PANELS, CLOUD_ROUTE_GATES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
 import { flatMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
+import { audio } from "../audio/audio";
 
 const at = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
 const bark = "#626652", rock = "#293c50";
@@ -119,15 +120,36 @@ function RouteGate({ x, z, open }: { x: number; z: number; open: boolean }) {
 }
 function ElectricPanels() {
   const refs = useRef<Array<THREE.Mesh | null>>([]);
+  const edges = useRef<Array<THREE.Mesh | null>>([]);
+  const sparks = useRef<THREE.InstancedMesh>(null);
+  const previous = useRef([false,false]);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => CLOUD_ELECTRIC_PANELS.forEach((p, i) => {
     const mesh = refs.current[i]; if (!mesh) return;
     const phase = electricPanelPhase(rt.time, p.phase), mat = mesh.material as THREE.MeshBasicMaterial;
-    mat.color.set(phase >= 2.4 ? "#b5e7ff" : phase >= 1.8 ? "#ddae62" : "#375b70");
-    mat.opacity = phase >= 2.4 ? .9 : phase >= 1.8 ? .45 + Math.sin(rt.time * 14) * .2 : .6;
+    const active = phase >= 2.4, warning = phase >= 1.8;
+    mat.color.set(active ? "#c8f2ff" : warning ? "#eea731" : "#12222f");
+    const edge = edges.current[i];
+    if(edge) (edge.material as THREE.MeshBasicMaterial).color.set(active ? "#48baff" : warning ? "#ffcc60" : "#294354");
+    if(active && !previous.current[i] && Math.hypot(rt.player.x-p.x,rt.player.z-p.z)<22) audio.play("crackle");
+    previous.current[i]=active;
+    for(let n=0;n<4;n++) {
+      const t=(rt.time*2+n*.23)%1;
+      dummy.position.set(p.x+Math.sin(n*8+rt.time*4)*p.w*.38,cloudY(p.x,p.z)+.25+t*.7,p.z+Math.cos(n*9)*p.d*.35);
+      dummy.rotation.set(0,0,rt.time*7+n);
+      dummy.scale.setScalar(active ? .07+Math.sin(t*Math.PI)*.08 : 0);
+      dummy.updateMatrix();sparks.current?.setMatrixAt(i*4+n,dummy.matrix);
+    }
+    if(sparks.current) sparks.current.instanceMatrix.needsUpdate=true;
   }));
-  return <>{CLOUD_ELECTRIC_PANELS.map((p, i) => <mesh key={i} ref={m => { refs.current[i] = m; }} position={at(p.x, p.z, .16)} rotation={[-Math.PI / 2, 0, 0]}>
-    <planeGeometry args={[p.w - .5, p.d - .25]} /><meshBasicMaterial transparent color="#375b70" />
-  </mesh>)}</>;
+  return <>{CLOUD_ELECTRIC_PANELS.map((p, i) => <group key={i}>
+    <mesh ref={m=>{edges.current[i]=m;}} position={at(p.x,p.z,.13)}><boxGeometry args={[p.w,.12,p.d]}/><meshBasicMaterial color="#294354"/></mesh>
+    <mesh ref={m => { refs.current[i] = m; }} position={at(p.x, p.z, .205)} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[p.w - .2, p.d - .2]} /><meshBasicMaterial color="#12222f" />
+    </mesh>
+  </group>)}
+    <instancedMesh ref={sparks} args={[undefined,undefined,8]} frustumCulled={false}><octahedronGeometry args={[1,0]}/><meshBasicMaterial color="#e5fbff"/></instancedMesh>
+  </>;
 }
 function RouteWind({ stopped }: { stopped: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null), dummy = useMemo(() => new THREE.Object3D(), []);

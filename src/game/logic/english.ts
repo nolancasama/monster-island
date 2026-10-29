@@ -64,7 +64,7 @@ export type PhraseId =
   | "cmdBurn"
   | "cmdFly" | "cmdSplash"
   | "yesLetsGo" | "raiseSail" | "turnLeft" | "itsWindy" | "itsSunny" | "itsRainy" | "look"
-  | "imAFriend" | "yesItIs" | "whereLumo";
+  | "imAFriend" | "yesItIs" | "whereLumo" | "yesIWill";
 
 const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
 const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
@@ -170,6 +170,7 @@ const color = (id: PhraseId, c: ColorId, distractors: PhraseId[]): Phrase => ({
 const can = (id: PhraseId, a: AbilityId | "help", en: string): Phrase => ({ id, en, keys: [CAN_Q, ABILITY_WORDS[a]] });
 
 export const PHRASES: Record<PhraseId, Phrase> = {
+  yesIWill: { id: "yesIWill", en: "Yes, I will!", keys: [YES], forbid: NO },
   yesLetsGo: { id: "yesLetsGo", en: "Yes, let's go!", keys: [YES, GO], forbid: NO },
   raiseSail: { id: "raiseSail", en: "Raise the sail!", keys: [["raise", "rays", "rise", "reis", "raiseu"], ["sail", "sale", "sails", "sell", "seiru"]] },
   turnLeft: { id: "turnLeft", en: "Turn left!", keys: [["turn", "tern", "tan", "turns"], ["left", "leff", "refuto", "lift"]] },
