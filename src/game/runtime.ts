@@ -1,6 +1,14 @@
 import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
+import { inLowland } from "./world/lowland";
+
+export const LOWLAND_CAMERA = { yaw: 0, pitch: 0.55, dist: 10, ahead: 3 };
+
+/** The cliff rope and basin use authored framing rather than pointer orbit. */
+export function fixedCamera() {
+  return (rt.player.climbY !== null && rt.player.z < -140) || inLowland(rt.player.x, rt.player.z);
+}
 
 /**
  * Mutable per-frame state shared by the scene, input and game flow. Kept out
@@ -134,6 +142,9 @@ export const rt = {
     mode: "follow" as "follow" | "shot",
     shot: null as CameraShot | null,
     snap: false,
+    /** Semantic framing and transition completion, exposed read-only by the capture hook. */
+    framing: "orbit" as "orbit" | "lowland" | "rope" | "shot" | "title" | "results",
+    settled: false,
     pos: { x: 0, y: 6, z: 6 } as Vec3,
     target: { x: 0, y: 1, z: 0 } as Vec3
   },
@@ -221,6 +232,8 @@ export function resetRuntime() {
   rt.camera.pitch = 0.46;
   rt.camera.dist = 9;
   rt.camera.snap = true;
+  rt.camera.framing = "orbit";
+  rt.camera.settled = false;
   for (const id of MONSTER_ORDER) rt.monsters[id] = monsterStart(id);
   rt.taken.clear();
   rt.ripe.clear();

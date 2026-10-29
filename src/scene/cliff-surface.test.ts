@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { seaStacksGeometry } from "./models/highlands";
-import { cliffFaceGeometry, cliffRopeGeometry } from "./models/lowland";
-import { CLIFF_ROPE } from "../game/world/lowland";
+import { cliffFaceGeometry, cliffRopeGeometry, stageBarrierGeometry, spatialGeometry } from "./models/lowland";
+import { CLIFF_ROPE, STAGE_EXITS } from "../game/world/lowland";
 import { groundY } from "../game/world/island";
 
 describe("closed sanctuary descent surface", () => {
@@ -54,4 +54,35 @@ it("legacy sea stacks cannot protrude into Act 2 clearings",()=>{
   }
   expect(g.getAttribute("position").count).toBeGreaterThan(0);
   g.dispose();(mesh.material as THREE.Material).dispose();
+});
+
+it("locked first-clear barriers have substantial obstructions and clear sightlines at player eye height",()=>{
+  const material=new THREE.MeshBasicMaterial();
+  for(const exit of STAGE_EXITS){
+    const geometry=stageBarrierGeometry(exit),mesh=new THREE.Mesh(geometry,material);
+    mesh.updateMatrixWorld();
+    let blocked=0,clear=0;
+    for(let x=-exit.half;x<=exit.half;x+=.1){
+      const ray=new THREE.Raycaster(new THREE.Vector3(x,1.6,3),new THREE.Vector3(0,0,-1),0,6);
+      if(ray.intersectObject(mesh).length)blocked++;else clear++;
+    }
+    expect(blocked,exit.id).toBeGreaterThan(10);
+    expect(clear/(blocked+clear),exit.id).toBeGreaterThan(.55);
+    geometry.dispose();
+  }
+  material.dispose();
+});
+
+it("spatial prop tiling preserves every triangle and colour across stage boundaries",()=>{
+  const source=stageBarrierGeometry(STAGE_EXITS[0]);
+  source.translate(76,2,-184.5);
+  const count=source.getAttribute("position").count;
+  const tiles=spatialGeometry(source,8);
+  expect(tiles.length).toBeGreaterThan(1);
+  expect(tiles.reduce((sum,g)=>sum+g.getAttribute("position").count,0)).toBe(count);
+  for(const tile of tiles){
+    expect(tile.getAttribute("color").count).toBe(tile.getAttribute("position").count);
+    expect(tile.boundingSphere?.radius).toBeGreaterThan(0);
+    tile.dispose();
+  }
 });

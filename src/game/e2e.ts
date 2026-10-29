@@ -6,6 +6,7 @@ import { PLAYER_R, moveCircle, gatesOf, nearestWalkable, standY } from "./world/
 import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
+import { lowlandView } from "../scene/Lowland";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
@@ -95,8 +96,14 @@ export function installE2eHook(seed: number) {
         gate: rt.gate,
         starGlow: rt.starGlow,
         finale: rt.finale,
-        camera: { pos: { ...rt.camera.pos }, target: { ...rt.camera.target } },
+        camera: {
+          pos: { ...rt.camera.pos }, target: { ...rt.camera.target },
+          mode: rt.camera.mode, yaw: rt.camera.yaw, pitch: rt.camera.pitch, dist: rt.camera.dist,
+          framing: rt.camera.framing, settled: rt.camera.settled,
+          offset: { x: rt.camera.pos.x - rt.player.x, y: rt.camera.pos.y - rt.player.y, z: rt.camera.pos.z - rt.player.z }
+        },
         perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped },
+        lowland: { visible: lowlandView.visible, fog: { ...lowlandView.fog }, barriers: { ...lowlandView.barriers } },
         playTime: rt.playTime,
         act2: {
           scene: rt.act2Scene,
@@ -182,6 +189,22 @@ export function installE2eHook(seed: number) {
     /** Slow or freeze the game clock (0 = paused) for visual captures. */
     timeScale(k: number) {
       rt.timeScale = Math.max(0, k);
+    },
+    /** Match save loading's settled puzzle poses after a visual progress fixture. */
+    settleAct2Unlocks() {
+      const solved = getGame().progress.solved;
+      for (const id of ["groveLilies", "canopyVines", "canopyRope", "causewayGate"] as const)
+        rt.act2Unlock[id] = solved.includes(id) ? 1 : 0;
+    },
+    /** Let renderer statistics catch up after a paused visual fixture. */
+    renderFrames(count = 2) {
+      return new Promise<void>((resolve) => {
+        const frame = () => {
+          if (--count <= 0) resolve();
+          else requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      });
     },
     /** Act 2: stand near an enemy (by spawn index), facing it. */
     nearEnemy(i: number, dist = 3) {

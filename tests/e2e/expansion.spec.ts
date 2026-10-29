@@ -152,11 +152,12 @@ for (const branch of ["grove", "canopy"])
     await hook(page, "teleport", 76, -287);
     await hook(page, "moveTo", 76, -294);
     await waitFor(page, (s) => s.progress.act2.portFound && s.mode === "explore", 40000, "port reached");
-    expect((await state(page)).act2.stance.friend).toBeNull();
+    // The safe-area dismount eases out over a few frames.
+    await waitFor(page, (s) => s.act2.stance.friend === null, 5000, "dismounted in town");
     expect(errors).toEqual([]);
   });
 
-test("visual inspection at both Chromebook sizes: areas, panorama, and closed cliff in both directions", async ({ page }) => {
+test("visual inspection at both Chromebook sizes: continuous areas, real overlook, and closed cliff in both directions", async ({ page }) => {
   test.setTimeout(240000);
   const errors = await start(page, ["forest1", "grove", "canopy", "causeway", "coast"]);
   mkdirSync(".tmp/shots/expansion", { recursive: true });
@@ -175,26 +176,28 @@ test("visual inspection at both Chromebook sizes: areas, panorama, and closed cl
     ] as const) {
       await hook(page, "teleport", x, z);
       await hook(page, "follow");
-      await hook(page, "setCamera", 0.55, 0.44, 11);
-      await page.waitForTimeout(2500);
+      await renderedCamera(page);
       await pauseForPortrait(page);
       await page.screenshot({ path: `.tmp/shots/expansion/${name}-${width}.png` });
       const perf=(await state(page)).perf;
-      expect(perf.calls,`${name} draw calls`).toBeLessThanOrEqual(125);
-      expect(perf.triangles,`${name} triangles`).toBeLessThanOrEqual(120000);
+      expect(perf.calls,`${name} draw calls`).toBeLessThanOrEqual(120);
+      expect(perf.triangles,`${name} triangles`).toBeLessThanOrEqual(150000);
       report.push({ name, width, height, perf });
       await hook(page, "timeScale", 1);
-      await hook(page, "setCamera", -1.3, .46, 10);
-      await page.waitForTimeout(1200);
+      const s = await state(page);
+      await hook(page, "look",
+        [s.camera.pos.x, s.camera.pos.y, 2 * s.player.z - s.camera.pos.z],
+        [s.camera.target.x, s.camera.target.y, 2 * s.player.z - s.camera.target.z]);
+      await renderedCamera(page);
       await pauseForPortrait(page);
-      await page.screenshot({path:`.tmp/shots/expansion/${name}-orbit-${width}.png`});
-      report.push({name:`${name}-orbit`,width,height,perf:(await state(page)).perf});
+      await page.screenshot({path:`.tmp/shots/expansion/${name}-reverse-${width}.png`});
+      report.push({name:`${name}-reverse`,width,height,perf:(await state(page)).perf});
       await hook(page, "timeScale", 1);
     }
     await hook(page, "teleport", 87, -128);
     await hook(page, "look", [90, 24, -120], [85, 6, -220]);
-    await page.waitForTimeout(2500);
-    await page.screenshot({ path: `.tmp/shots/expansion/panorama-${width}.png` });
+    await renderedCamera(page);
+    await page.screenshot({ path: `.tmp/shots/expansion/real-lowland-overlook-${width}.png` });
     for (const [name, pos, at] of [
       ["front", [75.5, 10, -163], [75.5, 10, -151]],
       ["side", [84, 12, -157], [75.5, 12, -150]],
@@ -202,7 +205,7 @@ test("visual inspection at both Chromebook sizes: areas, panorama, and closed cl
       ["below", [77, 3, -156], [75.5, 12, -151]],
     ] as const) {
       await hook(page, "look", pos, at);
-      await page.waitForTimeout(350);
+      await renderedCamera(page);
       await page.screenshot({ path: `.tmp/shots/expansion/cliff-${name}-${width}.png` });
     }
   }
@@ -233,6 +236,19 @@ test("visual inspection at both Chromebook sizes: areas, panorama, and closed cl
   writeFileSync(".tmp/shots/expansion/render-report.json", JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
 });
+
+async function renderedCamera(page: Page) {
+  try {
+    await hook(page, "renderFrames", 2);
+    await page.waitForFunction(() => {
+      const s = (window as unknown as { __mi: { state(): { camera: { settled: boolean } } } }).__mi.state();
+      return s.camera.settled;
+    }, undefined, { timeout: 15000 });
+    await hook(page, "renderFrames", 3);
+  } catch {
+    throw new Error("HARNESS_PRECONDITION_FAILED: rendered inspection camera did not settle");
+  }
+}
 
 /** Let the existing damage blink finish with AI paused before freezing a
  * review image. This does not change HP, enemies, gates or model visibility. */

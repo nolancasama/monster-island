@@ -363,8 +363,7 @@ const GATE_CUT = rect(SHORTCUT_GATE.x - SHORTCUT_GATE.half - 0.5, SHORTCUT_GATE.
 export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number): boolean {
   if (z > CLIFF_FOOT_Z - m) return false;
   const solved = g.solved;
-  // Two dog-legged ravines keep the independent branches visually enclosed
-  // right up to their own exits. No broad clearing can go around the walls.
+  // The two narrow branch crossings retain their original walking footprints.
   for (const t of STAGE_PASSAGES)
     if (inPassageBand(t, x, z)) {
       if (!inside(t.walk, x, z, m)) return false;
@@ -472,7 +471,7 @@ export function lowlandY(x: number, z: number): number {
   // Hills close the basin east and west, then fall into the sea; the north coast falls past the town.
   const west = Math.max(32 - x, 0);
   const east = Math.max(x - 114, 0);
-  y += 9 * smooth(Math.max(west, east) / 6);
+  y += 5 * smooth(Math.max(west, east) / 6);
   const sea = Math.max(26 - x, x - 124, -323 - z, 0);
   y -= sea * 2.4;
   return Math.max(y, -4.5);
@@ -740,49 +739,36 @@ export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: numbe
   { id: "coast", x: 76, z: -288, half: 5, kind: "wood", cut: rect(19, 135, -288.4, -287.6) },
 ];
 
-/** Detail belongs to one stage only; panoramas use a separate low-detail mesh. */
-export function stageDetailVisible(owner: ZoneId | null, active: ZoneId | null): boolean {
-  return owner !== null && owner === active;
-}
-
-/** Pre-lair overlook at the sanctuary approach, outside the tunnel. */
-export function panoramaVisible(x: number, z: number, cameraZ: number): boolean {
+/** Draw the real basin from the sanctuary and below; the prologue tunnel stays isolated. */
+export function lowlandRegionVisible(x: number, z: number, cameraZ: number): boolean {
+  if (z <= CLIFF_FOOT_Z) return true;
   if (x > 82 && x < 90 && z < -126 && z > -132) return true;
-  return x > 55 && x < 91 && z < -126 && z > CLIFF_FOOT_Z && cameraZ < -125;
-}
-
-/** Nearest stage owns boundary scenery too, so an inactive stage cannot leak detail. */
-export function detailOwner(x: number, z: number): ZoneId {
-  const at = zoneAt(x, z);
-  if (at) return at;
-  let best = Infinity,
-    owner: ZoneId = "forest1";
-  for (const id of ZONE_ORDER)
-    for (const sh of ZONES[id].walk) {
-      const d = shapeDistance(sh, x, z);
-      if (d < best) {
-        best = d;
-        owner = id;
-      }
-    }
-  return owner;
+  return x > 55 && x < 91 && z < -126 && cameraZ < -125;
 }
 function shapeDistance(sh: WalkShape, x: number, z: number): number {
   if (sh.kind === "disc") return Math.max(0, Math.hypot(x - sh.x, z - sh.z) - sh.r);
   if (sh.kind === "trail") return Math.max(0, nearestOnTrail(sh.pts, x, z).d - sh.w);
   return Math.hypot(Math.max(sh.x0 - x, 0, x - sh.x1), Math.max(sh.z0 - z, 0, z - sh.z1));
 }
-/** Raised, solid forest banks enclose bends without using fog to hide geography. */
+/** Low shoulders frame the paths; broad saddles keep neighbouring places visible. */
 export function forestBankY(x: number, z: number): number {
   if (z > -159 || z < -288 || x < 30 || x > 123) return 0;
   let d = Infinity;
   for (const id of ZONE_ORDER) for (const sh of ZONES[id].walk) d = Math.min(d, shapeDistance(sh, x, z));
   for (const t of STAGE_PASSAGES) if (inPassageBand(t, x, z)) d = shapeDistance(t.walk, x, z);
-  // Pond/islet remains open water; banks start outside the whole path union.
-  return 10 * smooth((d - 1.2) / 4.5);
+  let opening = 0;
+  for (const gate of [...STAGE_EXITS, SHORTCUT_GATE]) {
+    const distance = Math.hypot(Math.max(0, Math.abs(x - gate.x) - gate.half - 3) / 5, (z - gate.z) / 11);
+    opening = Math.max(opening, 1 - smooth((distance - 0.6) / 0.9));
+  }
+  // Open the fork as well as the first-clear crossings, preserving every walk shape.
+  for (const [cx, cz] of [[62, -202], [92, -202], [76, -211]])
+    opening = Math.max(opening, 1 - smooth((Math.hypot((x - cx) / 14, (z - cz) / 12) - 0.5) / 0.8));
+  const edge = smooth((-159 - z) / 6) * smooth((z + 288) / 6) * smooth((x - 30) / 4) * smooth((123 - x) / 4);
+  return (4 - 3.6 * opening) * smooth((d - 1.2) / 4.5) * edge;
 }
 
-/** Curved transition ravines. Raised terrain uses these same footprints. */
+/** Curved transition crossings; collision footprints remain independent of the low shoulders. */
 export const STAGE_PASSAGES = [
   {
     x0: 19,

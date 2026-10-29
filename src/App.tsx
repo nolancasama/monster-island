@@ -11,7 +11,7 @@ import { installKeyboard } from "./input/keyboard";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave } from "./game/flow/story";
 import { getGame, setGame, useGame } from "./game/store";
-import { rt } from "./game/runtime";
+import { fixedCamera, rt } from "./game/runtime";
 import { tts } from "./audio/tts";
 import { audio } from "./audio/audio";
 import { bottomPanel } from "./scene/CameraRig";
@@ -39,7 +39,7 @@ function useCameraDrag(ref: React.RefObject<HTMLDivElement | null>) {
       lx = e.clientX;
       ly = e.clientY;
       const g = getGame();
-      if (g.screen !== "game" || rt.camera.mode !== "follow") return;
+      if (g.screen !== "game" || rt.camera.mode !== "follow" || fixedCamera()) return;
       const s = g.settings.cameraSensitivity;
       rt.camera.yaw -= dx * 0.005 * s;
       rt.camera.pitch = Math.min(1.1, Math.max(0.2, rt.camera.pitch + dy * 0.003 * s));
@@ -48,7 +48,7 @@ function useCameraDrag(ref: React.RefObject<HTMLDivElement | null>) {
       if (e.pointerId === id) id = null;
     };
     const wheel = (e: WheelEvent) => {
-      if (getGame().screen !== "game") return;
+      if (getGame().screen !== "game" || fixedCamera()) return;
       rt.camera.dist = Math.min(14, Math.max(5, rt.camera.dist + Math.sign(e.deltaY) * 0.8));
     };
     el.addEventListener("pointerdown", down);

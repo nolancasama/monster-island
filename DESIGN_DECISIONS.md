@@ -54,6 +54,25 @@ and its camera specs pass. A fixed south-facing view there would put half the
 island behind the player. The handoff at the cliff is the rope, which has its
 own camera anyway.
 
+**Continuity implementation.** The real basin replaces the panorama. Scenery
+uses 96 m spatial tiles, normal frustum culling and a 260 m fog-matched distance
+cut-off plus each object's radius; ferns and reeds scale over their final 8 m.
+Lowland fog targets near 55 / far 260 everywhere, blending only from the
+prologue's near 70. Follow framing is yaw 0, pitch 0.55 radians, distance 10 m
+with a 3 m look-ahead, so the path and the next area sit in the upper half of
+the screen. (The first pass used 0.85 / 9 m / 2 m: near top-down, it showed only
+~10 m ahead and defeated the visibility goal.) The cliff closes the lowland's
+north side, so the lens never goes behind its face; over the last 5 m before
+the rope foot the framing tips down (pitch up to 1.15, 8 m, no look-ahead)
+with the same heading. Obstructions allow at most 2.5 m pull-in and 1.5 m rise;
+rope clearance is resolved before camera smoothing. The rope uses the same
+(+5, +4, -8) m offset in both directions, with a 0.75 s entry blend and a
+smoothed handoff to follow. The island orbit resumes the rope's yaw. Exit and
+fork shoulders have broad low saddles, the outer banks taper continuously,
+and the side ridges are lower. Root, reed, stone and timber lattices leave
+clear sightlines while their original collision cuts and opening animations
+stay intact. Playable floor measurements remain unchanged.
+
 **Eat button.** The quick-eat button and F key belong to the active friend's
 favourite food: its icon, the count in the bag, and the effect ("Fish ×3 · +15
 HP · +30 Bubbo MP"). With none of that food left, the button is greyed with

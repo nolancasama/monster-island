@@ -6,10 +6,8 @@ import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Ou
 import { makeRng } from "../../game/logic/rng";
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import {
-  detailOwner,
   STAGES,
   STAGE_EXITS,
-  type ZoneId,
   BASIN,
   CAMP2,
   CANOPY_GAPS,
@@ -889,52 +887,27 @@ export function coinGeometry(): THREE.BufferGeometry {
 
 export { CHESTS };
 
-/** Simplified crowns, hills, coastline and port roofs: no stages or enemies. */
-export function lowlandPanoramaGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0),
-    rand = makeRng(809);
-  b.box(16, 1, 30, 75.5, 0, -167, "#487c55");
-  b.add(new THREE.CircleGeometry(1, 14), "#487c55", [77, 1, -244], [-Math.PI / 2, 0, 0], [46, 85, 1]);
-  for (let i = 0; i < 140; i++) {
-    const x = 34 + rand() * 85,
-      z = -166 - rand() * 117,
-      y = 2.2;
-    b.add(new THREE.IcosahedronGeometry(1, 0), i % 3 ? "#326d50" : "#4d825a", [x, y + 5 + rand() * 3, z], [0, rand() * 6, 0], [3 + rand() * 2, 3, 4]);
-  }
-  for (const x of [28, 124]) for (let z = -182; z > -290; z -= 29) b.add(new THREE.ConeGeometry(12, 18, 5), "#557b6c", [x, 7, z]);
-  b.box(49, 0.3, 24, 77, 0.8, -307, "#c6be97");
-  for (const x of [60, 94])
-    for (const z of [-298, -313]) {
-      b.box(5, 2.5, 4, x, 1, z, "#d4c6a7");
-      b.add(new THREE.ConeGeometry(4, 2, 4), "#9b7159", [x, 4.5, z], [0, Math.PI / 4, 0], [1, 1, 0.8]);
-    }
-  b.box(2, 0.4, 17, 76, 1, -330, "#9c825f");
-  // The same harbour lighthouse as the detailed town, simplified to a silhouette.
-  b.cyl(.9,1.3,8,99,SEA_Y+1.2,-327,"#f8e8d0",6);
-  b.cyl(.95,1.05,1,99,SEA_Y+7.2,-327,"#c76c55",6);
-  b.cone(1.2,1.2,99,SEA_Y+10.4,-327,"#c76c55",6);
-  return b.build();
-}
-
-/** Split merged props by stage, preserving their per-triangle colours. */
-export function zoneGeometry(source: THREE.BufferGeometry): Array<{ zone: ZoneId; geometry: THREE.BufferGeometry }> {
+/** Spatial tiles retain the same props from either side of every stage boundary. */
+export function spatialGeometry(source: THREE.BufferGeometry, size = 48): THREE.BufferGeometry[] {
   const g = source.index ? source.toNonIndexed() : source;
-  const buckets = new Map<ZoneId, Record<string, number[]>>();
+  const buckets = new Map<string, Record<string, number[]>>();
   const p = g.getAttribute("position");
   for (let i = 0; i < p.count; i += 3) {
-    const owner = detailOwner((p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3);
-    let attrs = buckets.get(owner);
-    if (!attrs) buckets.set(owner, (attrs = {}));
+    const x = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3,
+      z = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+    const key = `${Math.floor(x / size)},${Math.floor(z / size)}`;
+    let attrs = buckets.get(key);
+    if (!attrs) buckets.set(key, (attrs = {}));
     for (const [name, a] of Object.entries(g.attributes)) {
       const values = (attrs[name] ??= []);
       for (let j = i; j < i + 3; j++) for (let k = 0; k < a.itemSize; k++) values.push(a.array[j * a.itemSize + k]);
     }
   }
-  const result = [...buckets].map(([zone, attrs]) => {
+  const result = [...buckets.values()].map((attrs) => {
     const geometry = new THREE.BufferGeometry();
     for (const [name, values] of Object.entries(attrs)) geometry.setAttribute(name, new THREE.Float32BufferAttribute(values, g.getAttribute(name).itemSize));
     geometry.computeBoundingSphere();
-    return { zone, geometry };
+    return geometry;
   });
   if (g !== source) g.dispose();
   source.dispose();
@@ -944,16 +917,22 @@ export function zoneGeometry(source: THREE.BufferGeometry): Array<{ zone: ZoneId
 export function stageBarrierGeometry(gate: (typeof STAGE_EXITS)[number]): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   if (gate.kind === "stone") {
-    b.box(gate.half * 2, 3.8, 0.8, 0, 0, 0, "#8c9081");
-    for (let x = -gate.half; x <= gate.half; x += 1.6) b.box(0.09, 3.6, 0.83, x, 0.05, 0, "#646e5e");
+    for (const x of [-gate.half, gate.half]) b.box(0.65, 3.4, 0.8, x, 0, 0, "#8c9081");
+    b.box(gate.half * 2 + 0.65, 0.45, 0.8, 0, 3, 0, "#8c9081");
+    for (let x = -gate.half + 0.8; x < gate.half; x += 1.2) b.box(0.16, 3, 0.22, x, 0, 0, "#646e5e");
+    b.box(gate.half * 2, 0.14, 0.26, 0, 0.65, 0, "#646e5e");
   } else if (gate.kind === "wood") {
-    for (let x = -gate.half; x <= gate.half; x += 1) b.box(0.32, 2.5, 0.38, x, 0, 0, "#7c5941");
-    b.boxAt(gate.half * 2 + 0.6, 0.35, 0.4, [0, 1.4, 0.2], [0, 0, 0.12], "#9c7650");
-  } else {
-    for (let x = -gate.half; x <= gate.half; x += 0.8) {
-      between(b, [x, 0, 0], [x + 0.7, 2.7, 0.12], 0.26, 0.12, gate.kind === "reeds" ? "#447965" : "#5b6540", 5);
-      between(b, [x, 1, -0.1], [x - 0.8, 2.3, -0.1], 0.2, 0.08, "#7e8750", 5);
+    for (let x = -gate.half; x <= gate.half; x += 1.25) {
+      b.box(0.28, 2.3, 0.32, x, 0, 0, "#7c5941");
+      b.cone(0.22, 0.4, x, 2.3, 0, "#9c7650", 4);
     }
+    for (const y of [0.6, 1.7]) b.box(gate.half * 2 + 0.5, 0.18, 0.32, 0, y, 0.1, "#9c7650");
+  } else {
+    for (let x = -gate.half; x <= gate.half; x += 1.25) {
+      between(b, [x, 0, 0], [x + 0.3, 2.8, 0.12], 0.18, 0.09, gate.kind === "reeds" ? "#447965" : "#5b6540", 5);
+      between(b, [x, 0.7, -0.1], [Math.min(x + 1.25, gate.half), 1.7, -0.1], 0.1, 0.065, "#7e8750", 5);
+    }
+    between(b, [-gate.half, 2.4, 0], [gate.half, 2.7, 0], 0.12, 0.1, "#5b6540", 5);
   }
   return b.build();
 }

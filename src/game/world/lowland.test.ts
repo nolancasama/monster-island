@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PLAYER_R, isWalkable, moveCircle, standY, type Gates } from "./collision";
 import { groundY } from "./island";
 import {
-  panoramaVisible, stageDetailVisible, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
+  lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
 } from "./lowland";
 import type { ObstacleId } from "../types";
 
@@ -144,9 +144,27 @@ describe("first-clear exit collision", () => {
   });
 });
 
-it("the early overlook is before the lair, while stage details belong only to the current zone",()=>{
-  expect(panoramaVisible(87,-129,-120)).toBe(true);
-  expect(panoramaVisible(70,-117,-110)).toBe(false);
-  for(const owner of STAGES) for(const active of STAGES) expect(stageDetailVisible(owner,active)).toBe(owner===active);
-  expect(stageDetailVisible("grove",null)).toBe(false);
+it("draws one real lowland from the overlook, rope and every stage, while keeping the prologue isolated",()=>{
+  for(const [x,z] of [[87,-129],[75.5,-149.8],[75.5,-152.15],[75.5,-154.4],...Object.values(ZONES).map(zone=>{
+    const sh=zone.walk[0];
+    return sh.kind==="disc"?[sh.x,sh.z]:sh.kind==="trail"?sh.pts[0]:[sh.x0,sh.z0];
+  })]) expect(lowlandRegionVisible(x,z,z),`${x},${z}`).toBe(true);
+  expect(lowlandRegionVisible(87,-129,-120)).toBe(true);
+  expect(lowlandRegionVisible(70,-127,-118)).toBe(false);
+  for(const [x,z] of [[0,0],[0,-60],[70,-117],[70,-125]]) expect(lowlandRegionVisible(x,z,z),`${x},${z}`).toBe(false);
+});
+
+it("opens low visual shoulders beside every crossing without widening gate collision",()=>{
+  for(const exit of STAGE_EXITS) {
+    for(const dx of [-exit.half-2,0,exit.half+2])
+      for(const dz of [-5,0,5]) expect(forestBankY(exit.x+dx,exit.z+dz),`${exit.id} ${dx},${dz}`).toBeLessThanOrEqual(.41);
+    const locked={...gates(),cleared:STAGES.filter(id=>id!==exit.id)};
+    expect(isWalkable(exit.x,exit.z,locked,.7),exit.id).toBe(false);
+  }
+  for(const [x,z] of [[40,-159],[40,-288],[30,-210],[123,-210]]) {
+    const boundary=forestBankY(x,z);
+    expect(boundary).toBe(0);
+    for(const [dx,dz] of [[.01,0],[-.01,0],[0,.01],[0,-.01]])
+      expect(Math.abs(forestBankY(x+dx,z+dz)-boundary)).toBeLessThan(.001);
+  }
 });
