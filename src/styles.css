@@ -1672,7 +1672,8 @@ kbd {
   pointer-events: none;
 }
 
-.moves-legend span {
+.moves-legend > span,
+.eat-key {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1683,6 +1684,42 @@ kbd {
   box-shadow: var(--shadow);
   font-weight: 900;
   font-size: 1.05rem;
+}
+
+.eat-key {
+  pointer-events: auto;
+  position: relative;
+}
+
+.eat-effect {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--paper);
+  border: 2px solid var(--line);
+  font-size: 0.75rem;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.eat-count {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  padding: 1px 4px;
+  border-radius: 8px;
+  background: var(--paper);
+  border: 2px solid var(--line);
+  font-size: 0.7rem;
+}
+
+[data-testid="btn-eat"][aria-disabled="true"] {
+  filter: grayscale(1);
+  opacity: 0.65;
 }
 
 .moves-legend kbd {

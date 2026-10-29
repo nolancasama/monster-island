@@ -149,20 +149,15 @@ export function eatHelps(v: Vitals, food: FoodId): boolean {
   return v.hp < MAX_HP || (r.friend !== null && v.mp[r.friend] < MAX_MP);
 }
 
-/**
- * Which food the quick-eat key uses: the active friend's favourite if its MP
- * is low, otherwise whatever helps most. Null when nothing in the bag helps.
- */
+/** The active friend's favourite, shared by the quick-eat key and its icon. */
+export function favouriteFood(active: CompanionId | null): FoodId | null {
+  return active ? (Object.keys(FOOD_RESTORE) as FoodId[]).find((f) => FOOD_RESTORE[f].friend === active) ?? null : null;
+}
+
+/** Quick-eat only uses the active friend's favourite, when present and helpful. */
 export function bestFood(v: Vitals, bag: Partial<Record<FoodId, number>>, active: CompanionId | null): FoodId | null {
-  const have = (Object.keys(FOOD_RESTORE) as FoodId[]).filter((f) => (bag[f] ?? 0) > 0 && eatHelps(v, f));
-  if (!have.length) return null;
-  const score = (f: FoodId) => {
-    const r = FOOD_RESTORE[f];
-    const hp = Math.min(r.hp, MAX_HP - v.hp);
-    const mp = r.friend ? Math.min(r.mp, MAX_MP - v.mp[r.friend]) * (r.friend === active ? 1.5 : 0.6) : 0;
-    return hp + mp;
-  };
-  return have.sort((a, b) => score(b) - score(a))[0];
+  const food = favouriteFood(active);
+  return food && (bag[food] ?? 0) > 0 && eatHelps(v, food) ? food : null;
 }
 
 /** A rest at a camp or the inn: everything back to full. */

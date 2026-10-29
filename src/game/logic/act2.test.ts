@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { newProgress, objective, type Progress } from "./progress";
 import {
-  clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, findPort, hearLead,
+  clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, eatHelps, findPort, hearLead,
   hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, regenMp, rested, spendMp, startAct2
 } from "./act2";
 import { decodeSave, encodeSave } from "./save";
 import { PHRASES, heardQuantity } from "./english";
 import { judgeSpeech } from "./speechMatch";
 import { STAGES, ENEMY_SPAWNS } from "../world/lowland";
-import { KO_HP, MAX_HP } from "../data/combat";
+import { FOOD_RESTORE, KO_HP, MAX_HP } from "../data/combat";
 import type { FoodId, MonsterId } from "../types";
 
 /** The finished prologue: all five friends, every unlock, the finale played. */
@@ -72,6 +72,37 @@ function addFood2(p: Progress, f: FoodId): Progress {
 }
 
 describe("HP and MP", () => {
+  it("quick-eat chooses only the active friend's favourite when HP or that friend's MP needs it", () => {
+    const bag = { apples: 3, fish: 3, berries: 3, meat: 3, bananas: 3 };
+    for (const food of Object.keys(FOOD_RESTORE) as FoodId[]) {
+      const friend = FOOD_RESTORE[food].friend;
+      if (!friend) continue;
+      expect(bestFood(v(90), bag, friend)).toBe(food);
+      const lowMp = v();
+      lowMp.mp[friend] = 90;
+      expect(bestFood(lowMp, bag, friend)).toBe(food);
+      expect(bestFood(v(50, 0), { ...bag, [food]: 0 }, friend)).toBeNull();
+      expect(bestFood(v(), bag, friend)).toBeNull();
+      expect(bestFood(v(50, 0), { bananas: 3 }, friend)).toBeNull();
+    }
+    expect(bestFood(v(50, 0), bag, null)).toBeNull();
+    const otherLow = v();
+    otherLow.mp.bubbo = 0;
+    expect(bestFood(otherLow, bag, "leafy")).toBeNull();
+  });
+
+  it("deliberate eating can help another friend or restore HP with bananas, without wasting food", () => {
+    const lowMp = v();
+    lowMp.mp.bubbo = 95;
+    expect(eatHelps(lowMp, "fish")).toBe(true);
+    expect(eatEffect(lowMp, "fish")).toEqual(v());
+    expect(eatHelps(lowMp, "apples")).toBe(false);
+    expect(eatHelps(lowMp, "bananas")).toBe(false);
+    expect(eatHelps(v(95), "bananas")).toBe(true);
+    expect(eatEffect(v(95), "bananas")).toEqual(v());
+    for (const food of Object.keys(FOOD_RESTORE) as FoodId[]) expect(eatHelps(v(), food)).toBe(false);
+  });
+
   it("one HP pool, clamped; specials need enough MP; every friend regains MP on its own", () => {
     expect(hurt(v(10), 25).hp).toBe(0);
     expect(spendMp(v(100, 20), "leafy", 25)).toBeNull();

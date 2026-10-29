@@ -1,7 +1,7 @@
-import { COMBAT, ENEMIES, MAX_HP, type CompanionId, type MoveDef } from "./data/combat";
+import { COMBAT, ENEMIES, FOOD_RESTORE, MAX_HP, type CompanionId, type MoveDef } from "./data/combat";
 import { FOODS } from "./data/foods";
 import { MONSTERS } from "./data/monsters";
-import { clearStage, remainingEnemies, addCoins, addFood, addItem, afterKnockout, bestFood, changeZone, eatEffect, eatHelps, hurt, markTutorial, newZoneMemory, noteDefeat, regenMp, spendMp, type TutorialStep, type Vitals, type ZoneMemory } from "./logic/act2";
+import { clearStage, remainingEnemies, addCoins, addFood, addItem, afterKnockout, favouriteFood, changeZone, eatEffect, eatHelps, hurt, markTutorial, newZoneMemory, noteDefeat, regenMp, spendMp, type TutorialStep, type Vitals, type ZoneMemory } from "./logic/act2";
 import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
 import { effect, rt } from "./runtime";
 import { isRunning } from "./flow/script";
@@ -613,25 +613,37 @@ function dropAt(x: number, z: number, kind: Drop["kind"], value: number, food?: 
 // ------------------------------------------------------------ eating
 
 /** F / tapping a food in the bag: eat it (HP for the player, MP for the friend who loves it). */
-export function eat(food: FoodId | null = bestFood(cb.vitals, getGame().progress.bag, getGame().progress.active as CompanionId | null)): boolean {
+export function eat(food: FoodId | null = favouriteFood(getGame().progress.active as CompanionId | null)): boolean {
   const g = getGame();
   if (!act2Live() || g.mode !== "explore" || isRunning() || cb.knockedOut) return false;
   if (!food) {
-    toast({ en: "You're fine! / No food that helps.", ja: "いまは たべなくて だいじょうぶ (または たべものが ない)", tone: "info" }, 1800);
+    toast({ en: "Choose a friend first!", ja: "なかまを えらぼう!", tone: "info" }, 1600);
     return false;
   }
-  if ((g.progress.bag[food] ?? 0) < 1) return false;
+  if ((g.progress.bag[food] ?? 0) < 1) {
+    toast({ en: `No ${FOODS[food].word}!`, ja: `${FOODS[food].ja}が ないよ!`, icon: food, tone: "info" }, 1600);
+    return false;
+  }
   if (!eatHelps(cb.vitals, food)) {
     toast({ en: "You're full!", ja: "HPも MPも いっぱい!", icon: food, tone: "info" }, 1600);
     return false;
   }
-  cb.vitals = eatEffect(cb.vitals, food);
+  const before = cb.vitals;
+  cb.vitals = eatEffect(before, food);
+  const gains: string[] = [];
+  const hp = cb.vitals.hp - before.hp;
+  const friend = FOOD_RESTORE[food].friend;
+  const mp = friend ? cb.vitals.mp[friend] - before.mp[friend] : 0;
+  if (hp > 0) gains.push(`+${Number(hp.toFixed(2))} HP`);
+  if (friend && mp > 0) gains.push(`${MONSTERS[friend].name} +${Number(mp.toFixed(2))} MP`);
   updateProgress((p) => ({ ...p, bag: { ...p.bag, [food]: (p.bag[food] ?? 1) - 1 } }));
   const p = rt.player;
   pushFx("eat", p.x, p.y + 1.6, p.z, 0, 0, 0, 1);
   audio.play("munch");
   rt.player.action = { kind: "cheer", t0: rt.time };
-  toast({ en: `Yum! ${FOODS[food].word}`, ja: `${FOODS[food].ja}を たべた! HPと MPが ふえた`, icon: food, tone: "good" }, 1600);
+  const effect = gains.join(" · ");
+  const word = FOODS[food].word;
+  toast({ en: `Yum! ${word[0].toUpperCase()}${word.slice(1)}! ${effect}`, ja: `${FOODS[food].ja}を たべた! · ${effect}`, icon: food, tone: "good" }, 1600);
   learn("eat");
   return true;
 }

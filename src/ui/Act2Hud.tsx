@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { setGame, useGame } from "../game/store";
 import { stageStatus, cb, basicAttack, eat, inHostileZone, specialAttack } from "../game/combat";
-import { COMBAT, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
+import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
+import { FOODS } from "../game/data/foods";
+import { favouriteFood } from "../game/logic/act2";
 import { MONSTERS } from "../game/data/monsters";
 import { practiseCommand, quickBuy } from "../game/flow/act2";
 import { rt } from "../game/runtime";
@@ -96,6 +98,31 @@ function Moves() {
   const active = progress.active as CompanionId | null;
   if (!active || mode !== "explore" || !inHostileZone()) return null;
   const c = COMBAT[active];
+  const food = favouriteFood(active);
+  if (!food) return null;
+  const count = progress.bag[food] ?? 0;
+  const restore = FOOD_RESTORE[food];
+  const word = FOODS[food].word;
+  const Word = `${word[0].toUpperCase()}${word.slice(1)}`;
+  const effect = count ? `${Word} ×${count} · +${restore.hp} HP · +${restore.mp} ${MONSTERS[active].name} MP` : `No ${word} · ${MONSTERS[active].name} loves ${word}!`;
+  const eatButton = (
+    <button
+      className={touch ? "move-btn eat" : "eat-key"}
+      onPointerDown={touch ? (e) => {
+        e.preventDefault();
+        eat();
+      } : undefined}
+      onClick={(e) => { if (!touch || e.detail === 0) eat(); }}
+      aria-disabled={count === 0}
+      data-testid="btn-eat"
+      aria-label={count ? `Eat ${word}` : `No ${word}`}
+    >
+      {!touch && <kbd>F</kbd>}
+      <Icon id={food} size={touch ? 30 : 24} />
+      <b className="eat-count">×{count}</b>
+      <small>{count ? "Eat" : `No ${word}`}</small>
+    </button>
+  );
   if (touch) {
     const hold = (on: boolean) => (e: React.PointerEvent) => {
       e.preventDefault();
@@ -104,6 +131,7 @@ function Moves() {
     };
     return (
       <div className="touch-moves ui">
+        <div className="eat-effect">{effect}</div>
         <button
           className="move-btn special"
           onPointerDown={(e) => {
@@ -127,32 +155,20 @@ function Moves() {
         >
           <span className="move-word">{c.basic.word}</span>
         </button>
-        <button
-          className="move-btn eat"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            eat();
-          }}
-          data-testid="btn-eat"
-          aria-label="Eat"
-        >
-          <Icon id="apples" size={30} />
-          <small>Eat</small>
-        </button>
+        {eatButton}
       </div>
     );
   }
   return (
     <div className="moves-legend ui" data-testid="moves">
+      <div className="eat-effect">{effect}</div>
       <span>
         <kbd>J</kbd> {c.basic.word}
       </span>
       <span>
         <kbd>K</kbd> {c.special.word} <small>{c.special.cost} MP</small>
       </span>
-      <span>
-        <kbd>F</kbd> Eat
-      </span>
+      {eatButton}
     </div>
   );
 }
