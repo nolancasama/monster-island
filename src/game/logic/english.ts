@@ -33,6 +33,8 @@ export type PhraseId =
   | "noIDont"
   | "yesICan"
   | "noICant"
+  | "yesPlease"
+  | "noThankYou"
   | "canSwim"
   | "canFly"
   | "canJump"
@@ -202,6 +204,8 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   noIDont: { id: "noIDont", en: "No, I don't.", keys: [NO], forbid: ["yes", "yeah", "yep"] },
   yesICan: { id: "yesICan", en: "Yes, I can.", keys: [YES], forbid: NO },
   noICant: { id: "noICant", en: "No, I can't.", keys: [NO], forbid: ["yes", "yeah", "yep"] },
+  yesPlease: { id: "yesPlease", en: "Yes, please.", keys: [YES], forbid: NO },
+  noThankYou: { id: "noThankYou", en: "No, thank you.", keys: [NO], forbid: YES },
   canSwim: can("canSwim", "swim", "Can you swim?"),
   canFly: can("canFly", "fly", "Can you fly?"),
   canJump: can("canJump", "jump", "Can you jump?"),

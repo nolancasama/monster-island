@@ -90,7 +90,6 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
   // Nothing else is near the sanctuary; the rest is down in the lowland.
   if (rt.player.z > -152) return;
   for (const c of CHESTS) if (!p.act2.chests.includes(c.id)) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
-  add({ id: "campRest", kind: "rest", verb: "Rest", noun: "at the camp", x: CAMP2.rest.x, z: CAMP2.rest.z }, 2.4);
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {
     if (isSolved(p, id) || !obstacleAvailable(p, id as ObstacleId)) continue;
@@ -177,7 +176,7 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       const c = CHESTS.find((x) => x.id === "forestChest")!;
       return { x: c.x, z: c.z, y: 1.5 };
     }
-    case "rest":
+    case "crossing":
       return { x: CAMP2.rest.x, z: CAMP2.rest.z, y: 1.8 };
     case "reachPort": {
       const zone = zoneAt(rt.player.x, rt.player.z);

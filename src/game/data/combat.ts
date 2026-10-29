@@ -133,8 +133,8 @@ export const FOOD_RESTORE: Record<FoodId, { hp: number; mp: number; friend: Comp
 
 /** Market prices in Monster Coins. */
 export const PRICES: Record<FoodId, number> = { apples: 5, bananas: 4, fish: 8, berries: 6, meat: 10 };
-/** Most of one food the bag holds once Act 2 has begun (the prologue keeps 3). */
-export const ACT2_BAG_MAX = 9;
+/** The Seaside Inn's price, paid only after accepting a room. */
+export const INN_PRICE = 10;
 
 export interface Recipe {
   friend: CompanionId;

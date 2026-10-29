@@ -22,6 +22,7 @@ import { MONSTER_ORDER } from "../game/data/monsters";
 import type { FoodId, MonsterId } from "../game/types";
 import { additiveSprite, flatMat, occluderMat, smoothMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
+import { Tent } from "./Tent";
 import {
   SOCKETS,
   appleTreeGeometry,
@@ -38,14 +39,12 @@ import {
   signPostGeometry,
   steppingStoneGeometry,
   tableGeometry,
-  tentGeometry,
   vinesGeometry
 } from "./models/props";
 
 const at = (x: number, z: number, dy = 0): [number, number, number] => [x, groundY(x, z) + dy, z];
 
 function Camp() {
-  const tent = useMemo(tentGeometry, []);
   const table = useMemo(tableGeometry, []);
   const fire = useMemo(campfireGeometry, []);
   const flag = useMemo(flagGeometry, []);
@@ -63,7 +62,7 @@ function Camp() {
   const f = CAMP.fire;
   return (
     <group>
-      <mesh geometry={tent} material={occluderMat} position={at(CAMP.tent.x, CAMP.tent.z)} rotation={[0, CAMP.tent.yaw, 0]} />
+      <Tent />
       <mesh geometry={table} material={smoothMat} position={at(CAMP.table.x, CAMP.table.z)} rotation={[0, CAMP.table.yaw, 0]} />
       <group position={at(f.x, f.z)}>
         <mesh geometry={fire} material={flatMat} />

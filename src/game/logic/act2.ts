@@ -1,7 +1,7 @@
 import type { FoodId, ItemId, ObstacleId } from "../types";
 import type { Progress } from "./progress";
 import { BAG_MAX } from "../data/foods";
-import { ACT2_BAG_MAX, COMPANION_IDS, FOOD_RESTORE, KO_HP, MAX_HP, MAX_MP, MP_REGEN, PRICES, RECIPES, type CompanionId } from "../data/combat";
+import { COMPANION_IDS, FOOD_RESTORE, INN_PRICE, KO_HP, MAX_HP, MAX_MP, MP_REGEN, PRICES, RECIPES, type CompanionId } from "../data/combat";
 import { CHESTS, ENEMY_SPAWNS, STAGES, type StageId, type ZoneId } from "../world/lowland";
 
 /**
@@ -68,8 +68,8 @@ export function startAct2(p: Progress): Progress {
   return withAct2(p, { started: true, lumoTaken: true });
 }
 
-export function bagMax(p: Progress): number {
-  return p.act2.started ? ACT2_BAG_MAX : BAG_MAX;
+export function bagMax(_p?: Progress): number {
+  return BAG_MAX;
 }
 
 export function markTutorial(p: Progress, step: TutorialStep): Progress {
@@ -85,7 +85,21 @@ export function markDescended(p: Progress): Progress {
 }
 
 export function findPort(p: Progress): Progress {
-  return p.act2.portFound || !p.act2.started ? p : withAct2(p, { portFound: true, checkpoint: "port" });
+  return p.act2.portFound || !p.act2.started ? p : withAct2(p, { portFound: true });
+}
+
+/** Keep the saved lesson token `rest`; the lesson now records reaching the crossing. */
+export function reachCrossing(p: Progress): Progress {
+  return !p.act2.started ? p : setCheckpoint(markTutorial(p, "rest"), "camp");
+}
+
+export type InnResult = { outcome: "rest" | "declined" | "coins"; progress: Progress };
+
+/** A room is bought once by the accepted answer, before the rest transition. */
+export function stayAtInn(p: Progress, accept: boolean): InnResult {
+  if (!accept) return { outcome: "declined", progress: p };
+  if (p.act2.coins < INN_PRICE) return { outcome: "coins", progress: p };
+  return { outcome: "rest", progress: setCheckpoint(addCoins(p, -INN_PRICE), "port") };
 }
 
 export function hearLead(p: Progress): Progress {
@@ -93,7 +107,7 @@ export function hearLead(p: Progress): Progress {
 }
 
 export function addCoins(p: Progress, n: number): Progress {
-  return withAct2(p, { coins: Math.max(0, Math.min(9999, p.act2.coins + Math.floor(n))) });
+  return withAct2(p, { coins: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, p.act2.coins + Math.floor(n))) });
 }
 
 export function addItem(p: Progress, item: ItemId, n = 1): Progress {
@@ -160,7 +174,7 @@ export function bestFood(v: Vitals, bag: Partial<Record<FoodId, number>>, active
   return food && (bag[food] ?? 0) > 0 && eatHelps(v, food) ? food : null;
 }
 
-/** A rest at a camp or the inn: everything back to full. */
+/** A paid rest at the inn: everything back to full. */
 export function rested(): Vitals {
   return { hp: MAX_HP, mp: fullMp() };
 }
@@ -176,8 +190,8 @@ export type BuyResult = { ok: true; progress: Progress } | { ok: false; reason: 
 
 export function buy(p: Progress, food: FoodId, n: number): BuyResult {
   const cost = PRICES[food] * n;
-  if (p.act2.coins < cost) return { ok: false, reason: "coins" };
   if ((p.bag[food] ?? 0) + n > bagMax(p)) return { ok: false, reason: "bag" };
+  if (p.act2.coins < cost) return { ok: false, reason: "coins" };
   const next = addCoins(addFood(p, food, n).progress, -cost);
   return { ok: true, progress: withAct2(next, { bought: true }) };
 }
@@ -204,12 +218,19 @@ export function practise(p: Progress, friend: CompanionId): Progress {
   return p.act2.trained.includes(friend) ? p : withAct2(p, { trained: [...p.act2.trained, friend] });
 }
 
-/** Open a one-time chest: its coins, amber and food (food that does not fit stays behind). */
+/** Food that will become coins when this unopened chest is collected. */
+export function chestFoodOverflow(p: Progress, id: string): number {
+  const c = CHESTS.find((x) => x.id === id);
+  if (!c?.food || p.act2.chests.includes(id) || !p.act2.started) return 0;
+  return Math.max(0, c.food.n - Math.max(0, bagMax(p) - (p.bag[c.food.id] ?? 0)));
+}
+
+/** Open a one-time chest: overflow becomes one coin each, alongside all other rewards. */
 export function openChest(p: Progress, id: string): Progress {
   const c = CHESTS.find((x) => x.id === id);
   if (!c || p.act2.chests.includes(id) || !p.act2.started) return p;
   let next = withAct2(p, { chests: [...p.act2.chests, id] });
-  next = addCoins(next, c.coins);
+  next = addCoins(next, c.coins + chestFoodOverflow(p, id));
   if (c.amber) next = addItem(next, "amber", c.amber);
   if (c.food) next = addFood(next, c.food.id, c.food.n).progress;
   return next;
@@ -266,7 +287,7 @@ export type Act2Objective =
   | { id: "act2Start" }
   | { id: "descend" }
   | { id: "openChest" }
-  | { id: "rest" }
+  | { id: "crossing" }
   | { id: "reachPort" }
   | { id: "market" }
   | { id: "kitchen" }
@@ -281,7 +302,7 @@ export function act2Objective(p: Progress): Act2Objective {
   if (!a.portFound) {
     if (!a.descended) return { id: "descend" };
     if (!a.chests.includes("forestChest")) return { id: "openChest" };
-    if (!a.tutorial.includes("rest")) return { id: "rest" };
+    if (!a.tutorial.includes("rest")) return { id: "crossing" };
     return { id: "reachPort" };
   }
   if (a.harbor) return { id: "act2Done" };

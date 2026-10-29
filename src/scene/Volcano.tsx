@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { GATE_PILLARS, LAVA, SANCTUARY_GATE, groundY } from "../game/world/island";
-import { additiveSprite, flatMat, occluderMat } from "./materials";
+import { additiveSprite, flatMat, glowTexture, occluderMat } from "./materials";
 import {
   gardenGeometry,
   CAVE_TORCHES,
@@ -15,6 +15,7 @@ import {
   meatRackGeometry,
   pillarGeometry,
   pillarPowerGeometry,
+  PILLAR_COLOR,
   rackPosition,
   volcanoGroundGeometry,
   volcanoRocksGeometry,
@@ -97,7 +98,6 @@ function Pillar({ id }: { id: PillarId }) {
   const power = useMemo(() => pillarPowerGeometry(id), [id]);
   const glowMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true }), []);
   const ref = useRef<THREE.Mesh>(null);
-  const glow = useRef<THREE.Mesh>(null);
   const p = GATE_PILLARS[id];
   useFrame(() => {
     const t = rt.pillars[id] ?? 0;
@@ -105,16 +105,68 @@ function Pillar({ id }: { id: PillarId }) {
       ref.current.visible = t > 0.01;
       ref.current.scale.y = Math.max(0.01, t);
     }
-    if (glow.current) glow.current.visible = t > 0.9;
   });
   return <group position={at(p.x, p.z)}>
     <mesh geometry={stone} material={flatMat} />
     <mesh ref={ref} geometry={power} material={glowMat} />
-    <mesh ref={glow} position={[0, 1.3, 0.64]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[0.75, 0.84, 20]} />
-      <meshBasicMaterial color="#fff0a9" side={THREE.DoubleSide} />
-    </mesh>
   </group>;
+}
+
+/** Solved rings also share one draw; all four are in the tunnel's north-facing
+ * frustum even when the lining hides them. Preserve their individual animation. */
+function PillarRings() {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const pose = useMemo(() => new THREE.Object3D(), []);
+  const ids = Object.keys(GATE_PILLARS) as PillarId[];
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    mesh.visible = ids.some(id => (rt.pillars[id] ?? 0) > .9);
+    if (!mesh.visible) return;
+    ids.forEach((id, i) => {
+      const p = GATE_PILLARS[id];
+      pose.position.set(p.x, groundY(p.x, p.z) + 1.3, p.z + .64);
+      pose.rotation.x = -Math.PI / 2;
+      pose.scale.setScalar((rt.pillars[id] ?? 0) > .9 ? 1 : 0);
+      pose.updateMatrix();
+      mesh.setMatrixAt(i, pose.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  });
+  return <instancedMesh ref={ref} args={[undefined, undefined, 4]}>
+    <ringGeometry args={[.75, .84, 20]} />
+    <meshBasicMaterial color="#fff0a9" side={THREE.DoubleSide} />
+  </instancedMesh>;
+}
+
+/** One draw for the four soft halos, attached to the physical friend plaques. */
+function PillarHalos() {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const pose = useMemo(() => new THREE.Object3D(), []);
+  const color = useMemo(() => new THREE.Color(), []);
+  const ids = Object.keys(GATE_PILLARS) as PillarId[];
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ map: glowTexture(), transparent: true,
+    opacity: .25, depthWrite: false, blending: THREE.AdditiveBlending }), []);
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    mesh.visible = ids.some(id => (rt.pillars[id] ?? 0) < .01);
+    if (!mesh.visible) return;
+    ids.forEach((id, i) => {
+      const p = GATE_PILLARS[id];
+      pose.position.set(p.x, groundY(p.x, p.z) + 2, p.z + .81);
+      pose.scale.setScalar((rt.pillars[id] ?? 0) < .01 ? 1.6 : 0);
+      pose.updateMatrix();
+      mesh.setMatrixAt(i, pose.matrix);
+      mesh.setColorAt(i, color.set(PILLAR_COLOR[id]));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    material.opacity = .23 + Math.sin(rt.time * 1.8) * .04;
+    mesh.computeBoundingSphere();
+  });
+  return <instancedMesh ref={ref} args={[undefined, material, 4]}><planeGeometry args={[1, 1]} /></instancedMesh>;
 }
 
 function Gate() {
@@ -130,6 +182,8 @@ function Gate() {
     <mesh geometry={wall} material={occluderMat} />
     <mesh ref={ref} geometry={door} material={flatMat} position={at(SANCTUARY_GATE.x, SANCTUARY_GATE.z)} />
     {(Object.keys(GATE_PILLARS) as PillarId[]).map((id) => <Pillar key={id} id={id} />)}
+    <PillarHalos />
+    <PillarRings />
   </group>;
 }
 

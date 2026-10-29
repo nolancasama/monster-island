@@ -75,9 +75,9 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   a.hp = hp <= 0 ? KO_HP : Math.min(MAX_HP, hp);
   const mp = isObj(raw.mp) ? raw.mp : {};
   for (const id of COMPANION_IDS) a.mp[id] = Math.max(0, Math.min(MAX_MP, num(mp[id], MAX_MP)));
-  a.coins = Math.max(0, Math.min(9999, Math.floor(num(raw.coins, 0))));
+  a.coins = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(num(raw.coins, 0))));
   const items = isObj(raw.items) ? raw.items : {};
-  const amber = Math.max(0, Math.min(99, Math.floor(num(items.amber, 0))));
+  const amber = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(num(items.amber, 0))));
   if (amber) a.items.amber = amber;
   a.chests = list(raw.chests, CHESTS.map((c) => c.id));
   a.tutorial = list(raw.tutorial, TUTORIAL_STEPS);

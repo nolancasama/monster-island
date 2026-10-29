@@ -11,7 +11,7 @@ import { switchTo } from "./companion";
 import { cloudInteract } from "./act3";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
-import { climbCliff, lookAtLockedGate, openChestScene, readForkSign, restAtCamp, talkToKeeper } from "./act2";
+import { climbCliff, lookAtLockedGate, openChestScene, readForkSign, talkToKeeper } from "./act2";
 import type { ServiceId } from "../world/lowland";
 import type { MonsterId, ObstacleId } from "../types";
 
@@ -55,9 +55,6 @@ export function interact(f: Focus | null = getGame().focus) {
       return;
     case "chest":
       void openChestScene(f.id);
-      return;
-    case "rest":
-      void restAtCamp();
       return;
     case "npc":
       void talkToKeeper(f.id as ServiceId);

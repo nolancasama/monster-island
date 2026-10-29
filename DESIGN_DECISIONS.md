@@ -70,6 +70,88 @@ rescued; boat travel both ways; the save extended without breaking old saves.
 (the game has speech and Tap); a crafting system at the shelter; microphone
 prompts in fights (Act 2 decision stands).
 
+## 2026-10-29 — Gameplay polish Part 1 — decisions made while building
+
+- **Bridge surfaces.** A shared bank-to-bank height profile bends the actual
+  touching deck planks and anchors. Collision and walkers use that same profile;
+  endpoints overlap solid banks and meet their height and slope. Growth still
+  uses the original unlock animations, ending at the full unscaled span.
+- **Food and rewards.** The prologue and Act 2 share one 99-item cap per food.
+  Full-bag ground food stays available, including enemy food drops. Chest
+  overflow becomes one coin per item, reported separately from its other rewards.
+  The old 9,999-coin and saved 99-amber clamps cannot silently discard the
+  chest's other rewards: coins and amber now load as nonnegative safe integers
+  in the same save fields. Only food has the 99-item cap.
+- **The paid inn and Crossing.** Only an accepted, affordable inn answer charges
+  10 coins and establishes the inn checkpoint. Merely finding Port Town keeps
+  the previous wake point. Fern Crossing establishes the existing `camp` wake
+  point without healing; its saved `rest` tutorial token remains compatible and
+  now means learning about the crossing. Knock-out recovery remains free.
+- **Maple's tent.** Thick opaque canvas panels overlap at the seams, with a
+  shallow enclosed entrance and rolled flap. The original placement, canvas
+  footprint and collision proxy stay fixed. Shared vertex-coloured meshes add
+  grounded poles and pegs, ropes, seams, a map, jars and a lantern alongside
+  the existing table and crates; no transparent canvas or cloth simulation.
+- **The four pillars.** Real-mesh sightline checks identified the east shoulder
+  of the tunnel's raised terrain and portal face as the left pillars' occluder.
+  A tighter symmetric row and a lower visible shoulder expose their coloured
+  friend symbols from the existing courtyard framing. The tunnel's central roof,
+  lining, floor, collision and camera clearance stay intact. Each unsolved symbol
+  has a soft coloured halo; solving it removes that idle halo.
+- **The view beyond the lair.** Only the outer east gate-wall section and the
+  east/north-east garden rim rocks are lowered. The existing lowland tiles are
+  drawn through the same fog from outside; only a camera physically inside the
+  lined tunnel below its roof suppresses them. No panorama, duplicate scenery
+  or camera behavior changes are introduced. Render measurements and matched
+  before/after views live in `.tmp/shots/polish/render-report.json`.
+  Pillar idle halos and solved rings are each batched in one instanced draw:
+  the tunnel can include them in its frustum even when its opaque lining hides
+  them. This keeps the enclosed views at 52–57 calls / about 40k triangles;
+  the new exterior viewpoints stay within 120 calls / 140k triangles.
+
+## 2026-10-29 — Gameplay polish brief: accepted, with these changes
+
+The external brief "Gameplay, Camera, Bridge, Economy, and Visual Polish"
+(ten items) is accepted. The frozen spec is `docs/GAMEPLAY_POLISH.md`.
+
+**Supersedes earlier decisions (the user's explicit direction):**
+- **The prologue's drag-orbit camera is removed.** The continuity polish had
+  kept it because a single fixed yaw on a round island puts half the goals
+  behind the lens. The answer now is per-zone camera profiles with authored
+  yaws and blended borders, not orbit.
+- **Projectiles no longer use "forgiving aim"** (the nearest enemy in front).
+  They fly straight along the friend's facing. A wider hit radius keeps them
+  fair on touchpads.
+- **Fern Camp no longer heals for free**, and the inn costs 10 coins.
+
+**Changed from the brief:**
+- **Split in two.** Part 1 (bridges, food 99, pillars, tent, inn, camp, the
+  view past the lair) branches from `main` and can ship alone. Part 2 (camera,
+  projectiles, ranged enemies, companion transitions) runs after Act 3 slice
+  C, because it shares the camera and combat code Act 3 changes, and it must
+  cover Cloud Isle.
+- **Inn English:** "Would you like a room?" → "Yes, please." / "No, thank
+  you." This replaces the brief's three-step exchange: it's shorter, and these
+  are the phrases the students already drill. The game has speech and Tap,
+  not typing.
+- **Fern Crossing stays a knock-out wake point** (no healing). Otherwise a
+  knock-out in the Grove or Canopy would always walk the player back from the
+  rope.
+- **Chest food overflow becomes coins** (1 per item), with a toast. The brief
+  asked for "a clear way to handle the excess"; this way is simple and loses
+  nothing.
+- **The view past the lair uses the real lowland only.** The tunnel-wide
+  camera cut-off narrows to the enclosed tunnel itself. A panorama would
+  repeat the two-representation problem the continuity polish removed.
+- **New ranged enemies replace existing spawns**, so stage-clear counts stay
+  the same. At most two are awake per area, and they fire only with line of
+  sight, on screen.
+
+**Kept on purpose:** knock-out recovery is free (wake with at least 60 HP).
+On Cloud Isle, the Hidden Hollow's rest stays free. It is the family's
+hospitality, the story's safe haven, and Cloud Isle has no inn. Gull's boat
+at the Cloud Isle dock becomes a wake point only, recorded in the Act 3 spec.
+
 ## 2026-10-29 — Act 2 continuity polish (branch `feature/act2-continuity-polish`)
 
 A new brief asks for visible neighbouring stages, an honest Eat button, a

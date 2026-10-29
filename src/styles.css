@@ -254,6 +254,14 @@ kbd {
   gap: 2px;
   font-weight: 900;
   font-size: 1.1rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bag-item b {
+  min-width: 2ch;
+  text-align: center;
 }
 
 .top-buttons {
@@ -1715,6 +1723,10 @@ kbd {
   background: var(--paper);
   border: 2px solid var(--line);
   font-size: 0.7rem;
+  min-width: 4ch;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 [data-testid="btn-eat"][aria-disabled="true"] {

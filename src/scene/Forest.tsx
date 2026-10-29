@@ -41,6 +41,8 @@ import {
   ropeStakeGeometry
 } from "./models/forest";
 import { hangRope, setRopeLine } from "../game/world/rope";
+import { bridgeDeckY } from "../game/world/collision";
+import { conformBridge } from "./models/bridge";
 
 /**
  * The Phase 2 forest: big trees in the clearings, the jungle wall around
@@ -173,8 +175,10 @@ function Trees() {
 function Ravine() {
   const len = BRIDGE.z1 - BRIDGE.z0;
   const gap: [number, number] = [-len * 0.3, -len * 0.72];
-  const frame = useMemo(() => bridgeFrameGeometry(len, BRIDGE.half, gap), [len]);
-  const vines = useMemo(() => bridgeVinesGeometry(len, BRIDGE.half), [len]);
+  const y0 = bridgeDeckY(BRIDGE.z1);
+  const fit = (g: THREE.BufferGeometry) => conformBridge(g, BRIDGE.x, BRIDGE.z1, y0, (x, z) => bridgeDeckY(z, x));
+  const frame = useMemo(() => fit(bridgeFrameGeometry(len, BRIDGE.half, gap)), [len]);
+  const vines = useMemo(() => fit(bridgeVinesGeometry(len, BRIDGE.half)), [len]);
   const walls = useMemo(() => {
     const colors = ["#8a7a66", "#7a6c5a", "#968670"];
     return [
@@ -192,16 +196,13 @@ function Ravine() {
     v.position.z = (-len / 2) * (1 - k);
     v.visible = rt.bridge > 0.01;
   });
-  const deckY = (z: number) => forestBase(BRIDGE.x, z) + 0.12;
-  const y0 = deckY(BRIDGE.z1);
-  const tilt = Math.atan2(deckY(BRIDGE.z0) - y0, len);
   const wallY = (z: number) => forestBase(GLADE.x0, z) - 2.2;
   return (
     <group>
-      <group position={[BRIDGE.x, y0, BRIDGE.z1]} rotation={[tilt, 0, 0]}>
+      <group position={[BRIDGE.x, y0, BRIDGE.z1]}>
         <mesh geometry={frame} material={smoothMat} />
       </group>
-      <group position={[BRIDGE.x, y0, BRIDGE.z1]} rotation={[tilt, 0, 0]}>
+      <group position={[BRIDGE.x, y0, BRIDGE.z1]}>
         <mesh ref={vineRef} geometry={vines} material={smoothMat} />
       </group>
       <mesh geometry={walls[0]} material={flatMat} position={[GLADE.x0 - 2, wallY(RAVINE.z1), RAVINE.z1 + 0.2]} />

@@ -3,7 +3,7 @@ import { FOODS } from "../data/foods";
 import { COMBAT, PRICES, RECIPES, COMPANION_IDS, type CompanionId } from "../data/combat";
 import { NPCS, type NpcId } from "../data/town";
 import { NUMBER_PHRASE, WANT_PHRASE, heardQuantity, type PhraseId } from "../logic/english";
-import { buy, craft, craftMissing, findPort, hearLead, markDescended, markTutorial, openChest, practise, rested, setCheckpoint, startAct2, addCoins, type Checkpoint } from "../logic/act2";
+import { buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDescended, openChest, practise, reachCrossing, rested, stayAtInn, startAct2, addCoins, type Checkpoint } from "../logic/act2";
 import { companions } from "../logic/progress";
 import { banner, getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
@@ -343,10 +343,13 @@ export function openChestScene(id: string): Promise<void> {
     await over(0.6, (k) => rt.chestLid.set(id, ease(k)));
     effect("sparkle", c.x, groundY(c.x, c.z) + 0.9, c.z);
     rt.player.action = { kind: "cheer", t0: rt.time };
+    const overflow = chestFoodOverflow(getGame().progress, id);
     updateProgress((p) => openChest(p, id));
+    if (overflow) toast({ en: `Bag full! +${overflow} coins`, ja: `バッグが いっぱい! コイン +${overflow}`, icon: "coin", tone: "info" }, 3200);
     const parts = [`${c.coins} coins`];
     if (c.amber) parts.push(`${c.amber} amber`);
-    if (c.food) parts.push(`${c.food.n} ${FOODS[c.food.id].word}`);
+    if (c.food && c.food.n > overflow) parts.push(`${c.food.n - overflow} ${FOODS[c.food.id].word}`);
+    if (overflow) parts.push(`${overflow} bonus coins`);
     await say("game", `Treasure! ${parts.join(", ")}!`, `たからばこ! コイン ${c.coins}まい${c.amber ? "・こはく" : ""}${c.food ? `・${FOODS[c.food.id].ja}` : ""}`);
     if (id === "forestChest") {
       await say("game", "Food gives HP and MP! Press F to eat. (Tap the food in your bag.)", "たべものを たべると HPと MPが ふえるよ! F キー (または バッグの たべもの を タップ)");
@@ -357,26 +360,15 @@ export function openChestScene(id: string): Promise<void> {
 }
 
 /** A full rest: HP and every friend's MP back to full, nothing lost. */
-async function restHere(checkpoint: Checkpoint, line: [string, string]) {
+async function restHere() {
   await fadeThrough(async () => {
     cb.vitals = rested();
     audio.play("rest");
-    updateProgress((p) => setCheckpoint(markTutorial(p, "rest"), checkpoint));
+    // Persist the completed stay immediately, including its restored vitals.
+    updateProgress((p) => ({ ...p, act2: { ...p.act2, hp: cb.vitals.hp, mp: { ...cb.vitals.mp } } }));
     await wait(400);
   }, 600);
   toast({ en: "HP and MP are full!", ja: "HPも MPも まんたん!", icon: "heart", tone: "good" }, 2200);
-  await say("game", line[0], line[1]);
-}
-
-export function restAtCamp(): Promise<void> {
-  return run(async () => {
-    const first = !getGame().progress.act2.tutorial.includes("rest");
-    await restHere("camp", ["You rested at the camp.", "キャンプで やすんだ。たおれても ここに もどれるよ"]);
-    if (first) {
-      await say("game", "Two paths! Left: the Flooded Grove. Right: the Ancient Canopy. Both go to the port.", "みちが ふたつ! ひだり: みずびたしの もり。みぎ: こだいの きのうえ。どちらも みなとへ いけるよ");
-      hint("switch");
-    }
-  });
 }
 
 export function readForkSign(): Promise<void> {
@@ -433,6 +425,14 @@ hooks.enterZone = (zone: ZoneId) => {
   if (lastZoneToast !== zone) {
     lastZoneToast = zone;
     toast({ en: z.name.en, ja: z.name.ja, icon: z.hostile ? "star" : "heart", tone: "info" }, 2200);
+  }
+  if (zone === "camp") {
+    const first = !getGame().progress.act2.tutorial.includes("rest");
+    updateProgress(reachCrossing);
+    if (first) {
+      toast({ en: "Fern Crossing is a wake point. Choose either path to the port!", ja: "たおれても ここに もどれるよ。ふたつの みちは みなとへ!", icon: "heart", tone: "info" }, 5000);
+      hint("switch");
+    }
   }
   if (zone === "port" && !getGame().progress.act2.portFound) void arriveAtPort();
 };
@@ -644,8 +644,26 @@ export function practiseCommand(friend: CompanionId): Promise<void> {
 function inn(): Promise<void> {
   return run(async () => {
     faceKeeper("innkeeper");
-    await say("innkeeper", "Welcome to the Seaside Inn! Have a rest. It's free!", "うみべの やどへ ようこそ! ゆっくり やすんでね。むりょうだよ!");
-    await restHere("port", ["You rested at the inn.", "やどで やすんだ。たおれても ここに もどれるよ"]);
+    const answer = await ask({
+      kind: "choice",
+      options: ["yesPlease", "noThankYou"],
+      question: { en: "Welcome to the Seaside Inn! A room is 10 coins. Would you like a room?", by: "innkeeper" },
+      readQuestion: true,
+      cancellable: true
+    });
+    if (!answer) return;
+    const result = stayAtInn(getGame().progress, answer === "yesPlease");
+    if (result.outcome === "declined") {
+      await say("innkeeper", "OK. See you!", "わかったよ。またね!");
+      return;
+    }
+    if (result.outcome === "coins") {
+      await say("innkeeper", "Sorry, you need 10 coins.", "ごめんね。コインが 10まい いるよ。");
+      return;
+    }
+    updateProgress(() => result.progress);
+    await say("innkeeper", "Good night!", "おやすみなさい!");
+    await restHere();
   });
 }
 

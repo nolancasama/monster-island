@@ -243,7 +243,7 @@ export function talkToMaple(): Promise<void> {
     else if (o.id === "act2Start") phase3Hint = ["Let's go and see Lumo in the garden!", "にわの ルモに あいに いこう!"];
     else if (o.id === "descend") phase3Hint = ["Climb down the rope at the cliff!", "がけの ロープを おりよう!"];
     else if (o.id === "openChest") phase3Hint = ["Follow the path. Look for a treasure chest!", "みちを すすんで たからばこを さがそう!"];
-    else if (o.id === "rest") phase3Hint = ["Rest at the camp. Then choose a path!", "キャンプで やすもう。それから みちを えらぼう!"];
+    else if (o.id === "crossing") phase3Hint = ["Reach Fern Crossing. It is a wake point! Then choose a path to the port.", "シダの ぶんきてんへ。たおれても そこに もどれるよ! みなとへの みちを えらぼう。"];
     else if (o.id === "reachPort") phase3Hint = ["Go north to the port. The grove or the canopy, both are OK!", "きたの みなとへ。どちらの みちでも いけるよ!"];
     else if (o.id === "market") phase3Hint = ["Buy food at the market: I want apples, please.", "おみせで「I want apples, please.」と いって かおう!"];
     else if (o.id === "kitchen") phase3Hint = ["Make a monster treat in the kitchen!", "キッチンで モンスターの おやつを つくろう!"];

@@ -153,7 +153,7 @@ export const FOREST_PATH = { x0: 32.1, x1: 35.5, z0: -17.5, z1: -8 };
 export const GLADE = { x0: 29, x1: 46, z0: -25, z1: -16.5 };
 /** The ravine across the whole forest; the bridge spans it. */
 export const RAVINE = { z0: -28.4, z1: -24.6 };
-export const BRIDGE = { x: 37, half: 0.85, z0: RAVINE.z0 - 0.4, z1: RAVINE.z1 + 0.4 };
+export const BRIDGE = { x: 37, half: 0.85, z0: RAVINE.z0 - 1, z1: RAVINE.z1 + 1 };
 export const HILLS = { x0: 29, x1: 47, z0: -45, z1: -27.6 };
 export const PUFF_TREE = { x: 41.5, z: -36.5 };
 /** Puff's nest on the tree's south branch (height above the ground). */
@@ -209,10 +209,10 @@ export const GARDEN = { x: 70, z: -136, r: 10.8 };
 export const COURTYARD = { x0: 57, x1: 83, z0: -133.5, z1: -125.4 };
 export const SANCTUARY_GATE = { x: 70, z: -133, half: 2.2 };
 export const GATE_PILLARS = {
-  gateLeaf: { x: 60, z: -130 },
-  gateDrop: { x: 65, z: -130 },
-  gateWing: { x: 75, z: -130 },
-  gateFlame: { x: 80, z: -130 }
+  gateLeaf: { x: 64, z: -131.1 },
+  gateDrop: { x: 67.8, z: -131.1 },
+  gateWing: { x: 72.2, z: -131.1 },
+  gateFlame: { x: 76, z: -131.1 }
 };
 export const PHASE3_AREAS = [...VOLCANO_PATH, EMBER_SLOPE, CAVE_PASSAGE, SANCTUARY];
 
@@ -440,7 +440,9 @@ export const VOLCANO_ROCKS: VolcanoRock[] = (() => {
     // Two north-east rocks leave the gap out to the lookout ledge (the random
     // sequence is still drawn, so every other rock keeps its shape).
     if (i === 20 || i === 21) continue;
-    add(x, z, r, h, 540 + i);
+    // The east rim still encloses the garden, but its low stone shoulder
+    // leaves the real basin visible from the approach/courtyard overlook.
+    add(x, z, r, i === 0 || i >= 22 ? Math.min(h, .7) : h, 540 + i);
   }
   return rocks;
 })();

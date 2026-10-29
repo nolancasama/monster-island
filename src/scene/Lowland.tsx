@@ -7,7 +7,8 @@ import { NPCS, NPC_OF } from "../game/data/town";
 import {
   lowlandRegionVisible,
   STAGE_EXITS,
-  CAMP2,
+  gapDeck,
+  lowlandBridgeY,
   CANOPY_GAPS,
   CHESTS,
   POND_Y,
@@ -15,8 +16,9 @@ import {
   SHORTCUT_GATE,
   type ServiceId,
 } from "../game/world/lowland";
-import { groundY } from "../game/world/island";
-import { additiveSprite, flatMat, occluderMat, smoothMat } from "./materials";
+import { TUNNEL, groundY, inTunnel } from "../game/world/island";
+import { flatMat, occluderMat, smoothMat } from "./materials";
+import { conformBridge } from "./models/bridge";
 import { Chest } from "./Chest";
 import {
   spatialGeometry,
@@ -55,6 +57,12 @@ const FAR = FOG_FAR;
 
 /** Read-only inspection surface for rendered region and gate transitions. */
 export const lowlandView = { visible: false, fog: { near: FOG_NEAR, far: FOG_FAR }, barriers: {} as Record<string, number> };
+
+function cameraInTunnel() {
+  const c = rt.camera.pos;
+  const floor = groundY(c.x, c.z);
+  return inTunnel(c.x, c.z) && c.y > floor - .2 && c.y < floor + TUNNEL.roof + .15;
+}
 
 /** Instanced vegetation split into tiles, each with its own bounds (frustum culled) and a distance cut-off. */
 function TiledInstances({ geometry, spots, material, far = FAR }: { geometry: THREE.BufferGeometry; spots: Spot[]; material: THREE.Material; far?: number }) {
@@ -160,14 +168,17 @@ function Unlocks() {
   const lilies = useMemo(lilyPadGeometry, []);
   const g1 = CANOPY_GAPS.canopyVines,
     g2 = CANOPY_GAPS.canopyRope;
-  const vines = useMemo(() => vineBridgeGeometry(g1.z1 - g1.z0 + 1.4), [g1]);
-  const rope = useMemo(() => ropeBridgeGeometry(g2.z1 - g2.z0 + 1.4), [g2]);
+  const d1 = gapDeck("canopyVines"), d2 = gapDeck("canopyRope");
+  const deck = (id: keyof typeof CANOPY_GAPS) => lowlandBridgeY(id, CANOPY_GAPS[id].x, gapDeck(id).z1);
+  const vines = useMemo(() => conformBridge(vineBridgeGeometry(d1.z1 - d1.z0), g1.x, (d1.z0 + d1.z1) / 2, deck("canopyVines"),
+    (x, z) => lowlandBridgeY("canopyVines", x, z)), [g1]);
+  const rope = useMemo(() => conformBridge(ropeBridgeGeometry(d2.z1 - d2.z0), g2.x, (d2.z0 + d2.z1) / 2, deck("canopyRope"),
+    (x, z) => lowlandBridgeY("canopyRope", x, z)), [g2]);
   const bars = useMemo(gateBarsGeometry, []);
   const thorns = useMemo(thornsGeometry, []);
   const padRef = useRef<THREE.Mesh>(null);
   const bRef = useRef<THREE.Mesh>(null);
   const tRef = useRef<THREE.Mesh>(null);
-  const deck = (g: { x: number; z0: number; z1: number }) => groundY(g.x, g.z1 + 1.4) + 0.06;
   useFrame(() => {
     if (root.current) root.current.visible = true;
     const u = rt.act2Unlock;
@@ -189,8 +200,8 @@ function Unlocks() {
     <group ref={root}>
       <mesh ref={padRef} geometry={lilies} material={flatMat} />
       {/* Each bridge grows from the near (south) end toward the far end. */}
-      <BridgeGrow geometry={vines} at={[g1.x, deck(g1), g1.z1 + 0.7]} len={g1.z1 - g1.z0 + 1.4} which="canopyVines" />
-      <BridgeGrow geometry={rope} at={[g2.x, deck(g2), g2.z1 + 0.7]} len={g2.z1 - g2.z0 + 1.4} which="canopyRope" />
+      <BridgeGrow geometry={vines} at={[g1.x, deck("canopyVines"), d1.z1]} len={d1.z1 - d1.z0} which="canopyVines" />
+      <BridgeGrow geometry={rope} at={[g2.x, deck("canopyRope"), d2.z1]} len={d2.z1 - d2.z0} which="canopyRope" />
       <group position={[SHORTCUT_GATE.x, 0, SHORTCUT_GATE.z]}>
         <mesh ref={bRef} geometry={bars} material={flatMat} />
         <mesh ref={tRef} geometry={thorns} material={flatMat} position={[0, groundY(SHORTCUT_GATE.x, SHORTCUT_GATE.z), 0]} />
@@ -226,19 +237,6 @@ function BridgeGrow({
   );
 }
 
-function CampFire() {
-  const mat = useMemo(() => additiveSprite("#ff9a3a", 0.85), []);
-  const ref = useRef<THREE.Sprite>(null);
-  useFrame(() => {
-    if (ref.current) {
-      ref.current.visible = near(CAMP2.fire.x, CAMP2.fire.z);
-      ref.current.scale.setScalar(1.1 + Math.sin(rt.time * 11) * 0.12 + Math.sin(rt.time * 7.3) * 0.08);
-    }
-  });
-  const f = CAMP2.fire;
-  return <sprite ref={ref} position={[f.x, groundY(f.x, f.z) + 0.55, f.z]} material={mat} />;
-}
-
 function CliffRope() {
   const geo = useMemo(cliffRopeGeometry, []);
   const ref = useRef<THREE.Mesh>(null);
@@ -254,7 +252,7 @@ function LowlandFog() {
   useFrame(() => {
     const fog = scene.fog as THREE.Fog | null;
     if (!fog) return;
-    const lowland = lowlandRegionVisible(rt.player.x, rt.player.z, rt.camera.pos.z);
+    const lowland = lowlandRegionVisible(rt.player.x, rt.player.z, cameraInTunnel());
     fog.far = FOG_FAR;
     fog.near += ((lowland ? FOG_NEAR : 70) - fog.near) * 0.05;
     lowlandView.fog.near = fog.near;
@@ -279,10 +277,10 @@ export function Lowland() {
   const signs = useMemo(townSigns, []);
   const signMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signs.tex, side: THREE.DoubleSide }), [signs]);
   useFrame(() => {
-    // From the sanctuary (looking down from the lookout) and inside the lowland; never from the beach or the forest,
-    // nor while the camera is still in the tunnel (the ridge and the garden's rim hide all of it from there).
+    // Only the genuinely enclosed passage suppresses the real basin. Outside
+    // its roof and walls the scenery uses the same distance/fog tiles everywhere.
     const shot = rt.camera.shot !== null && rt.camera.shot.target.z < -125;
-    lowlandView.visible = shot || lowlandRegionVisible(rt.player.x, rt.player.z, rt.camera.pos.z);
+    lowlandView.visible = !cameraInTunnel() && (shot || lowlandRegionVisible(rt.player.x, rt.player.z));
     if (region.current) region.current.visible = lowlandView.visible;
   });
   return (
@@ -308,7 +306,6 @@ export function Lowland() {
         <StageBarrier key={gate.id} gate={gate} />
       ))}
       <CliffRope />
-      <CampFire />
       <Unlocks />
       {CHESTS.map((c) => (
         <Chest key={c.id} id={c.id} visible={near} />

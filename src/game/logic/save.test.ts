@@ -160,7 +160,7 @@ describe("save / load", () => {
     expect(s.progress.active).toBe("leafy");
     expect(s.progress.solved).toEqual([]);
     expect(s.progress.endings).toBe(0);
-    expect(s.progress.bag).toEqual({ apples: 3 });
+    expect(s.progress.bag).toEqual({ apples: 99 });
     expect(s.progress.said).toEqual(["likeApples"]);
     expect(s.player).toEqual({ x: SPAWN.x, z: SPAWN.z, yaw: 0 });
     expect(isWalkable(s.player.x, s.player.z, gatesOf(s.progress), PLAYER_R)).toBe(true);
