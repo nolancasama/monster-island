@@ -148,10 +148,11 @@ it("draws one real lowland from the overlook, rope and every stage, while keepin
   for(const [x,z] of [[87,-129],[75.5,-149.8],[75.5,-152.15],[75.5,-154.4],...Object.values(ZONES).map(zone=>{
     const sh=zone.walk[0];
     return sh.kind==="disc"?[sh.x,sh.z]:sh.kind==="trail"?sh.pts[0]:[sh.x0,sh.z0];
-  })]) expect(lowlandRegionVisible(x,z,z),`${x},${z}`).toBe(true);
-  expect(lowlandRegionVisible(87,-129,-120)).toBe(true);
-  expect(lowlandRegionVisible(70,-127,-118)).toBe(false);
-  for(const [x,z] of [[0,0],[0,-60],[70,-117],[70,-125]]) expect(lowlandRegionVisible(x,z,z),`${x},${z}`).toBe(false);
+  })]) expect(lowlandRegionVisible(x,z),`${x},${z}`).toBe(true);
+  expect(lowlandRegionVisible(87,-129)).toBe(true);
+  expect(lowlandRegionVisible(70,-127)).toBe(true);
+  expect(lowlandRegionVisible(70,-127,true)).toBe(false);
+  for(const [x,z] of [[0,0],[0,-60],[70,-117],[70,-125]]) expect(lowlandRegionVisible(x,z),`${x},${z}`).toBe(false);
 });
 
 it("opens low visual shoulders beside every crossing without widening gate collision",()=>{

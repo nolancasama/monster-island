@@ -141,6 +141,7 @@ export function caveTorchGeometry(lit: boolean): THREE.BufferGeometry {
 }
 
 export type PillarId = keyof typeof GATE_PILLARS;
+export const PILLAR_COLOR: Record<PillarId, string> = { gateLeaf: "#80c957", gateDrop: "#7bd4f0", gateWing: "#d4b2f3", gateFlame: "#ffb05a" };
 export function pillarGeometry(id: PillarId): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
   b.cyl(0.95, 1.1, 0.25, 0, 0, 0, "#a3a18a", 8);
@@ -191,8 +192,12 @@ export function gateWallGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   const y = groundY(SANCTUARY_GATE.x, SANCTUARY_GATE.z);
   for (const wall of GATE_WALLS) {
-    b.box(wall.width, 2.7, wall.depth, wall.x, y, wall.z, "#a1aa84");
-    b.box(wall.width + 0.4, 0.25, wall.depth + 0.3, wall.x, y + 2.7, wall.z, "#c4c7a2");
+    const west = wall.x - wall.width / 2, east = wall.x + wall.width / 2;
+    const sections = wall.x > SANCTUARY_GATE.x ? [[west, 79, 2.7], [79, east, .85]] : [[west, east, 2.7]];
+    for (const [a, c, h] of sections) {
+      b.box(c - a, h, wall.depth, (a + c) / 2, y, wall.z, "#a1aa84");
+      b.box(c - a + .12, .25, wall.depth + .3, (a + c) / 2, y + h, wall.z, "#c4c7a2");
+    }
   }
   for (const post of GATE_POSTS) b.cyl(0.72, post.r, 4.1, post.x, y, post.z, "#cac8a9", 8);
   b.box(6.6, 0.6, 1.4, 70, y + 4.0, SANCTUARY_GATE.z, "#d7d6b8");

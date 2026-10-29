@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { newProgress, objective, type Progress } from "./progress";
 import {
   clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, eatHelps, findPort, hearLead,
-  hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, regenMp, rested, spendMp, startAct2
+  hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, reachCrossing, regenMp, rested, spendMp, stayAtInn, startAct2, addFood, chestFoodOverflow, afterKnockout
 } from "./act2";
 import { decodeSave, encodeSave } from "./save";
 import { PHRASES, heardQuantity } from "./english";
 import { judgeSpeech } from "./speechMatch";
-import { STAGES, ENEMY_SPAWNS } from "../world/lowland";
+import { STAGES, ENEMY_SPAWNS, CHESTS, CAMP2, ZONES, zoneAt } from "../world/lowland";
+import { PLAYER_R, gatesOf, isWalkable } from "../world/collision";
+import { FOODS } from "../data/foods";
 import { FOOD_RESTORE, KO_HP, MAX_HP } from "../data/combat";
 import type { FoodId, MonsterId } from "../types";
 
@@ -40,8 +42,8 @@ describe("Act 2 story", () => {
     p = markDescended(p);
     expect(objective(p)).toEqual({ id: "openChest" });
     p = openChest(p, "forestChest");
-    expect(objective(p)).toEqual({ id: "rest" });
-    p = markTutorial(p, "rest");
+    expect(objective(p)).toEqual({ id: "crossing" });
+    p = reachCrossing(p);
     expect(objective(p)).toEqual({ id: "reachPort" });
     expect(hearLead(p)).toBe(p);
     p = findPort(p);
@@ -129,9 +131,29 @@ describe("HP and MP", () => {
 describe("coins, the market, the kitchen, chests and the trainer", () => {
   const p0 = markDescended(startAct2(done()));
 
-  it("buying needs the coins and room in the bag; the bag holds more in Act 2", () => {
-    expect(bagMax(done())).toBe(3);
-    expect(bagMax(p0)).toBe(9);
+  it("preserves all chest coins and overflow across saves at the old currency ceiling", () => {
+    const rich = addItem(addCoins(p0, 9999), "amber", 99);
+    const p = { ...rich, bag: { apples: 99 } };
+    const opened = openChest(p, "forestChest");
+    expect(opened.act2.coins).toBe(10016);
+    expect(opened.act2.items.amber).toBe(100);
+    const loaded = decodeSave(encodeSave(opened, { x: 76, z: -168, yaw: 0 }, 20))!;
+    expect(loaded.progress.act2.coins).toBe(10016);
+    expect(loaded.progress.act2.items.amber).toBe(100);
+  });
+
+  it("validates every saved food to 0–99 in either chapter", () => {
+    for (const started of [false, true]) for (const count of [-20, 0, 9, 99, 300]) {
+      const p = started ? startAct2(done()) : done();
+      p.bag = Object.fromEntries(Object.keys(FOODS).map(id => [id, count]));
+      const loaded = decodeSave(encodeSave(p, { x: 70, z: -137, yaw: 0 }, 20))!;
+      for (const food of Object.keys(FOODS) as FoodId[]) expect(loaded.progress.bag[food]).toBe(Math.max(0, Math.min(99, count)));
+    }
+  });
+
+  it("buying needs the coins and room in the bag; the bag holds 99 in both chapters", () => {
+    expect(bagMax(done())).toBe(99);
+    expect(bagMax(p0)).toBe(99);
     expect(buy(p0, "fish", 1)).toEqual({ ok: false, reason: "coins" });
     const rich = addCoins(p0, 100);
     const res = buy(rich, "fish", 3);
@@ -141,7 +163,8 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
       expect(res.progress.bag.fish).toBe(3);
       expect(res.progress.act2.bought).toBe(true);
     }
-    expect(buy({ ...rich, bag: { fish: 8 } }, "fish", 2)).toEqual({ ok: false, reason: "bag" });
+    expect(buy({ ...rich, bag: { fish: 98 } }, "fish", 2)).toEqual({ ok: false, reason: "bag" });
+    expect(buy({ ...p0, bag: { fish: 99 } }, "fish", 1)).toEqual({ ok: false, reason: "bag" });
   });
 
   it("a treat needs its two foods and one amber; eating it teaches the upgrade once", () => {
@@ -163,6 +186,71 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
     expect(p.bag.apples).toBe(2);
     expect(openChest(p, "forestChest")).toBe(p);
     expect(practise(practise(p, "puff"), "puff").act2.trained).toEqual(["puff"]);
+  });
+
+  it("every food uses the same cap for additions and purchases in both chapters", () => {
+    for (const base of [done(), p0]) for (const food of Object.keys(FOODS) as FoodId[]) {
+      const p = { ...addCoins(base, 1000), bag: { [food]: 98 } };
+      expect(addFood(p, food, 3).added).toBe(1);
+      expect(addFood(p, food, 3).progress.bag[food]).toBe(99);
+      const full = addFood(p, food, 1).progress;
+      expect(addFood(full, food, 1)).toEqual({ progress: full, added: 0 });
+      expect(buy(p, food, 2)).toEqual({ ok: false, reason: "bag" });
+      const bought = buy(p, food, 1);
+      expect(bought.ok && bought.progress.bag[food]).toBe(99);
+      expect(buy(full, food, 1)).toEqual({ ok: false, reason: "bag" });
+    }
+  });
+
+  it("all chest overflow becomes coins, preserving amber and the food that fits, once", () => {
+    for (const c of CHESTS) for (const room of [0, 1, 99]) {
+      const p = { ...p0, bag: c.food ? { [c.food.id]: 99 - room } : {} };
+      const overflow = c.food ? Math.max(0, c.food.n - room) : 0;
+      expect(chestFoodOverflow(p, c.id)).toBe(overflow);
+      const opened = openChest(p, c.id);
+      expect(opened.act2.coins).toBe(c.coins + overflow);
+      expect(opened.act2.items.amber ?? 0).toBe(c.amber);
+      if (c.food) expect(opened.bag[c.food.id]).toBe(Math.min(99, 99 - room + c.food.n));
+      expect(opened.act2.chests).toEqual([c.id]);
+      expect(openChest(opened, c.id)).toBe(opened);
+      expect(chestFoodOverflow(opened, c.id)).toBe(0);
+    }
+  });
+});
+
+describe("paid inn and Fern Crossing", () => {
+  it("only yes with 10 coins buys a room; no and insufficient funds change nothing", () => {
+    for (const coins of [0, 9, 10, 25]) {
+      const p = findPort(addCoins(markDescended(startAct2(done())), coins));
+      expect(p.act2.checkpoint).toBe("cliff");
+      expect(stayAtInn(p, false)).toEqual({ outcome: "declined", progress: p });
+      const result = stayAtInn(p, true);
+      if (coins < 10) expect(result).toEqual({ outcome: "coins", progress: p });
+      else {
+        expect(result.outcome).toBe("rest");
+        expect(result.progress.act2.coins).toBe(coins - 10);
+        expect(result.progress.act2.checkpoint).toBe("port");
+      }
+    }
+  });
+
+  it("reaching the safe crossing records the compatible wake point without healing", () => {
+    const p = markDescended(startAct2(done()));
+    p.act2.hp = 12;
+    p.act2.mp = v(12, 8).mp;
+    p.act2.coins = 9;
+    const reached = reachCrossing(p);
+    expect(reached.act2).toMatchObject({ checkpoint: "camp", hp: 12, mp: v(12, 8).mp, coins: 9, tutorial: ["rest"] });
+    expect(reachCrossing(reached)).toBe(reached);
+    expect(zoneAt(CAMP2.rest.x, CAMP2.rest.z)).toBe("camp");
+    expect(ZONES.camp).toMatchObject({ name: { en: "Fern Crossing" }, hostile: false });
+    const loaded = decodeSave(encodeSave(reached, { ...CAMP2.rest, yaw: Math.PI }, 50))!;
+    expect(loaded.progress.act2.checkpoint).toBe("camp");
+    expect(isWalkable(loaded.player.x, loaded.player.z, gatesOf(loaded.progress), PLAYER_R)).toBe(true);
+    const recovered = afterKnockout({ hp: 0, mp: reached.act2.mp });
+    expect(recovered.hp).toBeGreaterThanOrEqual(60);
+    expect(recovered.mp).toEqual(reached.act2.mp);
+    expect(reached.act2.coins).toBe(9);
   });
 });
 
@@ -211,7 +299,7 @@ describe("Act 2 saves", () => {
     p = findPort(markTutorial(p, "rest"));
     p = { ...p, solved: [...p.solved, "groveLilies", "canopyVines"], act2: { ...p.act2, hp: 42, mp: { leafy: 10, bubbo: 20, puff: 30, ember: 40 }, upgrades: ["ember"], trained: ["leafy"] } };
     const back = roundTrip(p).progress;
-    expect(back.act2).toMatchObject({ started: true, lumoTaken: true, hp: 42, mp: { leafy: 10, bubbo: 20, puff: 30, ember: 40 }, coins: 15, items: { amber: 1 }, chests: ["forestChest"], upgrades: ["ember"], portFound: true, checkpoint: "port", trained: ["leafy"] });
+    expect(back.act2).toMatchObject({ started: true, lumoTaken: true, hp: 42, mp: { leafy: 10, bubbo: 20, puff: 30, ember: 40 }, coins: 15, items: { amber: 1 }, chests: ["forestChest"], upgrades: ["ember"], portFound: true, checkpoint: "cliff", trained: ["leafy"] });
     expect(back.solved).toEqual(expect.arrayContaining(["groveLilies", "canopyVines"]));
     expect(back.act2.tutorial).toContain("rest");
   });
@@ -225,14 +313,25 @@ describe("Act 2 saves", () => {
     expect(roundTrip(ko).progress.act2.hp).toBe(KO_HP);
   });
 
-  it("the bag keeps up to 9 of a food in Act 2 (3 before)", () => {
-    expect(roundTrip({ ...startAct2(done()), bag: { fish: 7 } }).progress.bag.fish).toBe(7);
-    expect(roundTrip({ ...done(), bag: { fish: 7 } }).progress.bag.fish).toBe(3);
+  it("save validation clamps each food to 0–99 in both chapters", () => {
+    for (const p of [done(), startAct2(done())]) {
+      expect(roundTrip({ ...p, bag: { apples: 120, fish: 99, berries: 98.9, bananas: -4, meat: NaN } }).progress.bag)
+        .toEqual({ apples: 99, fish: 99, berries: 98, bananas: 0, meat: 0 });
+    }
   });
 });
 
 describe("Act 2 English", () => {
   const judge = (text: string, ids: Array<keyof typeof PHRASES>) => judgeSpeech([text], ids.map((id) => PHRASES[id]));
+
+  it("the inn's polite answers tolerate beginner recognition without confusing no and yes", () => {
+    expect(PHRASES.yesPlease.en).toBe("Yes, please.");
+    expect(PHRASES.noThankYou.en).toBe("No, thank you.");
+    for (const text of ["Yes, please.", "yes", "yess pleas", "yeah please"]) expect(judge(text, ["yesPlease", "noThankYou"])).toMatchObject({ kind: "match", id: "yesPlease" });
+    for (const text of ["No, thank you.", "no", "know sank you"]) expect(judge(text, ["yesPlease", "noThankYou"])).toMatchObject({ kind: "match", id: "noThankYou" });
+    expect(judge("yes no", ["yesPlease", "noThankYou"]).kind).toBe("none");
+    expect(judge("thank you", ["yesPlease", "noThankYou"]).kind).toBe("none");
+  });
 
   it("shopping: the food names the sentence; a number in it sets how many", () => {
     expect(judge("I want three apples please", ["wantApples", "wantFish", "wantMeat"])).toMatchObject({ kind: "match", id: "wantApples" });

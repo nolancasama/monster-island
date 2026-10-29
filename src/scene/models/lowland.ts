@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PartBuilder } from "../partBuilder";
+import { bridgeDeck } from "./bridge";
+import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
 import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Outfit } from "./people";
 import { makeRng } from "../../game/logic/rng";
@@ -418,22 +420,7 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     b.sphere(0.12, x - 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
     b.sphere(0.12, x + 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
   }
-  // The camp: tent, fire ring, log bench, a lantern post.
-  const t = CAMP2.tent;
-  const ty = gy(t.x, t.z);
-  const tent = new THREE.ConeGeometry(2.1, 2.4, 4, 1);
-  tent.rotateY(Math.PI / 4);
-  tent.scale(1, 1, 0.8);
-  b.add(tent, "#e8a43a", [t.x, ty + 1.2, t.z], [0, t.yaw, 0]);
-  b.boxAt(0.9, 1.4, 0.06, [t.x + Math.sin(t.yaw) * 1.25, ty + 0.65, t.z + Math.cos(t.yaw) * 1.25], [0, t.yaw, 0], "#7a4a20");
-  const f = CAMP2.fire;
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    b.add(rockGeometry(0.22, 0.18, 1500 + i, 0), "#8a8178", [f.x + Math.cos(a) * 0.6, gy(f.x, f.z) + 0.05, f.z + Math.sin(a) * 0.6]);
-  }
-  for (let i = 0; i < 3; i++) b.cylAt(0.08, 0.9, [f.x, gy(f.x, f.z) + 0.15, f.z], [Math.PI / 2, i * 1.05, 0.25], "#6e4a2c", 6);
-  const bn = CAMP2.bench;
-  b.cylAt(0.22, 1.6, [bn.x, gy(bn.x, bn.z) + 0.22, bn.z], [0, bn.yaw, Math.PI / 2], "#7a5534", 8);
+  // Fern Crossing retains its junction and sign, with no rest-only furnishings.
   // The fork's signpost with two arrow boards.
   const s = FORK_SIGN;
   const fy = gy(s.x, s.z);
@@ -524,8 +511,7 @@ export function lilyPadGeometry(): THREE.BufferGeometry {
 /** The vine bridge Leafy weaves over the first gap (built along +z, centred). */
 export function vineBridgeGeometry(len: number): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (let i = 0; i < Math.ceil(len / 0.42); i++)
-    b.boxAt(1.8, 0.1, 0.36, [0, 0, -len / 2 + 0.2 + i * 0.42], [0, 0, (i % 2 ? 1 : -1) * 0.03], i % 2 ? "#4f9a3e" : "#3f8a36");
+  bridgeDeck(b, len, DECK_HALF, -len / 2, ["#4f9a3e", "#3f8a36"]);
   for (const side of [-1, 1]) {
     between(b, [side * 0.95, 0.75, -len / 2], [side * 0.95, 0.6, len / 2], 0.05, 0.05, "#3a7a2e", 5);
     for (let z = -len / 2 + 0.6; z < len / 2; z += 1.1) b.sphere(0.14, side * 0.95, 0.66, z, "#6fd24f", [1, 0.6, 1.3], 6);
@@ -536,8 +522,8 @@ export function vineBridgeGeometry(len: number): THREE.BufferGeometry {
 /** The rope bridge Puff unrolls over the second gap. */
 export function ropeBridgeGeometry(len: number): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (let i = 0; i < Math.ceil(len / 0.5); i++) b.boxAt(1.7, 0.08, 0.4, [0, -0.04, -len / 2 + 0.25 + i * 0.5], [0, 0, 0], i % 2 ? "#a77a46" : "#b88a52");
-  for (const side of [-1, 1]) between(b, [side * 0.9, 0.85, -len / 2], [side * 0.9, 0.85, len / 2], 0.035, 0.035, "#c79a5c", 4);
+  bridgeDeck(b, len, DECK_HALF, -len / 2, ["#a77a46", "#b88a52"]);
+  for (const side of [-1, 1]) between(b, [side * (DECK_HALF + .05), 0.85, -len / 2], [side * (DECK_HALF + .05), 0.85, len / 2], 0.035, 0.035, "#c79a5c", 4);
   return b.build();
 }
 

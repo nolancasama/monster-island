@@ -81,7 +81,7 @@ export interface Line {
 
 export interface Focus {
   id: string;
-  kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign" | "rope" | "chest" | "rest" | "npc" | "cliffRope";
+  kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign" | "rope" | "chest" | "npc" | "cliffRope";
   verb: string;
   noun: string;
   x: number;

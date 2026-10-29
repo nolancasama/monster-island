@@ -4,6 +4,7 @@ import { between, rockGeometry } from "./nature";
 import { makeRng } from "../../game/logic/rng";
 import { ROPE_STAKE } from "../../game/world/island";
 import type { RopePoint } from "../../game/world/rope";
+import { bridgeDeck } from "./bridge";
 
 /**
  * Phase 2 forest pieces. Same rules as the beach: merged vertex-coloured
@@ -83,10 +84,9 @@ export function bridgeFrameGeometry(len: number, half: number, gap: [number, num
     }
   }
   // Planks from each lip up to the gap.
-  const plank = (z: number, broken: boolean) =>
-    b.boxAt(half * 2 - 0.05, 0.08, 0.32, [broken ? 0.12 : 0, 0, z], [broken ? 0.18 : 0, broken ? 0.12 : 0, broken ? -0.1 : 0], "#a07040");
-  for (let z = -0.1; z > gap[0]; z -= 0.38) plank(z, z - 0.38 <= gap[0]);
-  for (let z = -len + 0.1; z < gap[1]; z += 0.38) plank(z, z + 0.38 >= gap[1]);
+  // The repaired living deck covers the surviving wood without raised broken tips.
+  bridgeDeck(b, -gap[0], half, gap[0], ["#a07040", "#ad7e49"], .32, -.02);
+  bridgeDeck(b, len + gap[1], half, -len, ["#a07040", "#ad7e49"], .32, -.02);
   // Snapped rope rails hanging down into the ravine.
   for (const s of [-1, 1]) {
     between(b, [s * (half + 0.05), 0.95, 0.2], [s * (half + 0.05), 0.7, gap[0] + 0.3], 0.025, 0.025, "#d8c9a0", 4);
@@ -100,10 +100,10 @@ export function bridgeFrameGeometry(len: number, half: number, gap: [number, num
 /** Leafy's repair: woven vine planks and living rails across the whole span (scaled in from the middle). */
 export function bridgeVinesGeometry(len: number, half: number): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (let z = -0.25; z > -len; z -= 0.34) {
-    b.boxAt(half * 2 - 0.1, 0.07, 0.26, [0, 0.02, z], [0, 0, 0], "#4fae3e");
-    b.add(new THREE.SphereGeometry(0.09, 6, 4), "#7fd85a", [((z * 7) % 1) * half * 0.8, 0.07, z], [0, 0, 0], [1.6, 0.4, 0.9]);
-  }
+  bridgeDeck(b, len, half, -len, ["#3f9632", "#62c04c"]);
+  // Flat leaf patches on the slats keep the woven look while staying within the walking surface's 2 cm.
+  for (let z = -0.25; z > -len; z -= 0.34)
+    b.add(new THREE.SphereGeometry(0.09, 6, 4), "#8fe066", [((z * 7) % 1) * half * 0.8, -0.005, z], [0, 0, 0], [1.6, 0.2, 0.9]);
   for (const s of [-1, 1]) {
     const pts: Array<[number, number, number]> = [];
     for (let i = 0; i <= 10; i++) pts.push([s * (half + 0.05), 0.92 - Math.sin((i / 10) * Math.PI) * 0.18, 0.2 - (i / 10) * (len + 0.4)]);

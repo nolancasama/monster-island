@@ -119,10 +119,10 @@ describe("friendship progression", () => {
     expect(canOffer(p, "leafy")).toBe(false);
   });
 
-  it("the bag holds at most three of a food", () => {
+  it("the prologue bag holds at most 99 of a food", () => {
     let p = newProgress();
-    for (let i = 0; i < 5; i++) p = pickUp(p, "berries");
-    expect(p.bag.berries).toBe(3);
+    for (let i = 0; i < 101; i++) p = pickUp(p, "berries");
+    expect(p.bag.berries).toBe(99);
   });
 });
 

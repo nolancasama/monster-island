@@ -1,5 +1,6 @@
 import type { ObstacleId, Text, Vec2 } from "../types";
 import type { SolidShape } from "./island";
+import { bridgeSurfaceY } from "./bridge";
 
 /**
  * Act 2: the prehistoric lowland below the sanctuary's cliff, north of the
@@ -9,7 +10,7 @@ import type { SolidShape } from "./island";
  *                     |
  *             PRIMEVAL FOREST 1 (tutorial)
  *                     |
- *                FERN CAMP (fork)
+ *                FERN CROSSING (fork)
  *           /         |          \
  *   FLOODED GROVE  OLD TRAIL   ANCIENT CANOPY (raised roots, two gaps)
  *           \     (shortcut)     /
@@ -193,7 +194,7 @@ export const CANOPY_GAPS = {
   canopyRope: { x: 106, z0: -229, z1: -225.5 },
 };
 const GAP_HALF = 14;
-const DECK_HALF = 0.95;
+export const DECK_HALF = 0.95;
 
 /** The old trail's gate into the causeway (closed until the shortcut is opened). */
 export const SHORTCUT_GATE = { x: 76, z: -241.4, half: 2.2 };
@@ -209,7 +210,7 @@ export interface ZoneDef {
 export const ZONES: Record<ZoneId, ZoneDef> = {
   camp: {
     id: "camp",
-    name: { en: "Fern Camp", ja: "シダの キャンプ" },
+    name: { en: "Fern Crossing", ja: "シダの ぶんきてん" },
     hostile: false,
     walk: [disc(CAMP_SITE.x, CAMP_SITE.z, CAMP_SITE.r), rect(70.5, 81.5, -201.5, -195)],
   },
@@ -353,7 +354,7 @@ function gapCut(id: keyof typeof CANOPY_GAPS): Rect {
   return rect(g.x - GAP_HALF, g.x + GAP_HALF, g.z0, g.z1);
 }
 /** The deck runs a metre onto the root walk at each end, so its ends overlap the land by more than a body width. */
-function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
+export function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
   const g = CANOPY_GAPS[id];
   return rect(g.x - DECK_HALF, g.x + DECK_HALF, g.z0 - 1, g.z1 + 1);
 }
@@ -485,13 +486,19 @@ function rectMask(r: Rect, x: number, z: number, fade: number): number {
 export const POND_Y = base(POND.x, POND.z) - 0.35;
 export const streamY = (x: number, z: number) => base(x, z) - 0.12;
 
+export function lowlandBridgeY(id: keyof typeof CANOPY_GAPS, x: number, z: number): number {
+  const deck = gapDeck(id);
+  return bridgeSurfaceY(x, z, deck.z0, deck.z1, lowlandY);
+}
+
 /** Height of a walking surface added by an unlock (bridge decks, lily pads, the pier), or -Infinity. */
 export function lowlandDeckY(x: number, z: number, solved: readonly ObstacleId[]): number {
   if (Math.abs(x - PIER2.x) <= PIER2.half && z >= PIER2.z0 && z <= PIER2.z1 + 0.6) return base(PIER2.x, PIER2.z1) + PIER2.deckY;
   for (const id of ["canopyVines", "canopyRope"] as const) {
     const g = CANOPY_GAPS[id];
-    if (solved.includes(id) && Math.abs(x - g.x) <= DECK_HALF + 0.3 && z >= g.z0 - 0.8 && z <= g.z1 + 0.8)
-      return base(g.x, (g.z0 + g.z1) / 2) + CANOPY_HEIGHT + 0.08;
+    const deck = gapDeck(id);
+    if (solved.includes(id) && Math.abs(x - g.x) <= DECK_HALF + 0.3 && z >= deck.z0 && z <= deck.z1)
+      return lowlandBridgeY(id, x, z);
   }
   if (solved.includes("groveLilies") && inside(LILY_WALK, x, z, -0.3)) return POND_Y + 0.08;
   return -Infinity;
@@ -503,7 +510,7 @@ export const CAMP2 = {
   tent: { x: 71.5, z: -193.5, yaw: 0.9 },
   fire: { x: 76.5, z: -190.5 },
   bench: { x: 79, z: -188.6, yaw: -0.5 },
-  /** Resting spot (E: Rest). */
+  /** Legacy camp wake point; Fern Crossing has no rest interaction. */
   rest: { x: 75.6, z: -189.2 },
 };
 export const FORK_SIGN = { x: 78.6, z: -198.2, yaw: 0 };
@@ -699,11 +706,6 @@ export function lowlandSolids(): SolidShape[] {
   for (const b of MOSSY_BOULDERS) circle(b.x, b.z, b.r * 0.9);
   for (const l of LOGS) out.push({ kind: "capsule", ...l });
   for (const p of RUIN_PILLARS) circle(p.x, p.z, 0.6);
-  circle(CAMP2.fire.x, CAMP2.fire.z, 0.7);
-  box(CAMP2.tent.x, CAMP2.tent.z, 1.6, 1.55, CAMP2.tent.yaw);
-  const bx = Math.cos(CAMP2.bench.yaw) * 0.75,
-    bz = -Math.sin(CAMP2.bench.yaw) * 0.75;
-  out.push({ kind: "capsule", ax: CAMP2.bench.x - bx, az: CAMP2.bench.z - bz, bx: CAMP2.bench.x + bx, bz: CAMP2.bench.z + bz, r: 0.2 });
   circle(FORK_SIGN.x, FORK_SIGN.z, 0.12);
   for (const c of CHESTS) box(c.x, c.z, 0.5, 0.36, c.yaw);
   for (const s of Object.values(SERVICES)) {
@@ -740,10 +742,10 @@ export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: numbe
 ];
 
 /** Draw the real basin from the sanctuary and below; the prologue tunnel stays isolated. */
-export function lowlandRegionVisible(x: number, z: number, cameraZ: number): boolean {
+export function lowlandRegionVisible(x: number, z: number, cameraInTunnel = false): boolean {
+  if (cameraInTunnel) return false;
   if (z <= CLIFF_FOOT_Z) return true;
-  if (x > 82 && x < 90 && z < -126 && z > -132) return true;
-  return x > 55 && x < 91 && z < -126 && cameraZ < -125;
+  return x > 55 && x < 91 && z < -125;
 }
 function shapeDistance(sh: WalkShape, x: number, z: number): number {
   if (sh.kind === "disc") return Math.max(0, Math.hypot(x - sh.x, z - sh.z) - sh.r);

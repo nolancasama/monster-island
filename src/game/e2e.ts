@@ -3,7 +3,7 @@ import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { objective } from "./logic/progress";
 import { PLAYER_R, moveCircle, gatesOf, nearestWalkable, standY } from "./world/collision";
-import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
+import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, GATE_PILLARS, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
@@ -23,6 +23,7 @@ export function installE2eHook(seed: number) {
     const p = nearestWalkable(x, z, PLAYER_R, gatesOf(getGame().progress));
     rt.player.x = p.x;
     rt.player.z = p.z;
+    rt.player.y = standY(p.x, p.z, getGame().progress.solved);
     rt.player.vx = rt.player.vz = 0;
     rt.player.yaw = Math.atan2(faceX - p.x, faceZ - p.z);
     rt.camera.snap = true;
@@ -195,6 +196,13 @@ export function installE2eHook(seed: number) {
       const solved = getGame().progress.solved;
       for (const id of ["groveLilies", "canopyVines", "canopyRope", "causewayGate"] as const)
         rt.act2Unlock[id] = solved.includes(id) ? 1 : 0;
+    },
+    /** Match loaded sanctuary poses after changing only a visual fixture's solved flags. */
+    settleSanctuary() {
+      const solved = getGame().progress.solved;
+      const ids = Object.keys(GATE_PILLARS) as Array<keyof typeof GATE_PILLARS>;
+      for (const id of ids) rt.pillars[id] = solved.includes(id) ? 1 : 0;
+      rt.gate = ids.every(id => solved.includes(id)) ? 1 : 0;
     },
     /** Let renderer statistics catch up after a paused visual fixture. */
     renderFrames(count = 2) {

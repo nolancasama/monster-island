@@ -31,7 +31,13 @@ function portalCell(x: number, z: number) {
 }
 
 function surface(x: number, z: number): number {
-  if (inCover(x, z)) return massifY(x, z);
+  if (inCover(x, z)) {
+    // Only the nonwalkable eastern shoulder at the north portal is lowered.
+    // The central tunnel roof, lining, camera clearance and passage stay intact.
+    if (x >= TUNNEL.x + TUNNEL.half && z <= -120)
+      return Math.min(massifY(x, z), TUNNEL_FLOOR + TUNNEL.roof + .2);
+    return massifY(x, z);
+  }
   const m = Math.max(volcanoMask(x, z), forestMask(x, z));
   return groundY(x, z) - 0.3 * m;
 }

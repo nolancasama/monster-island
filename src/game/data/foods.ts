@@ -26,6 +26,6 @@ export function islandFoods(p: { endings: number }): FoodId[] {
 }
 
 /** How many of one food fit in the bag. */
-export const BAG_MAX = 3;
+export const BAG_MAX = 99;
 
 export const FOOD_LABEL = (id: FoodId): Text => ({ en: FOODS[id].word, ja: FOODS[id].ja });

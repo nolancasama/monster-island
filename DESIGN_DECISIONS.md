@@ -21,6 +21,45 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-29 — Gameplay polish Part 1 — decisions made while building
+
+- **Bridge surfaces.** A shared bank-to-bank height profile bends the actual
+  touching deck planks and anchors. Collision and walkers use that same profile;
+  endpoints overlap solid banks and meet their height and slope. Growth still
+  uses the original unlock animations, ending at the full unscaled span.
+- **Food and rewards.** The prologue and Act 2 share one 99-item cap per food.
+  Full-bag ground food stays available, including enemy food drops. Chest
+  overflow becomes one coin per item, reported separately from its other rewards.
+  The old 9,999-coin and saved 99-amber clamps cannot silently discard the
+  chest's other rewards: coins and amber now load as nonnegative safe integers
+  in the same save fields. Only food has the 99-item cap.
+- **The paid inn and Crossing.** Only an accepted, affordable inn answer charges
+  10 coins and establishes the inn checkpoint. Merely finding Port Town keeps
+  the previous wake point. Fern Crossing establishes the existing `camp` wake
+  point without healing; its saved `rest` tutorial token remains compatible and
+  now means learning about the crossing. Knock-out recovery remains free.
+- **Maple's tent.** Thick opaque canvas panels overlap at the seams, with a
+  shallow enclosed entrance and rolled flap. The original placement, canvas
+  footprint and collision proxy stay fixed. Shared vertex-coloured meshes add
+  grounded poles and pegs, ropes, seams, a map, jars and a lantern alongside
+  the existing table and crates; no transparent canvas or cloth simulation.
+- **The four pillars.** Real-mesh sightline checks identified the east shoulder
+  of the tunnel's raised terrain and portal face as the left pillars' occluder.
+  A tighter symmetric row and a lower visible shoulder expose their coloured
+  friend symbols from the existing courtyard framing. The tunnel's central roof,
+  lining, floor, collision and camera clearance stay intact. Each unsolved symbol
+  has a soft coloured halo; solving it removes that idle halo.
+- **The view beyond the lair.** Only the outer east gate-wall section and the
+  east/north-east garden rim rocks are lowered. The existing lowland tiles are
+  drawn through the same fog from outside; only a camera physically inside the
+  lined tunnel below its roof suppresses them. No panorama, duplicate scenery
+  or camera behavior changes are introduced. Render measurements and matched
+  before/after views live in `.tmp/shots/polish/render-report.json`.
+  Pillar idle halos and solved rings are each batched in one instanced draw:
+  the tunnel can include them in its frustum even when its opaque lining hides
+  them. This keeps the enclosed views at 52–57 calls / about 40k triangles;
+  the new exterior viewpoints stay within 120 calls / 140k triangles.
+
 ## 2026-10-29 — Gameplay polish brief: accepted, with these changes
 
 The external brief "Gameplay, Camera, Bridge, Economy, and Visual Polish"

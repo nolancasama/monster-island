@@ -1,5 +1,5 @@
 import { COMBAT, ENEMIES, FOOD_RESTORE, MAX_HP, type CompanionId, type MoveDef } from "./data/combat";
-import { FOODS } from "./data/foods";
+import { BAG_MAX, FOODS } from "./data/foods";
 import { MONSTERS } from "./data/monsters";
 import { clearStage, remainingEnemies, addCoins, addFood, addItem, afterKnockout, favouriteFood, changeZone, eatEffect, eatHelps, hurt, markTutorial, newZoneMemory, noteDefeat, regenMp, spendMp, type TutorialStep, type Vitals, type ZoneMemory } from "./logic/act2";
 import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
@@ -951,9 +951,15 @@ function updateDrops(dt: number) {
   let coins = 0;
   const kept: Drop[] = [];
   for (const d of cb.drops) {
+    // Full food stays on the floor, ready to collect after eating or giving some away.
+    const full = d.kind === "food" && (getGame().progress.bag[d.food!] ?? 0) >= BAG_MAX;
+    if (full) {
+      d.magnet = false;
+      d.t0 = rt.time;
+    }
     const dx = p.x - d.x, dz = p.z - d.z;
     const dist = Math.hypot(dx, dz);
-    if (!cb.knockedOut && rt.time - d.t0 > 0.45 && dist < 3.2) d.magnet = true;
+    if (!full && !cb.knockedOut && rt.time - d.t0 > 0.45 && dist < 3.2) d.magnet = true;
     if (d.magnet) {
       const sp = 9 * dt;
       d.x += (dx / (dist || 1)) * Math.min(dist, sp);

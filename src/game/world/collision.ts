@@ -32,12 +32,12 @@ import {
   LEDGE,
   GARDEN,
   type SolidShape,
-  forestBase,
   inRavine,
   inRiver,
   groundY,
   shoreZ
 } from "./island";
+import { bridgeSurfaceY } from "./bridge";
 import { STAGES, type StageId, CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
 
 export interface Circle {
@@ -358,7 +358,7 @@ export function standY(x: number, z: number, solved: readonly ObstacleId[]): num
   if (z < CLIFF_FOOT_Z + 1) return Math.max(y, lowlandDeckY(x, z, solved));
   if (onPier(x, z)) return Math.max(y, groundY(PIER.x, PIER.z0) + PIER.deckY);
   if (solved.includes("river") && inBox(x, z, STONES, -0.3)) return Math.max(y, STONE_TOP);
-  if (solved.includes("bridge") && onBridge(x, z, -0.3)) return Math.max(y, bridgeDeckY(z));
+  if (solved.includes("bridge") && onBridge(x, z, -0.3)) return bridgeDeckY(z, x);
   if (solved.includes("lava")) return Math.max(y, lavaCrustY(x, z));
   return y;
 }
@@ -381,12 +381,9 @@ export function lavaCrustY(x: number, z: number): number {
   return top - LAVA_CRUST * 1.2 * t * t * (3 - 2 * t);
 }
 
-/** The bridge deck: a straight span between the two lips of the ravine. */
-export function bridgeDeckY(z: number): number {
-  const a = forestBase(BRIDGE.x, BRIDGE.z0);
-  const b = forestBase(BRIDGE.x, BRIDGE.z1);
-  const t = Math.max(0, Math.min(1, (z - BRIDGE.z0) / (BRIDGE.z1 - BRIDGE.z0)));
-  return a + (b - a) * t + 0.12;
+/** The bridge deck meets the terrain and its slope at both bank anchors. */
+export function bridgeDeckY(z: number, x = BRIDGE.x): number {
+  return bridgeSurfaceY(x, z, BRIDGE.z0, BRIDGE.z1, groundY);
 }
 
 /** Top of a risen stepping stone (the river surface is at -0.3). */
