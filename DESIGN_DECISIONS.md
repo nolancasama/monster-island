@@ -21,6 +21,55 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-29 — Act 3 Cloud Isle: brief accepted, with these changes
+
+The external brief "Act 3: Cloud Isle and the Hidden Family" is the product
+definition of Act 3. The frozen spec is `docs/ACT3_CLOUD_ISLE.md`; branch
+`feature/act3-cloud-isle`. Before building it, the continuity-polish branch was
+fast-forwarded into `main` and deployed, at the user's request.
+
+**Accepted as written:** the voyage with Captain Gull; a dangerous, empty
+Cloud Isle with no town or market; the layout of coast, hidden shelter,
+junction, two routes, observatory and beacon; a family of three (protector,
+caregiver, witness); the discovery event and the trust exchange; the child's
+drawing of Lumo; a safe shelter with free rest and a checkpoint; optional
+errands that visibly improve the shelter; four new enemy types; a puzzle
+using all four friends; a real-time boss with one bar; Lumo glimpsed and not
+rescued; boat travel both ways; the save extended without breaking old saves.
+
+**Changed:**
+- **The shelter is on the route.** A raider barricade the player can see but
+  never open closes the road from the coast. The family's back tunnel is the
+  "safer route" the parent knows. So the family is needed to progress, enemy
+  respawns can never cut the shelter off, and it stays hidden from the road.
+  The brief's layout showed the shelter on the main path without saying why
+  it stays hidden.
+- **Only one world is mounted at a time** (home island or Cloud Isle). The
+  only cut is a short fade at sea during the voyage. Cloud Isle is not drawn
+  from Port Town: a far-off copy would be the second, low-detail
+  representation that the continuity decision rejected.
+- **The route runs one way (dock in the south, summit in the north)**, so the
+  fixed lowland camera framing works unchanged. The summit beacon is the
+  long-term goal, and it stays in the upper half of the screen.
+- **Wind never pushes the player.** It pushes light objects and projectiles
+  only, and the boss's one telegraphed gust can be cancelled by Puff. Puff's
+  "glide" is a scripted hop between marked pads, not free flight.
+- **Cooking is one optional recipe:** Grandpa Bo turns one fish into Stew (a
+  bag food for every friend, carry 3). Errands use pickups found in the world
+  and never take the player's own items. There is no second economy, and
+  Port Town stays the only shop.
+- **No "other hidden residents"** in the aftermath. The brief also forbids a
+  settlement, so the family stays the only people. Going home is left for a
+  later chapter.
+- **The chapter ends on a named hook:** Lumo's airship flies to the Sky
+  Fortress, and "Find the Sky Fortress" is the next objective.
+- Characters are named (Tala, Grandpa Bo, Kiko, Officer Squall) so the
+  dialogue and journal read naturally.
+
+**Rejected:** a sailing minigame with a fail state; a typing-only input path
+(the game has speech and Tap); a crafting system at the shelter; microphone
+prompts in fights (Act 2 decision stands).
+
 ## 2026-10-29 — Act 2 continuity polish (branch `feature/act2-continuity-polish`)
 
 A new brief asks for visible neighbouring stages, an honest Eat button, a
