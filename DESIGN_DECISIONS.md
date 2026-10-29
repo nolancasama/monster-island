@@ -21,6 +21,49 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-29 — Gameplay polish brief: accepted, with these changes
+
+The external brief "Gameplay, Camera, Bridge, Economy, and Visual Polish"
+(ten items) is accepted. The frozen spec is `docs/GAMEPLAY_POLISH.md`.
+
+**Supersedes earlier decisions (the user's explicit direction):**
+- **The prologue's drag-orbit camera is removed.** The continuity polish had
+  kept it because a single fixed yaw on a round island puts half the goals
+  behind the lens. The answer now is per-zone camera profiles with authored
+  yaws and blended borders, not orbit.
+- **Projectiles no longer use "forgiving aim"** (the nearest enemy in front).
+  They fly straight along the friend's facing. A wider hit radius keeps them
+  fair on touchpads.
+- **Fern Camp no longer heals for free**, and the inn costs 10 coins.
+
+**Changed from the brief:**
+- **Split in two.** Part 1 (bridges, food 99, pillars, tent, inn, camp, the
+  view past the lair) branches from `main` and can ship alone. Part 2 (camera,
+  projectiles, ranged enemies, companion transitions) runs after Act 3 slice
+  C, because it shares the camera and combat code Act 3 changes, and it must
+  cover Cloud Isle.
+- **Inn English:** "Would you like a room?" → "Yes, please." / "No, thank
+  you." This replaces the brief's three-step exchange: it's shorter, and these
+  are the phrases the students already drill. The game has speech and Tap,
+  not typing.
+- **Fern Crossing stays a knock-out wake point** (no healing). Otherwise a
+  knock-out in the Grove or Canopy would always walk the player back from the
+  rope.
+- **Chest food overflow becomes coins** (1 per item), with a toast. The brief
+  asked for "a clear way to handle the excess"; this way is simple and loses
+  nothing.
+- **The view past the lair uses the real lowland only.** The tunnel-wide
+  camera cut-off narrows to the enclosed tunnel itself. A panorama would
+  repeat the two-representation problem the continuity polish removed.
+- **New ranged enemies replace existing spawns**, so stage-clear counts stay
+  the same. At most two are awake per area, and they fire only with line of
+  sight, on screen.
+
+**Kept on purpose:** knock-out recovery is free (wake with at least 60 HP).
+On Cloud Isle, the Hidden Hollow's rest stays free. It is the family's
+hospitality, the story's safe haven, and Cloud Isle has no inn. Gull's boat
+at the Cloud Isle dock becomes a wake point only, recorded in the Act 3 spec.
+
 ## 2026-10-29 — Act 2 continuity polish (branch `feature/act2-continuity-polish`)
 
 A new brief asks for visible neighbouring stages, an honest Eat button, a
