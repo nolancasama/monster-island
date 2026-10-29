@@ -2,7 +2,7 @@ import type { FoodId, ItemId, ObstacleId } from "../types";
 import type { Progress } from "./progress";
 import { BAG_MAX } from "../data/foods";
 import { ACT2_BAG_MAX, COMPANION_IDS, FOOD_RESTORE, KO_HP, MAX_HP, MAX_MP, MP_REGEN, PRICES, RECIPES, type CompanionId } from "../data/combat";
-import { CHESTS, type ZoneId } from "../world/lowland";
+import { CHESTS, ENEMY_SPAWNS, STAGES, type StageId, type ZoneId } from "../world/lowland";
 
 /**
  * Act 2, "The Hunt for Lumo": what is saved and the pure rules on it.
@@ -19,6 +19,8 @@ export type Checkpoint = "cliff" | "camp" | "port";
 export interface Act2 {
   /** The kidnapping has played (Lumo stays a friend; being taken is a separate fact). */
   started: boolean;
+  /** First-clear exits, independent of transient respawning enemies. */
+  cleared: StageId[];
   lumoTaken: boolean;
   /** Climbed down the cliff at least once. */
   descended: boolean;
@@ -48,7 +50,7 @@ export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo
 
 export function newAct2(): Act2 {
   return {
-    started: false, lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
+    started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
     chests: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
   };
 }
@@ -295,3 +297,12 @@ export function act2Objective(p: Progress): Act2Objective {
 
 /** Act 2's permanent unlocks exist only once the chapter has begun. */
 export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "causewayGate"];
+
+/** Only registered enemies in this stage count; duplicate or foreign indices cannot clear it. */
+export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): number {
+  return ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !defeated.includes(i)), 0);
+}
+export function clearStage(p: Progress, zone: ZoneId, defeated: readonly number[]): Progress {
+  if (!p.act2.started || !STAGES.includes(zone as StageId) || p.act2.cleared.includes(zone as StageId) || remainingEnemies(zone, defeated) !== 0) return p;
+  return withAct2(p, { cleared: [...p.act2.cleared, zone as StageId] });
+}

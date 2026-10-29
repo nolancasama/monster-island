@@ -186,6 +186,12 @@ export function seaStacksGeometry(): THREE.BufferGeometry {
     [126, -96, 4, 9], [121, -132, 5, 7], [104, -160, 4.5, 8], [72, -168, 5, 10], [44, -158, 3.5, 6],
     [24, -132, 4, 7], [-10, -112, 5, 8], [96, -40, 3.5, 6], [92, -66, 3, 5]
   ];
-  stacks.forEach(([x, z, r, h], i) => b.add(rockGeometry(r, h, 700 + i, 1), i % 2 ? "#7a6c61" : "#6c6058", [x, SEA_Y - 2.5, z]));
+  stacks.forEach(([x, z, r, h], i) => {
+    // These were sea rocks before Act 2 extended the island northward.
+    // Keep the original seeds, but remove stacks now inside the forest basin:
+    // they otherwise render through playable clearings without any collider.
+    if (x >= BASIN.x0 && x <= BASIN.x1 && z < BASIN.z1) return;
+    b.add(rockGeometry(r, h, 700 + i, 1), i % 2 ? "#7a6c61" : "#6c6058", [x, SEA_Y - 2.5, z]);
+  });
   return b.build();
 }

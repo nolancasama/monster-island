@@ -6,9 +6,47 @@ import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Ou
 import { makeRng } from "../../game/logic/rng";
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import {
-  BASIN, CAMP2, CANOPY_GAPS, CANOPY_TRAIL, CAUSEWAY, CHESTS, CLIFF_ROPE, COAST_TRAIL, CRATES, FOREST1_TRAIL, FORK_SIGN, FOUNTAIN,
-  GIANT_TREES, GROVE_TRAIL, HOUSES, ISLET, LAMPS, LILY_PADS, LOGS, MOSSY_BOULDERS, OLD_TRAIL, PIER2, POND, POND_Y, PORT, RUIN_PILLARS,
-  SERVICES, SHORTCUT_GATE, SHRINE, STREAMS, ZONE_ORDER, ZONES, canopyRaise, lowlandWalkable, nearestOnTrail, streamY, type EnemyKind
+  detailOwner,
+  STAGES,
+  STAGE_EXITS,
+  type ZoneId,
+  BASIN,
+  CAMP2,
+  CANOPY_GAPS,
+  CANOPY_TRAIL,
+  CAUSEWAY,
+  CHESTS,
+  CLIFF_ROPE,
+  COAST_TRAIL,
+  CRATES,
+  FOREST1_TRAIL,
+  FORK_SIGN,
+  FOUNTAIN,
+  GIANT_TREES,
+  GROVE_TRAIL,
+  HOUSES,
+  ISLET,
+  LAMPS,
+  LILY_PADS,
+  LOGS,
+  MOSSY_BOULDERS,
+  OLD_TRAIL,
+  PIER2,
+  POND,
+  POND_Y,
+  PORT,
+  RUIN_PILLARS,
+  SERVICES,
+  SHORTCUT_GATE,
+  SHRINE,
+  STREAMS,
+  ZONE_ORDER,
+  ZONES,
+  canopyRaise,
+  lowlandWalkable,
+  nearestOnTrail,
+  streamY,
+  type EnemyKind,
 } from "../../game/world/lowland";
 import type { NpcDef } from "../../game/data/town";
 
@@ -52,7 +90,7 @@ function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Co
   for (const t of TRAILS) trail = Math.min(trail, nearestOnTrail(t, x, z).d);
   c.lerp(DIRT, (1 - sstep(1.2, 2.6, trail)) * 0.8);
   const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, pad: number) => x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad;
-  if (inRect(CAUSEWAY, 0) || Math.hypot(x - SHRINE.x, z - SHRINE.z) < SHRINE.r) c.lerp(STONE, 0.9);
+  if (inRect({x0:44,x1:52,z0:-257,z1:-250},0) || inRect(CAUSEWAY, 0) || Math.hypot(x - SHRINE.x, z - SHRINE.z) < SHRINE.r) c.lerp(STONE, 0.9);
   if (inRect(PORT, 0)) c.lerp(COBBLE, 0.92);
   if (Math.hypot(x - CAMP2.fire.x, z - CAMP2.fire.z) < 6) c.lerp(DIRT, 0.45);
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.6 && Math.hypot(x - ISLET.x, z - ISLET.z) > ISLET.r) c.lerp(MUD, 0.85);
@@ -73,7 +111,10 @@ export function lowlandTerrainTiles(size = 48): THREE.BufferGeometry[] {
   const vy: number[] = [];
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) vy.push(surface(BASIN.x0 + i * STEP, BASIN.z0 + j * STEP));
   const buckets = new Map<string, { p: number[]; c: number[] }>();
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), cc = new THREE.Vector3(), n = new THREE.Vector3();
+  const a = new THREE.Vector3(),
+    b = new THREE.Vector3(),
+    cc = new THREE.Vector3(),
+    n = new THREE.Vector3();
   const col = new THREE.Color();
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
@@ -85,13 +126,26 @@ export function lowlandTerrainTiles(size = 48): THREE.BufferGeometry[] {
       let bucket = buckets.get(key);
       if (!bucket) buckets.set(key, (bucket = { p: [], c: [] }));
       const at = (di: number, dj: number, v: THREE.Vector3) => v.set(x + di * STEP, vy[(j + dj) * (nx + 1) + i + di], z + dj * STEP);
-      for (const tri of [[[0, 0], [0, 1], [1, 0]], [[1, 0], [0, 1], [1, 1]]]) {
+      for (const tri of [
+        [
+          [0, 0],
+          [0, 1],
+          [1, 0],
+        ],
+        [
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ],
+      ]) {
         at(tri[0][0], tri[0][1], a);
         at(tri[1][0], tri[1][1], b);
         at(tri[2][0], tri[2][1], cc);
         n.subVectors(b, a).cross(cc.clone().sub(a)).normalize();
         const steep = 1 - THREE.MathUtils.smoothstep(n.y, 0.55, 0.85);
-        const mx = (a.x + b.x + cc.x) / 3, my = (a.y + b.y + cc.y) / 3, mz = (a.z + b.z + cc.z) / 3;
+        const mx = (a.x + b.x + cc.x) / 3,
+          my = (a.y + b.y + cc.y) / 3,
+          mz = (a.z + b.z + cc.z) / 3;
         groundColor(mx, mz, my, steep, col);
         for (const v of [a, b, cc]) {
           bucket.p.push(v.x, v.y, v.z);
@@ -182,12 +236,22 @@ export interface Spot {
  */
 export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[]; reeds: Spot[] } {
   const rand = makeRng(2024);
-  const trees: Spot[] = [], ferns: Spot[] = [], fernTrees: Spot[] = [], reeds: Spot[] = [];
-  const open = { solved: ["groveLilies", "canopyVines", "canopyRope", "causewayGate"] as const };
+  const trees: Spot[] = [],
+    ferns: Spot[] = [],
+    fernTrees: Spot[] = [],
+    reeds: Spot[] = [];
+  const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope", "causewayGate"] as const };
   const off = (x: number, z: number, pad: number) => {
     // Nothing grows on the sanctuary's shelf or against the cliff (it would poke up beside the garden).
     if (z > -157.5) return false;
-    for (const [dx, dz] of [[0, 0], [pad, 0], [-pad, 0], [0, pad], [0, -pad]]) if (lowlandWalkable(x + dx, z + dz, open, 0)) return false;
+    for (const [dx, dz] of [
+      [0, 0],
+      [pad, 0],
+      [-pad, 0],
+      [0, pad],
+      [0, -pad],
+    ])
+      if (lowlandWalkable(x + dx, z + dz, open, 0)) return false;
     return groundY(x, z) > SEA_Y + 0.3 && Math.hypot(x - POND.x, z - POND.z) > POND.r + 0.5;
   };
   const town = (x: number, z: number) => x > PORT.x0 - 6 && x < PORT.x1 + 6 && z < PORT.z1 + 4;
@@ -196,7 +260,8 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
       const pts: Array<[number, number, number]> = [];
       if (sh.kind === "trail") {
         for (let i = 1; i < sh.pts.length; i++) {
-          const [ax, az] = sh.pts[i - 1], [bx, bz] = sh.pts[i];
+          const [ax, az] = sh.pts[i - 1],
+            [bx, bz] = sh.pts[i];
           const len = Math.hypot(bx - ax, bz - az);
           for (let s = 0; s < len; s += 2.2) pts.push([ax + ((bx - ax) * s) / len, az + ((bz - az) * s) / len, sh.w]);
         }
@@ -211,7 +276,8 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
           const a = rand() * Math.PI * 2;
           const near = k === 0;
           const d = near ? 1.4 + rand() * 2.2 : 4 + rand() * 8;
-          const x = px + Math.cos(a) * d, z = pz + Math.sin(a) * d;
+          const x = px + Math.cos(a) * d,
+            z = pz + Math.sin(a) * d;
           if (!off(x, z, near ? 0.7 : 2.6)) continue;
           if (id === "port" || town(x, z)) {
             if (!near && rand() < 0.15) trees.push({ x, z, s: 0.55 + rand() * 0.2, r: rand() * 6.28, tint: 0.95 + rand() * 0.1 });
@@ -243,30 +309,39 @@ export function cliffFaceGeometry(): THREE.BufferGeometry {
   const foot = groundY(r.foot.x, r.foot.z) - 0.6;
   // The climbing face: a slab as wide as the ledge, its top just under the ledge's grass,
   // in bands of slightly different rock so it reads as strata, not a box.
-  const bands = 6;
-  for (let i = 0; i < bands; i++) {
-    const y0 = foot + ((top - 0.3 - foot) * i) / bands;
-    const h = (top - 0.3 - foot) / bands + 0.02;
-    b.box(6.4 - (i % 2) * 0.5, h, 1.6 + (i % 3) * 0.12, r.x + ((i * 7) % 3 - 1) * 0.15, y0, r.faceZ + 0.8 + (i % 3) * 0.06, i % 2 ? "#7d6c5f" : "#86766a");
+  // One closed core all the way from the ledge to below the basin. Strata
+  // are flush coloured overlays on this core, never separate floating slabs.
+  b.box(12.8, top - foot - 0.12, 9, r.x, foot, r.faceZ + 4.5, "#7d6c5f");
+  for (let i = 0; i < 6; i++) {
+    const y = foot + ((top - foot - 0.2) * i) / 6;
+    b.box(12.8, (top - foot - 0.2) / 6 + 0.015, 0.035, r.x, y, r.faceZ + 0.012, i % 2 ? "#806e60" : "#89776a");
+  }
+  // Closed tapered wings meet the old massif under the garden rim. Their
+  // shared columns overlap so side and underside views cannot expose cracks.
+  for (let x = 49; x < 92; x += 2) {
+    if (Math.abs(x - r.x) < 6) continue;
+    const h = Math.max(1, groundY(x, -147.5) - foot - 0.15);
+    b.box(2.06, h, 8, x, foot, r.faceZ + 4.05, "#79695e");
   }
   // Bulging rocks either side of the climbing line (never in front of the rope), up to the lip.
   const rand = makeRng(77);
   for (let i = 0; i < 22; i++) {
     const side = i % 2 ? 1 : -1;
-    const x = r.x + side * (2.6 + rand() * 4);
+    const x = r.x + side * (5 + rand() * 4);
     const y = foot + rand() * (top - foot - 0.6);
     b.add(rockGeometry(1.1 + rand() * 1.2, 1.1 + rand() * 1.5, 1200 + i, 1), i % 3 ? "#6f6157" : "#85766a", [x, y, r.faceZ - 0.1 - rand() * 0.5]);
   }
   // Mossy boulders and broken rock at the foot.
   for (let i = 0; i < 9; i++) {
     const x = r.x - 7 + i * 1.8 + rand() * 0.6;
-    if (Math.abs(x - r.x) < 1.6) continue;
+    if (Math.abs(x - r.x) < 3.3) continue;
     b.add(rockGeometry(0.7 + rand() * 0.8, 0.6 + rand() * 0.6, 1300 + i, 0), "#6f7a5a", [x, groundY(x, r.faceZ - 1.2) - 0.2, r.faceZ - 0.9 - rand()]);
   }
   // The shelf's north face, east and west of the lookout: tall rocks under the garden's rim.
   for (let i = 0; i < 18; i++) {
     const a = Math.PI * (1.12 + (i / 17) * 0.76);
-    const x = 70 + Math.cos(a) * 14.2, z = -136 + Math.sin(a) * 14.2;
+    const x = 70 + Math.cos(a) * 14.2,
+      z = -136 + Math.sin(a) * 14.2;
     if (Math.abs(x - r.x) < 7.5 && z < -146) continue;
     const g = groundY(x, z - 2);
     b.add(rockGeometry(2.4 + rand(), Math.max(3, 15.5 - g) * 0.62, 1400 + i, 1), i % 2 ? "#776659" : "#6a5c53", [x, g - 0.5, z]);
@@ -285,7 +360,7 @@ export function cliffRopeGeometry(): THREE.BufferGeometry {
     new THREE.Vector3(r.x, top - 0.4, r.hangZ),
     new THREE.Vector3(r.x, (top + foot) / 2, r.hangZ - 0.02),
     new THREE.Vector3(r.x, foot + 0.1, r.hangZ - 0.05),
-    new THREE.Vector3(r.x + 0.4, foot + 0.04, r.hangZ - 0.5)
+    new THREE.Vector3(r.x + 0.4, foot + 0.04, r.hangZ - 0.5),
   ];
   const curve = new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.2);
   const b = new PartBuilder(0);
@@ -304,7 +379,14 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   for (let x = CAUSEWAY.x0 + 1; x < CAUSEWAY.x1; x += 2.1) {
     for (let z = CAUSEWAY.z0 + 1.6; z < CAUSEWAY.z1 - 0.6; z += 2.1) {
       if (rand() < 0.18) continue;
-      b.boxAt(1.9, 0.12, 1.9, [x + (rand() - 0.5) * 0.15, gy(x, z) + 0.02, z + (rand() - 0.5) * 0.15], [0, (rand() - 0.5) * 0.08, 0], rand() < 0.5 ? "#b9b1a3" : "#a49c8f");
+      b.boxAt(
+        1.9,
+        0.12,
+        1.9,
+        [x + (rand() - 0.5) * 0.15, gy(x, z) + 0.02, z + (rand() - 0.5) * 0.15],
+        [0, (rand() - 0.5) * 0.08, 0],
+        rand() < 0.5 ? "#b9b1a3" : "#a49c8f",
+      );
     }
   }
   for (const p of RUIN_PILLARS) {
@@ -315,7 +397,10 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     b.sphere(0.35, p.x + 0.3, gy(p.x, p.z) + h * 0.4, p.z + 0.4, "#6aa04a", [1, 0.5, 0.8], 6);
   }
   // A broken arch where the grove joins the causeway, another at the shrine.
-  for (const [x, z] of [[58, -243], [102, -251.5]]) {
+  for (const [x, z] of [
+    [58, -243],
+    [102, -251.5],
+  ]) {
     const y = gy(x, z);
     b.cyl(0.45, 0.55, 4.2, x - 2.4, y - 0.1, z, "#b3a893", 8);
     b.cyl(0.45, 0.55, 3.1, x + 2.4, y - 0.1, z, "#b3a893", 8);
@@ -324,8 +409,12 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   // The shrine: a stepped platform, statues of monsters, a glowing stone.
   const sy = gy(SHRINE.x, SHRINE.z);
   b.cyl(4.2, 4.5, 0.25, SHRINE.x, sy - 0.15, SHRINE.z, "#b2a895", 12);
-  for (const [dx, dz] of [[2.6, -2.2], [2.6, 2.2]]) {
-    const x = SHRINE.x + dx, z = SHRINE.z + dz;
+  for (const [dx, dz] of [
+    [2.6, -2.2],
+    [2.6, 2.2],
+  ]) {
+    const x = SHRINE.x + dx,
+      z = SHRINE.z + dz;
     b.box(0.9, 0.9, 0.9, x, sy, z, "#9d9384");
     b.sphere(0.55, x, sy + 1.4, z, "#a8b0a0", [1, 1.1, 1], 8);
     b.sphere(0.12, x - 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
@@ -355,7 +444,8 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   b.boxAt(1.4, 0.32, 0.06, [s.x + 0.55, fy + 1.35, s.z], [0, 0, -0.08], "#c99a5a");
   // Fallen logs and mossy boulders.
   for (const l of LOGS) {
-    const mx = (l.ax + l.bx) / 2, mz = (l.az + l.bz) / 2;
+    const mx = (l.ax + l.bx) / 2,
+      mz = (l.az + l.bz) / 2;
     between(b, [l.ax, gy(l.ax, l.az) + l.r * 0.8, l.az], [l.bx, gy(l.bx, l.bz) + l.r * 0.8, l.bz], l.r, l.r * 0.9, "#6e5236", 8);
     b.sphere(l.r * 0.9, mx, gy(mx, mz) + l.r * 1.5, mz, "#5f9a44", [1.6, 0.4, 1], 6);
   }
@@ -365,12 +455,15 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   }
   // The raised root walk: giant roots line both sides; posts mark each gap.
   for (let i = 0; i < CANOPY_TRAIL.length - 1; i++) {
-    const [ax, az] = CANOPY_TRAIL[i], [bx, bz] = CANOPY_TRAIL[i + 1];
+    const [ax, az] = CANOPY_TRAIL[i],
+      [bx, bz] = CANOPY_TRAIL[i + 1];
     const len = Math.hypot(bx - ax, bz - az);
-    const ux = (bx - ax) / len, uz = (bz - az) / len;
+    const ux = (bx - ax) / len,
+      uz = (bz - az) / len;
     for (let s = 1.5; s < len; s += 3.2) {
       for (const side of [-1, 1]) {
-        const x = ax + ux * s - uz * side * 2.9, z = az + uz * s + ux * side * 2.9;
+        const x = ax + ux * s - uz * side * 2.9,
+          z = az + uz * s + ux * side * 2.9;
         const h = canopyRaise(x, z);
         if (h < 1.2) continue;
         const inGap = Object.values(CANOPY_GAPS).some((g) => Math.abs(x - g.x) < 4 && z > g.z0 - 0.3 && z < g.z1 + 0.3);
@@ -381,7 +474,13 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   }
   for (const g of Object.values(CANOPY_GAPS)) {
     const y = groundY(g.x, g.z1 + 1.2);
-    for (const [dx, z] of [[-1.15, g.z1 + 0.5], [1.15, g.z1 + 0.5], [-1.15, g.z0 - 0.5], [1.15, g.z0 - 0.5]]) b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
+    for (const [dx, z] of [
+      [-1.15, g.z1 + 0.5],
+      [1.15, g.z1 + 0.5],
+      [-1.15, g.z0 - 0.5],
+      [1.15, g.z0 - 0.5],
+    ])
+      b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
   }
   // The islet: a small mossy mound; the shortcut gate's stone frame.
   b.cyl(0.5, 0.6, 2.8, SHORTCUT_GATE.x - SHORTCUT_GATE.half - 0.5, gy(SHORTCUT_GATE.x, SHORTCUT_GATE.z) - 0.1, SHORTCUT_GATE.z, "#a89e8c", 8);
@@ -402,9 +501,11 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
   b.add(new THREE.CircleGeometry(POND.r + 0.6, 24).rotateX(-Math.PI / 2), "#3fb5c8", [POND.x, POND_Y, POND.z], [0, 0, 0], [1, 1, 1], { flatAo: true });
   for (const s of STREAMS) {
     for (let i = 1; i < s.length; i++) {
-      const [ax, az] = s[i - 1], [bx, bz] = s[i];
+      const [ax, az] = s[i - 1],
+        [bx, bz] = s[i];
       const len = Math.hypot(bx - ax, bz - az);
-      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const mx = (ax + bx) / 2,
+        mz = (az + bz) / 2;
       const plane = new THREE.PlaneGeometry(1.6, len + 1.2).rotateX(-Math.PI / 2);
       b.add(plane, "#5cc6d6", [mx, streamY(mx, mz), mz], [0, Math.atan2(bx - ax, bz - az), 0], [1, 1, 1], { flatAo: true });
     }
@@ -425,7 +526,8 @@ export function lilyPadGeometry(): THREE.BufferGeometry {
 /** The vine bridge Leafy weaves over the first gap (built along +z, centred). */
 export function vineBridgeGeometry(len: number): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (let i = 0; i < Math.ceil(len / 0.42); i++) b.boxAt(1.8, 0.1, 0.36, [0, 0, -len / 2 + 0.2 + i * 0.42], [0, 0, (i % 2 ? 1 : -1) * 0.03], i % 2 ? "#4f9a3e" : "#3f8a36");
+  for (let i = 0; i < Math.ceil(len / 0.42); i++)
+    b.boxAt(1.8, 0.1, 0.36, [0, 0, -len / 2 + 0.2 + i * 0.42], [0, 0, (i % 2 ? 1 : -1) * 0.03], i % 2 ? "#4f9a3e" : "#3f8a36");
   for (const side of [-1, 1]) {
     between(b, [side * 0.95, 0.75, -len / 2], [side * 0.95, 0.6, len / 2], 0.05, 0.05, "#3a7a2e", 5);
     for (let z = -len / 2 + 0.6; z < len / 2; z += 1.1) b.sphere(0.14, side * 0.95, 0.66, z, "#6fd24f", [1, 0.6, 1.3], 6);
@@ -491,30 +593,44 @@ export function townGeometry(): THREE.BufferGeometry {
     b.boxAt(w, h, d, [x, y + h / 2, z], [0, yaw, 0], wall);
     const r = new THREE.ConeGeometry(Math.hypot(w, d) / 2 + 0.25, 1.8, 4, 1);
     r.rotateY(Math.PI / 4);
-    r.scale(w / Math.hypot(w, d) * 1.414, 1, d / Math.hypot(w, d) * 1.414);
+    r.scale((w / Math.hypot(w, d)) * 1.414, 1, (d / Math.hypot(w, d)) * 1.414);
     b.add(r, roof, [x, y + h + 0.9, z], [0, yaw, 0]);
     // Door and windows on the front (local +z).
-    const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const fx = Math.sin(yaw),
+      fz = Math.cos(yaw),
+      rx = Math.cos(yaw),
+      rz = -Math.sin(yaw);
     const front = d / 2 + 0.02;
     b.boxAt(0.9, 1.7, 0.08, [x + fx * front, y + 0.85, z + fz * front], [0, yaw, 0], "#6e4a2c");
-    for (const side of [-1, 1]) b.boxAt(0.7, 0.7, 0.08, [x + fx * front + rx * side * w * 0.3, y + 2, z + fz * front + rz * side * w * 0.3], [0, yaw, 0], "#7fc6e8");
+    for (const side of [-1, 1])
+      b.boxAt(0.7, 0.7, 0.08, [x + fx * front + rx * side * w * 0.3, y + 2, z + fz * front + rz * side * w * 0.3], [0, yaw, 0], "#7fc6e8");
   };
   for (const s of Object.values(SERVICES)) {
     const colors: Record<string, [string, string]> = {
-      market: ["#fbe3b5", "#e8553f"], kitchen: ["#fff1f4", "#ff8fb0"], trainer: ["#dfe9f7", "#3f7fd0"], inn: ["#f2e6ff", "#8f6ad0"], harbor: ["#e6eef2", "#26467a"]
+      market: ["#fbe3b5", "#e8553f"],
+      kitchen: ["#fff1f4", "#ff8fb0"],
+      trainer: ["#dfe9f7", "#3f7fd0"],
+      inn: ["#f2e6ff", "#8f6ad0"],
+      harbor: ["#e6eef2", "#26467a"],
     };
     const [wall, roof] = colors[s.id];
     house(s.house.x, s.house.z, s.house.w, s.house.d, s.house.yaw, wall, roof, s.id === "inn" ? 4.4 : 3.2);
     const k = s.keeper;
     // A counter in front of each keeper.
-    const fx = Math.sin(s.house.yaw), fz = Math.cos(s.house.yaw);
+    const fx = Math.sin(s.house.yaw),
+      fz = Math.cos(s.house.yaw);
     b.boxAt(Math.min(3, s.house.w * 0.5), 1, 0.7, [k.x - fx * 0.95, gy(k.x, k.z) + 0.5, k.z - fz * 0.95], [0, s.house.yaw, 0], "#b0763e");
   }
   for (const h of HOUSES) house(h.x, h.z, h.w, h.d, h.yaw, h.color, h.roof);
   // Market stall: a striped awning and crates of food.
   const m = SERVICES.market.house;
-  for (let i = 0; i < 6; i++) b.boxAt(0.62, 0.08, 2, [m.x + 2.6, gy(m.x, m.z) + 2.7 - 0.1 * i, m.z - 1.6 + i * 0.64], [0.2, 0, 0], i % 2 ? "#ffffff" : "#e8553f");
-  for (const [dz, c] of [[-1.1, "#e83a35"], [0, "#ffd23f"], [1.1, "#a070e0"]] as const) {
+  for (let i = 0; i < 6; i++)
+    b.boxAt(0.62, 0.08, 2, [m.x + 2.6, gy(m.x, m.z) + 2.7 - 0.1 * i, m.z - 1.6 + i * 0.64], [0.2, 0, 0], i % 2 ? "#ffffff" : "#e8553f");
+  for (const [dz, c] of [
+    [-1.1, "#e83a35"],
+    [0, "#ffd23f"],
+    [1.1, "#a070e0"],
+  ] as const) {
     b.box(0.7, 0.4, 0.7, m.x + 3.4, gy(m.x, m.z) + 0.6, m.z + dz, "#b0763e");
     b.sphere(0.25, m.x + 3.4, gy(m.x, m.z) + 1.1, m.z + dz, c, [1.2, 0.6, 1.2], 7);
   }
@@ -545,16 +661,19 @@ export function townGeometry(): THREE.BufferGeometry {
   b.box(PORT.x1 - PORT.x0 + 6, qy + 4.4, 1, (PORT.x0 + PORT.x1) / 2, -4.4, qz, "#a59a88");
   const deck = qy + PIER2.deckY;
   b.box(PIER2.half * 2, 0.16, PIER2.z1 - PIER2.z0, PIER2.x, deck - 0.16, (PIER2.z0 + PIER2.z1) / 2, "#b88a52");
-  for (let z = PIER2.z0 + 0.6; z < PIER2.z1; z += 2.4) for (const side of [-1, 1]) b.cyl(0.12, 0.12, deck + 3.6, PIER2.x + side * (PIER2.half - 0.05), -3.6, z, "#7a5532", 6);
+  for (let z = PIER2.z0 + 0.6; z < PIER2.z1; z += 2.4)
+    for (const side of [-1, 1]) b.cyl(0.12, 0.12, deck + 3.6, PIER2.x + side * (PIER2.half - 0.05), -3.6, z, "#7a5532", 6);
   // The boat (a sailing boat at the pier's end).
-  const bx = PIER2.x + 3.6, bz = PIER2.z0 + 4;
+  const bx = PIER2.x + 3.6,
+    bz = PIER2.z0 + 4;
   const hull = new THREE.CylinderGeometry(1.4, 0.9, 6.5, 8, 1, false, Math.PI, Math.PI);
   hull.rotateX(Math.PI / 2);
   b.add(hull, "#c0503a", [bx, SEA_Y + 0.6, bz], [0, 0, Math.PI]);
   b.box(2.4, 0.15, 5.6, bx, SEA_Y + 0.55, bz, "#d8b77a");
   b.cyl(0.09, 0.11, 6, bx, SEA_Y + 0.6, bz, "#7a5532", 6);
   b.boxAt(0.05, 3.6, 2.6, [bx, SEA_Y + 3.6, bz + 1.4], [0, 0, 0], "#fbf6ea");
-  const lx = 99, lz = -327;
+  const lx = 99,
+    lz = -327;
   b.add(rockGeometry(3, 2.5, 1800, 1), "#7a6c61", [lx, SEA_Y - 1, lz]);
   b.cyl(0.9, 1.3, 8, lx, SEA_Y + 1.2, lz, "#ffffff", 10);
   for (const y of [3, 6]) b.cyl(1.0 - y * 0.03, 1.2 - y * 0.03, 0.9, lx, SEA_Y + 1.2 + y, lz, "#e8553f", 10);
@@ -566,7 +685,11 @@ export function townGeometry(): THREE.BufferGeometry {
 /** Signboards over the services (English words to read): one atlas, one draw. */
 export function townSigns(): { geo: THREE.BufferGeometry; tex: THREE.CanvasTexture } {
   const labels: Array<[keyof typeof SERVICES, string, string]> = [
-    ["market", "FOOD MARKET", "#e8553f"], ["kitchen", "TREAT KITCHEN", "#ff6f9e"], ["trainer", "MONSTER TRAINER", "#3f7fd0"], ["inn", "SEASIDE INN", "#8f6ad0"], ["harbor", "HARBOR OFFICE", "#26467a"]
+    ["market", "FOOD MARKET", "#e8553f"],
+    ["kitchen", "TREAT KITCHEN", "#ff6f9e"],
+    ["trainer", "MONSTER TRAINER", "#3f7fd0"],
+    ["inn", "SEASIDE INN", "#8f6ad0"],
+    ["harbor", "HARBOR OFFICE", "#26467a"],
   ];
   const c = document.createElement("canvas");
   c.width = 512;
@@ -591,7 +714,8 @@ export function townSigns(): { geo: THREE.BufferGeometry; tex: THREE.CanvasTextu
     const plane = new THREE.PlaneGeometry(3.4, 0.45);
     const uv = plane.attributes.uv as THREE.BufferAttribute;
     for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - (i + 1 - uv.getY(k)) / labels.length);
-    const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+    const fx = Math.sin(s.yaw),
+      fz = Math.cos(s.yaw);
     plane.rotateY(s.yaw);
     plane.translate(s.x + fx * (s.d / 2 + 0.06), groundY(s.x, s.z) + (id === "inn" ? 3.7 : 2.75), s.z + fz * (s.d / 2 + 0.06));
     parts.push(plane);
@@ -601,10 +725,22 @@ export function townSigns(): { geo: THREE.BufferGeometry; tex: THREE.CanvasTextu
 
 /** A keeper: one merged mesh (limbs posed), with hats and aprons from their look. */
 export function npcGeometry(n: NpcDef): THREE.BufferGeometry {
-  const o: Outfit = { skin: n.skin, hair: n.hair, shirt: n.shirt, shirtTrim: n.apron ?? n.shirt, shorts: "#5a5a72", shoes: "#5a3a22", hat: "band", hatColor: n.hat === "band" ? n.hatColor : n.hair, height: 1.1 };
+  const o: Outfit = {
+    skin: n.skin,
+    hair: n.hair,
+    shirt: n.shirt,
+    shirtTrim: n.apron ?? n.shirt,
+    shorts: "#5a5a72",
+    shoes: "#5a3a22",
+    hat: "band",
+    hatColor: n.hat === "band" ? n.hatColor : n.hair,
+    height: 1.1,
+  };
   const parts: THREE.BufferGeometry[] = [bodyGeometry(o)];
   const place = (g: THREE.BufferGeometry, x: number, y: number, z: number, rx = 0, rz = 0) => {
-    g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), new THREE.Vector3(1, 1, 1)));
+    g.applyMatrix4(
+      new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), new THREE.Vector3(1, 1, 1)),
+    );
     parts.push(g);
   };
   for (const s of [-1, 1]) {
@@ -621,9 +757,13 @@ export function npcGeometry(n: NpcDef): THREE.BufferGeometry {
     extra.cyl(0.25, 0.23, 0.12, 0, 1.45, 0, "#ffffff", 12);
     extra.cyl(0.25, 0.25, 0.04, 0, 1.44, 0.02, "#26467a", 12);
     extra.sphere(0.12, 0, 1.18, 0.16, n.hair, [1.4, 0.6, 0.6], 8);
-  } else if (n.hat === "scarf") extra.add(new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), n.hatColor, [0, 1.35, -0.01], [-0.2, 0, 0]);
+  } else if (n.hat === "scarf")
+    extra.add(new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), n.hatColor, [0, 1.35, -0.01], [-0.2, 0, 0]);
   if (!extra.empty) parts.push(extra.build());
-  const merged = mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)), false);
+  const merged = mergeGeometries(
+    parts.map((p) => (p.index ? p.toNonIndexed() : p)),
+    false,
+  );
   merged.computeBoundingSphere();
   return merged;
 }
@@ -635,15 +775,19 @@ function emblem(b: PartBuilder, x: number, y: number, z: number, r: number, yaw 
   const disc = new THREE.CylinderGeometry(r, r, 0.06, 16);
   disc.rotateX(Math.PI / 2);
   b.add(disc, "#4a2a7a", [x, y, z], [0, yaw, 0], [1, 1, 1], { flatAo: true });
-  const fx = Math.sin(yaw) * 0.04, fz = Math.cos(yaw) * 0.04;
+  const fx = Math.sin(yaw) * 0.04,
+    fz = Math.cos(yaw) * 0.04;
   const moon = new THREE.CylinderGeometry(r * 0.62, r * 0.62, 0.05, 16);
   moon.rotateX(Math.PI / 2);
   b.add(moon, "#ffffff", [x + fx, y, z + fz], [0, yaw, 0], [1, 1, 1], { flatAo: true });
   const bite = new THREE.CylinderGeometry(r * 0.5, r * 0.5, 0.05, 16);
   bite.rotateX(Math.PI / 2);
-  const rx = Math.cos(yaw) * r * 0.25, rz = -Math.sin(yaw) * r * 0.25;
+  const rx = Math.cos(yaw) * r * 0.25,
+    rz = -Math.sin(yaw) * r * 0.25;
   b.add(bite, "#4a2a7a", [x + fx * 2 + rx, y + r * 0.12, z + fz * 2 + rz], [0, yaw, 0], [1, 1, 1], { flatAo: true });
-  b.add(new THREE.OctahedronGeometry(r * 0.16, 0), "#ffd23f", [x + fx * 2 - rx * 1.4, y - r * 0.2, z + fz * 2 - rz * 1.4], [0, yaw, 0], [1, 1, 0.4], { flatAo: true });
+  b.add(new THREE.OctahedronGeometry(r * 0.16, 0), "#ffd23f", [x + fx * 2 - rx * 1.4, y - r * 0.2, z + fz * 2 - rz * 1.4], [0, yaw, 0], [1, 1, 0.4], {
+    flatAo: true,
+  });
 }
 
 /** A round, patched balloon over a wooden gondola with fins and a propeller (faces +z). */
@@ -654,9 +798,21 @@ export function airshipGeometry(): THREE.BufferGeometry {
   emblem(b, 3.3, 4.3, 0, 1.15, Math.PI / 2);
   emblem(b, -3.3, 4.3, 0, 1.15, -Math.PI / 2);
   // Fins at the back.
-  for (const [rx, rz] of [[0, 0], [0, Math.PI / 2], [0, Math.PI], [0, -Math.PI / 2]]) b.boxAt(0.12, 1.6, 1.8, [Math.sin(rz) * 1.2, 4.2 + Math.cos(rz) * 1.2, -4.8], [rx, 0, rz], "#3a2460");
+  for (const [rx, rz] of [
+    [0, 0],
+    [0, Math.PI / 2],
+    [0, Math.PI],
+    [0, -Math.PI / 2],
+  ])
+    b.boxAt(0.12, 1.6, 1.8, [Math.sin(rz) * 1.2, 4.2 + Math.cos(rz) * 1.2, -4.8], [rx, 0, rz], "#3a2460");
   // Ropes and the gondola.
-  for (const [x, z] of [[-1, -1.6], [1, -1.6], [-1, 1.6], [1, 1.6]]) between(b, [x * 1.6, 2.2, z * 1.2], [x * 1.1, 0.6, z], 0.04, 0.04, "#c79a5c", 4);
+  for (const [x, z] of [
+    [-1, -1.6],
+    [1, -1.6],
+    [-1, 1.6],
+    [1, 1.6],
+  ])
+    between(b, [x * 1.6, 2.2, z * 1.2], [x * 1.1, 0.6, z], 0.04, 0.04, "#c79a5c", 4);
   const hull = new THREE.CylinderGeometry(1.3, 0.8, 5, 8, 1, false, Math.PI, Math.PI);
   hull.rotateX(Math.PI / 2);
   b.add(hull, "#7a4a2a", [0, 0.8, 0], [0, 0, Math.PI]);
@@ -750,3 +906,72 @@ export function coinGeometry(): THREE.BufferGeometry {
 }
 
 export { CHESTS };
+
+/** Simplified crowns, hills, coastline and port roofs: no stages or enemies. */
+export function lowlandPanoramaGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0),
+    rand = makeRng(809);
+  b.box(16, 1, 30, 75.5, 0, -167, "#487c55");
+  b.add(new THREE.CircleGeometry(1, 14), "#487c55", [77, 1, -244], [-Math.PI / 2, 0, 0], [46, 85, 1]);
+  for (let i = 0; i < 140; i++) {
+    const x = 34 + rand() * 85,
+      z = -166 - rand() * 117,
+      y = 2.2;
+    b.add(new THREE.IcosahedronGeometry(1, 0), i % 3 ? "#326d50" : "#4d825a", [x, y + 5 + rand() * 3, z], [0, rand() * 6, 0], [3 + rand() * 2, 3, 4]);
+  }
+  for (const x of [28, 124]) for (let z = -182; z > -290; z -= 29) b.add(new THREE.ConeGeometry(12, 18, 5), "#557b6c", [x, 7, z]);
+  b.box(49, 0.3, 24, 77, 0.8, -307, "#c6be97");
+  for (const x of [60, 94])
+    for (const z of [-298, -313]) {
+      b.box(5, 2.5, 4, x, 1, z, "#d4c6a7");
+      b.add(new THREE.ConeGeometry(4, 2, 4), "#9b7159", [x, 4.5, z], [0, Math.PI / 4, 0], [1, 1, 0.8]);
+    }
+  b.box(2, 0.4, 17, 76, 1, -330, "#9c825f");
+  // The same harbour lighthouse as the detailed town, simplified to a silhouette.
+  b.cyl(.9,1.3,8,99,SEA_Y+1.2,-327,"#f8e8d0",6);
+  b.cyl(.95,1.05,1,99,SEA_Y+7.2,-327,"#c76c55",6);
+  b.cone(1.2,1.2,99,SEA_Y+10.4,-327,"#c76c55",6);
+  return b.build();
+}
+
+/** Split merged props by stage, preserving their per-triangle colours. */
+export function zoneGeometry(source: THREE.BufferGeometry): Array<{ zone: ZoneId; geometry: THREE.BufferGeometry }> {
+  const g = source.index ? source.toNonIndexed() : source;
+  const buckets = new Map<ZoneId, Record<string, number[]>>();
+  const p = g.getAttribute("position");
+  for (let i = 0; i < p.count; i += 3) {
+    const owner = detailOwner((p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3);
+    let attrs = buckets.get(owner);
+    if (!attrs) buckets.set(owner, (attrs = {}));
+    for (const [name, a] of Object.entries(g.attributes)) {
+      const values = (attrs[name] ??= []);
+      for (let j = i; j < i + 3; j++) for (let k = 0; k < a.itemSize; k++) values.push(a.array[j * a.itemSize + k]);
+    }
+  }
+  const result = [...buckets].map(([zone, attrs]) => {
+    const geometry = new THREE.BufferGeometry();
+    for (const [name, values] of Object.entries(attrs)) geometry.setAttribute(name, new THREE.Float32BufferAttribute(values, g.getAttribute(name).itemSize));
+    geometry.computeBoundingSphere();
+    return { zone, geometry };
+  });
+  if (g !== source) g.dispose();
+  source.dispose();
+  return result;
+}
+
+export function stageBarrierGeometry(gate: (typeof STAGE_EXITS)[number]): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  if (gate.kind === "stone") {
+    b.box(gate.half * 2, 3.8, 0.8, 0, 0, 0, "#8c9081");
+    for (let x = -gate.half; x <= gate.half; x += 1.6) b.box(0.09, 3.6, 0.83, x, 0.05, 0, "#646e5e");
+  } else if (gate.kind === "wood") {
+    for (let x = -gate.half; x <= gate.half; x += 1) b.box(0.32, 2.5, 0.38, x, 0, 0, "#7c5941");
+    b.boxAt(gate.half * 2 + 0.6, 0.35, 0.4, [0, 1.4, 0.2], [0, 0, 0.12], "#9c7650");
+  } else {
+    for (let x = -gate.half; x <= gate.half; x += 0.8) {
+      between(b, [x, 0, 0], [x + 0.7, 2.7, 0.12], 0.26, 0.12, gate.kind === "reeds" ? "#447965" : "#5b6540", 5);
+      between(b, [x, 1, -0.1], [x - 0.8, 2.3, -0.1], 0.2, 0.08, "#7e8750", 5);
+    }
+  }
+  return b.build();
+}

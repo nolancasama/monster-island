@@ -1940,3 +1940,6 @@ kbd {
   border: 2px dashed #7a4fbf;
   color: #4a2a7a;
 }
+
+.stage-counter { position:absolute; left:50%; top:70px; transform:translateX(-50%); padding:7px 13px; font-size:14px; pointer-events:none; background:#173b36e8; color:#fff5c8; border:1px solid #aec392; border-radius:16px; }
+.stage-counter[hidden] { display:none; }

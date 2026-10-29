@@ -230,10 +230,13 @@ const VOLCANO_FLOORS: Area[] = [...VOLCANO_PATH, EMBER_SLOPE, CAVE_PASSAGE, COUR
  */
 export const LEDGE = { x0: 72.5, x1: 79, z0: -151.2, z1: -143 };
 
+export const EARLY_OVERLOOK = { x0: 79, x1: 90, z0: -131.6, z1: -126 };
+
 export function volcanoMask(x: number, z: number): number {
-  if (z > -48 || z < -154 || x < 27 || x > 87) return 0;
+  if (z > -48 || z < -154 || x < 27 || x > 93) return 0;
   let d = Math.max(0, Math.hypot(x - GARDEN.x, z - GARDEN.z) - GARDEN.r);
   for (const a of VOLCANO_FLOORS) d = Math.min(d, outside(x, z, a));
+  d = Math.min(d, outside(x,z,EARLY_OVERLOOK));
   if (z >= LEDGE.z0) d = Math.min(d, outside(x, z, LEDGE));
   return 1 - smooth(d / 3);
 }

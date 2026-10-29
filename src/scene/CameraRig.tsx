@@ -5,6 +5,8 @@ import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from "../game/world/island";
 
+import { MOSSY_BOULDERS, CLIFF_ROPE } from "../game/world/lowland";
+
 const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
@@ -45,7 +47,7 @@ export function CameraRig() {
       const cover = tunnelCoverY(probe.x, probe.z);
       const open = cover !== null && inTunnel(probe.x, probe.z, 0.4) && lineY0 < tunnelRoof - 0.4;
       let floor = (cover !== null && !open ? cover : groundY(probe.x, probe.z)) + 0.7;
-      for (const b of BOULDERS) {
+      for (const b of (rt.player.z < -153.6 ? MOSSY_BOULDERS : BOULDERS)) {
         const d = Math.hypot(probe.x - b.x, probe.z - b.z);
         if (d < b.r * 1.1) floor = Math.max(floor, groundY(b.x, b.z) + b.h * 0.95 * Math.sqrt(1 - (d / (b.r * 1.1)) ** 2) + 0.6);
       }
@@ -131,6 +133,11 @@ export function CameraRig() {
     const k = 1 - Math.exp(-dt * (c.mode === "follow" && g.screen === "game" ? 6 : 2.4));
     pos.current.lerp(want.current, k);
     look.current.lerp(wantLook.current, k);
+    if (rt.player.climbY !== null && rt.player.z < -150) {
+      pos.current.z = Math.min(pos.current.z, CLIFF_ROPE.hangZ - 2.2);
+      pos.current.x = Math.max(CLIFF_ROPE.x - 5.5, Math.min(CLIFF_ROPE.x + 5.5,pos.current.x));
+    }
+    pos.current.y = Math.max(pos.current.y, groundY(pos.current.x,pos.current.z)+.7);
     camera.position.copy(pos.current);
     camera.lookAt(look.current);
     // Lens shift: while a prompt or line covers the bottom of the screen, the

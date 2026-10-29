@@ -14,7 +14,7 @@ export interface MiState {
     endings: number;
     said: string[];
     act2: {
-      started: boolean; lumoTaken: boolean; descended: boolean; hp: number; mp: Record<string, number>; coins: number;
+      cleared: string[]; started: boolean; lumoTaken: boolean; descended: boolean; hp: number; mp: Record<string, number>; coins: number;
       items: { amber?: number }; upgrades: string[]; chests: string[]; tutorial: string[]; checkpoint: string;
       portFound: boolean; bought: boolean; harbor: boolean; trained: string[]; zone: string | null;
     };
@@ -36,7 +36,7 @@ export interface MiState {
   } | null;
   line: { by: string; en: string } | null;
   player: { x: number; z: number; y: number; ground: number; riding: boolean; climbing: boolean };
-  monsters: Record<string, { x: number; z: number; mode: string; air: number }>;
+  monsters: Record<string, { x: number; z: number; mode: string; visible: boolean; air: number }>;
   palm: number;
   stones: number;
   bridge: number;

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { PLAYER_R, isWalkable, moveCircle, standY, type Gates } from "./collision";
 import { groundY } from "./island";
 import {
-  ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
+  panoramaVisible, stageDetailVisible, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
 } from "./lowland";
 import type { ObstacleId } from "../types";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
-const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true });
+const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
 
 /** Flood the lowland from the foot of the rope with real collision moves (optionally keeping out of some areas). */
 function reachable(g: Gates, avoid: ZoneId[] = []) {
@@ -107,4 +107,46 @@ describe("the lowland below the sanctuary", () => {
     expect(CLIFF_ROPE.bodyZ).toBeLessThan(CLIFF_ROPE.hangZ - 0.25);
     expect(groundY(CLIFF_ROPE.top.x, CLIFF_ROPE.top.z) - groundY(CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z)).toBeGreaterThan(12);
   });
+});
+
+describe("first-clear exit collision", () => {
+  it("blocks the forest exit with every approach, while the rope and every required enemy remain reachable", () => {
+    const g={...gates(),cleared:[]};
+    const reach=reachable(g);
+    expect(reach.near(CAMP2.rest.x,CAMP2.rest.z)).toBe(false);
+    expect(reach.near(CLIFF_ROPE.foot.x,CLIFF_ROPE.foot.z,1)).toBe(true);
+    for(const e of ENEMY_SPAWNS.filter(e=>e.zone==="forest1"))expect(reach.near(e.x,e.z,1.5),`${e.x},${e.z}`).toBe(true);
+  });
+  it("each gate cuts walking and mounted approaches and opens only for its own first-clear flag", () => {
+    for(const exit of STAGE_EXITS) {
+      for(const radius of [PLAYER_R,.7]) {
+        const g={...gates(["canopyVines","canopyRope"]),cleared:STAGES.filter(id=>id!==exit.id)};
+        for(let x=exit.cut.x0;x<exit.cut.x1;x+=.3)
+          expect(isWalkable(x,exit.z,g,radius),`${exit.id} bypass at ${x}`).toBe(false);
+        const closed=moveCircle(exit.x,exit.z+1.8,exit.x,exit.z-1.8,radius,g);
+        expect(closed.z).toBeGreaterThan(exit.z);
+        const opened=moveCircle(exit.x,exit.z+1.8,exit.x,exit.z-1.8,radius,{...g,cleared:[...STAGES]});
+        expect(opened.z,exit.id).toBeLessThan(exit.z);
+        // Retreat south toward the previous area remains possible before clearing.
+        const retreat=moveCircle(exit.x,exit.z+1.8,exit.x,exit.z+3,radius,g);
+        expect(retreat.z,exit.id).toBeGreaterThan(exit.z+2);
+      }
+    }
+  });
+  it("either branch alone unlocks a route to Port Town; the second branch is optional",()=>{
+    for(const branch of ["grove","canopy"] as const){
+      const g={...gates(["canopyVines","canopyRope"]),cleared:["forest1",branch,"causeway","coast"] as typeof STAGES[number][]};
+      const reach=reachable(g,[branch==="grove"?"canopy":"grove","oldTrail"]);
+      expect(reach.near(SERVICES.harbor.keeper.x,SERVICES.harbor.keeper.z,2.8),branch).toBe(true);
+      for(const e of ENEMY_SPAWNS.filter(e=>["forest1",branch,"causeway","coast"].includes(e.zone)))
+        expect(reach.near(e.x,e.z,1.5),`${branch}: enemy ${e.x},${e.z}`).toBe(true);
+    }
+  });
+});
+
+it("the early overlook is before the lair, while stage details belong only to the current zone",()=>{
+  expect(panoramaVisible(87,-129,-120)).toBe(true);
+  expect(panoramaVisible(70,-117,-110)).toBe(false);
+  for(const owner of STAGES) for(const active of STAGES) expect(stageDetailVisible(owner,active)).toBe(owner===active);
+  expect(stageDetailVisible("grove",null)).toBe(false);
 });

@@ -1,5 +1,6 @@
 import type { ObstacleId } from "../types";
 import {
+  EARLY_OVERLOOK,
   CROSSING,
   PASS,
   RIDGE,
@@ -37,7 +38,7 @@ import {
   groundY,
   shoreZ
 } from "./island";
-import { CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
+import { STAGES, type StageId, CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
 
 export interface Circle {
   x: number;
@@ -72,15 +73,16 @@ export interface Gates {
   volcano?: boolean;
   /** Act 2 has begun (Lumo was taken): the lowland below the sanctuary is open. */
   act2?: boolean;
+  cleared?: readonly StageId[];
 }
 
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
-export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean } }): Gates {
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] } }): Gates {
   const act2 = p.act2?.started === true;
-  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2);
-  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2 };
+  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared);
+  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared };
 }
 
 const GATE_IDS: readonly ObstacleId[] = [
@@ -88,12 +90,13 @@ const GATE_IDS: readonly ObstacleId[] = [
   "groveLilies", "canopyVines", "canopyRope", "causewayGate"
 ];
 const gateCache: Gates[] = [];
-function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false, act2 = false): number {
+function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false, act2 = false, cleared: readonly StageId[] = []): number {
   let key = (forest ? 1 << 14 : 0) | (volcano ? 1 << 15 : 0) | (act2 ? 1 << 16 : 0);
   for (let i = 0; i < GATE_IDS.length; i++) if (solved.includes(GATE_IDS[i])) key |= 1 << i;
+  STAGES.forEach((id, i) => { if (cleared.includes(id)) key |= 1 << (17 + i); });
   return key;
 }
-const keyOf = (g: Gates) => stateKey(g.solved, g.forest, g.volcano, g.act2);
+const keyOf = (g: Gates) => stateKey(g.solved, g.forest, g.volcano, g.act2, g.cleared);
 
 /** The bramble across the forest path while it is closed. */
 export const BRAMBLE_BLOCK: Box = { x0: FOREST_PATH.x0 - 1, x1: FOREST_PATH.x1 + 1, z0: BRAMBLE.z - 0.5, z1: BRAMBLE.z + 0.5 };
@@ -204,6 +207,8 @@ function volcanoWalkable(x: number, z: number, gates: Gates, m: number): boolean
   const opened0 = Object.keys(GATE_PILLARS).every((id) => gates.solved.includes(id as ObstacleId));
   // The lookout ledge through the garden's north-east rim (its north edge is the cliff's lip).
   if (opened0 && inBox(x, z, LEDGE, m) && z < SANCTUARY.z0 + 1) return true;
+  // A side overlook before the sanctuary gate: no route around its wall.
+  if (inBox(x,z,EARLY_OVERLOOK,m)) return true;
   if (!inBox(x, z, SANCTUARY, m)) return false;
   const opened = Object.keys(GATE_PILLARS).every((id) => gates.solved.includes(id as ObstacleId));
   // The wall closes the entire garden; when open its central doorway is the only crossing.

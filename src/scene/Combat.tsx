@@ -5,7 +5,7 @@ import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { cb, type EnemyRt, type Fx } from "../game/combat";
 import { ENEMIES } from "../game/data/combat";
-import { ENEMY_SPAWNS, type EnemyKind } from "../game/world/lowland";
+import { zoneAt, ENEMY_SPAWNS, type EnemyKind } from "../game/world/lowland";
 import { standY } from "../game/world/collision";
 import { additiveSprite, flatMat, glowTexture, shadowMaterial } from "./materials";
 import { airshipGeometry, cageGeometry, coinGeometry, enemyGeometry, propellerGeometry } from "./models/lowland";
@@ -56,7 +56,7 @@ function Enemy({ e }: { e: EnemyRt }) {
     if (!g || !m) return;
     const p = rt.player;
     const near = Math.hypot(p.x - e.x, p.z - e.z) < VIEW;
-    g.visible = e.state !== "gone" && near && getGame().progress.act2.started;
+    g.visible = e.zone === cb.zones.current && e.state !== "gone" && near && getGame().progress.act2.started;
     if (!g.visible) return;
     const t = rt.time;
     const y = standY(e.x, e.z, getGame().progress.solved);
@@ -152,6 +152,7 @@ function Drops() {
     let a = 0;
     let f = 0;
     for (const d of cb.drops) {
+      if (zoneAt(d.x, d.z) !== cb.zones.current) continue;
       o.position.set(d.x, d.y + Math.sin(rt.time * 4 + d.id) * 0.05, d.z);
       o.rotation.set(0, rt.time * 4 + d.id, 0);
       o.scale.setScalar(1);

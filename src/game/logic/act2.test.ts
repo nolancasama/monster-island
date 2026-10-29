@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { newProgress, objective, type Progress } from "./progress";
 import {
-  RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, findPort, hearLead,
+  clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, findPort, hearLead,
   hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, regenMp, rested, spendMp, startAct2
 } from "./act2";
 import { decodeSave, encodeSave } from "./save";
 import { PHRASES, heardQuantity } from "./english";
 import { judgeSpeech } from "./speechMatch";
+import { STAGES, ENEMY_SPAWNS } from "../world/lowland";
 import { KO_HP, MAX_HP } from "../data/combat";
 import type { FoodId, MonsterId } from "../types";
 
@@ -220,4 +221,51 @@ describe("Act 2 English", () => {
       expect(judge(said, [id])).toMatchObject({ kind: "match", id });
     }
   });
+});
+
+describe("persistent stage clears and pre-expansion saves",()=>{
+  it("requires every registered enemy; duplicates and other stages cannot satisfy the count",()=>{
+    for(const zone of STAGES){
+      const ids=ENEMY_SPAWNS.flatMap((e,i)=>e.zone===zone?[i]:[]),p=startAct2(done());
+      expect(remainingEnemies(zone,[])).toBe(ids.length);
+      expect(clearStage(p,zone,[...ids.slice(1),...ids.slice(1),999])).toBe(p);
+      const cleared=clearStage(p,zone,ids);
+      expect(cleared.act2.cleared).toEqual([zone]);
+      expect(clearStage(cleared,zone,[])).toBe(cleared);
+      let memory=changeZone(newZoneMemory(),zone,0).mem;
+      memory=noteDefeat(memory,zone,ids[0]);
+      memory=changeZone(memory,"camp",1).mem;
+      const respawn=changeZone(memory,zone,14);
+      expect(respawn.respawn).toBe(zone);
+      expect(cleared.act2.cleared).toEqual([zone]);
+      const loaded=decodeSave(encodeSave(cleared,{x:75.5,z:-154.4,yaw:0},20))!;
+      expect(loaded.progress.act2.cleared).toEqual([zone]);
+    }
+  });
+  it("migrates old town and route saves without replaying the story or losing inventory",()=>{
+    for(const [zone,flags]of [["port",STAGES],["coast",["forest1","grove","canopy","causeway"]],["causeway",["forest1","grove","canopy"]],["grove",["forest1"]]] as const){
+      const p=startAct2(done());p.act2.descended=true;p.act2.zone=zone;p.act2.portFound=zone==="port";
+      p.act2.coins=73;p.act2.upgrades=["leafy"];p.bag={fish:3};
+      const raw=JSON.parse(encodeSave(p,{x:77,z:zone==="port"?-300:-203,yaw:0},99));
+      delete raw.progress.act2.cleared;
+      const loaded=decodeSave(JSON.stringify(raw))!;
+      expect(loaded.progress.act2.cleared).toEqual([...flags]);
+      expect(loaded.progress.act2).toMatchObject({started:true,lumoTaken:true,coins:73,upgrades:["leafy"]});
+      expect(loaded.progress.bag).toEqual({fish:3});
+      expect(loaded.progress.endings).toBe(3);
+    }
+  });
+  it("new in-progress saves do not acquire unlocks merely by loading or resting",()=>{
+    const p=startAct2(done());p.act2.descended=true;p.act2.zone="camp";p.act2.checkpoint="camp";
+    const loaded=decodeSave(encodeSave(p,{x:76,z:-191,yaw:0},10))!;
+    expect(loaded.progress.act2.cleared).toEqual([]);
+  });
+});
+
+it("legacy branch saves already past a new exit keep their retreat route",()=>{
+  for(const [zone,x,z]of [["grove",58,-243],["canopy",95,-244],["forest1",79,-185],["coast",76,-289]]as const){
+    const p=startAct2(done());p.act2.descended=true;p.act2.zone=zone;
+    const raw=JSON.parse(encodeSave(p,{x,z,yaw:0},20));delete raw.progress.act2.cleared;
+    expect(decodeSave(JSON.stringify(raw))!.progress.act2.cleared).toContain(zone);
+  }
 });

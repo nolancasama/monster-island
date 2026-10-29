@@ -471,6 +471,12 @@ class AudioEngine {
     if (Math.random() > 0.22) return;
     const t = this.now;
     if (this.scene === "forest") {
+      // Air in the crowns and a branch creak between sparse distant calls.
+      if (Math.random() < .25) {
+        this.noiseBurst(t, { filter: "bandpass", freq: 650, q: .5, peak: .022, attack: .4, decay: 1.8, bus: this.ambBus });
+        this.tone(220, t+.3, { to: 155, peak: .009, attack: .2, decay: .5, bus: this.ambBus, type: "triangle" });
+        return;
+      }
       // Insects, frogs and, now and then, a far-off friendly dinosaur hoot.
       if (Math.random() < 0.25) {
         this.tone(140 + Math.random() * 40, t, { to: 90, peak: 0.03, attack: 0.15, decay: 0.7, bus: this.ambBus, type: "triangle" });

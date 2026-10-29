@@ -12,7 +12,7 @@ import { isRunning } from "./flow/script";
 import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
-import { cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
+import { companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
 import { lumoHidden, startAct2Scene } from "./flow/act2";
 import { CLIFF_FOOT_Z } from "./world/lowland";
 import { audio } from "../audio/audio";
@@ -45,7 +45,7 @@ export function tick(dt: number) {
     const m = rt.monsters[id];
     // Act 2: friends who are not the active one travel with the party.
     if (act2 && id !== "lumo" && g.progress.monsters[id].friend && id !== g.progress.active && ["wander", "idle", "eat", "sleep", "play", "follow"].includes(m.mode)) m.mode = "party";
-    if (mounted(id)) continue;
+    if (!companionVisible(id) || mounted(id)) continue;
     if (m.mode === "follow") follow(m, dt);
     else if (m.mode === "party") partyFollow(m, dt);
     else if (m.mode === "talk" || m.mode === "script") faceLook(m, dt);
@@ -111,7 +111,7 @@ function monsterObstacles(): Obstacles[] {
     const c = circles[i];
     // The companion, a friend travelling with the party, or one in its combat position never blocks the player.
     const m = rt.monsters[id];
-    c.x = id === active || m.mode === "party" || mounted(id) || (id === "lumo" && lumoHidden()) ? 1e6 : m.x;
+    c.x = !companionVisible(id) || id === active || m.mode === "party" || mounted(id) || (id === "lumo" && lumoHidden()) ? 1e6 : m.x;
     c.z = rt.monsters[id].z;
     c.r = MONSTERS[id].radius;
   }

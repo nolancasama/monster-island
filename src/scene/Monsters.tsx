@@ -9,7 +9,7 @@ import { standY } from "../game/world/collision";
 import { smoothMat, shadowMaterial } from "./materials";
 import { bubboParts, emberParts, leafyParts, lumoParts, puffParts, type MonsterParts } from "./models/monsters";
 import type { MonsterId } from "../game/types";
-import { mountPose } from "../game/combat";
+import { cb, companionVisible, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
 
@@ -116,6 +116,8 @@ function MonsterBody({ id }: { id: MonsterId }) {
     const g = root.current;
     const r = rig.current;
     if (!g || !r) return;
+    g.visible = companionVisible(id);
+    if (!g.visible) return;
     const t = rt.time;
     const solved = getGame().progress.solved;
     const ground = standY(m.x, m.z, solved);
@@ -134,12 +136,12 @@ function MonsterBody({ id }: { id: MonsterId }) {
     g.rotation.y = m.yaw + pose.spin + pose.shake;
     g.scale.setScalar(0.2 + 0.8 * sm(poof));
     // Act 2: Lumo is in the raiders' cage; a friend in its combat position sits on (or carries) the player.
-    g.visible = !(id === "lumo" && lumoHidden());
+    g.visible = companionVisible(id) && !(id === "lumo" && lumoHidden());
     const mount = mountPose(id);
     if (mount) {
       g.position.set(mount.x, mount.y, mount.z);
       g.rotation.y = mount.yaw + pose.spin * 0.2;
-      g.scale.setScalar(mount.scale);
+      g.scale.setScalar(mount.scale * (cb.stance.leaving === id ? cb.stance.leaveK : 0.45 + 0.55 * sm(poof)));
     }
     r.position.y = pose.bounce + walkHop + (m.talking ? Math.abs(Math.sin(t * 8)) * 0.03 : 0);
     r.scale.set(1 / Math.sqrt(pose.squash), pose.squash, 1 / Math.sqrt(pose.squash));

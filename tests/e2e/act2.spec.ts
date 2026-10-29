@@ -193,6 +193,10 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   expect(s.act2.mp.leafy).toBeGreaterThanOrEqual(40);
   expect(s.progress.act2.tutorial).toContain("eat");
 
+  // First-clear progression now requires every forest enemy before camp.
+  for (const e of (await state(page)).act2.enemies.filter(e => e.zone === "forest1")) await defeat(page,e.i);
+  expect((await state(page)).progress.act2.cleared).toContain("forest1");
+
   // The camp is safe (everyone follows again) and a rest fills everything.
   await use(page, "campRest");
   s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.tutorial.includes("rest"), 30_000, "rested");
@@ -318,7 +322,7 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   expect(s.objective).toEqual({ id: "act2Done" });
 
   // The upgrade is visible in a fight: Super Whip knocks a gloomlet out with one hit less.
-  await hook(page, "teleport", 76, -262, Math.PI);
+  await hook(page, "teleport", 70, -272, Math.PI);
   await waitFor(page, (x) => x.act2.zone === "coast" && x.act2.stance.friend === "leafy" && x.act2.stance.k > 0.99, 10_000, "Leafy in position on the coast");
   await hook(page, "nearEnemy", 24, 1.8);
   await page.keyboard.press("KeyJ");

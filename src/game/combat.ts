@@ -1,11 +1,11 @@
 import { COMBAT, ENEMIES, MAX_HP, type CompanionId, type MoveDef } from "./data/combat";
 import { FOODS } from "./data/foods";
 import { MONSTERS } from "./data/monsters";
-import { addCoins, addFood, addItem, afterKnockout, bestFood, changeZone, eatEffect, eatHelps, hurt, markTutorial, newZoneMemory, noteDefeat, regenMp, spendMp, type TutorialStep, type Vitals, type ZoneMemory } from "./logic/act2";
+import { clearStage, remainingEnemies, addCoins, addFood, addItem, afterKnockout, bestFood, changeZone, eatEffect, eatHelps, hurt, markTutorial, newZoneMemory, noteDefeat, regenMp, spendMp, type TutorialStep, type Vitals, type ZoneMemory } from "./logic/act2";
 import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
 import { effect, rt } from "./runtime";
 import { isRunning } from "./flow/script";
-import { ENEMY_SPAWNS, ZONES, zoneAt, type EnemyKind, type ZoneId } from "./world/lowland";
+import { ENEMY_SPAWNS, ZONES, zoneAt, type EnemyKind, type StageId, type ZoneId } from "./world/lowland";
 import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
@@ -582,6 +582,13 @@ function knockOut(e: EnemyRt) {
   e.timer = 0.9;
   e.hp = 0;
   cb.zones = noteDefeat(cb.zones, e.zone, e.i);
+  const before = getGame().progress;
+  const next = clearStage(before, e.zone, cb.zones.defeated[e.zone] ?? []);
+  if (next !== before) {
+    updateProgress(() => next);
+    audio.play("chest");
+    toast({ en: "Area Cleared!", ja: "エリア クリア! みちが ひらいた!", tone: "good", icon: "star" }, 2400);
+  }
   if (e.zone === "forest1") cb.kos++;
   audio.play("ko");
   // Rewards pop out: coins always, sometimes food or amber.
@@ -666,6 +673,8 @@ export function combatTick(dt: number) {
     const { mem, respawn } = changeZone(cb.zones, zone, rt.playTime);
     cb.zones = mem;
     if (before) sendHome(before);
+    cb.shots = [];
+    cb.fx = [];
     if (respawn) respawnZone(respawn);
     if (zone) hooks.enterZone?.(zone);
   }
@@ -675,7 +684,11 @@ export function combatTick(dt: number) {
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack();
   const live = g.mode === "explore" && !isRunning();
-  for (const e of cb.enemies) updateEnemy(e, dt, live);
+  for (const e of cb.enemies) if (e.zone === zone) updateEnemy(e, dt, live);
+  if (live && zone && ZONES[zone].hostile) {
+    const fighting = cb.enemies.some((e) => e.zone === zone && alive(e) && ["alert", "chase", "windup", "lunge"].includes(e.state));
+    audio.startMusic(fighting ? "forest" : "danger");
+  }
   separate();
   if (live) updateShots(dt);
   updateDrops(dt);
@@ -689,7 +702,12 @@ export function combatTick(dt: number) {
 function sendHome(zone: ZoneId) {
   for (const e of cb.enemies) {
     if (e.zone !== zone || !alive(e)) continue;
-    if (e.state !== "idle") e.state = "return";
+    e.x = e.homeX;
+    e.z = e.homeZ;
+    e.kx = e.kz = 0;
+    e.pull = null;
+    e.wander = null;
+    e.state = "idle";
     e.hp = ENEMIES[e.kind].hp;
   }
 }
@@ -710,6 +728,7 @@ function moveEnemy(e: EnemyRt, tx: number, tz: number, speed: number, dt: number
 const moveOut = { x: 0, z: 0 };
 function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | null): number {
   const q = moveCircle(e.x, e.z, nx, nz, ENEMIES[e.kind].radius, gatesOf(getGame().progress), false, undefined, moveOut);
+  if (zoneAt(q.x, q.z) !== e.zone) return 0;
   const moved = Math.hypot(q.x - e.x, q.z - e.z);
   e.x = q.x;
   e.z = q.z;
@@ -974,4 +993,19 @@ function collect(d: Drop): boolean {
   audio.play("pick");
   toast({ en: `+1 ${FOODS[food].word}`, ja: FOODS[food].ja, icon: food, tone: "good" }, 1400);
   return true;
+}
+
+/** Hidden companions keep their records and inventory but have no world activity. */
+export function companionVisible(id: MonsterId): boolean {
+  const p = getGame().progress;
+  if (id === "lumo") return !p.act2.lumoTaken || ["capture", "escape", "reveal"].includes(rt.act2Scene);
+  if (!p.act2.started || !inHostileZone() || rt.act2Scene !== "done") return true;
+  return id === p.active || (cb.stance.leaving === id && cb.stance.leaveK > 0);
+}
+export function stageStatus() {
+  const zone = currentZone();
+  if (!zone || !ZONES[zone].hostile || getGame().progress.act2.cleared.includes(zone as StageId)) return null;
+  const remaining = remainingEnemies(zone, cb.zones.defeated[zone] ?? []);
+  const last = remaining === 1 ? cb.enemies.find((e) => e.zone === zone && alive(e)) : null;
+  return { zone, remaining, last };
 }

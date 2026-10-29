@@ -21,6 +21,27 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-29 — Act 2 forest expansion (development branch)
+
+The five hostile areas gain roughly twice their collision-open floor through
+clearings, platforms, loops and optional treasure rather than uniform world
+scaling. Existing camp, puzzle and town coordinates remain stable. The two
+branches now end in narrow curved ravines; scenery and enemies are isolated
+by active zone. A separate merged landscape supplies the pre-lair panorama.
+
+First-clear exits require all registered enemies in their own stage, but either
+branch is sufficient. Persistent `act2.cleared` flags are independent of the
+existing temporary respawn memory. Pre-expansion v4 saves retain already-reached
+travel rights, including return routes past new gates. This extends v4 without
+resetting the prologue or kidnapping. See `docs/ACT2_FOREST_EXPANSION.md` for
+measurements and migration details.
+
+In hostile zones only the selected friend participates visually; switching
+uses the existing hop with a short shrinking departure. Safe zones restore the
+full party. This supersedes the earlier decision that inactive friends trail
+during fights. No attacks become automatic. Maple's existing lookout/town
+story placement and the economy, English exchanges and forgiving defeat remain.
+
 ## 2026-10-29 — Act 2 "The Hunt for Lumo": brief accepted, with these changes
 
 The external brief (Kirby: Forgotten Land-style fights in the world, Secret

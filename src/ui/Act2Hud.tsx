@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { setGame, useGame } from "../game/store";
-import { cb, basicAttack, eat, inHostileZone, specialAttack } from "../game/combat";
+import { stageStatus, cb, basicAttack, eat, inHostileZone, specialAttack } from "../game/combat";
 import { COMBAT, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
 import { MONSTERS } from "../game/data/monsters";
 import { practiseCommand, quickBuy } from "../game/flow/act2";
@@ -41,7 +41,8 @@ function Vitals() {
     const h = Math.max(0, v.hp) / MAX_HP;
     if (hp.current) {
       hp.current.style.width = `${h * 100}%`;
-      hp.current.style.background = h > 0.5 ? "linear-gradient(#7ee36a, #3fb64a)" : h > 0.25 ? "linear-gradient(#ffd96b, #e8a83a)" : "linear-gradient(#ff8a7a, #e8483f)";
+      hp.current.style.background =
+        h > 0.5 ? "linear-gradient(#7ee36a, #3fb64a)" : h > 0.25 ? "linear-gradient(#ffd96b, #e8a83a)" : "linear-gradient(#ff8a7a, #e8483f)";
     }
     if (hpText.current) hpText.current.textContent = `${Math.ceil(v.hp)} / ${MAX_HP}`;
     if (box.current) box.current.classList.toggle("hurt", rt.time - cb.hurtT < 0.35);
@@ -103,14 +104,38 @@ function Moves() {
     };
     return (
       <div className="touch-moves ui">
-        <button className="move-btn special" onPointerDown={(e) => { e.preventDefault(); specialAttack(); }} data-testid="btn-special" aria-label={c.special.word}>
+        <button
+          className="move-btn special"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            specialAttack();
+          }}
+          data-testid="btn-special"
+          aria-label={c.special.word}
+        >
           <span className="move-word">{c.special.word}</span>
           <small>{c.special.cost} MP</small>
         </button>
-        <button className="move-btn basic" onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerCancel={hold(false)} onPointerLeave={hold(false)} data-testid="btn-basic" aria-label={c.basic.word}>
+        <button
+          className="move-btn basic"
+          onPointerDown={hold(true)}
+          onPointerUp={hold(false)}
+          onPointerCancel={hold(false)}
+          onPointerLeave={hold(false)}
+          data-testid="btn-basic"
+          aria-label={c.basic.word}
+        >
           <span className="move-word">{c.basic.word}</span>
         </button>
-        <button className="move-btn eat" onPointerDown={(e) => { e.preventDefault(); eat(); }} data-testid="btn-eat" aria-label="Eat">
+        <button
+          className="move-btn eat"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            eat();
+          }}
+          data-testid="btn-eat"
+          aria-label="Eat"
+        >
           <Icon id="apples" size={30} />
           <small>Eat</small>
         </button>
@@ -119,9 +144,15 @@ function Moves() {
   }
   return (
     <div className="moves-legend ui" data-testid="moves">
-      <span><kbd>J</kbd> {c.basic.word}</span>
-      <span><kbd>K</kbd> {c.special.word} <small>{c.special.cost} MP</small></span>
-      <span><kbd>F</kbd> Eat</span>
+      <span>
+        <kbd>J</kbd> {c.basic.word}
+      </span>
+      <span>
+        <kbd>K</kbd> {c.special.word} <small>{c.special.cost} MP</small>
+      </span>
+      <span>
+        <kbd>F</kbd> Eat
+      </span>
     </div>
   );
 }
@@ -153,6 +184,7 @@ export function Act2Hud() {
     <>
       {mode === "explore" && <Vitals />}
       {mode === "explore" && <Coins />}
+      {mode === "explore" && <StageCounter />}
       <Moves />
       <ShopPanel />
       <TrainerPanel />
@@ -273,4 +305,29 @@ function TrainerPanel() {
       </div>
     </div>
   );
+}
+
+/** Small first-clear counter; the last-enemy arrow rotates relative to the live camera. */
+function StageCounter() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fn] = useState(() => () => {
+    const el = ref.current;
+    if (!el) return;
+    const status = stageStatus();
+    el.hidden = !status;
+    if (!status) return;
+    let hint = "";
+    if (status.last) {
+      const e = status.last,
+        p = rt.player,
+        c = rt.camera;
+      const yaw = Math.atan2(c.target.x - c.pos.x, c.target.z - c.pos.z);
+      const angle = Math.atan2(e.x - p.x, e.z - p.z) - yaw;
+      const arrows = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+      hint = `  ${arrows[((Math.round(-angle / (Math.PI / 4)) % 8) + 8) % 8]} ${Math.ceil(Math.hypot(e.x - p.x, e.z - p.z))} m`;
+    }
+    el.textContent = `Enemies remaining: ${status.remaining}${hint}`;
+  });
+  useLive(fn);
+  return <div ref={ref} hidden className="stage-counter panel ui" data-testid="stage-counter" aria-live="polite" />;
 }

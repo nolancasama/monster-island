@@ -1,5 +1,17 @@
 # Current State
 
+## Development work (not deployed)
+
+`feature/act2-forest-expansion` expands the five combat stages, adds permanent
+first-clear exits and active-only hostile-zone companions, repairs the descent
+cliff and adds an earlier landscape overlook. Review details, measurements and
+Chromebook checks: [Act 2 expansion](docs/ACT2_FOREST_EXPANSION.md).
+Validation: 141 unit tests, TypeScript and production build pass; all 19 browser
+checks verified across the full suite and targeted visual rechecks. Both screen
+sizes and normal-speed two-way descent are captured. Real Chromebook hardware
+and microphone validation remain outstanding. The live status below describes
+main before this feature branch.
+
 ## Status
 **Act 2 is live.** With the user's approval, `feature/act2-hunt-for-lumo`
 was fast-forwarded into `main` on 2026-10-29 (`02bc281`). The Pages workflow

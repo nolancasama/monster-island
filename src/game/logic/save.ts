@@ -6,7 +6,7 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CHESTS, ZONES, type ZoneId } from "../world/lowland";
+import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
 
 /**
  * Versioned save. A save of an unknown version, or one that does not parse,
@@ -88,6 +88,15 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   const cp = raw.checkpoint as Checkpoint;
   a.checkpoint = checkpoints.includes(cp) && (cp !== "port" || a.portFound) && (cp !== "camp" || a.descended) ? cp : "cliff";
   a.zone = typeof raw.zone === "string" && raw.zone in ZONES ? (raw.zone as ZoneId) : null;
+  a.cleared = list(raw.cleared, STAGES);
+  // Pre-expansion v4 has no clear flags. Honour already-reached places without
+  // guessing which branch was taken; never replay the prologue or kidnapping.
+  if (!Array.isArray(raw.cleared)) {
+    if (a.portFound || a.zone === "port") a.cleared = [...STAGES];
+    else if (a.zone === "coast") a.cleared = ["forest1", "grove", "canopy", "causeway"];
+    else if (a.zone === "causeway" || p.solved.includes("causewayGate")) a.cleared = ["forest1", "grove", "canopy"];
+    else if (a.checkpoint === "camp" || (a.zone && ["camp", "grove", "canopy", "oldTrail"].includes(a.zone))) a.cleared = ["forest1"];
+  }
   return a;
 }
 
@@ -122,11 +131,21 @@ export function decodeSave(text: string | null): SaveData | null {
   // Act 2 (v4 only), then its permanent unlocks, which need the chapter to have begun.
   p.act2 = readAct2(raw.v === VERSION ? src.act2 : null, p);
   for (const id of ACT2_OBSTACLES) if (solved.includes(id) && obstacleAvailable(p, id)) p.solved.push(id);
+  if (p.act2.started && isObj(src.act2) && !Array.isArray(src.act2.cleared) && solved.includes("causewayGate")) p.act2.cleared = [...new Set([...p.act2.cleared, "forest1", "grove", "canopy"] as const)];
   if (isObj(src.bag)) {
     const max = bagMax(p);
     for (const f of Object.keys(src.bag)) if (f in FOODS) p.bag[f as FoodId] = Math.max(0, Math.min(max, Math.floor(num(src.bag[f], 0))));
   }
   const pl = isObj(raw.player) ? raw.player : {};
+  // Some pre-expansion saves stand just beyond a newly inserted exit while
+  // still labelled with that branch. Preserve the return route as well.
+  if (p.act2.started && isObj(src.act2) && !Array.isArray(src.act2.cleared)) {
+    const z = num(pl.z, Infinity), zone = p.act2.zone;
+    const passed = zone === "forest1" && z < -184.1 ? "forest1"
+      : (zone === "grove" || zone === "canopy") && z < -241 ? zone
+      : zone === "coast" && z < -287.6 ? "coast" : null;
+    if (passed && !p.act2.cleared.includes(passed)) p.act2.cleared.push(passed);
+  }
   // Validate position after migration and progression sanitization, against the
   // same solids and gates movement uses. Progress and the v3 format stay intact.
   const safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);

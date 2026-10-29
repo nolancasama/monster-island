@@ -6,7 +6,7 @@ import { gatesOf, nearestWalkable } from "../world/collision";
 import { audio } from "../../audio/audio";
 import type { MonsterId } from "../types";
 import { LAVA } from "../world/island";
-import { learn } from "../combat";
+import { inHostileZone, learn } from "../combat";
 
 const learnSwitch = () => learn("switch");
 
@@ -68,6 +68,10 @@ export function switchTo(id: MonsterId, quiet = false) {
   m.target = null;
   const spot = besidePlayer();
   if (Math.hypot(m.x - rt.player.x, m.z - rt.player.z) > 9) poofTo(id, spot.x, spot.z);
+  if (act2 && inHostileZone()) {
+    m.x = rt.player.x; m.z = rt.player.z; m.poofT0 = rt.time;
+    effect("poof", m.x, rt.player.y + .8, m.z);
+  }
   m.anim = { kind: "hop", t0: rt.time };
   audio.play("switch");
   audio.voice(id, "hello");

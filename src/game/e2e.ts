@@ -2,14 +2,14 @@ import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { objective } from "./logic/progress";
-import { PLAYER_R, gatesOf, nearestWalkable, standY } from "./world/collision";
+import { PLAYER_R, moveCircle, gatesOf, nearestWalkable, standY } from "./world/collision";
 import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
-import { cb } from "./combat";
+import { cb, companionVisible, stageStatus } from "./combat";
 import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
 
 /**
@@ -80,7 +80,7 @@ export function installE2eHook(seed: number) {
         line: g.line ? { by: g.line.by, en: g.line.en } : null,
         player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null },
         monsters: Object.fromEntries(
-          LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, air: rt.monsters[id].air }])
+          LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, visible: companionVisible(id), air: rt.monsters[id].air }])
         ),
         palm: rt.palm,
         stones: rt.stones,
@@ -100,6 +100,7 @@ export function installE2eHook(seed: number) {
         playTime: rt.playTime,
         act2: {
           scene: rt.act2Scene,
+          stage: stageStatus() ? { remaining: stageStatus()!.remaining } : null,
           zone: cb.zones.current,
           stance: { friend: cb.stance.friend, k: cb.stance.k },
           hp: cb.vitals.hp,
@@ -140,6 +141,13 @@ export function installE2eHook(seed: number) {
             ? { x: t.x, z: t.z + dist * 0.6 }
             : { x: t.x + Math.sin(a) * dist, z: t.z + Math.cos(a) * dist };
       return place(near.x, near.z, name === "river" ? CROSSING.east.x : t.x, name === "river" ? CROSSING.east.z : t.z);
+    },
+    /** Collision-respecting movement probe: unlike teleport this cannot cross gates. */
+    moveTo(x: number, z: number) {
+      const p = rt.player;
+      const q = moveCircle(p.x,p.z,x,z,PLAYER_R,gatesOf(getGame().progress));
+      p.x=q.x;p.z=q.z;p.vx=p.vz=0;
+      return q;
     },
     teleport(x: number, z: number, yaw = 0) {
       place(x, z, x + Math.sin(yaw), z + Math.cos(yaw));
