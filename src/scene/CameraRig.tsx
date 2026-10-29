@@ -5,6 +5,8 @@ import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from "../game/world/island";
 
+import { PASSAGE_DEPTH, TRANSITIONS, passageLocal, passagePoint, type TransitionEnd } from "../game/world/transitions";
+import { currentZone } from "../game/combat";
 import { MOSSY_BOULDERS, CLIFF_ROPE } from "../game/world/lowland";
 
 const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
@@ -122,6 +124,37 @@ export function CameraRig() {
         want.current.y += Math.min(up, 8) * (1 - k);
       }
     }
+    // Arrival faces out of the passage, so the follow camera sits inside its
+    // chamber. Keep framing that mouth until both the desired and smoothed
+    // camera have left it; the walking pocket alone excludes the arrival pad.
+    let mouth: TransitionEnd | null = null, mouthDistance = Infinity;
+    if (g.screen === "game" && g.progress.act2.started && rt.player.climbY === null) {
+      const zone = currentZone();
+      for (const passage of TRANSITIONS) for (const end of [passage.a,passage.b]) {
+        if (end.zone !== zone) continue;
+        const q = passageLocal(end,rt.player.x,rt.player.z);
+        if (q.depth < -Math.max(c.dist+1,3) || q.depth > PASSAGE_DEPTH || Math.abs(q.lateral)>3.4) continue;
+        const desired = passageLocal(end,want.current.x,want.current.z);
+        const smoothed = passageLocal(end,pos.current.x,pos.current.z);
+        if (q.depth < -.2 && desired.depth < -.5 && smoothed.depth < -.5) continue;
+        const distance = Math.hypot(q.depth,q.lateral);
+        if (distance < mouthDistance) { mouth=end; mouthDistance=distance; }
+      }
+    }
+    const clampMouth = (v:THREE.Vector3) => {
+      if(!mouth)return;
+      const q=passageLocal(mouth,v.x,v.z);
+      // The cap starts at depth 2.59. Staying below the arch's shoulders also
+      // leaves headroom for a rider. A player stepping sideways out of the
+      // opening needs the camera outside its front instead of behind a wall.
+      const playerSide = passageLocal(mouth,rt.player.x,rt.player.z).lateral;
+      const maxDepth = Math.abs(playerSide)>1.2 ? -.6 : 2;
+      const p=passagePoint(mouth,Math.min(q.depth,maxDepth),Math.max(-1.2,Math.min(1.2,q.lateral)));
+      v.x=p.x;v.z=p.z;
+      const floor=groundY(mouth.x,mouth.z);
+      v.y=Math.max(floor+1.3,Math.min(floor+2.6,v.y));
+    };
+    clampMouth(want.current);
     const floor = Math.max(groundY(want.current.x, want.current.z), -0.4) + 0.7;
     if (want.current.y < floor) want.current.y = floor;
     if (!ready.current || c.snap) {
@@ -138,6 +171,7 @@ export function CameraRig() {
       pos.current.x = Math.max(CLIFF_ROPE.x - 5.5, Math.min(CLIFF_ROPE.x + 5.5,pos.current.x));
     }
     pos.current.y = Math.max(pos.current.y, groundY(pos.current.x,pos.current.z)+.7);
+    clampMouth(pos.current);
     camera.position.copy(pos.current);
     camera.lookAt(look.current);
     // Lens shift: while a prompt or line covers the bottom of the screen, the

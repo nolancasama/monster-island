@@ -38,7 +38,8 @@ import {
   groundY,
   shoreZ
 } from "./island";
-import { STAGES, type StageId, CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
+import { STAGES, type StageId, zoneAt, CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
+import { TRANSITIONS } from "./transitions";
 
 export interface Circle {
   x: number;
@@ -74,15 +75,16 @@ export interface Gates {
   /** Act 2 has begun (Lumo was taken): the lowland below the sanctuary is open. */
   act2?: boolean;
   cleared?: readonly StageId[];
+  retreat?: string | null;
 }
 
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
-export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] } }): Gates {
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[]; retreat?: string | null } }): Gates {
   const act2 = p.act2?.started === true;
-  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared);
-  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared };
+  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared, p.act2?.retreat);
+  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared, retreat: p.act2?.retreat };
 }
 
 const GATE_IDS: readonly ObstacleId[] = [
@@ -90,13 +92,14 @@ const GATE_IDS: readonly ObstacleId[] = [
   "groveLilies", "canopyVines", "canopyRope", "causewayGate"
 ];
 const gateCache: Gates[] = [];
-function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false, act2 = false, cleared: readonly StageId[] = []): number {
+function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false, act2 = false, cleared: readonly StageId[] = [], retreat?: string | null): number {
   let key = (forest ? 1 << 14 : 0) | (volcano ? 1 << 15 : 0) | (act2 ? 1 << 16 : 0);
   for (let i = 0; i < GATE_IDS.length; i++) if (solved.includes(GATE_IDS[i])) key |= 1 << i;
   STAGES.forEach((id, i) => { if (cleared.includes(id)) key |= 1 << (17 + i); });
-  return key;
+  // Multiplication preserves the high bits without 32-bit bitwise overflow.
+  return key + (retreat ? TRANSITIONS.findIndex(t => retreat === `${t.id}:a`) + 1 : 0) * 2 ** 22;
 }
-const keyOf = (g: Gates) => stateKey(g.solved, g.forest, g.volcano, g.act2, g.cleared);
+const keyOf = (g: Gates) => stateKey(g.solved, g.forest, g.volcano, g.act2, g.cleared, g.retreat);
 
 /** The bramble across the forest path while it is closed. */
 export const BRAMBLE_BLOCK: Box = { x0: FOREST_PATH.x0 - 1, x1: FOREST_PATH.x1 + 1, z0: BRAMBLE.z - 0.5, z1: BRAMBLE.z + 0.5 };
@@ -299,6 +302,7 @@ export function moveCircle(
   out = { x: 0, z: 0 }
 ): { x: number; z: number } {
   const sets = obstaclesFor(gates, z0);
+  const startZone = inLowlandSet(z0) && gates.act2 ? zoneAt(x0,z0) : null;
   const count = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.15));
   const dx = (x1 - x0) / count, dz = (z1 - z0) / count;
   let x = x0, z = z0;
@@ -312,7 +316,10 @@ export function moveCircle(
         pushOut(nx, nz, r, sets); nx = pushX; nz = pushZ;
         pushOut(nx, nz, r, extra); nx = pushX; nz = pushZ;
       }
-      if (isWalkable(nx, nz, gates, r, swimmer) && !overlaps(nx, nz, r, extra)) {
+      const candidateZone = startZone ? zoneAt(nx,nz) : null;
+      // Every stage edge is a physical passage. Only its fade/arrival can
+      // change zones; ordinary movement cannot slip around a mouth.
+      if ((!startZone || candidateZone === startZone) && isWalkable(nx, nz, gates, r, swimmer) && !overlaps(nx, nz, r, extra)) {
         x = nx; z = nz; break;
       }
     }

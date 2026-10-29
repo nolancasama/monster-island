@@ -88,7 +88,8 @@ function BottomPanels() {
 
 function Fade() {
   const fade = useGame((s) => s.fade);
-  return <div className="fade" style={{ opacity: fade }} />;
+  const passage = useGame((s) => s.passageFade);
+  return <div className="fade" style={{ opacity: fade, transitionDuration: passage ? "120ms" : "400ms" }} />;
 }
 
 export function App() {

@@ -21,6 +21,8 @@ export interface Act2 {
   started: boolean;
   /** First-clear exits, independent of transient respawning enemies. */
   cleared: StageId[];
+  /** Mouth used to enter an uncleared stage backwards; retreat stays free for this visit. */
+  retreat: string | null;
   lumoTaken: boolean;
   /** Climbed down the cliff at least once. */
   descended: boolean;
@@ -50,7 +52,7 @@ export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo
 
 export function newAct2(): Act2 {
   return {
-    started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
+    started: false, cleared: [], retreat: null, lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
     chests: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
   };
 }

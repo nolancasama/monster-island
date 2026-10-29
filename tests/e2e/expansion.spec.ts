@@ -76,14 +76,32 @@ async function clear(page: Page, zone: string) {
   for (const e of enemies) await defeat(page, e.i);
   await waitFor(page, (s) => s.progress.act2.cleared.includes(zone), 10000, `${zone} exit unlocked`);
 }
-const exit: Record<string, [number, number]> = { forest1: [76, -184.5], grove: [56, -241.4], canopy: [97, -241.4], causeway: [76, -264], coast: [76, -288] };
 async function probe(page: Page, zone: string, open: boolean) {
-  const [x, z] = exit[zone];
-  await hook(page, "teleport", x, z + 1.9, Math.PI);
-  await hook(page, "moveTo", x, z - 1.8);
-  const s = await state(page);
-  if (open) expect(s.player.z, `${zone} open`).toBeLessThan(z);
-  else expect(s.player.z, `${zone} closed`).toBeGreaterThan(z);
+  const before = await state(page);
+  const e = before.passages.find(e => e.from === zone && e.id.endsWith(":a") && !e.id.startsWith("camp-"));
+  if (!e) throw new Error(`missing forward passage for ${zone}`);
+  expect(e.open, `${zone} first-clear exit`).toBe(open);
+  await hook(page, "setHp", 100);
+  await hook(page, "teleport", e.approach.x, e.approach.z);
+  await hook(page, "follow");
+  await hook(page, "setCamera", Math.atan2(-e.nx, -e.nz), .34, 6);
+  await waitFor(page, s => s.act2.zone === zone && s.mode === "explore");
+  await page.waitForTimeout(1100);
+  const serial = (await state(page)).passage.serial;
+  await page.keyboard.down("ArrowUp");
+  try {
+    if (open) {
+      await waitFor(page, s => s.passage.serial > serial && !s.passage.active && s.act2.zone === e.to, 15000, `${zone} passage arrival`);
+    } else {
+      const time = (await state(page)).playTime;
+      await waitFor(page, s => s.playTime > time + 1.2, 15000, `${zone} locked approach`);
+      const s = await state(page);
+      expect(s.act2.zone, `${zone} closed`).toBe(zone);
+      expect(s.passage.serial, `${zone} closed`).toBe(serial);
+      expect((s.player.x-e.x)*e.nx+(s.player.z-e.z)*e.nz).toBeLessThan(.3);
+    }
+  } finally { await page.keyboard.up("ArrowUp"); }
+  await waitFor(page, s => s.mode === "explore", 40000, `${zone} arrival scene finished`);
 }
 
 test("first forest clear, active-only companions, retreat, re-entry and save persistence", async ({ page }) => {
@@ -149,8 +167,6 @@ for (const branch of ["grove", "canopy"])
     }
     const s = await state(page);
     expect(s.progress.act2.cleared).not.toContain(branch === "grove" ? "canopy" : "grove");
-    await hook(page, "teleport", 76, -287);
-    await hook(page, "moveTo", 76, -294);
     await waitFor(page, (s) => s.progress.act2.portFound && s.mode === "explore", 40000, "port reached");
     expect((await state(page)).act2.stance.friend).toBeNull();
     expect(errors).toEqual([]);

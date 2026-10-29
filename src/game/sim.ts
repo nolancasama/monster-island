@@ -1,3 +1,4 @@
+import { passageTick } from "./flow/passages";
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
 import { companions, gateOpen, objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
@@ -14,7 +15,8 @@ import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
 import { companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
 import { lumoHidden, startAct2Scene } from "./flow/act2";
-import { CLIFF_FOOT_Z } from "./world/lowland";
+import { CLIFF_FOOT_Z, zoneAt } from "./world/lowland";
+import { passageFollowerTarget } from "./world/transitions";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
 
@@ -36,6 +38,7 @@ export function tick(dt: number) {
   if (g.screen !== "game") return;
   const paused = g.journalOpen || g.settingsOpen;
   if (!paused) rt.playTime += dt;
+  if (rt.passage.active) return;
 
   const picking = rt.player.action?.kind === "pick" && rt.time - rt.player.action.t0 < PICK_TIME;
   movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen && !picking);
@@ -88,7 +91,7 @@ export function tick(dt: number) {
     const cur = g.focus;
     if (f?.id !== cur?.id || f?.verb !== cur?.verb || f?.noun !== cur?.noun) setGame({ focus: f });
     else if (f && cur && (Math.abs(f.x - cur.x) > 0.3 || Math.abs(f.z - cur.z) > 0.3)) setGame({ focus: f });
-    autoTriggers();
+    if (!passageTick()) autoTriggers();
   } else if (g.focus && g.mode !== "explore") setGame({ focus: null });
 
   // Ambience follows the player.
@@ -220,8 +223,8 @@ function partyFollow(m: MonsterRt, dt: number) {
   const back = (inHostileZone() ? 3.4 : 2.3) + Math.floor(slot / 2) * 1.4;
   const side = (slot % 2 ? 1 : -1) * (1.2 + Math.floor(slot / 2) * 0.5);
   const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
-  const sx = p.x - fx * back + fz * side;
-  const sz = p.z - fz * back - fx * side;
+  const spot=passageFollowerTarget(zoneAt(p.x,p.z),p,{x:p.x-fx*back+fz*side,z:p.z-fz*back-fx*side});
+  const sx=spot.x,sz=spot.z;
   const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
   if (dPlayer > 15) {
     poofTo(m.id, sx, sz);
@@ -393,7 +396,8 @@ function follow(m: MonsterRt, dt: number) {
     faceLook(m, dt);
     return;
   }
-  const spot = companionSpot(m.id);
+  const desired = companionSpot(m.id);
+  const spot = getGame().progress.act2.started ? passageFollowerTarget(zoneAt(p.x,p.z),p,desired) : desired;
   const dPlayer = Math.hypot(p.x - m.x, p.z - m.z);
   if (dPlayer > 13) {
     poofTo(m.id, spot.x, spot.z);

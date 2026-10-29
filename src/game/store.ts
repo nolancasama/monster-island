@@ -112,6 +112,7 @@ export interface GameState {
   journalOpen: boolean;
   journalPage: MonsterId;
   fade: number;
+  passageFade: boolean;
   hasSave: boolean;
 
   progress: Progress;
@@ -174,6 +175,7 @@ export const useGame = create<GameState>(() => ({
   journalOpen: false,
   journalPage: "leafy",
   fade: 0,
+  passageFade: false,
   hasSave: false,
   progress: newProgress(),
   focus: null,

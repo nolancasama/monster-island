@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { PLAYER_R, isWalkable, moveCircle, standY, type Gates } from "./collision";
 import { groundY } from "./island";
 import {
-  panoramaVisible, stageDetailVisible, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
+  panoramaVisible, stageDetailVisible, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
 } from "./lowland";
+import { TRANSITIONS, passageLocal, transitionApproach, transitionEntry, transitionTrigger } from "./transitions";
 import type { ObstacleId } from "../types";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
@@ -17,6 +18,16 @@ function reachable(g: Gates, avoid: ZoneId[] = []) {
   const queue = [start];
   while (queue.length) {
     const [i, j] = queue.pop()!;
+    // Walking enters the enclosed pocket, then the transition commits the
+    // paired landing. There is deliberately no continuous floor across zones.
+    const entry = transitionEntry(i*S,j*S,zoneAt(i*S,j*S),g);
+    if(entry && !avoid.includes(entry.to.zone)) {
+      const landing=transitionApproach(entry.to);
+      const ni=Math.round(landing.x/S),nj=Math.round(landing.z/S),key=`${ni},${nj}`;
+      if(!seen.has(key) && isWalkable(ni*S,nj*S,g,PLAYER_R) && zoneAt(ni*S,nj*S)===entry.to.zone) {
+        seen.add(key);queue.push([ni,nj]);
+      }
+    }
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = i + di, nj = j + dj, key = `${ni},${nj}`;
       const x = ni * S, z = nj * S;
@@ -117,19 +128,16 @@ describe("first-clear exit collision", () => {
     expect(reach.near(CLIFF_ROPE.foot.x,CLIFF_ROPE.foot.z,1)).toBe(true);
     for(const e of ENEMY_SPAWNS.filter(e=>e.zone==="forest1"))expect(reach.near(e.x,e.z,1.5),`${e.x},${e.z}`).toBe(true);
   });
-  it("each gate cuts walking and mounted approaches and opens only for its own first-clear flag", () => {
-    for(const exit of STAGE_EXITS) {
+  it("each exit pocket blocks entry until its own first clear, and keeps its backing when open", () => {
+    for(const passage of TRANSITIONS.filter(t=>t.clear)) {
       for(const radius of [PLAYER_R,.7]) {
-        const g={...gates(["canopyVines","canopyRope"]),cleared:STAGES.filter(id=>id!==exit.id)};
-        for(let x=exit.cut.x0;x<exit.cut.x1;x+=.3)
-          expect(isWalkable(x,exit.z,g,radius),`${exit.id} bypass at ${x}`).toBe(false);
-        const closed=moveCircle(exit.x,exit.z+1.8,exit.x,exit.z-1.8,radius,g);
-        expect(closed.z).toBeGreaterThan(exit.z);
-        const opened=moveCircle(exit.x,exit.z+1.8,exit.x,exit.z-1.8,radius,{...g,cleared:[...STAGES]});
-        expect(opened.z,exit.id).toBeLessThan(exit.z);
-        // Retreat south toward the previous area remains possible before clearing.
-        const retreat=moveCircle(exit.x,exit.z+1.8,exit.x,exit.z+3,radius,g);
-        expect(retreat.z,exit.id).toBeGreaterThan(exit.z+2);
+        const g={...gates(["canopyVines","canopyRope"]),cleared:STAGES.filter(id=>id!==passage.clear)};
+        const start=transitionApproach(passage.a),target=transitionTrigger(passage.a);
+        const closed=moveCircle(start.x,start.z,target.x,target.z,radius,g);
+        expect(transitionEntry(closed.x,closed.z,passage.a.zone,g),passage.id).toBeNull();
+        const opened=moveCircle(start.x,start.z,target.x,target.z,radius,{...g,cleared:[...STAGES]});
+        expect(transitionEntry(opened.x,opened.z,passage.a.zone,{...g,cleared:[...STAGES]})?.def.id).toBe(passage.id);
+        expect(passageLocal(passage.a,closed.x,closed.z).depth).toBeLessThan(1.05);
       }
     }
   });

@@ -9,6 +9,7 @@ import { cameraRef } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
+import { TRANSITIONS, transitionApproach, transitionLanding, transitionTrigger, transitionOpen } from "./world/transitions";
 import { cb, companionVisible, stageStatus } from "./combat";
 import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
 
@@ -56,6 +57,12 @@ export function installE2eHook(seed: number) {
     state() {
       const g = getGame();
       return {
+        passage: {...rt.passage},
+        passages: TRANSITIONS.flatMap(def => (["a","b"] as const).map(side=>{
+          const end=def[side],other=def[side==="a"?"b":"a"];
+          return {id:`${def.id}:${side}`,from:end.zone,to:other.zone,x:end.x,z:end.z,nx:end.nx,nz:end.nz,
+            open:transitionOpen(def,end,gatesOf(g.progress)),approach:transitionApproach(end),arrival:transitionLanding(other),trigger:transitionTrigger(end)};
+        })),
         screen: g.screen,
         mode: g.mode,
         micState: g.micState,

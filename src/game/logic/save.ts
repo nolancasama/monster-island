@@ -7,6 +7,7 @@ import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
+import { normalizePassagePosition, TRANSITIONS } from "../world/transitions";
 
 /**
  * Versioned save. A save of an unknown version, or one that does not parse,
@@ -89,6 +90,8 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   a.checkpoint = checkpoints.includes(cp) && (cp !== "port" || a.portFound) && (cp !== "camp" || a.descended) ? cp : "cliff";
   a.zone = typeof raw.zone === "string" && raw.zone in ZONES ? (raw.zone as ZoneId) : null;
   a.cleared = list(raw.cleared, STAGES);
+  a.retreat = TRANSITIONS.some(d => d.clear && d.a.zone === a.zone && raw.retreat === `${d.id}:a`)
+    ? raw.retreat as string : null;
   // Pre-expansion v4 has no clear flags. Honour already-reached places without
   // guessing which branch was taken; never replay the prologue or kidnapping.
   if (!Array.isArray(raw.cleared)) {
@@ -148,7 +151,8 @@ export function decodeSave(text: string | null): SaveData | null {
   }
   // Validate position after migration and progression sanitization, against the
   // same solids and gates movement uses. Progress and the v3 format stay intact.
-  const safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);
+  const position = p.act2.started ? normalizePassagePosition(num(pl.x, NaN), num(pl.z, NaN)) : {x:num(pl.x,NaN),z:num(pl.z,NaN)};
+  const safe = nearestWalkable(position.x, position.z, PLAYER_R, gatesOf(p), false, true);
   return {
     v: VERSION,
     progress: p,

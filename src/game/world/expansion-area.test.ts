@@ -19,7 +19,7 @@ export function measureAreas() {
 it("each hostile section has approximately twice the original playable floor", () => {
   const a = measureAreas();
   for (const zone of STAGES) {
-    expect(a[zone] / BASELINE_AREA[zone], zone).toBeGreaterThanOrEqual(1.8);
-    expect(a[zone] / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(2.2);
+    expect.soft(a[zone] / BASELINE_AREA[zone], zone).toBeGreaterThanOrEqual(1.8);
+    expect.soft(a[zone] / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(2.2);
   }
 });

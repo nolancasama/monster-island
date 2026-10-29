@@ -10,6 +10,7 @@ import { judgeSpeech } from "./speechMatch";
 import { STAGES, ENEMY_SPAWNS } from "../world/lowland";
 import { KO_HP, MAX_HP } from "../data/combat";
 import type { FoodId, MonsterId } from "../types";
+import { TRANSITIONS, transitionLanding, transitionTrigger } from "../world/transitions";
 
 /** The finished prologue: all five friends, every unlock, the finale played. */
 function done(): Progress {
@@ -197,6 +198,27 @@ describe("Act 2 saves", () => {
   it("the bag keeps up to 9 of a food in Act 2 (3 before)", () => {
     expect(roundTrip({ ...startAct2(done()), bag: { fish: 7 } }).progress.bag.fish).toBe(7);
     expect(roundTrip({ ...done(), bag: { fish: 7 } }).progress.bag.fish).toBe(3);
+  });
+
+  it("keeps only a valid retreat permit for the saved stage without marking it cleared", () => {
+    const p=startAct2(done());p.act2.zone='grove';p.act2.retreat='grove-causeway:a';
+    expect(roundTrip(p).progress.act2).toMatchObject({retreat:'grove-causeway:a',cleared:[]});
+    for(const retreat of ['grove-causeway:b','canopy-causeway:a','old-trail-causeway:a','missing:a']){
+      p.act2.retreat=retreat;
+      expect(roundTrip(p).progress.act2.retreat).toBeNull();
+    }
+  });
+
+  it("resumes saves inside every passage outside its own mouth", () => {
+    const p=startAct2(done());p.act2.descended=true;p.act2.cleared=[...STAGES];
+    p.solved.push('causewayGate');
+    for(const def of TRANSITIONS)for(const end of [def.a,def.b]){
+      p.act2.zone=end.zone;
+      const back=decodeSave(encodeSave(p,{...transitionTrigger(end),yaw:1.2},100))!;
+      expect(back.player,`${def.id}:${end.zone}`).toEqual({...transitionLanding(end),yaw:1.2});
+      expect(back.progress.act2.cleared).toEqual(STAGES);
+      expect(back.progress.act2.coins).toBe(p.act2.coins);
+    }
   });
 });
 

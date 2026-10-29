@@ -2,6 +2,9 @@ import { expect, type Page } from "@playwright/test";
 import { BROWSER_STUBS } from "./stubs";
 
 export interface MiState {
+  passage: {active:boolean;from:string|null;to:string|null;last:string|null;serial:number;cooldownUntil:number};
+  passages: Array<{id:string;from:string;to:string;x:number;z:number;nx:number;nz:number;open:boolean;approach:{x:number;z:number};arrival:{x:number;z:number};trigger:{x:number;z:number}}>;
+
   screen: string;
   mode: string;
   micState: string;

@@ -7,6 +7,7 @@ import { effect, rt } from "./runtime";
 import { isRunning } from "./flow/script";
 import { ENEMY_SPAWNS, ZONES, zoneAt, type EnemyKind, type StageId, type ZoneId } from "./world/lowland";
 import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
+import { TRANSITIONS } from "./world/transitions";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
@@ -661,22 +662,42 @@ export function learn(step: TutorialStep) {
 
 // ------------------------------------------------------------ the frame
 
+/** Commit area memory at the black midpoint of a passage, before anything is drawn. */
+export function enterCombatZone(zone: ZoneId | null, notify = true) {
+  if (zone === cb.zones.current) return;
+  const before = cb.zones.current;
+  const {mem,respawn} = changeZone(cb.zones,zone,rt.playTime);
+  cb.zones=mem;
+  if(before)sendHome(before);
+  cb.shots=[]; cb.fx=[]; cb.move=null;
+  if(respawn)respawnZone(respawn);
+  const retreat=getGame().progress.act2.retreat;
+  if(retreat && !TRANSITIONS.some(d=>`${d.id}:a`===retreat && d.a.zone===zone))
+    updateProgress(p=>({...p,act2:{...p.act2,retreat:null}}));
+  if(zone && notify)hooks.enterZone?.(zone);
+}
+
+/** Passage travel preserves an active mount across hostile destinations. */
+export function settlePassageStance() {
+  const p=getGame().progress, active=p.active as CompanionId | null;
+  const friend=inHostileZone()?active:null;
+  cb.stance={friend,k:friend?1:0,fromX:rt.player.x,fromZ:rt.player.z,leaving:null,leaveK:0};
+  if(friend){
+    const m=rt.monsters[friend];m.mode="script";m.x=rt.player.x;m.z=rt.player.z;m.poofT0=rt.time-1;
+    mountPose(friend);
+    const y=riderSeatY();if(y!==null)rt.player.y=y;
+  }
+}
+
 export function combatTick(dt: number) {
   const g = getGame();
-  if (g.screen !== "game" || !act2Live()) return;
+  if (g.screen !== "game" || !act2Live() || rt.passage.active) return;
   const paused = g.journalOpen || g.settingsOpen;
   const p = rt.player;
   // Areas (null on the rope and anywhere south of the cliff).
   const zone = p.climbY === null ? zoneAt(p.x, p.z) : null;
   if (zone !== cb.zones.current) {
-    const before = cb.zones.current;
-    const { mem, respawn } = changeZone(cb.zones, zone, rt.playTime);
-    cb.zones = mem;
-    if (before) sendHome(before);
-    cb.shots = [];
-    cb.fx = [];
-    if (respawn) respawnZone(respawn);
-    if (zone) hooks.enterZone?.(zone);
+    enterCombatZone(zone);
   }
   updateStance(paused ? 0 : dt);
   if (paused) return;

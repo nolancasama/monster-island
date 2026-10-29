@@ -1,5 +1,6 @@
 import type { ObstacleId, Text, Vec2 } from "../types";
 import type { SolidShape } from "./island";
+import { passageAt, passageLocal, passageZoneAt, passageWalkable } from "./transitions";
 
 /**
  * Act 2: the prehistoric lowland below the sanctuary's cliff, north of the
@@ -250,7 +251,8 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       disc(50.5, -212.5, 6),
       disc(47.5, -233, 5.5),
       disc(ISLET.x, ISLET.z, ISLET.r),
-      disc(51, -211, 11.6),
+      // Keep the broad grove clearing after the tunnel lining takes its rim.
+      disc(51, -211, 12.1),
       disc(48, -232.5, 11.6),
       trail(
         [
@@ -285,7 +287,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     walk: [
       trail(COAST_TRAIL, 4),
       disc(66, -272, 7),
-      disc(84, -280, 7),
+      disc(84, -280, 7.8),
       trail(
         [
           [71, -267],
@@ -334,6 +336,10 @@ export const ZONE_ORDER: ZoneId[] = ["camp", "port", "oldTrail", "canopy", "grov
 /** The zone at a point (null outside the lowland's walkable land). */
 export function zoneAt(x: number, z: number): ZoneId | null {
   if (z > CLIFF_FOOT_Z + 0.5) return null;
+  const pocket = passageZoneAt(x,z);
+  if (pocket) return pocket;
+  // Unlockable stepping stones still belong to the grove while over water.
+  if (inside(LILY_WALK,x,z,0)) return "grove";
   for (const id of ZONE_ORDER) if (ZONES[id].walk.some((sh) => inside(sh, x, z, 0))) return id;
   return null;
 }
@@ -344,6 +350,7 @@ export function zoneAt(x: number, z: number): ZoneId | null {
 export interface LowlandGates {
   solved: readonly ObstacleId[];
   cleared?: readonly StageId[];
+  retreat?: string | null;
 }
 
 const POND_CUT = disc(POND.x, POND.z, POND.r);
@@ -357,26 +364,25 @@ function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
   const g = CANOPY_GAPS[id];
   return rect(g.x - DECK_HALF, g.x + DECK_HALF, g.z0 - 1, g.z1 + 1);
 }
-const GATE_CUT = rect(SHORTCUT_GATE.x - SHORTCUT_GATE.half - 0.5, SHORTCUT_GATE.x + SHORTCUT_GATE.half + 0.5, SHORTCUT_GATE.z - 0.45, SHORTCUT_GATE.z + 0.45);
 
 /** True when a circle of radius m fits the lowland's open land (solid scenery is checked separately). */
 export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number): boolean {
   if (z > CLIFF_FOOT_Z - m) return false;
   const solved = g.solved;
+  const pocket = passageWalkable(x,z,g,m);
+  if (pocket !== undefined) return pocket;
   // Two dog-legged ravines keep the independent branches visually enclosed
   // right up to their own exits. No broad clearing can go around the walls.
   for (const t of STAGE_PASSAGES)
     if (inPassageBand(t, x, z)) {
       if (!inside(t.walk, x, z, m)) return false;
     }
-  for (const gate of STAGE_EXITS) if (!g.cleared?.includes(gate.id) && touches(gate.cut, x, z, m)) return false;
   // Decks added by unlocks (narrower than the gaps they span).
   if (solved.includes("groveLilies") && (inside(LILY_WALK, x, z, m) || inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m))) return true;
   for (const id of ["canopyVines", "canopyRope"] as const) {
     if (touches(gapCut(id), x, z, m)) return solved.includes(id) && inside(gapDeck(id), x, z, m);
   }
   if (touches(POND_CUT, x, z, m) && !inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m)) return false;
-  if (!solved.includes("causewayGate") && touches(GATE_CUT, x, z, m)) return false;
   for (const id of ZONE_ORDER) for (const sh of ZONES[id].walk) if (inside(sh, x, z, m)) return true;
   return false;
 }
@@ -452,6 +458,15 @@ export const STREAMS: Array<Array<[number, number]>> = [
 
 /** Terrain height of the lowland (before the island's blending). */
 export function lowlandY(x: number, z: number): number {
+  const y = lowlandBaseY(x,z), p = passageAt(x,z);
+  if (!p) return y;
+  const q = passageLocal(p.end,x,z), mouth = lowlandBaseY(p.end.x,p.end.z);
+  // A level tunnel floor and a short approach ramp: the enclosing bank cannot
+  // push a rider up through the lining's ceiling. Never recurse via groundY.
+  const blend = smooth((q.depth+1.4)/1.4);
+  return y+(mouth-y)*blend;
+}
+function lowlandBaseY(x: number, z: number): number {
   let y = base(x, z);
   const flat = Math.max(rectMask(CAUSEWAY, x, z, 2), rectMask(PORT, x, z, 3));
   y += bumps(x, z) * (1 - flat);
@@ -597,7 +612,7 @@ export const MOSSY_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
   { x: 72.2, z: -163.5, r: 0.9, h: 1.1 },
   { x: 80.9, z: -175.2, r: 1.1, h: 1.4 },
   { x: 55.8, z: -201.2, r: 0.8, h: 0.9 },
-  { x: 52.7, z: -238.6, r: 1, h: 1.2 },
+  { x: 49, z: -240.5, r: 1, h: 1.2 },
   { x: 76.5, z: -269.5, r: 2.2, h: 6 },
   { x: 68.5, z: -278, r: 1.2, h: 1.8 },
   { x: 74.5, z: -270.5, r: 0.8, h: 0.9 },
@@ -644,7 +659,7 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "grove", kind: "gloomlet", x: 46.4, z: -226.8 },
   { zone: "grove", kind: "snapjaw", x: 48.5, z: -232.2 },
   { zone: "grove", kind: "gloomlet", x: 37.8, z: -233.8 },
-  { zone: "grove", kind: "snapjaw", x: 56, z: -239.5 },
+  { zone: "grove", kind: "snapjaw", x: 56, z: -231 },
   // The canopy: fewer enemies, harder ground.
   { zone: "canopy", kind: "gloomlet", x: 97, z: -203.3 },
   { zone: "canopy", kind: "snapjaw", x: 106, z: -208.6 },

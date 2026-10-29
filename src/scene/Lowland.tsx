@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { StagePassages } from "./StagePassages";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
@@ -8,14 +9,12 @@ import {
   detailOwner,
   panoramaVisible,
   stageDetailVisible,
-  STAGE_EXITS,
   type ZoneId,
   CAMP2,
   CANOPY_GAPS,
   CHESTS,
   POND_Y,
   SERVICES,
-  SHORTCUT_GATE,
   type ServiceId,
 } from "../game/world/lowland";
 import { groundY } from "../game/world/island";
@@ -23,12 +22,10 @@ import { additiveSprite, flatMat, occluderMat, smoothMat } from "./materials";
 import {
   lowlandPanoramaGeometry,
   zoneGeometry,
-  stageBarrierGeometry,
   chestBaseGeometry,
   chestLidGeometry,
   cliffFaceGeometry,
   cliffRopeGeometry,
-  gateBarsGeometry,
   giantFernGeometry,
   lilyPadGeometry,
   lowlandPropsGeometry,
@@ -39,7 +36,6 @@ import {
   primevalTreeGeometry,
   reedGeometry,
   ropeBridgeGeometry,
-  thornsGeometry,
   townGeometry,
   townSigns,
   treeFernGeometry,
@@ -180,11 +176,7 @@ function Unlocks() {
     g2 = CANOPY_GAPS.canopyRope;
   const vines = useMemo(() => vineBridgeGeometry(g1.z1 - g1.z0 + 1.4), [g1]);
   const rope = useMemo(() => ropeBridgeGeometry(g2.z1 - g2.z0 + 1.4), [g2]);
-  const bars = useMemo(gateBarsGeometry, []);
-  const thorns = useMemo(thornsGeometry, []);
   const padRef = useRef<THREE.Mesh>(null);
-  const bRef = useRef<THREE.Mesh>(null);
-  const tRef = useRef<THREE.Mesh>(null);
   const deck = (g: { x: number; z0: number; z1: number }) => groundY(g.x, g.z1 + 1.4) + 0.06;
   useFrame(() => {
     if (root.current) root.current.visible = rt.player.z < -153.6;
@@ -193,15 +185,7 @@ function Unlocks() {
       padRef.current.visible = activeZone() === "grove";
       padRef.current.position.y = POND_Y - 0.6 + (u.groveLilies ?? 0) * 0.66;
     }
-    const gk = u.causewayGate ?? 0;
-    if (tRef.current) {
-      tRef.current.visible = gk < 0.6 && (activeZone() === "causeway" || activeZone() === "oldTrail");
-      tRef.current.scale.setScalar(Math.max(0.01, 1 - gk * 1.6));
-    }
-    if (bRef.current) {
-      bRef.current.visible = activeZone() === "causeway" || activeZone() === "oldTrail";
-      bRef.current.position.y = groundY(SHORTCUT_GATE.x, SHORTCUT_GATE.z) + (Math.max(0, gk - 0.4) / 0.6) * 2.5;
-    }
+
   });
   return (
     <group ref={root}>
@@ -209,10 +193,7 @@ function Unlocks() {
       {/* Each bridge grows from the near (south) end toward the far end. */}
       <BridgeGrow geometry={vines} at={[g1.x, deck(g1), g1.z1 + 0.7]} len={g1.z1 - g1.z0 + 1.4} which="canopyVines" />
       <BridgeGrow geometry={rope} at={[g2.x, deck(g2), g2.z1 + 0.7]} len={g2.z1 - g2.z0 + 1.4} which="canopyRope" />
-      <group position={[SHORTCUT_GATE.x, 0, SHORTCUT_GATE.z]}>
-        <mesh ref={bRef} geometry={bars} material={flatMat} />
-        <mesh ref={tRef} geometry={thorns} material={flatMat} position={[0, groundY(SHORTCUT_GATE.x, SHORTCUT_GATE.z), 0]} />
-      </group>
+
     </group>
   );
 }
@@ -322,9 +303,7 @@ export function Lowland() {
       <TiledInstances geometry={fern} spots={spots.ferns} material={flatMat} far={60} />
       <TiledInstances geometry={reed} spots={spots.reeds} material={flatMat} far={50} />
       <Panorama />
-      {STAGE_EXITS.map((gate) => (
-        <StageBarrier key={gate.id} gate={gate} />
-      ))}
+      <StagePassages />
       <CliffRope />
       <CampFire />
       <Unlocks />
@@ -359,19 +338,4 @@ function Panorama() {
     if (ref.current) ref.current.visible = rt.player.z > -153.6 && rt.player.climbY === null;
   });
   return <mesh ref={ref} geometry={geometry} material={flatMat} />;
-}
-function StageBarrier({ gate }: { gate: (typeof STAGE_EXITS)[number] }) {
-  const geometry = useMemo(() => stageBarrierGeometry(gate), [gate]),
-    ref = useRef<THREE.Mesh>(null),
-    open = useRef(0);
-  useFrame((_, dt) => {
-    const target = getGame().progress.act2.cleared.includes(gate.id) ? 1 : 0;
-    open.current += (target - open.current) * Math.min(1, dt * 5);
-    const m = ref.current;
-    if (!m) return;
-    m.visible = rt.player.z < -153.6 && Math.hypot(rt.player.x - gate.x, rt.player.z - gate.z) < 45 && open.current < 0.995;
-    m.position.y = groundY(gate.x, gate.z) - open.current * 4.3;
-    m.scale.y = Math.max(0.01, 1 - open.current);
-  });
-  return <mesh ref={ref} geometry={geometry} material={flatMat} position={[gate.x, groundY(gate.x, gate.z), gate.z]} />;
 }

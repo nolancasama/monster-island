@@ -1,3 +1,4 @@
+import type { ZoneId } from "./world/lowland";
 import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
@@ -95,7 +96,20 @@ function monsterStart(id: MonsterId): MonsterRt {
   };
 }
 
+export interface PassageRuntime {
+  active: boolean;
+  from: ZoneId | null;
+  to: ZoneId | null;
+  last: string | null;
+  blockedEnd: string | null;
+  cooldownUntil: number;
+  serial: number;
+  stable: { x: number; z: number; yaw: number; zone: ZoneId } | null;
+}
+const newPassageRuntime = (): PassageRuntime => ({ active:false,from:null,to:null,last:null,blockedEnd:null,cooldownUntil:0,serial:0,stable:null });
+
 export const rt = {
+  passage: newPassageRuntime(),
   /** Real seconds since load (animation). */
   time: 0,
   /** Test hook only: slows or freezes the clock for frame-by-frame captures. */
@@ -203,6 +217,7 @@ export function animate(id: MonsterId, kind: MonsterAnim) {
 export const PICK_TIME = 0.7;
 
 export function resetRuntime() {
+  rt.passage = newPassageRuntime();
   const p = rt.player;
   p.x = SPAWN.x;
   p.z = SPAWN.z;

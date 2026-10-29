@@ -2,21 +2,17 @@
 
 ## Development work (not deployed)
 
-`feature/act2-forest-expansion` expands the five combat stages, adds permanent
-first-clear exits and active-only hostile-zone companions, repairs the descent
-cliff and adds an earlier landscape overlook. Review details, measurements and
-Chromebook checks: [Act 2 expansion](docs/ACT2_FOREST_EXPANSION.md).
-Validation: 141 unit tests, TypeScript and production build pass; all 19 browser
-checks verified across the full suite and targeted visual rechecks. Both screen
-sizes and normal-speed two-way descent are captured. Real Chromebook hardware
-and microphone validation remain outstanding. The live status below describes
-main before this feature branch.
+`feature/physical-stage-passages` adds nine paired, opaque physical passages
+between Act 2 areas, automatic walking transitions, permanent first-clear locks,
+and safe mounted arrivals. The optional branches retain a return route even
+when entered backwards before being cleared. Saves resume outside a passage.
+Implementation and validation: [Physical passages](docs/PHYSICAL_STAGE_PASSAGES.md).
 
 ## Status
-**Act 2 is live.** With the user's approval, `feature/act2-hunt-for-lumo`
-was fast-forwarded into `main` on 2026-10-29 (`02bc281`). The Pages workflow
-(run 40781012500) passed its tests, built and deployed. The live site serves
-the tested bundle (`index-BdbnZuVW.js`).
+**The Act 2 forest expansion is live.** With the user's approval,
+`feature/act2-forest-expansion` was fast-forwarded into `main` on 2026-10-29
+(`1a92801`). Pages deployment 40816121858 succeeded. The physical passages
+feature remains separate from `main` and has not been deployed.
 Pages: https://nolancasama.github.io/monster-island/
 
 Act 2 "The Hunt for Lumo" is complete for its first chapter. The original
