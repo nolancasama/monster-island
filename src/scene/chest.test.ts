@@ -65,7 +65,8 @@ describe("finished treasure chest", () => {
     expect(floor.point.y).toBeCloseTo(0.063, 5);
     const color = base.getAttribute("color");
     const vertex = floor.face!.a;
-    expect(Math.max(color.getX(vertex), color.getY(vertex), color.getZ(vertex))).toBeLessThan(0.03);
+    // Dark warm wood (#3b2415), not black: an open chest must not read as a hole.
+    expect(Math.max(color.getX(vertex), color.getY(vertex), color.getZ(vertex))).toBeLessThan(0.05);
     base.dispose();
     lid.dispose();
     material.dispose();

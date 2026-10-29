@@ -1,16 +1,37 @@
 # Current State
 
-## Development work (not deployed)
+## Development work (not merged, not deployed)
 
-`feature/act2-forest-expansion` expands the five combat stages, adds permanent
-first-clear exits and active-only hostile-zone companions, repairs the descent
-cliff and adds an earlier landscape overlook. Review details, measurements and
-Chromebook checks: [Act 2 expansion](docs/ACT2_FOREST_EXPANSION.md).
-Validation: 141 unit tests, TypeScript and production build pass; all 19 browser
-checks verified across the full suite and targeted visual rechecks. Both screen
-sizes and normal-speed two-way descent are captured. Real Chromebook hardware
-and microphone validation remain outstanding. The live status below describes
-main before this feature branch.
+**`feature/act2-continuity-polish`** (from `main` `1a92801`), awaiting the
+user's review. It is built from `main`, not from
+`feature/physical-stage-passages`, whose opaque fade-through chambers this
+brief superseded. That branch stays unmerged and can be deleted. The design
+is in `DESIGN_DECISIONS.md`, "2026-10-29 — Act 2 continuity polish".
+- **Continuous lowland:** the panorama mesh and zone-gated detail are gone.
+  One real landscape is drawn by distance with a constant fog band (55–260 m).
+  Bank shoulders open at the exits and the fork. Gates are see-through
+  lattices that still block until the first clear. Enemies stay drawn and
+  simulated only in the active zone.
+- **Fixed lowland camera:** heading 0 (south, along the route), pitch 0.55,
+  10 m, 3 m look-ahead. Drag and wheel are ignored there. It tips down over
+  the last 5 m before the rope foot, because the cliff leaves no room
+  behind. The rope keeps one framing both ways. The prologue island keeps its
+  drag-orbit camera (a deliberate change from the brief).
+- **Eat button:** shows the active friend's favourite food, its count and its
+  effect. It never eats another friend's food. Toasts report only what
+  changed. The bag still eats anything.
+- **Treasure chest:** a finished model (`src/scene/models/chest.ts`,
+  `src/scene/Chest.tsx`) for all seven chests.
+- Evidence: `tests/e2e/continuity.spec.ts` writes 84 views to
+  `.tmp/shots/continuity/` with `render-report.json`. Baseline captures are in
+  `.tmp/shots/before/`. Gameplay views stay ≤119 calls / ≤133k triangles. The
+  mirrored "-back" inspection views reach 154k triangles; gameplay can no
+  longer look north.
+
+`main` (`1a92801`) already contains the forest expansion
+([Act 2 expansion](docs/ACT2_FOREST_EXPANSION.md)): larger stages, permanent
+first-clear exits, active-only hostile-zone companions. Whether Pages
+redeployed after that merge has not been checked this session.
 
 ## Status
 **Act 2 is live.** With the user's approval, `feature/act2-hunt-for-lumo`
@@ -74,6 +95,11 @@ pre-Act 2 build (`e3d6d3c`).
   not individually solid. The ravine's water is the sea plane showing through.
 
 ## Next Steps
+0. User review of `feature/act2-continuity-polish`, especially the lowland
+   camera angle and how much of each neighbouring stage shows. Then merge
+   on approval. The triangle count roughly doubled at stage views
+   (≤36k → ≤133k), because neighbours are now drawn. Check the frame rate on
+   a real Chromebook before deploying.
 1. Play the live game on a school Chromebook: title → "NEW! Act 2" (or
    Continue a finished save and walk up to Lumo) → kidnapping → rope at the
    lookout → forest tutorial → a route → town → market, kitchen, harbour.
@@ -83,5 +109,6 @@ pre-Act 2 build (`e3d6d3c`).
    planned yet.
 
 ## Codex / Delegated Work
-None pending. Act 2 was built by Claude directly across two sessions. The
-milestone 4 fixes were diagnosed and made directly (a small, localized fix).
+None pending. On the continuity branch, Codex built the food HUD, the chest
+and the continuity/camera slice through the router. Claude reviewed all three
+and tuned the camera angle and cliff-foot framing. All of it is committed.
