@@ -20,12 +20,11 @@ import {
 } from "../game/world/lowland";
 import { groundY } from "../game/world/island";
 import { additiveSprite, flatMat, occluderMat, smoothMat } from "./materials";
+import { Chest } from "./Chest";
 import {
   lowlandPanoramaGeometry,
   zoneGeometry,
   stageBarrierGeometry,
-  chestBaseGeometry,
-  chestLidGeometry,
   cliffFaceGeometry,
   cliffRopeGeometry,
   gateBarsGeometry,
@@ -117,36 +116,6 @@ const DETAIL = 85;
 const activeZone = () => (rt.player.climbY === null ? detailOwner(rt.player.x, rt.player.z) : null);
 const near = (x: number, z: number) =>
   rt.player.z < -153.6 && stageDetailVisible(detailOwner(x, z), activeZone()) && Math.hypot(rt.camera.pos.x - x, rt.camera.pos.z - z) < DETAIL;
-
-function Chest({ id }: { id: string }) {
-  const c = CHESTS.find((x) => x.id === id)!;
-  const base = useMemo(chestBaseGeometry, []);
-  const lid = useMemo(chestLidGeometry, []);
-  const lidRef = useRef<THREE.Group>(null);
-  const glow = useMemo(() => additiveSprite("#ffe680", 0.55), []);
-  const glowRef = useRef<THREE.Sprite>(null);
-  const root = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (root.current) root.current.visible = near(c.x, c.z);
-    const k = rt.chestLid.get(id) ?? 0;
-    if (lidRef.current) lidRef.current.rotation.x = -k * 1.9;
-    if (glowRef.current) {
-      const open = getGame().progress.act2.chests.includes(id);
-      glowRef.current.visible = !open;
-      glowRef.current.scale.setScalar(1.3 + Math.sin(rt.time * 3) * 0.12);
-    }
-  });
-  const y = id === "isletChest" ? POND_Y + 0.15 : groundY(c.x, c.z);
-  return (
-    <group ref={root} position={[c.x, y, c.z]} rotation={[0, c.yaw, 0]}>
-      <mesh geometry={base} material={flatMat} />
-      <group ref={lidRef} position={[0, 0.5, -0.33]}>
-        <mesh geometry={lid} material={flatMat} />
-      </group>
-      <sprite ref={glowRef} position={[0, 1.1, 0]} material={glow} />
-    </group>
-  );
-}
 
 function Keeper({ service }: { service: ServiceId }) {
   const def = NPCS[NPC_OF[service]];
@@ -329,7 +298,7 @@ export function Lowland() {
       <CampFire />
       <Unlocks />
       {CHESTS.map((c) => (
-        <Chest key={c.id} id={c.id} />
+        <Chest key={c.id} id={c.id} visible={near} />
       ))}
       {(Object.keys(SERVICES) as ServiceId[]).map((s) => (
         <Keeper key={s} service={s} />

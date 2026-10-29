@@ -21,6 +21,51 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-29 — Act 2 continuity polish (branch `feature/act2-continuity-polish`)
+
+A new brief asks for visible neighbouring stages, an honest Eat button, a
+fixed camera, scenery that looks the same at every distance, and finished
+treasure chests. Built from `main` (`1a92801`), **not** from
+`feature/physical-stage-passages`: that branch's opaque fade-through chambers
+are exactly what this brief supersedes, so it stays unmerged.
+
+**Visibility (supersedes the expansion's zone isolation).** Each place has
+one representation, chosen by camera distance only — never by which zone the
+player stands in, by climbing, or by a position threshold. The separate
+pre-lair panorama mesh is retired in favour of the real lowland seen through
+fog. Large objects (terrain, trees, props, town) are cut off only beyond the
+distance where fog already hides them, so nothing pops in. Small objects
+(ferns, reeds) may still be cut off nearer. Fog in the lowland changes
+continuously or not at all. Enemies stay drawn and simulated only in the
+active zone (performance; they are creatures, not landscape). The exit
+barriers become see-through obstructions (roots, bars, reeds with gaps), not
+walls. Banks may be lowered or opened at exits so the destination shows.
+Rejected: a matched low-detail panorama kept beside the real scenery. That is
+two representations that must agree forever, and the brief's complaint is
+exactly that they disagree.
+
+**Camera.** In the Act 2 lowland the follow camera has a fixed yaw (0,
+looking south along the route, which runs −z from the cliff to the port) and a
+fixed pitch and distance. Dragging no longer orbits it there. On the rope it
+uses one stable framing for the whole climb in both directions. Modified from
+the brief: the prologue island keeps its drag-orbit camera. It is a round
+island with goals in every direction and a tunnel framing tuned around orbit,
+and its camera specs pass. A fixed south-facing view there would put half the
+island behind the player. The handoff at the cliff is the rope, which has its
+own camera anyway.
+
+**Eat button.** The quick-eat button and F key belong to the active friend's
+favourite food: its icon, the count in the bag, and the effect ("Fish ×3 · +15
+HP · +30 Bubbo MP"). With none of that food left, the button is greyed with
+the missing food's name and does nothing. It never quietly eats another
+friend's favourite or bananas. Other foods are eaten deliberately from the
+bag. Toasts name only what actually changed. Rejected: falling back to the
+"best" other food, which is what made the apple icon a lie.
+
+**Chests.** One finished low-poly model (closed box, domed lid on a rear
+hinge, brass trim, latch, hinges, dark interior, sparkle on opening) used by
+every chest. Rewards, IDs and saved open state are unchanged.
+
 ## 2026-10-29 — Act 2 forest expansion (development branch)
 
 The five hostile areas gain roughly twice their collision-open floor through
