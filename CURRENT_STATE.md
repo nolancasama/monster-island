@@ -12,48 +12,49 @@ polish. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
 (an older Act 2 build; microphone blocked inside it). Use the live site for
 Chromebook testing.
 
-## In development: branch `feature/act3-cloud-isle`
-Pushed through `9737f68`; the merge of Part 1 below is local until pushed.
-Not merged to `main`. Merging (= deploying) needs the user's approval.
+## Ready to merge: branch `feature/act3-cloud-isle`
+Pushed through `b972592` (2026-10-31). Not merged to `main`. Merging
+(= deploying) needs the user's approval. Verified at `b972592`: tsc, 318 unit
+tests, build, full Playwright 51/51 (51 min).
 
-- **Act 3 "Cloud Isle: Above the Storm"** — complete (slices A–C, commits
-  `7903823`, `6ffb4e9`, `9737f68`). Spec `docs/ACT3_CLOUD_ISLE.md`. Verified at
-  `9737f68`: tsc, 223 unit tests, build, act3.spec 3/3 (≤120 calls, ≤66k
-  triangles), full Playwright 23/23.
+- **Act 3 "Cloud Isle: Above the Storm"** — slices A–C (`7903823`,
+  `6ffb4e9`, `9737f68`). Spec `docs/ACT3_CLOUD_ISLE.md`.
 - **Gameplay polish Part 1** (`docs/GAMEPLAY_POLISH.md` items 1, 3, 4, 5, 6,
   7, 11: bridges, 99-food bag, pillars, tent, 10-coin inn, Fern Crossing,
-  view beyond the lair) — built by Codex on `feature/gameplay-polish`
-  (worktree `../monster-island-polish`), reviewed by Claude from
-  `.tmp/shots/polish/` there, committed `f95bf04`, merged into this branch.
-  Merge fixes: union of `combat.ts` imports; the `rest` Focus kind restored
-  (Cloud Isle's Hollow and observatory rests use it; the Act 2 camp rest stays
-  gone).
-- **Gameplay polish Part 2** (items 2, 8, 9, 10) — split into two sequential
-  Codex slices because they share the harness and decisions files:
-  - **2a** camera profiles everywhere: `.ai/work-order-polish2a.json`.
-  - **2b** straight projectiles, ranged enemies, companions leaving combat:
-    `.ai/work-order-polish2b.json` (runs after 2a is reviewed and committed).
-  `.ai/work-order-polish2.json` is the superseded single order.
+  view beyond the lair) — `f95bf04`, merged in `ec7e14d`.
+- **Gameplay polish Part 2** (items 2, 8, 9, 10):
+  - **2a** fixed camera profiles everywhere — `33ff066`.
+  - **2b1** straight player projectiles, Forest Spitter / Raider Shooter,
+    Wind Sprites on the same shot rules — `9f2a1ec`. Evidence
+    `.tmp/shots/polish2/combat/`.
+  - **2b2** companions leave combat in safe zones — `b972592`.
+    `companions-polish.spec` was shown to fail without the fix.
+- **Debug menu** — `3e6d1a2`. `?debug=1`, then Ctrl+Shift+D or backquote:
+  story-aware jumps, travel map, x/z, free fly, cheats; separate save key
+  `mi.debug.save`. The normal URL ignores the shortcut.
 
 ## Known Issues
 - Nothing has been tested on a real Chromebook (SwiftShader only): speech,
-  TTS voices, audio levels, fight difficulty, GPU frame rate. Lowland stage
-  views reach ~133k triangles.
+  TTS voices, audio levels, fight difficulty (now including ranged enemies
+  and non-homing shots), GPU frame rate. Lowland stage views reach ~133k
+  triangles.
+- Sanctuary courtyard outer shoulders: the player is tiny in frame, and at
+  the west edge partly behind a rock.
+- Debug map shows only ground walkable at the current story progress (a fresh
+  save shows just the start beach) and is small.
 - The Playwright suite renders in SwiftShader on the CPU: background load
-  causes timeouts that look like product failures (camera.spec failed at ~50%
-  CPU and passed alone on 2026-10-30). Check CPU load before diagnosing.
+  causes timeouts that look like product failures. Check CPU load before
+  diagnosing. Workers must not run the full suite (exceeds their time limit);
+  the controller runs it.
 - The cliff wall's colliders are one box. The ravine's water is the sea plane
   showing through.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. Review slice 2a (camera) from `.tmp/shots/polish2/camera/` and the full
-   suite; commit.
-2. Dispatch slice 2b through the router; review combat/companion screenshots
-   and the full suite; commit; push the branch.
-3. Final report to the user; merge to `main` only with their approval.
-4. Play the live game on a school Chromebook.
+1. User decision: merge `feature/act3-cloud-isle` into `main` (deploys).
+2. Play it on a school Chromebook (use `?debug=1` to jump around); tune
+   fight difficulty from that.
+3. Optional polish: courtyard shoulder framing; bigger/whole-island debug map.
 
 ## Codex / Delegated Work
-- Slice 2a: see the latest `.ai/result-polish2a.json`. If it is missing or
-  in flight, do not edit this worktree; never re-delegate it.
+None pending; nothing uncommitted from workers.
