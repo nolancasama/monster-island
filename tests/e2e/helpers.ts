@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { BROWSER_STUBS } from "./stubs";
 
 export interface MiState {
+  cloudIsleOpen: boolean;
   time: number;
   screen: string;
   mode: string;

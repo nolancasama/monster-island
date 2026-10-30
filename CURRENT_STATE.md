@@ -33,6 +33,10 @@ tests, build, full Playwright 51/51 (51 min).
   story-aware jumps, travel map, x/z, free fly, cheats; separate save key
   `mi.debug.save`. The normal URL ignores the shortcut.
 
+- Slice L: the Cloud Isle ship is locked with a Coming Soon notice. Release by
+  setting `CLOUD_ISLE_RELEASED = true` in `src/game/release.ts`. `?debug=1`
+  exposes a session-only ship toggle; Cloud Isle jumps and travel home still work.
+
 ## Known Issues
 - Nothing has been tested on a real Chromebook (SwiftShader only): speech,
   TTS voices, audio levels, fight difficulty (now including ranged enemies

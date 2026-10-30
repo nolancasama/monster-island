@@ -1170,6 +1170,8 @@ Coming Soon Lock" is accepted. The frozen spec is
   the ship for testing; the normal URL never can. Rejected: hiding Gull or
   deleting the voyage (the brief forbids removal, and release must be a
   one-line change).
+  The ship override requires explicit `?debug=1` even on the development
+  server; the existing development-only jump tools keep their access rules.
 - **Save remap by area, not coordinate warping.** Act 3 was never deployed,
   so only debug/dev saves hold Cloud Isle positions. A `cloudLayout` field
   (absent = 1) sends layout-1 positions to the new spawn of the saved area,

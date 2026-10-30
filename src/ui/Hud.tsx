@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { getGame, setGame, useGame } from "../game/store";
+import { useDebug } from "../game/debugState";
 import { companions, objective } from "../game/logic/progress";
 import { islandFoods, FOODS } from "../game/data/foods";
 import { COLOR_HEX, MONSTERS } from "../game/data/monsters";
@@ -23,6 +24,7 @@ const rtAir = (id: string) => rt.monsters[id as MonsterId]?.air ?? 0;
 
 /** Shown while exploring: during a scene the next goal would give the story away. */
 function ObjectiveCard() {
+  useDebug(s => s.cloudIsleShipOpen);
   const progress = useGame((s) => s.progress);
   const mode = useGame((s) => s.mode);
   if (mode !== "explore") return <div />;

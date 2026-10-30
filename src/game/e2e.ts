@@ -1,4 +1,5 @@
 import { placePlayer, goToTarget } from "./travel";
+import { cloudIsleOpen, setE2eCloudIsleShipOpen } from "./release";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
@@ -29,6 +30,7 @@ export function installE2eHook(seed: number) {
       const g = getGame();
       return {
         time: rt.time,
+        cloudIsleOpen: cloudIsleOpen(),
         screen: g.screen,
         mode: g.mode,
         micState: g.micState,
@@ -141,6 +143,9 @@ export function installE2eHook(seed: number) {
     },
     set(patch: Record<string, unknown>) {
       setGame(patch as never);
+    },
+    openCloudShip(open = true) {
+      setE2eCloudIsleShipOpen(open);
     },
     /** Additive fixture; use the real save validator and matching physical world. */
     setAct3(patch: Partial<Act3>) {

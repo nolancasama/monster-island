@@ -324,6 +324,8 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   await answer(page, "whereShip");
   s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.harbor, 30_000, "the lead");
   expect(s.objective).toEqual({ id: "act2Done" });
+  expect(s.act2.banner).toBe("Cloud Isle — Coming Soon!");
+  await expect(page.getByTestId("objective")).toContainText("Cloud Isle — Coming Soon!");
 
   // The upgrade is visible in a fight: Super Whip knocks a gloomlet out with one hit less.
   await hook(page, "teleport", 70, -272, Math.PI);

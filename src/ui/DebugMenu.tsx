@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { debugEnabled } from "../game/debugAccess";
+import { cloudIsleShipDebugEnabled, setCloudIsleShipOpen } from "../game/release";
 import { useDebug } from "../game/debugState";
 import { debugHeal, debugKillZone, debugUnlockFriends, resetDebugSave, setDebugNoclip } from "../game/debugActions";
 import { DEBUG_DESTINATIONS, jumpDebug, switchDebugWorld, teleportDebug } from "../game/debugTravel";
@@ -118,6 +119,7 @@ function DebugDialog() {
           <TravelMap position={position} />
         </section>
         <section className="debug-cheats" aria-label="Cheats"><h2>Cheats</h2>
+          {cloudIsleShipDebugEnabled() && <button data-testid="debug-cloud-ship" aria-pressed={debug.cloudIsleShipOpen} onClick={() => setCloudIsleShipOpen(!debug.cloudIsleShipOpen)}>Cloud Isle ship: {debug.cloudIsleShipOpen ? "open" : "locked"}</button>}
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, coins: p.act2.coins + 100 } } }); }, "Added 100 coins")}>+100 coins</button>
           <button onClick={() => run(() => { const p = getGame().progress, bag = { ...p.bag }; for (const food of Object.keys(FOODS) as FoodId[]) bag[food] = Math.min(BAG_MAX, (bag[food] ?? 0) + 10); setGame({ progress: { ...p, bag } }); }, "Added 10 of every food (max 99)")}>+10 of every food</button>

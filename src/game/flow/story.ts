@@ -1,4 +1,5 @@
 import { MONSTERS, LIVE_MONSTERS } from "../data/monsters";
+import { cloudIsleOpen, CLOUD_ISLE_SOON } from "../release";
 import { FOODS } from "../data/foods";
 import { companions, friends, gateOpen, GATES, newProgress, objective, type Progress } from "../logic/progress";
 import { clearSave, encodeSave, readSave, writeSave } from "../logic/save";
@@ -248,7 +249,7 @@ export function talkToMaple(): Promise<void> {
     else if (o.id === "market") phase3Hint = ["Buy food at the market: I want apples, please.", "おみせで「I want apples, please.」と いって かおう!"];
     else if (o.id === "kitchen") phase3Hint = ["Make a monster treat in the kitchen!", "キッチンで モンスターの おやつを つくろう!"];
     else if (o.id === "harbor") phase3Hint = ["Ask at the harbor office: Where is the ship?", "みなとの じむしょで「Where is the ship?」と きこう!"];
-    else if (o.id === "act2Done") phase3Hint = ["Sail with Captain Gull to Cloud Isle and find Lumo!", "ガルせんちょうと クラウドじまへ いって ルモを さがそう!"];
+    else if (o.id === "act2Done") phase3Hint = cloudIsleOpen() ? ["Sail with Captain Gull to Cloud Isle and find Lumo!", "ガルせんちょうと クラウドじまへ いって ルモを さがそう!"] : [CLOUD_ISLE_SOON.en, CLOUD_ISLE_SOON.ja];
     if (phase3Hint) {
       await say("maple", ...phase3Hint);
       m.talking = false;
