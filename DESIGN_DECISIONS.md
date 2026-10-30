@@ -1156,3 +1156,14 @@ of view if measurement shows the need (not needed in Phase 2).
     and the reveal went over budget (130 calls).
   - **Test server.** The browser suite serves the built `dist`
     (`npm run preview`), so run `npm run build` before Playwright.
+
+## 2026-10-31 — Debug teleport story access
+
+Debug teleport applies the earliest story point (lowest destination step, then
+list order) in the target world that opens the requested ground. Open ground
+preserves current progress; points no destination opens snap to current open
+ground. The map shows all destination ground and distinguishes currently locked
+ground. Rejected: ignoring gates entirely, which strands the player on ground
+the game treats as unwalkable. Debug travel continues to use the separate debug
+save and never writes `mi.save.v4`.
+

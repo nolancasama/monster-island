@@ -7,6 +7,8 @@ import { cancelDebugScripts } from "./debugLifecycle";
 import { placePlayer, goToTarget, travelTarget } from "./travel";
 import { gatesOf, isWalkable, nearestWalkable, PLAYER_R } from "./world/collision";
 import { DEBUG_DESTINATIONS, progressForDestination } from "./logic/debugProgress";
+import { destinationForDebugPoint } from "./logic/debugTravel";
+import type { Progress } from "./logic/progress";
 export { DEBUG_DESTINATIONS } from "./logic/debugProgress";
 
 function clearInteraction() {
@@ -21,11 +23,7 @@ function clearInteraction() {
   rt.camera.shot = null;
 }
 
-export function jumpDebug(id: string) {
-  if (!debugEnabled) return;
-  const destination = DEBUG_DESTINATIONS.find(d => d.id === id);
-  if (!destination) return;
-  const progress = progressForDestination(id, getGame().progress);
+function applyDebugProgress(progress: Progress) {
   clearInteraction();
   const seconds = rt.playTime;
   resetRuntime();
@@ -33,9 +31,17 @@ export function jumpDebug(id: string) {
   setGame({ progress });
   rt.world = progress.act3.world;
   resetCombat();
+  applyWorld(progress);
+}
+
+export function jumpDebug(id: string) {
+  if (!debugEnabled) return;
+  const destination = DEBUG_DESTINATIONS.find(d => d.id === id);
+  if (!destination) return;
+  const progress = progressForDestination(id, getGame().progress);
+  applyDebugProgress(progress);
   // Restore Maple and other destination targets before placing, then gather
   // companions around the final player position using the save-load path.
-  applyWorld(progress);
   if (destination.target === "beach" || destination.target === "volcanoTrail" || destination.area) {
     const at = travelTarget(destination.target)!;
     placePlayer(at.x, at.z, at.x, at.z + 1);
@@ -51,11 +57,14 @@ export function switchDebugWorld(world: "home" | "cloud") {
 export function teleportDebug(x: number, z: number, world: "home" | "cloud" = rt.world) {
   if (!debugEnabled || !Number.isFinite(x) || !Number.isFinite(z)) return;
   switchDebugWorld(world);
-  clearInteraction();
+  const destination = destinationForDebugPoint(x, z, world, gatesOf(getGame().progress));
+  if (destination) applyDebugProgress(progressForDestination(destination.id, getGame().progress));
+  else clearInteraction();
   const at = nearestDebugGround(x, z);
   placePlayer(at.x, at.z, at.x + Math.sin(rt.player.yaw), at.z + Math.cos(rt.player.yaw));
   travelCombat();
   applyWorld(getGame().progress);
+  return destination ? `Story set to ${destination.label} to reach this spot` : "Teleported to nearest walkable spot";
 }
 
 /** Project onto valid terrain even when flight or a map click is far offshore. */

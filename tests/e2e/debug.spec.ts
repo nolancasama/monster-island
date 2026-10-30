@@ -37,11 +37,43 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
   });
 }
 
-test("normal built game ignores both debug shortcuts", async ({ page }) => {
-  await boot(page);
+test("fresh debug coordinates open the earliest story point for lowland ground", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.addInitScript(() => {
+    localStorage.removeItem("mi.debug.save");
+    localStorage.setItem("mi.save.v4", "real-save-sentinel");
+  });
+  await boot(page, "debug=1&fast=1");
+  expect((await state(page)).progress.act2.started).toBe(false);
   await page.keyboard.press("Control+Shift+KeyD");
-  await expect(page.getByTestId("debug-menu")).toHaveCount(0);
+  const menu = page.getByTestId("debug-menu");
+  await expect(menu).toBeVisible();
+  const mapBounds = await menu.getByRole("button", { name: "Travel map: click to teleport; arrow keys move cursor, Enter teleports" }).boundingBox();
+  expect(mapBounds!.height).toBeGreaterThan(350);
+  const dialogBounds = await menu.boundingBox();
+  expect(dialogBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBounds!.y + dialogBounds!.height).toBeLessThanOrEqual(768);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  await menu.getByLabel("x", { exact: true }).fill("76");
+  await menu.getByLabel("z", { exact: true }).fill("-184.5");
+  await menu.getByRole("button", { name: "Go", exact: true }).click();
+
+  await expect(menu.locator(".debug-message")).toContainText("Story set to Fern Camp to reach this spot");
+  const lowland = await state(page);
+  expect(lowland.progress.act2.started).toBe(true);
+  expect(lowland.progress.act2.cleared).toContain("forest1");
+  expect(Math.hypot(lowland.player.x - 76, lowland.player.z + 184.5)).toBeLessThan(1);
+  expect(await page.evaluate(() => localStorage.getItem("mi.save.v4"))).toBe("real-save-sentinel");
+});
+
+test("normal built game ignores backquote; Ctrl+Shift+D reloads into debug", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("mi.save.v4", "real-save-sentinel"));
+  await boot(page);
   await page.keyboard.press("Backquote");
   await expect(page.getByTestId("debug-menu")).toHaveCount(0);
   await expect(page.getByTestId("debug-badge")).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+KeyD");
+  await page.waitForURL(/[?&]debug=1/);
+  await expect(page.getByTestId("debug-badge")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("mi.save.v4"))).toBe("real-save-sentinel");
 });

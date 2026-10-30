@@ -8,6 +8,7 @@ import { getGame, setGame, useGame } from "../game/store";
 import { combatZoneAt } from "../game/combat";
 import { BAG_MAX, FOODS } from "../game/data/foods";
 import { gatesOf, isWalkable, standY } from "../game/world/collision";
+import { debugReachableMask } from "../game/logic/debugTravel";
 import type { FoodId } from "../game/types";
 import "./debug.css";
 
@@ -26,7 +27,7 @@ function usePosition() {
   return position;
 }
 
-function TravelMap({ position }: { position: ReturnType<typeof usePosition> }) {
+function TravelMap({ position, onTravel }: { position: ReturnType<typeof usePosition>; onTravel: (x: number, z: number) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const progress = useGame(s => s.progress);
   const [cursor, setCursor] = useState({ x: position.x, z: position.z });
@@ -37,17 +38,20 @@ function TravelMap({ position }: { position: ReturnType<typeof usePosition> }) {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx) return;
     const gates = gatesOf(progress);
+    const reachable = debugReachableMask(position.world, b, width, height);
     const image = ctx.createImageData(width, height);
     for (let py = 0; py < height; py++) {
       for (let px = 0; px < width; px++) {
         const x = b.x0 + px / width * (b.x1 - b.x0);
         const z = position.world === "cloud" ? b.z1 - py / height * (b.z1 - b.z0) : b.z0 + py / height * (b.z1 - b.z0);
-        const walk = isWalkable(x, z, gates);
+        const future = reachable[py * width + px] === 1;
+        const open = isWalkable(x, z, gates);
+        const walk = open || future;
         const shade = walk ? Math.min(75, Math.max(0, standY(x, z, progress.solved))) : 0;
         const i = (py * width + px) * 4;
-        image.data[i] = walk ? 75 + shade : 30;
-        image.data[i + 1] = walk ? 130 + shade : 58;
-        image.data[i + 2] = walk ? 83 + shade : 75;
+        image.data[i] = open ? 75 + shade : walk ? 73 + shade * .4 : 30;
+        image.data[i + 1] = open ? 130 + shade : walk ? 99 + shade * .4 : 58;
+        image.data[i + 2] = open ? 83 + shade : walk ? 77 + shade * .4 : 75;
         image.data[i + 3] = 255;
       }
     }
@@ -62,9 +66,9 @@ function TravelMap({ position }: { position: ReturnType<typeof usePosition> }) {
         const fraction = (e.clientY - rect.top) / rect.height;
         const z = position.world === "cloud" ? b.z1 - fraction * (b.z1 - b.z0) : b.z0 + fraction * (b.z1 - b.z0);
         setCursor({ x, z });
-        teleportDebug(x, z);
+        onTravel(x, z);
       }} onKeyDown={e => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); teleportDebug(cursor.x, cursor.z); }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTravel(cursor.x, cursor.z); }
         const moves: Record<string, [number, number]> = { ArrowLeft: [-2, 0], ArrowRight: [2, 0], ArrowUp: [0, position.world === "cloud" ? 2 : -2], ArrowDown: [0, position.world === "cloud" ? -2 : 2] };
         const move = moves[e.key];
         if (move) { e.preventDefault(); setCursor(p => ({ x: Math.max(b.x0, Math.min(b.x1, p.x + move[0])), z: Math.max(b.z0, Math.min(b.z1, p.z + move[1])) })); }
@@ -73,7 +77,7 @@ function TravelMap({ position }: { position: ReturnType<typeof usePosition> }) {
       <span className="debug-map-player" style={{ left: `${dot.x / width * 100}%`, top: `${dot.y / height * 100}%` }} />
       <span className="debug-map-north">N ↑</span>
     </div>
-    <p>Green: walkable terrain. White dot: player. Click to travel; blocked points snap to ground.</p>
+    <p>Bright green: open now. Muted green: ground unlocked by setting story progress. White dot: player. Click to travel; other points snap to open ground.</p>
     <p>Keyboard: focus map, arrows to aim, Enter to travel.</p>
   </div>;
 }
@@ -92,7 +96,7 @@ function DebugDialog() {
     return () => previous?.focus();
   }, []);
   const run = (action: () => unknown, label: string) => {
-    try { action(); setMessage(label); }
+    try { const result = action(); setMessage(typeof result === "string" ? result : label); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Debug action failed"); }
   };
   const trapFocus = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -115,7 +119,7 @@ function DebugDialog() {
           <form className="debug-coordinates" onSubmit={e => { e.preventDefault(); const nx = Number(x), nz = Number(z); if (x.trim() && z.trim() && Number.isFinite(nx) && Number.isFinite(nz)) run(() => teleportDebug(nx, nz), "Teleported to nearest walkable spot"); else setMessage("Enter finite x and z coordinates"); }}>
             <label>x<input type="number" step="any" value={x} onChange={e => setX(e.target.value)} required /></label><label>z<input type="number" step="any" value={z} onChange={e => setZ(e.target.value)} required /></label><button type="submit">Go</button><button type="button" onClick={() => { setX(position.x.toFixed(2)); setZ(position.z.toFixed(2)); }}>Use current</button>
           </form>
-          <TravelMap position={position} />
+          <TravelMap position={position} onTravel={(nx, nz) => run(() => teleportDebug(nx, nz), "Teleported to nearest walkable spot")} />
         </section>
         <section className="debug-cheats" aria-label="Cheats"><h2>Cheats</h2>
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>

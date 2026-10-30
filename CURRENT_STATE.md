@@ -1,21 +1,20 @@
 # Current State
 
 ## Live
-`main` = `201990a`, deployed by Pages run 40871708332 (2026-10-29).
+`main` deployed 2026-10-31 (Act 3 branch fast-forwarded at `f108ed9`, then
+the debug live-shortcut/teleport branch merged on top).
 https://nolancasama.github.io/monster-island/
 
-Live: the prologue, Act 2 "The Hunt for Lumo" (kidnapping, lowland, real-time
-combat, Port Town, harbour lead), the forest expansion and the continuity
-polish. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
+Live: the prologue, Act 2 "The Hunt for Lumo", the forest expansion, the
+continuity polish, Act 3 Cloud Isle, gameplay polish Parts 1–2 and the debug
+menu. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
 
 **Private preview:** https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr
 (an older Act 2 build; microphone blocked inside it). Use the live site for
 Chromebook testing.
 
-## Ready to merge: branch `feature/act3-cloud-isle`
-Pushed through `b972592` (2026-10-31). Not merged to `main`. Merging
-(= deploying) needs the user's approval. Verified at `b972592`: tsc, 318 unit
-tests, build, full Playwright 51/51 (51 min).
+## Recently shipped (2026-10-31)
+Verified at `b972592`: tsc, 318 unit tests, build, full Playwright 51/51.
 
 - **Act 3 "Cloud Isle: Above the Storm"** — slices A–C (`7903823`,
   `6ffb4e9`, `9737f68`). Spec `docs/ACT3_CLOUD_ISLE.md`.
@@ -31,7 +30,11 @@ tests, build, full Playwright 51/51 (51 min).
     `companions-polish.spec` was shown to fail without the fix.
 - **Debug menu** — `3e6d1a2`. `?debug=1`, then Ctrl+Shift+D or backquote:
   story-aware jumps, travel map, x/z, free fly, cheats; separate save key
-  `mi.debug.save`. The normal URL ignores the shortcut.
+  `mi.debug.save`. On the normal URL, Ctrl+Shift+D reloads into `?debug=1`
+  (backquote stays debug-only). Map click / x/z teleport reaches any ground:
+  locked ground (muted green) applies the earliest story fixture that opens
+  it (`src/game/logic/debugTravel.ts`; reachable layer cached per world).
+  Verified: tsc, logic tests 127, build, `debug.spec.ts` 4/4.
 
 ## Known Issues
 - Nothing has been tested on a real Chromebook (SwiftShader only): speech,
@@ -40,8 +43,8 @@ tests, build, full Playwright 51/51 (51 min).
   triangles.
 - Sanctuary courtyard outer shoulders: the player is tiny in frame, and at
   the west edge partly behind a rock.
-- Debug map shows only ground walkable at the current story progress (a fresh
-  save shows just the start beach) and is small.
+- Debug map: first open per world costs ~1 s (locked-ground layer, half
+  resolution, so its edges are blocky).
 - The Playwright suite renders in SwiftShader on the CPU: background load
   causes timeouts that look like product failures. Check CPU load before
   diagnosing. Workers must not run the full suite (exceeds their time limit);
