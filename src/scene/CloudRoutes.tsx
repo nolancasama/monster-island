@@ -6,6 +6,7 @@ import { useGame } from "../game/store";
 import { CANOPY_GLIDE, CLOUD_ELECTRIC_PANELS, CLOUD_ROUTE_GATES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
 import { flatMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
+import { addKit, branch, bridge, caveMouth, giantTree } from "./models/cloudKit";
 import { audio } from "../audio/audio";
 
 const at = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
@@ -18,6 +19,14 @@ function span(b: PartBuilder, ax: number, az: number, bx: number, bz: number, wi
     b.box(width, height, len / Math.ceil(len) + .15, x, cloudY(x, z) + dy, z, color, yaw);
   }
 }
+/** Current layout only. Branch sockets are public for later walkway placement. */
+export function canopyTreeKits() {
+  return [[-30, 106], [-30, 116], [-11, 114], [-29, 127]].map(([x, z]) => {
+    const y = cloudY(x, z);
+    return { position: [x, .3, z] as [number, number, number], kit: giantTree({ height: y + 9.2,
+      platformHeight: y - .3, platformReach: [x === -11 ? -9 : 9, 0, z === 127 ? -2 : 0] }) };
+  });
+}
 function canopyGeometry() {
   const b = new PartBuilder();
   span(b, -9, 99, -20, 106, 5.5, bark);
@@ -29,15 +38,13 @@ function canopyGeometry() {
     for (const x of [-26, -22, -18, -14]) {
       span(b, x, z0, x, z1, 3, "#6f775e", -.8, .8);
       // Heavy tapered roots beneath the walking tops make the height readable.
-      b.cylAt(.8, z1 - z0, [x, cloudY(x, (z0 + z1) / 2) - 1, (z0 + z1) / 2], [Math.PI / 2, 0, 0], bark, 7);
+      addKit(b, branch([0, cloudY(x, z1) - cloudY(x, z0), z1 - z0], .8), [x, cloudY(x, z0) - 1, z0]);
     }
   }
   b.cyl(3, 3.2, .4, -32, cloudY(-32, 123) - .4, 123, bark, 8);
-  for (const [x, z] of [[-30, 106], [-30, 116], [-11, 114], [-29, 127]]) {
-    const y = cloudY(x, z);
-    b.cyl(1.2, 2.2, 21, x, y - 14, z, "#535c50", 7);
-    b.cylAt(.5, 12, [x + 2, y - 1.8, z], [0, 0, -1.1], bark, 6);
-    for (let i = 0; i < 3; i++) b.sphere(3, x - 2 + i * 2, y + 9 + i * .3, z, "#708371", [1.8, .45, 1.4], 7);
+  for (const { position, kit } of canopyTreeKits()) {
+    const [x, , z] = position, y = cloudY(x, z);
+    addKit(b, kit, position);
     // Hanging vines sit at the edges, never between camera and walker.
     for (const dx of [-1, 1]) b.cyl(.045, .045, 7, x + dx * 1.2, y + 1, z, "#82946b", 5);
   }
@@ -56,13 +63,7 @@ function canopyGeometry() {
   return b.build();
 }
 function bridgeGeometry() {
-  const b = new PartBuilder();
-  for (let z = 109.5; z <= 111.6; z += .28) b.box(14, .18, .25, -20, cloudY(-20, z) + .02, z, "#adab7d");
-  for (const x of [-26.6, -13.4]) {
-    b.cylAt(.075, 3.2, [x, cloudY(x, 110.5) + .8, 110.5], [Math.PI / 2, 0, 0], "#829664", 5);
-    for (const z of [109.3, 111.7]) b.cyl(.09, .14, 1.2, x, cloudY(x, z), z, "#829664", 5);
-  }
-  return b.build();
+  return bridge({ length: 2, width: 14, deckAt: t => cloudY(-20, 109.5 + t * 2) - cloudY(-20, 109.5) }).geometry;
 }
 function grottoGeometry() {
   const b = new PartBuilder();
@@ -103,8 +104,7 @@ function mouthsGeometry() {
   const b = new PartBuilder();
   for (const [x, z] of [[12, 101], [12, 129]]) {
     const y = cloudY(x, z);
-    for (const dx of [-3.2, 3.2]) b.box(1.5, 8, 3, x + dx, y - 1, z, rock);
-    b.box(8, 2, 3, x, y + 6, z, rock);
+    addKit(b, caveMouth(6.4, 8, 3), [x, y - .85, z]);
     b.box(5, 5.5, .1, x + 1, y + .1, z + 1.5, "#142536");
   }
   return b.build();
@@ -186,8 +186,7 @@ export function CloudRoutes({ inside }: { inside: boolean }) {
   const vine = a.puzzles.includes("canopyVine"), raft = a.puzzles.includes("grottoRaft"), boiler = a.puzzles.includes("grottoBoiler");
   return <>
     {!inside && <><mesh geometry={canopy} material={flatMat} /><mesh geometry={mouths} material={flatMat} />
-      {vine && <mesh geometry={bridge} material={flatMat} />}
-      {!vine && <mesh geometry={bridge} material={flatMat} position={[-7, -12, 0]} rotation={[0, 0, -.12]} />}
+      <mesh geometry={bridge} material={flatMat} position={at(-20, 109.5)} rotation={[vine ? 0 : 1.25, 0, 0]} />
       <RouteWind stopped={a.puzzles.includes("canopyGust")} />
     </>}
     {inside && <>
@@ -202,3 +201,5 @@ export function CloudRoutes({ inside }: { inside: boolean }) {
     {CLOUD_ROUTE_GATES.filter(g => inside === (g.zone === "thunderGrotto")).map(g => <RouteGate key={g.zone} x={g.x} z={g.z} open={a.cleared.includes(g.zone)} />)}
   </>;
 }
+
+export const cloudRouteGeometry = { canopyGeometry, bridgeGeometry, mouthsGeometry };

@@ -1188,3 +1188,42 @@ Coming Soon Lock" is accepted. The frozen spec is
   to keep the view. Rejected: a new progress flag.
 - **Sliced delivery** (L, W, K, X1–X3 in the spec), each verified on its own.
 - **Enemy density** capped at 1.5× per stage; required clears unchanged.
+
+## 2026-10-31 — Slice K: Cloud Isle attachment kit at the current layout
+
+`src/scene/models/cloudKit.ts` builds vertex-coloured, flat-shaded composites
+with PartBuilder. Only the composite's root receives a scene position. Every
+child is positioned relative to a named socket on its parent: trunk base/tip,
+fork, branch tip/platform, pier top, bridge spine or ground contact. Small
+socket insertions make the joins overlap rather than depend on touching faces.
+Foliage encloses the wood supporting it; giant trunks remain at least 3 m
+across, and their roots continue below a real rock contact (with a submerged
+skirt beneath the canopy's otherwise absent terrain). Existing canopy x/z
+placements, walking heights and puzzle gaps stay fixed. Branch platform
+sockets are public for subsequent expansion slices.
+
+Each composite returns the rendered geometry, parent graph, measured primitive
+bounds, named anchors and vertex ranges. Bridge metadata also identifies each
+end plank and its supporting crossbeam. Tests reconstruct bounds from those
+vertex ranges, check the complete support graph and ground contact, and reject
+the former canopy proportions (a real 0.65 m trunk/crown gap). Current-layout
+tests raycast the rendered walkways at the tree platform sockets. Bounds are
+an assembly check, not new gameplay collision.
+
+Conifers keep the existing instanced placement and colour palette, at 50 rather
+than 60 triangles per tree. Area composites bake kit geometry into their
+existing draws while retaining individual vertex colours. Bridge spines use
+metre-long timber sections; planks retain their closer spacing. The unsolved
+vine bridge pivots from its near support. Ruin walkways, gears, cave lintels,
+Hollow furnishings/roof repairs and broken dock remnants now have physical
+supports. The home-island trees in `models/nature.ts` already join their crowns
+and trunks; they and Storm Beacon's connected machinery are unchanged.
+
+Rendering evidence is still required: this environment refused the preview
+listener with `listen EPERM` on 127.0.0.1:4176. No screenshots or per-view WebGL
+budget measurements are claimed. `scripts/cloud-kit-shots.mjs` records matched
+before/after close-ups and gameplay views at both requested sizes when a
+preview server is available, checks the budget and compares against baseline.
+Typecheck, 341 unit tests and build passed. The required
+`npx playwright test tests/e2e/act3.spec.ts` exited 1 at web-server startup with
+the same permission error, before any test executed. Slice K remains unaccepted.

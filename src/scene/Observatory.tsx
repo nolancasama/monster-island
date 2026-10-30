@@ -8,6 +8,7 @@ import { CLOUD_OBSTACLE_PLACE, OBSERVATORY, cloudY } from "../game/world/cloudis
 import { flatMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { lumoParts } from "./models/monsters";
+import { addKit, observatoryBay, observatoryGear, shelterRoofPatch } from "./models/cloudKit";
 
 const colors: Record<CompanionId,string> = {leafy:"#91df73",bubbo:"#6adcf4",puff:"#e7ceff",ember:"#ffb467"};
 const brass = "#b49b59", stone = "#8d9897";
@@ -18,23 +19,23 @@ function observatoryGeometry() {
   // The surviving tall window frames open directly onto the clouds. The
   // camera-side facade is ruined, keeping the fixed follow view unobstructed.
   for (const x of [-9,9]) for (const z of [136,142,148,154]) {
-    b.box(.65,7,.8,x,22,z,stone);
-    if (z<154) { b.box(.8,.6,5.3,x,28.5,z+3,stone); b.box(.5,.15,5.3,x,23.5,z+3,brass); }
+    if (z===136 || z===154) b.box(.65,7,.8,x,22,z,stone);
+    if (z<154 && z!==142) { b.box(.8,.6,5.3,x,28.5,z+3,stone); b.box(.5,.15,5.3,x,23.5,z+3,brass); }
   }
   for (const x of [-6,-2,2,6]) b.box(.65,6,.8,x,22,154,stone);
   b.box(17,.6,.9,0,28,154,stone);
   b.torus(3,.18,[0,22.12,145],[Math.PI/2,0,0],brass);
   b.cyl(2.7,2.8,.14,0,22,145,"#3b5863",24);
+  b.cyl(.1,.12,.2,0,22.1,145,brass,6);
   for (let i=0;i<12;i++) {
     const a=i*Math.PI/6;
     b.boxAt(.15,.05,.4,[Math.sin(a)*2.3,22.19,145+Math.cos(a)*2.3],[0,a,0],brass);
   }
   // Broken upper walkways and fallen brass gear teeth establish the ruin.
   for (const side of [-1,1]) {
-    b.box(2.3,.35,5,side*7,25,149,stone);
+    addKit(b, observatoryBay(side), [side*9,22,145]);
     for (let i=0;i<4;i++) b.boxAt(.9,.3,.7,[side*(7-i*.4),22.2,136+i*.3],[.1,i*.4,.15],stone);
-    b.torus(1.4,.18,[side*7,26.2,150],[0,.2,0],brass);
-    for (let i=0;i<10;i++) { const a=i*Math.PI/5; b.boxAt(.3,.5,.3,[side*7+Math.sin(a)*1.5,26.2+Math.cos(a)*1.5,150],[0,0,-a],brass); }
+    addKit(b, observatoryGear(), [side*7,25.35,150], side*.2);
     b.box(1.2,1.1,1.1,side*7.4,22,138,"#766044");
     b.add(new THREE.TorusGeometry(.22,.05,4,12,Math.PI*1.45),"#eadc9c",[side*7.4,22.7,137.43],[0,0,-.7]);
   }
@@ -52,7 +53,7 @@ function Mechanism({friend,solved}:{friend:CompanionId;solved:boolean}) {
     b.cyl(1.2,1.4,.25,0,0,0,"#596d76",8);
     b.cyl(.35,.5,1,0,.25,0,brass,8);
     if(friend==="leafy") { b.box(.8,.2,.65,0,1.1,0,brass); b.cyl(.1,.1,1,0,1.2,0,"#71915e",6); }
-    if(friend==="bubbo") { b.box(2.3,.2,1.3,0,.25,0,"#78b4c5"); b.cyl(.1,.1,1.8,0,1,0,brass,6); }
+    if(friend==="bubbo") { b.box(2.3,.2,1.3,0,.25,0,"#78b4c5"); b.cyl(.1,.1,2.4,0,.4,0,brass,6); }
     if(friend==="puff") b.cyl(.14,.23,2.6,0,.25,0,brass,7);
     if(friend==="ember") { b.sphere(.8,0,.95,0,"#80634d",[1,1.2,1],8); b.cyl(.16,.2,1.2,.7,1,0,brass,6); }
     return b.build();
@@ -185,7 +186,7 @@ export function HollowAftermath() {
     const b=new PartBuilder();
     // Fresh planks patch the family's own roof; a warm pool marks the sun
     // reaching through the waterfall entrance, without an extra light.
-    for(let i=0;i<8;i++)b.boxAt(1.6,.18,3,[-14+i*.65,9.8,59],[0,0,.04],"#b28d5f");
+    addKit(b, shelterRoofPatch(), [-14 + 3.5*.65,14.3,59]);
     b.add(new THREE.CircleGeometry(3.2,24),"#cfc49a",[-10,4.015,53],[-Math.PI/2,0,0],[1,1.3,1]);
     return b.build();
   },[]);

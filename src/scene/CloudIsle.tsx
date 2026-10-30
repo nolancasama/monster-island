@@ -13,6 +13,7 @@ import { nearestOnTrail, PIER2, type WalkShape } from "../game/world/lowland";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { npcGeometry } from "./models/lowland";
+import { addKit, branch, bridge, caveMouth, cliffSegment, giantTree, mountainConifer, ruinedArch, shelterFrame, shelterShelf, waterfallSurround } from "./models/cloudKit";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import { voyageStorm } from "./voyageWeather";
 import { CloudRoutes } from "./CloudRoutes";
@@ -106,15 +107,14 @@ function landscapeGeometry() {
   b.box(6, 8, 10, 5, 0, 61, dark);
   // Entrance pillars belong to the cliff; the continuous interior is drawn
   // separately so its walls never dissolve through the scenery material.
-  b.box(3.5, 10, 3, -16, 3, 49.8, stone);
-  b.box(3.5, 10, 3, -5, 3, 49.8, stone);
-  b.box(14, 2.5, 3, -10, 13, 50, stone);
+  addKit(b, waterfallSurround(11, 10.6), [-10.5, 3.15, 49.8]);
   // The back tunnel has side ribs and a high roof, open towards the lens.
   for (let i = 1; i < BACK_TUNNEL.length; i++) {
     const [ax, az] = BACK_TUNNEL[i - 1], [bx, bz] = BACK_TUNNEL[i];
     const len = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az);
     const mx = (ax + bx) / 2, mz = (az + bz) / 2, y = cloudY(mx, mz);
-    for (const side of [-1, 1]) b.box(1.2, 4.6, len + 1, mx + Math.cos(yaw) * side * 2.8, y - .3, mz - Math.sin(yaw) * side * 2.8, dark, yaw);
+    for (const side of [-1, 1]) addKit(b, cliffSegment(1.2, 4.9, len + 1),
+      [mx + Math.cos(yaw) * side * 2.8, y, mz - Math.sin(yaw) * side * 2.8], yaw);
     b.box(6.8, 1, len + 1, mx, y + 4.5, mz, dark, yaw);
   }
   // Real mountain mass beyond this slice; these are not alternate copies.
@@ -122,24 +122,22 @@ function landscapeGeometry() {
     b.cone(r, h, x, 1, z, "#4c5e64", 7);
   }
   // Giant tree with a wind-bent trunk above the shelter.
-  b.cylAt(1.5, 15, [-15, 19, 61], [0, 0, -.17], "#4d473b", 7);
-  for (const dx of [-5, 0, 5]) b.sphere(6, -18 + dx, 27 + Math.abs(dx) * .2, 61, "#425d53", [1.5, .6, 1], 7);
-  for (let i = 0; i < 5; i++) b.cylAt(.5, 7, [-20 + i * 3, 17, 58], [.35, 0, -.35 + i * .16], timber, 6);
+  addKit(b, giantTree({ height: 11.2, platformHeight: 2.2, platformReach: [5, 0, -1.5], crownRadius: 6 }), [-15, 16.6, 61]);
   // Dock is intact; the old pier beside it is shattered.
   b.box(3, .3, 9, 0, .5, -5, timber);
   for (const x of [-1.3, 1.3]) for (const z of [-8, -4, 0]) b.cyl(.13, .16, 2, x, -.7, z, timber, 6);
-  for (let i = 0; i < 5; i++) b.boxAt(1.8, .18, .6, [5, .4 - i * .08, -3 - i * 1.1], [0, i * .2, -.12], timber);
+  for (let i = 0; i < 5; i++) {
+    const z = -3 - i * 1.1;
+    b.boxAt(1.8, .18, .6, [5, .4 - i * .08, z], [0, i * .2, -.12], timber);
+    addKit(b, branch([0, 1.25 - i * .08, 0], .13), [5, -.9, z]);
+  }
   // Optional sea cave and cove have unmistakable mouths around their rewards.
   for (const [x, z] of [[-17, 30], [17, 39]]) {
-    b.box(1.2, 3.5, 5, x - 3, cloudY(x, z) - .3, z, dark);
-    b.box(1.2, 3.5, 5, x + 3, cloudY(x, z) - .3, z, dark);
-    b.box(7, 1.3, 5, x, cloudY(x, z) + 3, z, dark);
+    addKit(b, caveMouth(6, 3.5, 5), [x, cloudY(x, z) - .15, z]);
   }
   // Small old ruins show the direction of the next route without opening it.
   for (const m of ROUTE_MOUTHS) {
-    b.box(1.2, 5, 1.2, m.x - 2.6, 10.8, m.z, stone);
-    b.box(1.2, 5, 1.2, m.x + 2.6, 10.8, m.z, stone);
-    b.box(6.6, 1.2, 1.4, m.x, 15.6, m.z, stone);
+    addKit(b, ruinedArch(5.2, 5, 1.4), [m.x, 10.95, m.z]);
   }
   return b.build();
 }
@@ -218,6 +216,9 @@ function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
     b.box(3.2, .1, .1, -18.5, 5.8, 63, timber);
     for (let i = 0; i < 5; i++) { b.cyl(.025, .025, .4, -19.5 + i * .5, 5.4, 63, "#b7a983", 4); b.sphere(.18, -19.5 + i * .5, 5.3, 63, "#8ba5a3", [.5, 1.7, .6], 6); }
     b.box(2.2, .9, .06, -9, 5.1, 63.8, "#c7b687");
+    // The map and patched boards used to hang in front of the cave walls.
+    addKit(b, shelterFrame(2.2, 2.1, .12), [-9, 4, 63.8]);
+    addKit(b, shelterFrame(1.6, 1.6, .12), [-21.3, 4, 56]);
     b.boxAt(.06, .8, .03, [-9.2, 5.5, 63.75], [0, 0, -.5], "#718575");
     b.boxAt(.06, .7, .03, [-8.7, 5.5, 63.75], [0, 0, .5], "#718575");
     for (let i = 0; i < 3; i++) b.box(.22, .22, .22, -9 + i * .33, 4, 58.3, ["#cb915e", "#7f9e89", "#9a7d97"][i]);
@@ -227,8 +228,7 @@ function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
     // The unrepaired shelf leans, making the first upgrade legible.
     b.boxAt(1.6, .13, .6, [-7, 4.7, 61.5], [0, 0, -.16], timber);
   } else if (upgrade === "bag") {
-    for (const x of [-8, -6]) b.box(.15, 2, .65, x, 4, 61.5, "#b08f60");
-    for (const y of [4.8, 5.6]) b.box(2.2, .15, .7, -7, y, 61.5, "#b08f60");
+    addKit(b, shelterShelf(), [-7, 4, 61.5]);
     for (let i = 0; i < 3; i++) b.sphere(.22, -7.6 + i * .55, 5.95, 61.5, "#c3a97a", [1, 1.1, 1], 6);
   } else if (upgrade === "wood") {
     b.box(2.2, .35, 1.9, -16, 4, 56, "#b2936b");
@@ -240,7 +240,7 @@ function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
     b.box(1.5, .2, 2.3, -12.8, 4.06, 61.1, "#a8b89a");
     b.box(1.3, .15, .5, -12.8, 4.28, 61.8, "#e1d3b4");
     b.box(1.2, .1, 1.3, -12.8, 4.26, 60.6, "#c0a283");
-    for (const x of [-19, -9]) b.sphere(.2, x, 5.25, 62, "#b9d29a", [1.5, .6, 1], 6);
+    for (const x of [-19, -9]) b.sphere(.2, x, 4.12, 62, "#b9d29a", [1.5, .6, 1], 6);
   }
   return b.build();
 }
@@ -382,14 +382,8 @@ function WindAndWater() {
   </>;
 }
 
-function treeGeometry() {
-  const b = new PartBuilder(1);
-  b.cylAt(.22, 4.8, [-.4, 2.4, 0], [0, 0, -.21], "#565849", 6);
-  for (let i = 0; i < 3; i++) b.cone(1.55 - i * .3, 2.2, -.7 - i * .18, 2.1 + i * .85, 0, ["#405e56", "#4d695a", "#657b64"][i], 6);
-  return b.build();
-}
 function Vegetation() {
-  const geometry = useMemo(treeGeometry, []);
+  const geometry = useMemo(() => mountainConifer().geometry, []);
   const tiles = useMemo(() => {
     const result: Array<Array<{ x: number; z: number; s: number }>> = [[], [], [], []];
     for (let i = 0; i < 115; i++) {
@@ -428,6 +422,8 @@ function CoastProps() {
     for (let i = 0; i < 4; i++) b.boxAt(.45, 1.65, .12, [Math.sin(i * Math.PI / 2) * 1.03, Math.cos(i * Math.PI / 2) * 1.03, 0], [0, 0, -i * Math.PI / 2], "#c1b48c"); return b.build(); }, []);
   const loose = useMemo(() => { const b = new PartBuilder(); b.box(.45, .08, .3, 0, 0, 0, "#aa986d"); return b.build(); }, []);
   const coveGate = useMemo(() => barrierGeometry(6.4), []);
+  const seaBridge = useMemo(() => bridge({ length: Math.hypot(5, 6), width: 2.1,
+    deckAt: t => cloudY(-12 - 5 * t, 24 + 6 * t) - cloudY(-12, 24) }).geometry, []);
   useFrame((_, dt) => {
     if (rotor.current && getGame().progress.act3.puzzles.includes("coastWindmill")) rotor.current.rotation.z += dt * 2.4;
     if (light.current) { light.current.position.x = -5 + ((rt.time * 1.1) % 8); light.current.rotation.y = Math.sin(rt.time) * .3; }
@@ -436,7 +432,7 @@ function CoastProps() {
     <mesh geometry={base} material={flatMat} />
     <group ref={rotor} position={ground(-10.5, 27, 4)}><mesh geometry={blades} material={flatMat} /></group>
     <mesh ref={light} geometry={loose} material={flatMat} position={ground(-5, 20, .1)} />
-    {a.puzzles.includes("coastWindmill") && <mesh position={ground(-14.5, 27, .06)} rotation={[0, Math.atan2(6, 5), 0]}><boxGeometry args={[7.81, .18, 2.1]} /><meshLambertMaterial color="#ad9468" /></mesh>}
+    {a.puzzles.includes("coastWindmill") && <mesh geometry={seaBridge} material={flatMat} position={ground(-12, 24)} rotation={[0, Math.atan2(-5, 6), 0]} />}
     {!a.puzzles.includes("coastCrate") && <mesh geometry={coveGate} material={flatMat} position={ground(14, 36.5)} rotation={[0, Math.PI / 2, 0]} />}
     <mesh position={ground(a.puzzles.includes("coastCrate") ? 12 : 10.8, 35, .4)}><boxGeometry args={[.8, .8, .8]} /><meshLambertMaterial color="#9e8558" /></mesh>
   </>;

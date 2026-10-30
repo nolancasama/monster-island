@@ -3,8 +3,30 @@ import * as THREE from "three";
 import { cloudGeometry } from "./CloudIsle";
 import { cloudY } from "../game/world/cloudisle";
 import { arenaGeometry } from "./StormBeacon";
+import { canopyTreeKits, cloudRouteGeometry } from "./CloudRoutes";
 
 describe("Cloud Isle's single real landscape", () => {
+  it("puts each current canopy platform socket on its carrying branch beneath a walkway", () => {
+    const geometry = cloudRouteGeometry.canopyGeometry();
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.updateMatrixWorld(true);
+    for (const { position, kit } of canopyTreeKits()) {
+      const socket = new THREE.Vector3(...kit.anchors["walkwayBranch.platform"].point).add(new THREE.Vector3(...position));
+      const floor = cloudY(socket.x, socket.z);
+      expect(socket.y).toBeLessThanOrEqual(floor);
+      expect(floor - socket.y).toBeLessThan(.3);
+      const hit = new THREE.Raycaster(new THREE.Vector3(socket.x, floor + .1, socket.z), new THREE.Vector3(0, -1, 0), 0, .5).intersectObject(mesh)[0];
+      expect(hit, "branch endpoint is under a real rendered walkway").toBeDefined();
+      expect(Math.abs(hit.point.y - floor)).toBeLessThan(.2);
+      // Each root flare meets real rock, whose skirt continues below the sea.
+      const ground = kit.parts.find(p => p.id === "ground")!.bounds;
+      expect(ground.min.y + position[1]).toBeLessThan(-.4);
+      expect(kit.parts.find(p => p.id === "trunk")!.bounds.min.y).toBeLessThan(ground.max.y);
+      kit.geometry.dispose();
+    }
+    geometry.dispose(); material.dispose();
+  });
   it("fits the player and real beacon in the Cloud follow lens at both target sizes", () => {
     for (const [w,h] of [[1366,768],[1280,800]]) for (const z of [1,20,36,42]) {
       const y = cloudY(0,z), camera = new THREE.PerspectiveCamera(80,w/h,.1,900);
