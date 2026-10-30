@@ -113,6 +113,41 @@ the camera is in or near it. Budget per gameplay view at 1366×768 and
 **Camera:** the fixed up-mountain follow camera and context profiles stay;
 add or adjust profiles where longer paths, bridges, cliffs or caves need it.
 
+## 2a. Terrain: one island, not extruded paths (added 2026-10-31 after X1 review)
+
+The first X1 attempt (and the original Cloud Isle) drew ground only where the
+player can walk: walk-shape cells extruded as 1 m stair-stepped slabs with
+rock skirts into the sea. The result reads as separate rafts on water, with no
+landmass, slopes or mountain between them. Replaced by:
+
+- **One heightfield** `cloudGroundY(x, z)` in `src/game/world/cloudTerrain.ts`
+  (pure, testable) over an irregular island outline that contains every area
+  with generous margins (beaches that slope under the sea, rocky headlands).
+  A central massif rises from the coast to the summit behind the beacon;
+  ridges and valleys separate areas; noise breaks up regularity.
+- **Paths are carved into it, not the other way round.** Inside walk shapes
+  the ground equals `cloudY` (|difference| < 5 cm at every walkable sample,
+  unit-tested). Outside, within a few metres, it blends into natural
+  boundaries: slopes and banks up the mountain side, cliffs (steep heightfield
+  or kit cliff segments standing on it), beaches or drops on the sea side.
+  Collision stays the walk shapes; the visible terrain explains every edge.
+- **Mesh:** spatial chunks (~48 m) on a ~2 m grid, flat-shaded low-poly, vertex
+  colours by height and slope (wet sand, sand, grass, moss, rock on steep
+  slopes, darker cliff), a submerged skirt at the outline. No 1 m stair steps
+  anywhere. Elevated floors (canopy walkways, observatory) and enclosed ones
+  (grotto) keep their own geometry, with real terrain beneath/around them.
+- **Mountain landmark:** the massif replaces the placeholder cones; visible
+  from the dock through fog as the island's silhouette.
+- **Colour:** stormy but colourful and stylised (the brief's visual standard):
+  lift sand, grass and rock toward the home island's palette; keep the storm
+  in the sky, fog tint and the summit.
+- **Budget:** terrain + scenery chunk culling (frustum and fog distance) so
+  every gameplay view is ≤ 120 calls / ≤ 140k triangles.
+- **Geography preview without a browser:** `scripts/cloud-map.mjs` writes a
+  hill-shaded top-down PNG of `cloudGroundY` with walk shapes, gates, spawns
+  and landmarks outlined (Node + zlib only), so layout can be judged without
+  WebGL.
+
 ## 3. Environment kit and trees
 
 - New `src/scene/models/cloudKit.ts` (PartBuilder, vertex colours, the
