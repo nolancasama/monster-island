@@ -1156,3 +1156,33 @@ of view if measurement shows the need (not needed in Phase 2).
     and the reveal went over budget (130 calls).
   - **Test server.** The browser suite serves the built `dist`
     (`npm run preview`), so run `npm run build` before Playwright.
+
+## 2026-10-31 — Cloud Isle expansion brief: accepted, with these changes
+
+The external brief "Cloud Isle Expansion, Model Overhaul, Frontier Wall, and
+Coming Soon Lock" is accepted. The frozen spec is
+`docs/CLOUD_ISLE_EXPANSION.md`. Changes from the brief:
+
+- **Lock first, so the branch is shippable.** With `CLOUD_ISLE_RELEASED =
+  false` the prologue, Act 2 and polish can merge without exposing Act 3;
+  the expansion then continues behind the lock. Going *home* from Cloud Isle
+  is always allowed so no save is stranded. A session-only debug toggle opens
+  the ship for testing; the normal URL never can. Rejected: hiding Gull or
+  deleting the voyage (the brief forbids removal, and release must be a
+  one-line change).
+- **Save remap by area, not coordinate warping.** Act 3 was never deployed,
+  so only debug/dev saves hold Cloud Isle positions. A `cloudLayout` field
+  (absent = 1) sends layout-1 positions to the new spawn of the saved area,
+  then projects them with the current gates. Rejected: per-area coordinate
+  transforms (complex, and no public saves need them).
+- **Measurable size.** ≥ 9,400 m² walkable (3× the 3,133.5 m² baseline) and
+  each branch route ≥ 2× its baseline length (195.8 / 200.8 m), from
+  `scripts/measure-cloud-area.mjs`. Rejected: an unmeasured "3× bigger".
+- **Code-built kit, no glTF.** Composite models are assembled from parent
+  attachment points and tested for connectivity. Rejected: an asset
+  pipeline/loader for a game whose whole look is code-built.
+- **Wall reuses the existing unlock.** The gate opens on `act2.started`, the
+  same condition that already gates the rope; the lookout parapet stays low
+  to keep the view. Rejected: a new progress flag.
+- **Sliced delivery** (L, W, K, X1–X3 in the spec), each verified on its own.
+- **Enemy density** capped at 1.5× per stage; required clears unchanged.
