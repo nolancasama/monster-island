@@ -36,6 +36,25 @@ Git is the source of truth for detailed code-change history.
 
 ## 2026-10-30 — Gameplay polish Part 2 — decisions made while building
 
+### Companions (slice B2: item 10)
+
+- Combat mounts set the active friend's mode to `script`. Dismount used to
+  preserve that mode even without a running scene, leaving the last active
+  friend stranded at the hostile border. Combat now releases its friend to
+  `follow` (or `party` after switching); running scenes keep actor ownership.
+- Hop-off destinations use the existing nearest-walkable projection with
+  the friend's radius and swimming capability. Riders land on walkable
+  player ground; Leafy and Puff use the existing 0.4 s hop-off blend.
+  The same stance release covers every home-island and Cloud Isle safe zone.
+- Existing follow and party-follow movement still handles getting unstuck
+  and distant friends with `poofTo`; safe-zone entry does not teleport the
+  whole party or change the active friend. Story, save fields and combat
+  rules are unchanged.
+- The browser regression covers all four friends crossing from hostile
+  ground into Fern Crossing, Port Town and the Hidden Hollow, then walking
+  farther inside to check that the whole party follows. Evidence is in
+  `.tmp/shots/polish2/companions/`, including the reproduced Leafy failure.
+
 ### Combat (slice B1: items 8 and 9)
 
 - **Straight player shots replace Act 2's forgiving projectile aim.** Bubbo,

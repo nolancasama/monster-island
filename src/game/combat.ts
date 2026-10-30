@@ -9,7 +9,7 @@ import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
-import { PLAYER_R, gatesOf, isWalkable, moveCircle, standY } from "./world/collision";
+import { PLAYER_R, gatesOf, isWalkable, moveCircle, nearestWalkable, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
@@ -408,6 +408,8 @@ function updateStance(dt: number) {
   if (s.friend && s.friend !== want) {
     // Off: the friend drops beside the player and follows again.
     const off = s.friend;
+    const sceneOwnsFriend = isRunning();
+    const perched = off === "leafy" || off === "puff";
     if (s.k > 0.05 && want !== null) {
       s.leaving = off;
       s.leaveK = s.k;
@@ -420,9 +422,29 @@ function updateStance(dt: number) {
       m.x = p.x + Math.cos(p.yaw) * 1.2;
       m.z = p.z - Math.sin(p.yaw) * 1.2;
     }
-    if (m.mode === "script" || m.mode === "talk") {
-      /* a scene owns it now */
-    } else m.mode = "follow";
+    if (!sceneOwnsFriend) {
+      const gates = gatesOf(g.progress);
+      const landing = nearestWalkable(m.x, m.z, MONSTERS[off].radius, gates, MONSTERS[off].can.includes("swim"));
+      m.x = landing.x;
+      m.z = landing.z;
+      // Combat itself set "script" on mount. Only a running scene may keep
+      // ownership; otherwise this friend would stay at the hostile border.
+      m.mode = off === active ? "follow" : "party";
+      m.target = m.look = null;
+      m.air = m.airTarget = 0;
+      if (want === null && perched && s.k > 0.05) {
+        s.fromX = m.x;
+        s.fromZ = m.z;
+        s.leaving = off;
+        s.leaveK = s.k;
+      }
+      if (!perched && want === null) {
+        const ground = nearestWalkable(p.x, p.z, PLAYER_R, gates);
+        p.x = ground.x;
+        p.z = ground.z;
+        p.y = standY(p.x, p.z, g.progress.solved);
+      }
+    } else if (m.mode !== "script" && m.mode !== "talk") m.mode = "follow";
     if (s.k > 0.05) audio.play("mount");
     s.friend = null;
     s.k = 0;

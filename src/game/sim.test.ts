@@ -7,13 +7,51 @@ import { tick } from "./sim";
 import { PHASE3_PLACE } from "./flow/obstacles";
 import { PLAYER_R, gatesOf, isWalkable, moveCircle } from "./world/collision";
 import { CLIFF_TOP_SPOT, LAVA } from "./world/island";
+import { region } from "./world/region";
+import { cb, resetCombat } from "./combat";
 
-vi.mock("../audio/audio", () => ({ audio: { setNearness: vi.fn(), voice: vi.fn(), play: vi.fn() } }));
+vi.mock("../audio/audio", () => ({ audio: { setNearness: vi.fn(), voice: vi.fn(), play: vi.fn(), startMusic: vi.fn(), setScene: vi.fn() } }));
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+  region.world = "home";
   resetRuntime();
   setGame({ screen: "title", progress: newProgress() });
 });
+
+for (const world of ["home", "cloud"] as const) {
+  it(`poofs unreachable active and party friends onto walkable safe ground in ${world}`, () => {
+    vi.stubGlobal("window", { setTimeout: () => 0, clearTimeout: () => undefined });
+    resetRuntime();
+    const progress = newProgress();
+    progress.active = "leafy";
+    progress.act2.started = progress.act2.descended = progress.act2.portFound = progress.act2.harbor = true;
+    progress.act2.lumoTaken = true;
+    progress.act2.tutorial = ["attack", "coins", "special", "eat", "rest", "switch"];
+    progress.act3.world = world;
+    progress.act3.hollowFound = true;
+    progress.act3.family = { met: true, trusted: true, drawingSeen: true, tunnelOpen: true, aftermathSeen: false };
+    for (const id of ["leafy", "bubbo", "puff", "ember"] as const) progress.monsters[id].friend = progress.monsters[id].discovered = true;
+    setGame({ screen: "game", mode: "explore", settingsOpen: false, journalOpen: false, progress });
+    region.world = world;
+    rt.act2Scene = "done";
+    rt.act3Scene = "done";
+    Object.assign(rt.player, world === "cloud" ? { x: -13, z: 57, yaw: 0 } : { x: 76, z: -300, yaw: 0 });
+    resetCombat();
+    for (const e of cb.enemies) e.state = "gone";
+    for (const id of ["leafy", "bubbo", "puff", "ember"] as const) {
+      Object.assign(rt.monsters[id], { mode: id === "leafy" ? "follow" : "party", x: 500, z: 500, poofT0: -1 });
+    }
+    rt.time = 25;
+    tick(.1);
+    for (const id of ["leafy", "bubbo", "puff", "ember"] as const) {
+      const m = rt.monsters[id];
+      expect(m.poofT0).toBe(25);
+      expect(Math.hypot(m.x - rt.player.x, m.z - rt.player.z)).toBeLessThan(6);
+      expect(isWalkable(m.x, m.z, gatesOf(progress), MONSTERS[id].radius, MONSTERS[id].can.includes("swim"))).toBe(true);
+    }
+  });
+}
 
 it("keeps Ember at home behind hot lava, then allows him to wander after cooling", () => {
   resetRuntime();

@@ -8,6 +8,9 @@ import { COMBAT, ENEMIES, type CompanionId, type EnemyKind } from "./data/combat
 import { BEACON_PYLONS } from "./logic/beacon";
 import { CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
 import { ENEMY_SPAWNS } from "./world/lowland";
+import { MONSTERS } from "./data/monsters";
+import { PLAYER_R, gatesOf, isWalkable, standY } from "./world/collision";
+import { run } from "./flow/script";
 
 vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn() } }));
 
@@ -48,6 +51,73 @@ function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
   Object.assign(e, { kind, zone: "stormbreakCoast", x, z, homeX: x, homeZ: z, hp: 100, state: "recover", timer: 99, kx: 0, kz: 0 });
   return e;
 }
+
+describe("companions leaving combat", () => {
+  const destinations = [
+    { name: "Fern Crossing", world: "home", hostile: [76, -183], safe: [76, -188] },
+    { name: "Port Town", world: "home", hostile: [76, -287], safe: [76, -293] },
+    { name: "Hidden Hollow", world: "cloud", hostile: [-5, 47], safe: [-10, 50] }
+  ] as const;
+
+  for (const destination of destinations) for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
+    it(`${friend} releases its combat script on entering ${destination.name}`, () => {
+      changeWorld(destination.world);
+      setGame(g => ({ progress: { ...g.progress, active: friend, act2: { ...g.progress.act2, cleared: ["forest1", "grove", "canopy", "causeway", "coast"] } } }));
+      for (const e of cb.enemies) e.state = "gone";
+      Object.assign(rt.player, { x: destination.hostile[0], z: destination.hostile[1] });
+      advanceCombat(.6);
+      expect(cb.stance.friend).toBe(friend);
+      expect(rt.monsters[friend].mode).toBe("script");
+      Object.assign(rt.player, { x: destination.safe[0], z: destination.safe[1] });
+      combatTick(.01);
+      expect(cb.stance.friend).toBeNull();
+      const m = rt.monsters[friend];
+      expect(m.mode).toBe("follow");
+      expect(m.look).toBeNull();
+      expect(m.target).toBeNull();
+      expect(isWalkable(m.x, m.z, gatesOf(getGame().progress), MONSTERS[friend].radius, MONSTERS[friend].can.includes("swim"))).toBe(true);
+      if (COMBAT[friend].stance === "ride") {
+        expect(isWalkable(rt.player.x, rt.player.z, gatesOf(getGame().progress), PLAYER_R)).toBe(true);
+        expect(rt.player.y).toBeCloseTo(standY(rt.player.x, rt.player.z, getGame().progress.solved));
+      } else {
+        expect(cb.stance.leaving).toBe(friend);
+        advanceCombat(.6);
+        expect(cb.stance.leaving).toBeNull();
+      }
+    });
+  }
+
+  for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
+    it(`projects ${friend}'s dismount away from the Hollow campfire`, () => {
+      setGame(g => ({ progress: { ...g.progress, active: friend } }));
+      const perched = COMBAT[friend].stance !== "ride";
+      Object.assign(rt.player, perched ? { x: -15.1, z: 57.3 } : { x: -17.2, z: 56 });
+      Object.assign(cb.stance, { friend, k: 1 });
+      rt.monsters[friend].mode = "script";
+      combatTick(.01);
+      const m = rt.monsters[friend];
+      expect(Math.hypot(m.x + 16, m.z - 56)).toBeGreaterThanOrEqual(.65 + MONSTERS[friend].radius);
+      expect(isWalkable(m.x, m.z, gatesOf(getGame().progress), MONSTERS[friend].radius, MONSTERS[friend].can.includes("swim"))).toBe(true);
+    });
+  }
+
+  for (const mode of ["script", "talk"] as const) {
+    it(`preserves ${mode} ownership while a scene runs`, async () => {
+      Object.assign(cb.stance, { friend: "leafy", k: 1 });
+      rt.monsters.leafy.mode = mode;
+      let finish!: () => void;
+      const scene = run(() => new Promise<void>(resolve => { finish = resolve; }));
+      try {
+        combatTick(.01);
+        expect(cb.stance.friend).toBeNull();
+        expect(rt.monsters.leafy.mode).toBe(mode);
+      } finally {
+        finish();
+        await scene;
+      }
+    });
+  }
+});
 
 describe("facing-directed player attacks", () => {
   for (const friend of ["bubbo", "puff", "ember"] as const) {
