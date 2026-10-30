@@ -18,6 +18,8 @@ import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
+import { debugEnabled } from "./debugAccess";
+import { useDebug } from "./debugState";
 
 /**
  * One simulation step (called first every frame): player movement, monster
@@ -40,6 +42,7 @@ export function tick(dt: number) {
 
   const picking = rt.player.action?.kind === "pick" && rt.time - rt.player.action.t0 < PICK_TIME;
   movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen && !picking);
+  if (debugEnabled && useDebug.getState().noclip) return;
 
   const act2 = g.progress.act2.started;
   for (const id of LIVE_MONSTERS) {
@@ -155,6 +158,17 @@ function movePlayer(dt: number, canMove: boolean) {
   }
   const rx = -fz;
   const rz = fx;
+  if (debugEnabled && useDebug.getState().noclip) {
+    const speed = keys.has("AltLeft") || keys.has("AltRight") ? 36 : 12;
+    p.vx = p.vz = 0;
+    if (canMove) {
+      p.x += (fx * iy + rx * ix) * speed * dt;
+      p.z += (fz * iy + rz * ix) * speed * dt;
+      p.y += ((keys.has("Space") ? 1 : 0) - (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 1 : 0)) * speed * dt;
+    }
+    p.speed = Math.hypot(ix, iy) * speed;
+    return;
+  }
   const walk = WALK * speedScale();
   const wx = (fx * iy + rx * ix) * walk;
   const wz = (fz * iy + rz * ix) * walk;

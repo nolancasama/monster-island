@@ -1,3 +1,5 @@
+import { debugPaused } from "../game/debugState";
+
 /** Held keys (by physical code, so WASD works on JIS keyboards and with the IME on). */
 export const keys = new Set<string>();
 
@@ -19,6 +21,7 @@ function isTyping(e: KeyboardEvent): boolean {
 /** Install listeners. `onPress` receives fresh presses only (no auto-repeat). */
 export function installKeyboard(onPress: (code: string, e: KeyboardEvent) => void): () => void {
   const down = (e: KeyboardEvent) => {
+    if (debugPaused()) return;
     if (isTyping(e)) return;
     const fresh = !keys.has(e.code) && !e.repeat;
     keys.add(e.code);

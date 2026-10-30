@@ -10,6 +10,7 @@ import type { MonsterId } from "../types";
 import { recognition, HARD_ERRORS } from "../../audio/recognition";
 import { tts } from "../../audio/tts";
 import { audio } from "../../audio/audio";
+import { DebugScriptCancelled, debugGuard, debugInputPaused, debugWait, onDebugScriptCancel } from "../debugLifecycle";
 
 /**
  * The English interaction layer. Everything the student says or chooses goes
@@ -60,6 +61,7 @@ interface Active {
   done: boolean;
   stopListening: (() => void) | null;
   back: Mode;
+  speechVersion: number;
 }
 
 let active: Active | null = null;
@@ -89,6 +91,7 @@ function voiceOf(by: Speaker): { pitch: number; rate: number } {
 }
 
 export function speak(text: string, by: Speaker = "game"): Promise<void> {
+  if (debugInputPaused()) return Promise.resolve();
   return tts.speak(text, voiceOf(by));
 }
 
@@ -140,10 +143,10 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
   };
   const back: Mode = g.mode === "busy" ? "busy" : "explore";
   setGame({ prompt, mode: "ask", line: null });
-  return new Promise((resolve) => {
-    active = { req, resolve, done: false, stopListening: null, back };
+  return debugGuard(new Promise<PhraseId | null>((resolve) => {
+    active = { req, resolve, done: false, stopListening: null, back, speechVersion: 0 };
     void readOpening(req, prompt.id);
-  });
+  }));
 }
 
 async function readOpening(req: AskRequest, id: number) {
@@ -167,6 +170,7 @@ async function readSentences(id: number) {
 
 /** Replay (🔊): the sentence to say, or in mic-free mode every choice in order (listening, not a give-away). */
 export async function replay() {
+  if (debugInputPaused()) return;
   const p = getGame().prompt;
   if (!p || p.status === "listening") return;
   tts.cancel();
@@ -204,11 +208,12 @@ function succeed(id: PhraseId) {
   audio.play("correct");
   update({ status: "correct", matched: id, wrongId: null });
   updateProgress((p) => noteSaid(p, id));
-  window.setTimeout(() => {
+  void debugWait(fastMode() ? 60 : 600).then(() => {
+    if (active !== a) return;
     active = null;
     if (getGame().prompt?.status === "correct") setGame({ prompt: null, mode: a.back });
     a.resolve(id);
-  }, fastMode() ? 60 : 600);
+  }).catch(ignoreDebugCancellation);
 }
 
 function accepted(id: PhraseId): boolean {
@@ -219,6 +224,7 @@ function accepted(id: PhraseId): boolean {
 
 /** Space / 🎤: start one listening session (or end the current one early). */
 export function micPress() {
+  if (debugInputPaused()) return;
   const a = active;
   const p = getGame().prompt;
   if (!a || a.done || !p) return;
@@ -234,13 +240,14 @@ export function micPress() {
   const speechOptions = [...new Set(a.req.kind === "choice" ? [...a.req.options, ...(a.req.speechAliases ?? [])] : [a.req.options[0]])].map((id) => PHRASES[id]);
   let last: Judgement = { kind: "none", heard: "" };
   let hard = false;
+  const speechVersion = ++a.speechVersion;
   audio.setListening(true);
   audio.play("micOn");
   update({ status: "listening", heard: "", reading: false, wrongId: null });
   a.stopListening = recognition.listen(
     {
       onResult(alts) {
-        if (a.done) return;
+        if (a.done || a.speechVersion !== speechVersion || debugInputPaused()) return;
         const j = judgeSpeech(alts, speechOptions);
         if (alts[0]) update({ heard: alts[0] });
         if (j.kind === "match" && accepted(j.id)) {
@@ -251,11 +258,12 @@ export function micPress() {
         last = j;
       },
       onError(err) {
+        if (a.speechVersion !== speechVersion) return;
         if (HARD_ERRORS.has(err)) hard = true;
       },
       onEnd() {
         audio.setListening(false);
-        if (a.done) return;
+        if (a.done || a.speechVersion !== speechVersion || debugInputPaused()) return;
         a.stopListening = null;
         audio.play("micOff");
         miss(last, hard);
@@ -281,6 +289,7 @@ function miss(j: Judgement, hard: boolean) {
 
 /** Tap / click / number key on a sentence. */
 export function choose(id: PhraseId) {
+  if (debugInputPaused()) return;
   const a = active;
   const p = getGame().prompt;
   if (!a || a.done || !p || !p.buttons || p.status === "listening") return;
@@ -305,6 +314,7 @@ export function chooseIndex(i: number) {
 }
 
 export function cancelAsk() {
+  if (debugInputPaused()) return;
   const p = getGame().prompt;
   if (!p?.cancellable || p.status === "correct") return;
   tts.cancel();
@@ -326,17 +336,20 @@ export function say(by: Speaker, en: string, ja?: string, extra: Partial<Line> =
   const line: Line = { id: lineId++, by, en, ja, ...extra };
   setGame({ line, mode: getGame().mode === "busy" ? "busy" : "talk", prompt: null });
   void speak(en, by);
-  return new Promise((resolve) => {
+  return debugGuard(new Promise<void>((resolve) => {
     lineDone = () => {
       lineDone = null;
       resolve();
     };
-    if (fastMode()) window.setTimeout(() => nextLine(), 30);
-  });
+    if (fastMode()) void debugWait(30).then(() => {
+      if (getGame().line?.id === line.id) nextLine();
+    }).catch(ignoreDebugCancellation);
+  }));
 }
 
 /** Next ▶ (click, E, Space, Enter). */
 export function nextLine() {
+  if (debugInputPaused()) return;
   if (!getGame().line || !lineDone) return;
   tts.cancel();
   audio.play("tick");
@@ -355,5 +368,35 @@ export function fastMode(): boolean {
 
 /** A pause that test runs skip. */
 export function wait(ms: number): Promise<void> {
-  return new Promise((r) => window.setTimeout(r, fastMode() ? Math.min(ms, 40) : ms));
+  return debugWait(fastMode() ? Math.min(ms, 40) : ms);
 }
+
+/** Stop an in-flight microphone session when the tester opens the menu. */
+export function suspendDebugSpeech() {
+  tts.cancel();
+  const stop = active?.stopListening;
+  if (active) {
+    active.speechVersion++;
+    active.stopListening = null;
+  }
+  stop?.();
+  audio.setListening(false);
+  const prompt = getGame().prompt;
+  if (prompt) update({ status: prompt.status === "listening" ? "ready" : prompt.status, reading: false });
+}
+
+function ignoreDebugCancellation(error: unknown) {
+  if (!(error instanceof DebugScriptCancelled)) throw error;
+}
+
+onDebugScriptCancel(() => {
+  if (active) {
+    active.done = true;
+    active.stopListening?.();
+    active.resolve(null);
+    active = null;
+  }
+  lineDone = null;
+  tts.cancel();
+  audio.setListening(false);
+});

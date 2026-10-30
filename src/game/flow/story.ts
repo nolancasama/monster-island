@@ -68,7 +68,7 @@ export function hasSaved(): boolean {
 // ------------------------------------------------------------ start
 
 /** Put the world in line with saved progress (palm moved, stones up, bridge fixed, rope up, companion beside you). */
-function applyWorld(p: Progress) {
+export function applyWorld(p: Progress) {
   rt.world = p.act3.world;
   rt.palm = rt.palmTarget = p.solved.includes("fallenPalm") ? 1 : 0;
   rt.vines = rt.palm;

@@ -3,6 +3,8 @@ import { cancelAsk, chooseIndex, hasLine, micPress, nextLine } from "./ask";
 import { interact, switchByIndex } from "./actions";
 import { audio } from "../../audio/audio";
 import { basicAttack, eat, specialAttack } from "../combat";
+import { debugEnabled } from "../debugAccess";
+import { debugPaused, useDebug } from "../debugState";
 
 export function openJournal(open = !getGame().journalOpen) {
   const g = getGame();
@@ -13,6 +15,7 @@ export function openJournal(open = !getGame().journalOpen) {
 
 /** Fresh key presses, routed by what is on screen. Movement keys are read per frame. */
 export function onKey(code: string) {
+  if (debugPaused() || (debugEnabled && useDebug.getState().noclip)) return;
   const g = getGame();
   if (g.screen !== "game") return;
 

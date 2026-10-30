@@ -2,6 +2,8 @@ import { useRef, type ReactNode } from "react";
 import type * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { rt } from "../game/runtime";
+import { debugEnabled } from "../game/debugAccess";
+import { debugPaused } from "../game/debugState";
 import { tick } from "../game/sim";
 import { FarLand, River, Rocks, Sea, SkyAndLights, Terrain, Vegetation } from "./Environment";
 import { Props } from "./Props";
@@ -18,7 +20,7 @@ import { useGame } from "../game/store";
 import { CloudIsle } from "./CloudIsle";
 import { VoyageBoat } from "./VoyageBoat";
 
-const collisionDebugAllowed = import.meta.env.DEV || new URLSearchParams(window.location.search).get("e2e") === "1";
+const collisionDebugAllowed = debugEnabled || new URLSearchParams(window.location.search).get("e2e") === "1";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -27,9 +29,9 @@ function Clock() {
   const frames = useRef({ n: 0, t: 0 });
   // Runs before everything else each frame.
   useFrame((state, dt) => {
-    const d = Math.min(dt, 0.1) * rt.timeScale;
+    const d = debugPaused() ? 0 : Math.min(dt, 0.1) * rt.timeScale;
     rt.time += d;
-    tick(d);
+    if (!debugPaused()) tick(d);
     perf.calls = state.gl.info.render.calls;
     perf.triangles = state.gl.info.render.triangles;
     const f = frames.current;

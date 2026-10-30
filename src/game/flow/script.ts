@@ -2,6 +2,7 @@ import { getGame, setGame } from "../store";
 import { rt } from "../runtime";
 import { groundY } from "../world/island";
 import type { Vec2 } from "../types";
+import { DebugScriptCancelled, debugScriptEpoch, debugWait } from "../debugLifecycle";
 
 /**
  * Scripted moments (conversations, powers, the intro and ending) run one at a
@@ -10,21 +11,25 @@ import type { Vec2 } from "../types";
  * control and the follow camera back at the end.
  */
 
-let running = false;
+let running: number | null = null;
 
 export function isRunning() {
-  return running;
+  return running !== null && running === debugScriptEpoch();
 }
 
 export async function run(fn: () => Promise<void>): Promise<void> {
-  if (running) return;
-  running = true;
+  if (isRunning()) return;
+  const generation = debugScriptEpoch();
+  running = generation;
   setGame({ mode: "busy", focus: null });
   rt.joy.x = rt.joy.y = 0;
   try {
     await fn();
+  } catch (error) {
+    if (!(error instanceof DebugScriptCancelled)) throw error;
   } finally {
-    running = false;
+    if (generation !== debugScriptEpoch()) return;
+    running = null;
     rt.player.frozen = false;
     rt.camera.mode = "follow";
     rt.camera.shot = null;
@@ -88,10 +93,10 @@ export async function fadeThrough(during: () => void | Promise<void>, ms = 450) 
   const fast = new URLSearchParams(location.search).get("fast") === "1";
   const step = fast ? 10 : ms;
   setGame({ fade: 1 });
-  await new Promise((r) => window.setTimeout(r, step));
+  await debugWait(step);
   await during();
   rt.camera.snap = true;
-  await new Promise((r) => window.setTimeout(r, fast ? 10 : 120));
+  await debugWait(fast ? 10 : 120);
   setGame({ fade: 0 });
-  await new Promise((r) => window.setTimeout(r, step));
+  await debugWait(step);
 }

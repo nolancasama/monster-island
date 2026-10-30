@@ -13,6 +13,8 @@ import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
+import { debugEnabled } from "./debugAccess";
+import { debugPaused, useDebug } from "./debugState";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -786,6 +788,20 @@ function knockOut(e: EnemyRt) {
   hint("coins");
 }
 
+/** Uses normal defeat bookkeeping so stage exits open after the cheat. */
+export function debugKillZone() {
+  if (!debugEnabled) return;
+  const zone = combatZoneAt(rt.player.x, rt.player.z);
+  for (const e of cb.enemies) if (e.zone === zone && alive(e)) knockOut(e);
+  if (onCloudIsle() && zone === "stormBeacon" && !getGame().progress.act3.beaconDefeated) {
+    cb.beacon.power = 0;
+    cb.beacon.active = false;
+    for (const pylon of cb.beacon.pylons) pylon.phase = "down";
+    cb.shots = [];
+    hooks.beaconDefeated?.();
+  }
+}
+
 function dropAt(x: number, z: number, kind: Drop["kind"], value: number, food?: FoodId) {
   const a = Math.random() * Math.PI * 2;
   const v = 1.2 + Math.random() * 1.4;
@@ -857,6 +873,7 @@ export function learn(step: TutorialStep) {
 // ------------------------------------------------------------ the frame
 
 export function combatTick(dt: number) {
+  if (debugPaused()) return;
   const g = getGame();
   if (g.screen !== "game" || !act2Live()) return;
   const world = onCloudIsle() ? "cloud" : "home";
@@ -1128,6 +1145,7 @@ function separate() {
 }
 
 function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
+  if (debugEnabled && useDebug.getState().invincible) return;
   if (rt.time < cb.safeUntil || cb.knockedOut) return;
   cb.vitals = hurt(cb.vitals, n);
   cb.safeUntil = rt.time + 1.1;

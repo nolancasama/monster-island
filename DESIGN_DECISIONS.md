@@ -1,5 +1,18 @@
 # Design Decisions
 
+## 2026-10-30 — Opt-in playtest debug controls
+
+- The debug menu and DEBUG badge are available only with `?debug=1` or in
+  the Vite development server. Ctrl+Shift+D and backquote toggle the menu;
+  Escape closes it. The open menu pauses simulation and captures input.
+- Debug sessions read, write, and reset only `mi.debug.save`; they never
+  read or migrate real saves. Ordinary sessions retain the existing save
+  keys and behavior. This keeps classroom play safe from accidental tester
+  state and makes the active debug session visible.
+- Named jumps reuse the test hook's placement code and establish story
+  prerequisites. Map travel and free flight are deliberate tester tools;
+  they do not change authored story, camera, puzzle, or combat rules.
+
 This file records meaningful product, UX, visual, architectural, or behavioral decisions for this project.
 
 For each significant decision, record:

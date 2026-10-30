@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
+import { useDebug } from "../game/debugState";
 import { getGame, useGame } from "../game/store";
 import { LIVE_MONSTERS, MONSTERS } from "../game/data/monsters";
 import { gatesOf, PLAYER_R, solidsFor, standY, type Gates } from "../game/world/collision";
@@ -187,6 +188,7 @@ function VisibleOverlay() {
 /** F3 is available only in development or in an explicitly opted-in test session. */
 export function CollisionOverlay() {
   const [visible, setVisible] = useState(false);
+  const debugVisible = useDebug(s => s.collision);
   useEffect(() => {
     const toggle = (event: KeyboardEvent) => {
       if (event.code !== "F3" || event.repeat) return;
@@ -196,5 +198,5 @@ export function CollisionOverlay() {
     window.addEventListener("keydown", toggle);
     return () => window.removeEventListener("keydown", toggle);
   }, []);
-  return visible ? <VisibleOverlay /> : null;
+  return visible || debugVisible ? <VisibleOverlay /> : null;
 }

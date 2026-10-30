@@ -15,6 +15,9 @@ import { tts } from "./audio/tts";
 import { audio } from "./audio/audio";
 import { bottomPanel } from "./scene/CameraRig";
 import { CloudStory } from "./ui/CloudStory";
+import { debugEnabled } from "./game/debugAccess";
+import { installDebugControls } from "./game/debugControls";
+import { DebugMenu } from "./ui/DebugMenu";
 
 /** Keep the camera's lens shift in step with the bottom panel's height. */
 function BottomPanels() {
@@ -43,6 +46,7 @@ function Fade() {
 
 export function App() {
   const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => installDebugControls(), []);
   useEffect(() => installKeyboard(onKey), []);
   useEffect(() => tts.onSpeakingChange((on) => audio.setSpeaking(on)), []);
   useEffect(() => installAutosave(), []);
@@ -70,6 +74,7 @@ export function App() {
       <ResultsScreen />
       <SettingsModal />
       <Fade />
+      {debugEnabled ? <DebugMenu /> : null}
     </div>
   );
 }

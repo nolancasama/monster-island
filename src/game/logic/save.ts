@@ -1,4 +1,5 @@
 import { MONSTERS, MONSTER_ORDER } from "../data/monsters";
+import { debugEnabled } from "../debugAccess";
 import { FOODS } from "../data/foods";
 import { OBSTACLES, gateOpen, newProgress, obstacleAvailable, type MonsterRecord, type Progress } from "./progress";
 import { PHRASES, type PhraseId } from "./english";
@@ -25,6 +26,7 @@ import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZ
  */
 
 export const SAVE_KEY = "mi.save.v4";
+export const DEBUG_SAVE_KEY = "mi.debug.save";
 export const SAVE_KEY_V3 = "mi.save.v3";
 export const SAVE_KEY_V2 = "mi.save.v2";
 export const SAVE_KEY_V1 = "mi.save.v1";
@@ -273,7 +275,7 @@ export function decodeSave(text: string | null): SaveData | null {
 
 export function readSave(): SaveData | null {
   try {
-    for (const key of [SAVE_KEY, SAVE_KEY_V3, SAVE_KEY_V2, SAVE_KEY_V1]) {
+    for (const key of debugEnabled ? [DEBUG_SAVE_KEY] : [SAVE_KEY, SAVE_KEY_V3, SAVE_KEY_V2, SAVE_KEY_V1]) {
       const save = decodeSave(localStorage.getItem(key));
       if (save) return save;
     }
@@ -285,7 +287,7 @@ export function readSave(): SaveData | null {
 
 export function writeSave(text: string) {
   try {
-    localStorage.setItem(SAVE_KEY, text);
+    localStorage.setItem(debugEnabled ? DEBUG_SAVE_KEY : SAVE_KEY, text);
   } catch {
     /* storage blocked on some managed devices */
   }
@@ -293,6 +295,7 @@ export function writeSave(text: string) {
 
 export function clearSave() {
   try {
+    if (debugEnabled) { localStorage.removeItem(DEBUG_SAVE_KEY); return; }
     localStorage.removeItem(SAVE_KEY);
     localStorage.removeItem(SAVE_KEY_V3);
     localStorage.removeItem(SAVE_KEY_V2);

@@ -1,22 +1,21 @@
+import { placePlayer, goToTarget } from "./travel";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { objective } from "./logic/progress";
-import { PLAYER_R, moveCircle, gatesOf, nearestWalkable, standY } from "./world/collision";
-import { BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, GATE_PILLARS, MAPLE, MONSTER_STONE, ROPE } from "./world/island";
+import { PLAYER_R, moveCircle, gatesOf, standY } from "./world/collision";
+import { GATE_PILLARS, MAPLE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
-import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
 import { cb, companionVisible, stageStatus } from "./combat";
 import { travelCombat } from "./combat";
-import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ELECTRIC_PANELS, electricPanelActive, electricPanelPhase, HOLLOW, OBSERVATORY, type CloudAreaId } from "./world/cloudisle";
+import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_ELECTRIC_PANELS, electricPanelActive, electricPanelPhase, type CloudAreaId } from "./world/cloudisle";
 import { newAct3, type Act3 } from "./logic/act3";
 import { decodeSave, encodeSave } from "./logic/save";
 import { cloudView } from "../scene/CloudIsle";
-import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
 
 /**
  * Test hook (only with ?e2e=1): read game state and put the player next to
@@ -24,53 +23,6 @@ import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT
  */
 export function installE2eHook(seed: number) {
   seedChoices(seed);
-  const place = (x: number, z: number, faceX: number, faceZ: number) => {
-    const p = nearestWalkable(x, z, PLAYER_R, gatesOf(getGame().progress));
-    rt.player.x = p.x;
-    rt.player.z = p.z;
-    rt.player.y = standY(p.x, p.z, getGame().progress.solved);
-    rt.player.vx = rt.player.vz = 0;
-    rt.player.yaw = Math.atan2(faceX - p.x, faceZ - p.z);
-    rt.camera.snap = true;
-    return p;
-  };
-  const target = (name: string): { x: number; z: number } | null => {
-    if (getGame().progress.act3.world === "cloud") {
-      if (name.startsWith("cloud:")) return CLOUD_SPAWNS[name.slice(6) as CloudAreaId] ?? null;
-      if (name in CLOUD_SPAWNS) return CLOUD_SPAWNS[name as CloudAreaId];
-      if (name === "cloudGull") return CLOUD_DOCK.gull;
-      if (name === "observatoryRest") return OBSERVATORY.rest;
-      if (name === "beaconLift") return OBSERVATORY.lift;
-      if (name === "hollowRest") return HOLLOW.rest;
-      if (name === "tala" || name === "bo" || name === "kiko") return HOLLOW[name];
-      if (name in CLOUD_OBSTACLE_PLACE) return CLOUD_OBSTACLE_PLACE[name as keyof typeof CLOUD_OBSTACLE_PLACE];
-      const pickup = [...CLOUD_PICKUPS, ...CLOUD_CHESTS].find(p => p.id === name);
-      if (pickup) return pickup;
-    }
-    if (name === "maple") return { x: rt.maple.x, z: rt.maple.z };
-    if (name === "palm") return { x: FALLEN_PALM.x - 1, z: FALLEN_PALM.z };
-    if (name === "river") return CROSSING.west;
-    if (name === "stone") return MONSTER_STONE;
-    if (name === "sign") return FOREST_SIGN;
-    if (name === "bridge") return { x: BRIDGE.x, z: BRIDGE.z1 + 0.6 };
-    if (name === "cliff" || name === "rope") return { x: ROPE.x, z: ROPE.z + 0.2 };
-    if (name === "cliffTop") return CLIFF_TOP_SPOT;
-    if (name in PHASE3_PLACE) return PHASE3_PLACE[name as keyof typeof PHASE3_PLACE];
-    // Act 2 places.
-    if (name in ACT2_PLACE) return ACT2_PLACE[name as keyof typeof ACT2_PLACE];
-    if (name === "cliffDown") return { x: CLIFF_ROPE.top.x, z: CLIFF_ROPE.top.z - 0.5 };
-    if (name === "cliffUp") return { x: CLIFF_ROPE.foot.x, z: CLIFF_ROPE.foot.z + 0.6 };
-    if (name === "campRest") return CAMP2.rest;
-    if (name === "forkSign") return FORK_SIGN;
-    if (name === "lockedGate") return { x: SHORTCUT_GATE.x, z: SHORTCUT_GATE.z + 1.2 };
-    if (name in SERVICES) return SERVICES[name as ServiceId].keeper;
-    if (name.startsWith("zone:")) return ROUTE_MARKERS[name.slice(5) as ZoneId] ?? null;
-    const chest = CHESTS.find((c) => c.id === name);
-    if (chest) return chest;
-    if ((LIVE_MONSTERS as string[]).includes(name)) return rt.monsters[name as keyof typeof rt.monsters];
-    const src = FOOD_SOURCES.find((s) => s.id === name || s.food === name);
-    return src ?? null;
-  };
   const api = {
     state() {
       const g = getGame();
@@ -145,29 +97,7 @@ export function installE2eHook(seed: number) {
       };
     },
     /** Stand next to a named thing (a monster, a food, maple, palm, river, stone), facing it. */
-    goTo(name: string, dist = 1.6) {
-      const t = target(name);
-      if (!t) throw new Error(`no target ${name}`);
-      const a = Math.atan2(rt.player.x - t.x, rt.player.z - t.z);
-      // Obstacles are approached from the side the player arrives on.
-      // Act 2: unlocks are asked from their own standing spot; keepers are faced across their counter.
-      if (name in ACT2_PLACE) {
-        const f = ACT2_PLACE[name as keyof typeof ACT2_PLACE];
-        const face = ({ groveLilies: { x: 39, z: -223 }, canopyVines: { x: 106, z: -218 }, canopyRope: { x: 106, z: -227.5 }, causewayGate: SHORTCUT_GATE } as Record<string, { x: number; z: number }>)[name];
-        return place(f.x, f.z, face.x, face.z);
-      }
-      if (name in SERVICES) {
-        const k = SERVICES[name as ServiceId].keeper;
-        return place(k.x + Math.sin(k.yaw) * 1.7, k.z + Math.cos(k.yaw) * 1.7, k.x, k.z);
-      }
-      const near =
-        name === "river"
-          ? { x: t.x - 0.2, z: t.z }
-          : name === "bridge" || name === "cliff" || name === "rope" || name in PHASE3_PLACE
-            ? { x: t.x, z: t.z + dist * 0.6 }
-            : { x: t.x + Math.sin(a) * dist, z: t.z + Math.cos(a) * dist };
-      return place(near.x, near.z, name === "river" ? CROSSING.east.x : t.x, name === "river" ? CROSSING.east.z : t.z);
-    },
+    goTo: goToTarget,
     /** Collision-respecting movement probe: unlike teleport this cannot cross gates. */
     moveTo(x: number, z: number) {
       const p = rt.player;
@@ -176,7 +106,7 @@ export function installE2eHook(seed: number) {
       return q;
     },
     teleport(x: number, z: number, yaw = 0, snap = true) {
-      place(x, z, x + Math.sin(yaw), z + Math.cos(yaw));
+      placePlayer(x, z, x + Math.sin(yaw), z + Math.cos(yaw));
       rt.camera.snap = snap;
     },
     /** Pin the camera (screenshots). */
@@ -223,7 +153,7 @@ export function installE2eHook(seed: number) {
     cloudArea(area: CloudAreaId) {
       if (getGame().progress.act3.world !== "cloud" || !CLOUD_SPAWNS[area]) throw new Error("Cloud world must be active");
       const at = CLOUD_SPAWNS[area];
-      return place(at.x,at.z,at.x,at.z+1);
+      return placePlayer(at.x,at.z,at.x,at.z+1);
     },
     /** Slow or freeze the game clock (0 = paused) for visual captures. */
     timeScale(k: number) {
@@ -256,7 +186,7 @@ export function installE2eHook(seed: number) {
     nearEnemy(i: number, dist = 3) {
       const e = cb.enemies[i];
       const a = Math.atan2(rt.player.x - e.x, rt.player.z - e.z);
-      return place(e.x + Math.sin(a) * dist, e.z + Math.cos(a) * dist, e.x, e.z);
+      return placePlayer(e.x + Math.sin(a) * dist, e.z + Math.cos(a) * dist, e.x, e.z);
     },
     /** Act 2: set the live HP (tests of damage, eating and knock-outs). */
     setHp(hp: number) {
