@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { rt } from "../game/runtime";
 import {
   APPLE_TREES,
@@ -241,25 +242,37 @@ const SYMBOL_COLOR: Record<MonsterId, string> = { leafy: "#6dff5a", bubbo: "#4fc
 
 function MonsterStone() {
   const stone = useMemo(monsterStoneGeometry, []);
-  const symbols = useMemo(() => MONSTER_ORDER.map((id) => symbolGeometry(id)), []);
-  const mats = useMemo(() => MONSTER_ORDER.map(() => new THREE.MeshBasicMaterial({ color: "#3d423a" })), []);
+  // The eastward beach camera sees the whole stone. Batch its five symbols
+  // without changing their positions or individually animated light colours.
+  const symbols = useMemo(() => {
+    const parts = MONSTER_ORDER.map((id, i) => symbolGeometry(id).translate(SOCKETS[i][0], SOCKETS[i][1], .4));
+    const counts = parts.map(p => p.attributes.position.count);
+    const geometry = mergeGeometries(parts)!;
+    parts.forEach(p => p.dispose());
+    return { geometry, counts };
+  }, []);
+  const symbolMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true }), []);
   const glows = useMemo(() => MONSTER_ORDER.map((id) => additiveSprite(SYMBOL_COLOR[id], 0)), []);
   const lit = useMemo(() => new THREE.Color(), []);
   const dark = useMemo(() => new THREE.Color("#3d423a"), []);
   useFrame(() => {
+    const colors = symbols.geometry.attributes.color as THREE.BufferAttribute;
+    let offset = 0;
     MONSTER_ORDER.forEach((id, i) => {
       const k = id === "lumo" ? rt.starGlow : rt.stoneGlow[id];
-      mats[i].color.copy(dark).lerp(lit.set(SYMBOL_COLOR[id]), k);
+      lit.set(SYMBOL_COLOR[id]).lerp(dark, 1 - k);
+      for (let j = 0; j < symbols.counts[i]; j++) colors.setXYZ(offset++, lit.r, lit.g, lit.b);
       glows[i].opacity = k * (0.55 + Math.sin(rt.time * 2.5 + i) * 0.15);
     });
+    colors.needsUpdate = true;
   });
   const [x, y, z] = at(MONSTER_STONE.x, MONSTER_STONE.z);
   return (
     <group position={[x, y, z]} rotation={[0, MONSTER_STONE.yaw, 0]}>
       <mesh geometry={stone} material={flatMat} />
+      <mesh geometry={symbols.geometry} material={symbolMat} />
       {MONSTER_ORDER.map((id, i) => (
         <group key={id} position={[SOCKETS[i][0], SOCKETS[i][1], 0.4]}>
-          <mesh geometry={symbols[i]} material={mats[i]} />
           <sprite material={glows[i]} scale={[1, 1, 1]} />
         </group>
       ))}

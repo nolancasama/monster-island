@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { GATE_PILLARS, LAVA, SANCTUARY_GATE, groundY } from "../game/world/island";
-import { additiveSprite, flatMat, glowTexture, occluderMat } from "./materials";
+import { flatMat, glowTexture, occluderMat } from "./materials";
 import {
   gardenGeometry,
   CAVE_TORCHES,
@@ -68,16 +68,31 @@ function Lava() {
 
 function Cave() {
   const flames = useRef<THREE.Mesh>(null);
-  const halos = useRef<THREE.Group>(null);
+  const halos = useRef<THREE.InstancedMesh>(null);
+  const haloPose = useMemo(() => new THREE.Object3D(), []);
   const interior = useMemo(caveInteriorGeometry, []);
   const insideMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, color: "#050507" }), []);
-  const haloMat = useMemo(() => additiveSprite("#ff8d29", 0.6), []);
+  const haloMat = useMemo(() => new THREE.MeshBasicMaterial({ map: glowTexture(), color: "#ff8d29",
+    transparent: true, opacity: .6, depthWrite: false, blending: THREE.AdditiveBlending }), []);
   const torches = useMemo(() => caveTorchGeometry(false), []);
   const fire = useMemo(() => caveTorchGeometry(true), []);
   const flameMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true }), []);
-  useFrame(() => {
+  useFrame(({ camera }) => {
     insideMat.color.setRGB(0.006 + rt.cave * 0.85, 0.006 + rt.cave * 0.47, 0.008 + rt.cave * 0.2);
-    if (halos.current) halos.current.visible = rt.cave > 0.01;
+    if (halos.current) {
+      halos.current.visible = rt.cave > .01;
+      if (halos.current.visible) {
+        CAVE_TORCHES.forEach((t, i) => {
+          haloPose.position.set(t.x, groundY(t.x, t.z) + 2.1, t.z);
+          haloPose.quaternion.copy(camera.quaternion);
+          haloPose.scale.set(2.5, 2.5, 1);
+          haloPose.updateMatrix();
+          halos.current!.setMatrixAt(i, haloPose.matrix);
+        });
+        halos.current.instanceMatrix.needsUpdate = true;
+        halos.current.computeBoundingSphere();
+      }
+    }
     if (flames.current) {
       flames.current.visible = rt.cave > 0.01;
       flameMat.color.setRGB(1, 0.94 + Math.sin(rt.time * 9) * 0.05, 0.85);
@@ -87,9 +102,9 @@ function Cave() {
     <mesh geometry={interior} material={insideMat} />
     <mesh geometry={torches} material={flatMat} />
     <mesh ref={flames} geometry={fire} material={flameMat} />
-    <group ref={halos}>
-      {CAVE_TORCHES.map((t, i) => <sprite key={i} position={at(t.x, t.z, 2.1)} scale={[2.5, 2.5, 1]} material={haloMat} />)}
-    </group>
+    <instancedMesh ref={halos} args={[undefined, haloMat, CAVE_TORCHES.length]}>
+      <planeGeometry args={[1, 1]} />
+    </instancedMesh>
   </group>;
 }
 

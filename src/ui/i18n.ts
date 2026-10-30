@@ -17,8 +17,8 @@ export const UI = {
   next: { en: "Next", ja: "つぎへ" },
   journal: { en: "Journal", ja: "ずかん" },
   micBlocked: { en: "Microphone is off: tap the sentences.", ja: "マイクが つかえないので タップで こたえよう" },
-  move: { en: "Move: WASD / arrows. Drag to look.", ja: "いどう: WASD / やじるし。ドラッグで みまわす" },
-  moveTouch: { en: "Move with the stick. Drag to look.", ja: "スティックで いどう。ドラッグで みまわす" },
+  move: { en: "Move: WASD / arrows.", ja: "いどう: WASD / やじるし。" },
+  moveTouch: { en: "Move with the stick.", ja: "スティックで いどう。" },
   switch: { en: "Open the journal (M) and choose a friend!", ja: "ずかん(M)で ともだちを えらぼう!" },
   // Act 2's tutorial (each shows until it is understood).
   attack: { en: "An enemy! Press J to attack. Hold J to keep going!", ja: "てきだ! J で こうげき。おしつづけると れんぞく こうげき!" },

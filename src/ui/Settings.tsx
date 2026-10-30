@@ -61,7 +61,6 @@ export function SettingsModal() {
         <Toggle label="Slow voice" ja="ゆっくり よむ" on={s.slowVoice} onChange={(slowVoice) => set({ slowVoice })} id="slow" />
         <Slider label="Music" ja="おんがく" value={s.music} onChange={(music) => set({ music })} />
         <Slider label="Sounds" ja="こうかおん" value={s.sfx} onChange={(sfx) => set({ sfx })} />
-        <Slider label="Camera speed" ja="カメラ" value={s.cameraSensitivity} min={0.4} max={2} step={0.1} onChange={(cameraSensitivity) => set({ cameraSensitivity })} />
         {screen !== "title" && (
           <button
             className="secondary"

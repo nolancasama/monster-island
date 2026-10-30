@@ -1,15 +1,7 @@
 import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
-import { inLowland } from "./world/lowland";
 import { region } from "./world/region";
-
-export const LOWLAND_CAMERA = { yaw: 0, pitch: 0.55, dist: 10, ahead: 3 };
-
-/** The cliff rope and basin use authored framing rather than pointer orbit. */
-export function fixedCamera() {
-  return region.world === "cloud" || (rt.player.climbY !== null && rt.player.z < -140) || inLowland(rt.player.x, rt.player.z);
-}
 
 /**
  * Mutable per-frame state shared by the scene, input and game flow. Kept out
@@ -151,7 +143,8 @@ export const rt = {
     shot: null as CameraShot | null,
     snap: false,
     /** Semantic framing and transition completion, exposed read-only by the capture hook. */
-    framing: "orbit" as "orbit" | "lowland" | "cloud" | "rope" | "shot" | "title" | "results",
+    framing: "fixed" as "fixed" | "lowland" | "cloud" | "rope" | "shot" | "title" | "results",
+    profile: "west-beach",
     settled: false,
     pos: { x: 0, y: 6, z: 6 } as Vec3,
     target: { x: 0, y: 1, z: 0 } as Vec3
@@ -247,7 +240,8 @@ export function resetRuntime() {
   rt.camera.pitch = 0.46;
   rt.camera.dist = 9;
   rt.camera.snap = true;
-  rt.camera.framing = "orbit";
+  rt.camera.framing = "fixed";
+  rt.camera.profile = "west-beach";
   rt.camera.settled = false;
   for (const id of MONSTER_ORDER) rt.monsters[id] = monsterStart(id);
   rt.taken.clear();

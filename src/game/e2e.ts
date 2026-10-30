@@ -117,7 +117,7 @@ export function installE2eHook(seed: number) {
         camera: {
           pos: { ...rt.camera.pos }, target: { ...rt.camera.target },
           mode: rt.camera.mode, yaw: rt.camera.yaw, pitch: rt.camera.pitch, dist: rt.camera.dist,
-          framing: rt.camera.framing, settled: rt.camera.settled,
+          framing: rt.camera.framing, profile: rt.camera.profile, settled: rt.camera.settled,
           offset: { x: rt.camera.pos.x - rt.player.x, y: rt.camera.pos.y - rt.player.y, z: rt.camera.pos.z - rt.player.z }
         },
         perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped },
@@ -175,8 +175,9 @@ export function installE2eHook(seed: number) {
       p.x=q.x;p.z=q.z;p.vx=p.vz=0;
       return q;
     },
-    teleport(x: number, z: number, yaw = 0) {
+    teleport(x: number, z: number, yaw = 0, snap = true) {
       place(x, z, x + Math.sin(yaw), z + Math.cos(yaw));
+      rt.camera.snap = snap;
     },
     /** Pin the camera (screenshots). */
     look(pos: [number, number, number], at: [number, number, number]) {

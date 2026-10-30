@@ -21,6 +21,75 @@ Do NOT record:
 
 Git is the source of truth for detailed code-change history.
 
+## 2026-10-30 — Gameplay polish Part 2 — decisions made while building
+
+### Camera
+
+- All gameplay follow cameras are authored in `src/scene/cameraProfiles.ts`.
+  The shared default is pitch 0.55, distance 10 m and look-ahead 3 m. Beach
+  headings follow the eastward route, the far bank and forests face north,
+  and the volcano trail follows its north-east ascent. The pier faces out to
+  sea; passages and bridges use closer framing. The courtyard has a wider,
+  raised view with the lens held 2 m east of the approach centre, to hold the
+  full pillar row and clear the foreground rim rock. Its bounded pan also fits
+  the player on the outer courtyard shoulders. A steeper overhead trial cleared
+  the player but cropped the lowland; the final 0.65 / 16 m / 5 m view preserves
+  the real forest beyond the lowered east wall as well as the gate.
+- Slice A correction: the outer-shoulder failures came from the capture
+  harness. Both x=57.5 and x=82.5 lie in the courtyard's 0.65 m entry dead
+  band; a snapped teleport discarded the incoming view and selected
+  `ember-slope`. The west capture also read the previous settled courtyard
+  state before the teleport rendered. Captures now consume a frame after
+  placement and approach each shoulder from the centre without snapping,
+  preserving the existing profile table and hysteresis. The east `busy`
+  state was explicitly set by `stand()`, not a story/cutscene/zone trigger:
+  `sim.ts` only calls story triggers in explore mode. Story and save behavior
+  remain unchanged. The contracted entry bounds are x=57.65–82.35; the
+  retained bounds include both tested shoulders. The correction belongs in
+  the harness, rather than widening the profile or removing its hysteresis.
+  The full four-pillar row and player remain required at
+  both shoulders and the approach centre; no reduced-landmark fallback.
+- Volcano-trail pitch is 0.25 with 3.5 m look-ahead, replacing its default
+  0.55 / 3 m view. The lower lens shows the uphill route, cave destination
+  and sky while keeping the player clear. Its existing one-second blends
+  into cliff-top and ember-slope retain their authored framing.
+- The same table owns the existing lowland framing and its continuous tip-down
+  over the last 5 m before the rope foot, the stable (+5,+4,-8) cliff-rope
+  offset, Cloud Isle's northward framing and taller sky view, and the beacon's
+  outward radial heading. A fixed north heading in the arena puts the lens
+  inside the mast, so its radial heading remains deliberate. Cinematic and
+  conversation shots, including the prologue rope shot, keep their cameras.
+- Follow profiles interpolate yaw by the shortest turn and framing over 1 s.
+  A 0.65 m Schmitt border retains the incoming view inside the dead band;
+  elapsed time alone never changes the selected profile. Tunnel clearance
+  clamps the desired and rendered lens below the roof during handoffs.
+  Movement continues using the rendered camera direction during blends.
+- Mouse drag, touch drag and wheel camera handlers are removed, along with
+  the drag hints and camera-speed slider. The saved settings schema stays
+  compatible; its old sensitivity value is simply unused. Touch detection
+  still exposes the movement stick and action buttons.
+- The eastward beach view initially measured 124 draw calls. The Monster
+  Stone's five separately coloured symbols now share one vertex-coloured
+  mesh, preserving their individual glow animations and placement while
+  saving four calls. The tunnel's existing torch halos likewise share one
+  billboard instance draw after its centre measured 63 calls. Positions,
+  colours, opacity and torch lighting are unchanged.
+- Deliberately updated camera assumptions: `camera.spec.ts` replaces manual
+  orbit cases with every-profile input, movement, blend, hysteresis and render
+  coverage; `loop.spec.ts` uses screen-back to return west over the river
+  rather than manually turning the lens; `continuity.spec.ts` expects fixed
+  prologue framing after returning up the rope. The old sanctuary entrance
+  control sample (64.5,-127.2) touches a Part 1 boulder; the new sample
+  (70,-127.2) tests input on clear ground with the same vector assertions.
+- `act3.spec.ts` slows only the test clock around its fast-mode voyage reveal
+  capture. The full-suite run missed the one-frame airship-centre window at
+  both sizes, while an isolated rerun captured it; several matching frames
+  make the existing screenshot condition robust. Production cinematic timing
+  and cameras are unchanged.
+- Matched 1366×768 / 1280×800 gameplay captures and render measurements are
+  written to `.tmp/shots/polish2/camera/`, including both rope directions,
+  the enclosed tunnel and the courtyard's unsolved gate and east-wall view.
+
 ## 2026-10-29 — Act 3 Cloud Isle: brief accepted, with these changes
 
 The external brief "Act 3: Cloud Isle and the Hidden Family" is the product

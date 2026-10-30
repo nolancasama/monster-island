@@ -88,11 +88,11 @@ test("discover, befriend and use both monsters to reach the Monster Stone (mic-f
   expect(s.player.x).toBeGreaterThan(27.5);
 
   // The stepping stones stay: walk back west across them with the keyboard.
-  await hook(page, "teleport", 29, -1, -Math.PI / 2);
-  await hook(page, "setCamera", Math.PI / 2, 0.5, 9);
-  await page.keyboard.down("KeyW");
+  await hook(page, "teleport", 28.2, -1, -Math.PI / 2);
+  await waitFor(page, s => (s.camera as typeof s.camera & { settled: boolean }).settled, 30000, "fixed river view settled");
+  await page.keyboard.down("KeyS");
   await waitFor(page, (x) => x.player.x < 21, 20_000, "walked back over the stones");
-  await page.keyboard.up("KeyW");
+  await page.keyboard.up("KeyS");
   expect((await state(page)).player.y).toBeGreaterThan(-0.35);
 
   // ---- The Monster Stone ending.

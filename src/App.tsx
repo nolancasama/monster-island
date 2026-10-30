@@ -10,62 +10,11 @@ import { Banner } from "./ui/Act2Hud";
 import { installKeyboard } from "./input/keyboard";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave } from "./game/flow/story";
-import { getGame, setGame, useGame } from "./game/store";
-import { fixedCamera, rt } from "./game/runtime";
+import { setGame, useGame } from "./game/store";
 import { tts } from "./audio/tts";
 import { audio } from "./audio/audio";
 import { bottomPanel } from "./scene/CameraRig";
 import { CloudStory } from "./ui/CloudStory";
-
-/** Drag anywhere on the 3D view to turn the camera; the wheel zooms. */
-function useCameraDrag(ref: React.RefObject<HTMLDivElement | null>) {
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let id: number | null = null;
-    let lx = 0;
-    let ly = 0;
-    const down = (e: PointerEvent) => {
-      if (e.pointerType === "touch") setGame({ touch: true });
-      const target = e.target as HTMLElement;
-      if (target.closest(".ui, button, input, .modal")) return;
-      id = e.pointerId;
-      lx = e.clientX;
-      ly = e.clientY;
-    };
-    const move = (e: PointerEvent) => {
-      if (e.pointerId !== id) return;
-      const dx = e.clientX - lx;
-      const dy = e.clientY - ly;
-      lx = e.clientX;
-      ly = e.clientY;
-      const g = getGame();
-      if (g.screen !== "game" || rt.camera.mode !== "follow" || fixedCamera()) return;
-      const s = g.settings.cameraSensitivity;
-      rt.camera.yaw -= dx * 0.005 * s;
-      rt.camera.pitch = Math.min(1.1, Math.max(0.2, rt.camera.pitch + dy * 0.003 * s));
-    };
-    const up = (e: PointerEvent) => {
-      if (e.pointerId === id) id = null;
-    };
-    const wheel = (e: WheelEvent) => {
-      if (getGame().screen !== "game" || fixedCamera()) return;
-      rt.camera.dist = Math.min(14, Math.max(5, rt.camera.dist + Math.sign(e.deltaY) * 0.8));
-    };
-    el.addEventListener("pointerdown", down);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
-    el.addEventListener("wheel", wheel, { passive: true });
-    return () => {
-      el.removeEventListener("pointerdown", down);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      el.removeEventListener("wheel", wheel);
-    };
-  }, [ref]);
-}
 
 /** Keep the camera's lens shift in step with the bottom panel's height. */
 function BottomPanels() {
@@ -101,7 +50,12 @@ export function App() {
     if (window.matchMedia?.("(pointer: coarse)").matches) setGame({ touch: true });
     setGame({ hasSave: hasSaved() });
   }, []);
-  useCameraDrag(wrap);
+  // Touch anywhere can reveal the stick/buttons; the view has no drag controls.
+  useEffect(() => {
+    const detectTouch = (e: PointerEvent) => { if (e.pointerType === "touch") setGame({ touch: true }); };
+    window.addEventListener("pointerdown", detectTouch);
+    return () => window.removeEventListener("pointerdown", detectTouch);
+  }, []);
   const touch = useGame((s) => s.touch);
   return (
     <div className={`app ${touch ? "touch" : ""}`} ref={wrap}>

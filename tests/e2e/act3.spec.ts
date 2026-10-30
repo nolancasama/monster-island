@@ -124,14 +124,17 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     await tap(page,"itsSunny"); await tap(page,"itsWindy");
     // Observe and pause in the renderer's own frame: fast-mode reveal lasts only
     // a few frames, so a round trip after tapping Look can miss the airship.
+    // At SwiftShader's .1s clock cap the centre crossing can be one frame;
+    // slow only this capture so the RAF observer has several matching frames.
+    await hook(page,"timeScale",.1);
     const reveal = page.waitForFunction(() => {
       const api=(window as unknown as {__mi:{state():CloudState;timeScale(k:number):void}}).__mi;
       const s=api.state();
       if(s.act3.voyage.stage==="reveal" && s.act2.ship.visible && Math.abs(s.act2.ship.x)<15) {api.timeScale(0);return true;}
       return false;
     },undefined,{polling:"raf",timeout:60_000});
-    await tap(page,"look"); await reveal;
-    try {await shot("reveal");} finally {await hook(page,"timeScale",1);}
+    try {await tap(page,"look"); await reveal; await shot("reveal");}
+    finally {await hook(page,"timeScale",1);}
     await waitFor(page,s=>s.mode==="explore" && (s as CloudState).progress.act3.world==="cloud",60_000,"landed on Cloud Isle");
     expect((await cloudState(page)).progress.act3.voyageDone).toBe(true); await shot("dock");
     await hook(page,"cloudArea","stormbreakCoast");

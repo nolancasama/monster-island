@@ -182,7 +182,7 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
     await hook(page, "timeScale", 0);
     await capture("ascent-midpoint", width, height);
     await hook(page, "timeScale", 1);
-    await precondition(page, "return to prologue orbit", s => !s.player.climbing && s.mode === "explore" && s.player.z > -152 && s.camera.framing === "orbit" && s.camera.settled, 45000);
+    await precondition(page, "return to fixed prologue view", s => !s.player.climbing && s.mode === "explore" && s.player.z > -152 && s.camera.framing === "fixed" && s.camera.settled, 45000);
 
     for (const open of [false, true]) {
       await gates(page, open);
