@@ -9,7 +9,7 @@ import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
-import { PLAYER_R, gatesOf, moveCircle, standY } from "./world/collision";
+import { PLAYER_R, gatesOf, isWalkable, moveCircle, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
@@ -25,8 +25,8 @@ import { debugPaused, useDebug } from "./debugState";
  *   the town) puts everyone back to following. The position depends on the
  *   zone only, never on how near an enemy is, so it never flickers.
  * - Attacks happen only when the player presses J (basic) or K (special):
- *   friends never attack by themselves. Targeting is forgiving: the nearest
- *   enemy in front, else the nearest close by.
+ *   friends never attack by themselves. Projectiles follow the firing facing;
+ *   Leafy's melee and pull retain their forgiving target selection.
  * - Enemies notice, chase, wind up (visibly), lunge, recover, get knocked
  *   back and stunned, and are knocked out with a dizzy spin and a poof,
  *   dropping coins (and sometimes food or amber). They pause whenever a
@@ -48,7 +48,7 @@ export const currentCombatZone = (): CombatZone | null => onCloudIsle() ? cb.clo
 export const currentCloudZone = (): CloudAreaId | null => cb.cloudZones.current;
 const activeSpawns = () => onCloudIsle() ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
 
-/** The wind lanes bend projectiles and loose drops, never player movement. */
+/** Wind lanes still move loose drops; combat shots keep their launch velocity. */
 function projectileWind(x: number, z: number): { x: number; z: number } {
   return onCloudIsle() ? cloudWindAt(x, z, getGame().progress.act3.puzzles) : { x: 0, z: 0 };
 }
@@ -94,6 +94,8 @@ export interface Shot {
   y: number;
   z: number;
   vx: number;
+  /** Fixed launch slope; never follows an enemy after firing. */
+  vy?: number;
   vz: number;
   y1: number;
   life: number;
@@ -161,12 +163,14 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   const s = (cloud ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS)[i];
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
-    hp: ENEMIES[s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
+    hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
     hitT: -10, alertT: -10, pull: null, step: 0
   };
 }
 
 export const cb = {
+  /** Supplied by the scene's actual camera, including aspect and camera blends. */
+  onScreen: null as null | ((x: number, y: number, z: number) => boolean),
   beacon: newBeacon(),
   /** Live HP and MP (written into progress when the game saves). */
   vitals: { hp: MAX_HP, mp: { leafy: 100, bubbo: 100, puff: 100, ember: 100 } } as Vitals,
@@ -460,6 +464,17 @@ function canFight(): boolean {
 
 const alive = (e: EnemyRt) => e.state !== "ko" && e.state !== "gone";
 const awakeEnemies = (zone: CombatZone) => cb.enemies.filter((e) => e.zone === zone && alive(e) && e.state !== "idle" && e.state !== "return").length;
+export const isRanged = (kind: EnemyKind) => kind === "forestSpitter" || kind === "raiderShooter" || kind === "windSprite";
+const awakeRanged = (zone: CombatZone) => cb.enemies.filter(e => e.zone === zone && isRanged(e.kind) && alive(e) && e.state !== "idle" && e.state !== "return").length;
+const hasAttackSlot = (e: EnemyRt) => (!onCloudIsle() || awakeEnemies(e.zone) < 4) && (!isRanged(e.kind) || awakeRanged(e.zone) < 2);
+/** Replacement spawns retain the original HP, drops and rewards. */
+function spawnDef(e: EnemyRt) {
+  // Boat progress already names the destination while sendHome still handles
+  // the departing world's live enemies.
+  const spawns = cb.world === "cloud" ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
+  const spawn = e.i < 10000 ? spawns[e.i] : undefined;
+  return ENEMIES[spawn?.replaces ?? e.kind];
+}
 
 /** Incoming direction points towards the target: only J against the front is armoured. */
 export function crabDamage(kind: EnemyKind, damage: number, basic: boolean, yaw: number, ux: number, uz: number): number {
@@ -505,8 +520,9 @@ function originOf(f: CompanionId): { x: number; y: number; z: number } {
   return { x: pose.x + fx * 0.5, y: pose.y + 1.2, z: pose.z + fz * 0.5 };
 }
 
-function aimAt(target: EnemyRt | null, range: number): { x: number; z: number } {
+function aimAt(target: EnemyRt | null, range: number, targeted = true): { x: number; z: number } {
   const p = rt.player;
+  if (!targeted) return { x: p.x + Math.sin(p.yaw) * range, z: p.z + Math.cos(p.yaw) * range };
   // The pylon is a world target, using the same forgiving aim as ordinary foes.
   if (cb.beacon.active && currentCloudZone() === "stormBeacon") {
     const best = BEACON_PYLONS.map((q, i) => ({ ...q, i, d: Math.hypot(q.x - p.x, q.z - p.z) }))
@@ -536,8 +552,8 @@ export function basicAttack(): boolean {
   const size = up ? COMBAT[f].upgrade.size : 1;
   const dmg = move.damage * (up ? COMBAT[f].upgrade.damage : 1);
   const range = move.range * (move.shape === "whip" ? size : 1);
-  const target = pickTarget(move.shape === "whip" ? range + 1.5 : move.range);
-  const aim = aimAt(target, range);
+  const target = move.shape === "whip" ? pickTarget(range + 1.5) : null;
+  const aim = aimAt(target, range, move.shape === "whip");
   cb.ready.basic = rt.time + move.cooldown;
   cb.move = { friend: f, kind: "basic", t0: rt.time, tx: aim.x, tz: aim.z };
   const o = originOf(f);
@@ -559,13 +575,16 @@ export function basicAttack(): boolean {
     }
     audio.play("whip");
   } else {
-    const angles = COMBAT[f].upgrade.twin && up ? [-0.14, 0.14] : [0];
-    for (const a of angles) {
-      const y2 = yaw + a;
+    const offsets = COMBAT[f].upgrade.twin && up ? [-0.3, 0.3] : [0];
+    const life = move.range / move.speed!;
+    // Facing is planar. Lock the launch slope to the ground ahead so a low
+    // mouth-level bubble can travel uphill without aiming at an enemy.
+    const y1 = standY(aim.x, aim.z, getGame().progress.solved) + 0.55;
+    for (const offset of offsets) {
       cb.shots.push({
-        id: nextId++, shape: move.shape, owner: f, x: o.x, y: o.y, z: o.z, y1: target ? standY(target.x, target.z, getGame().progress.solved) + 0.55 : o.y - 0.4,
-        vx: Math.sin(y2) * move.speed!, vz: Math.cos(y2) * move.speed!, life: move.range / move.speed!, age: 0,
-        radius: move.radius * size, damage: dmg, knock: move.knock, stun: move.stun, size, basic: true
+        id: nextId++, shape: move.shape, owner: f, x: o.x + Math.cos(yaw) * offset, y: o.y, z: o.z - Math.sin(yaw) * offset, y1,
+        vx: Math.sin(yaw) * move.speed!, vy: (y1 - o.y) / life, vz: Math.cos(yaw) * move.speed!, life, age: 0,
+        radius: Math.min(1, move.radius * size), damage: dmg, knock: move.knock, stun: move.stun, size, basic: true
       });
     }
     audio.play(move.shape === "fireball" ? "fireball" : move.shape === "wind" ? "wind" : "bubble");
@@ -590,8 +609,9 @@ export function specialAttack(): boolean {
   cb.vitals = spent;
   cb.ready.special = rt.time + move.cooldown;
   const p = rt.player;
-  const target = pickTarget(move.shape === "burst" ? move.range : move.range + 1);
-  const aim = aimAt(target, move.range);
+  const targeted = move.shape === "pull" || move.shape === "burst";
+  const target = targeted ? pickTarget(move.shape === "burst" ? move.range : move.range + 1) : null;
+  const aim = aimAt(target, move.range, targeted);
   const yaw = Math.atan2(aim.x - p.x, aim.z - p.z);
   const ux = Math.sin(yaw), uz = Math.cos(yaw);
   if (cb.beacon.active) {
@@ -724,8 +744,8 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
   if (!alive(e)) return;
   const def = ENEMIES[e.kind];
   e.hp -= crabDamage(e.kind, damage, basic, e.yaw, ux, uz);
-  // Interrupting a sprite also disperses its in-flight puff.
-  if (e.kind === "windSprite") {
+  // Interrupting a ranged enemy also disperses its in-flight shot.
+  if (isRanged(e.kind)) {
     for (const s of cb.shots) if (s.source === e.i && s.hostile) s.life = 0;
   }
   e.hitT = rt.time;
@@ -743,7 +763,7 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
     e.state = "stun";
     e.timer = Math.max(stun, 0.25);
   }
-  if (onCloudIsle() && awakeEnemies(e.zone) > 4) {
+  if ((onCloudIsle() && awakeEnemies(e.zone) > 4) || (isRanged(e.kind) && awakeRanged(e.zone) > 2)) {
     // Damage and KO always count, even when all four attack slots are occupied.
     e.state = "idle";
     e.waiting = true;
@@ -754,7 +774,7 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
 }
 
 function knockOut(e: EnemyRt) {
-  const def = ENEMIES[e.kind];
+  const def = spawnDef(e);
   e.state = "ko";
   e.timer = 0.9;
   e.hp = 0;
@@ -943,7 +963,7 @@ function sendHome(zone: CombatZone) {
     e.wander = null;
     e.state = "idle";
     e.waiting = false;
-    e.hp = ENEMIES[e.kind].hp;
+    e.hp = spawnDef(e).hp;
   }
 }
 
@@ -976,6 +996,74 @@ function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | n
   return moved;
 }
 
+/** Check the whole sight line against scenery, closed gates and area borders.
+ * Requiring ground along the line also prevents firing across an unopened gap. */
+function rangedClear(e: EnemyRt): boolean {
+  if (e.zone !== currentCombatZone() || combatZoneAt(e.x, e.z) !== e.zone || cb.knockedOut) return false;
+  const gates = gatesOf(getGame().progress);
+  if (!isWalkable(e.x, e.z, gates, ENEMIES[e.kind].radius)) return false;
+  const y = standY(e.x, e.z, getGame().progress.solved) + 0.8;
+  if (!cb.onScreen?.(e.x, y, e.z)) return false;
+  const dx = rt.player.x - e.x, dz = rt.player.z - e.z;
+  const count = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.12));
+  for (let i = 1; i <= count; i++) {
+    const x = e.x + dx * i / count, z = e.z + dz * i / count;
+    if (combatZoneAt(x, z) !== e.zone || !isWalkable(x, z, gates, 0.08)) return false;
+  }
+  return true;
+}
+
+function updateRanged(e: EnemyRt, dt: number, distance: number) {
+  const def = ENEMIES[e.kind], p = rt.player;
+  const dx = (p.x - e.x) / (distance || 1), dz = (p.z - e.z) / (distance || 1);
+  // Recovery is a full pause between shots; backing away is still permitted.
+  if (distance < 3 && ["chase", "windup", "recover"].includes(e.state)) {
+    if (e.state === "windup") { e.state = "chase"; e.timer = 0; }
+    stepTo(e, e.x - dx * def.speed * dt, e.z - dz * def.speed * dt, dt, Math.atan2(dx, dz));
+    if (e.state === "recover" && e.timer <= 0) e.state = "chase";
+    return;
+  }
+  if (e.state === "recover") {
+    if (e.timer <= 0) e.state = "chase";
+    return;
+  }
+  if (e.state === "chase") {
+    if (currentCombatZone() !== e.zone || cb.knockedOut || Math.hypot(e.x - e.homeX, e.z - e.homeZ) > def.leash) {
+      e.state = "return";
+      return;
+    }
+    if (distance < 6) {
+      const step = Math.min(6 - distance, def.speed * dt);
+      stepTo(e, e.x - dx * step, e.z - dz * step, dt, Math.atan2(dx, dz));
+    } else if (distance > 9) moveEnemy(e, p.x, p.z, def.speed, dt);
+    else if (rangedClear(e)) {
+      e.state = "windup";
+      e.timer = def.windup;
+      e.yaw = Math.atan2(dx, dz);
+    }
+    return;
+  }
+  if (!rangedClear(e)) { e.state = "chase"; e.timer = 0; return; }
+  e.yaw = Math.atan2(dx, dz);
+  if (e.timer > 0) {
+    // Wind Sprites retain their authored sideways drift while charging.
+    // Movement belongs to the creature; the released shot never drifts.
+    if (e.kind === "windSprite") {
+      const drift = Math.sin(rt.time * 2 + e.i) * 0.65 * dt;
+      stepTo(e, e.x - dz * drift, e.z + dx * drift, dt, null);
+    }
+    return;
+  }
+  // Sample the player's position now, after the tell, and never steer again.
+  e.dx = dx; e.dz = dz;
+  const y = standY(e.x, e.z, getGame().progress.solved) + 0.9;
+  cb.shots.push({ id: nextId++, shape: e.kind === "windSprite" ? "wind" : e.kind === "raiderShooter" ? "fireball" : "bubble", owner: "puff", hostile: true, source: e.i,
+    x: e.x, y, z: e.z, y1: p.y + 0.8, vx: dx * 3.2, vy: (p.y + 0.8 - y) * 3.2 / (distance || 1), vz: dz * 3.2, life: 4, age: 0, radius: 0.42, damage: def.damage, knock: 0, stun: 0, size: 1 });
+  e.state = "recover";
+  e.timer = def.recover;
+  audio.play(e.kind === "windSprite" ? "wind" : e.kind === "raiderShooter" ? "fireball" : "bubble");
+}
+
 function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
   if (e.state === "gone") return;
   const def = ENEMIES[e.kind];
@@ -1002,13 +1090,17 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
   const dPlayer = Math.hypot(p.x - e.x, p.z - e.z);
   const dHome = Math.hypot(e.x - e.homeX, e.z - e.homeZ);
   e.timer -= dt;
+  if (isRanged(e.kind) && ["chase", "windup", "recover"].includes(e.state)) {
+    updateRanged(e, dt, dPlayer);
+    return;
+  }
   switch (e.state) {
     case "idle": {
       if (e.waiting) {
         if (e.timer > 0) return;
         e.waiting = false;
       }
-      if (here && dPlayer < def.notice && (!onCloudIsle() || awakeEnemies(e.zone) < 4)) {
+      if (here && dPlayer < def.notice && hasAttackSlot(e) && (!isRanged(e.kind) || rangedClear(e))) {
         e.state = "alert";
         e.timer = 0.55;
         e.alertT = rt.time;
@@ -1047,27 +1139,10 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
         if (e.kind === "stormCrab") e.yaw += Math.PI / 2;
         return;
       }
-      if (e.kind === "windSprite") {
-        const dx = (p.x - e.x) / (dPlayer || 1), dz = (p.z - e.z) / (dPlayer || 1);
-        const drift = Math.sin(rt.time * 1.8 + e.i) * def.speed;
-        stepTo(e, e.x + (dx * def.speed - dz * drift) * dt, e.z + (dz * def.speed + dx * drift) * dt, dt, Math.atan2(dx, dz));
-        return;
-      }
       moveEnemy(e, p.x, p.z, def.speed, dt);
       return;
     case "windup":
-      if (e.kind === "windSprite") {
-        const drift = Math.sin(rt.time * 2 + e.i) * 0.65 * dt;
-        stepTo(e, e.x - e.dz * drift, e.z + e.dx * drift, dt, null);
-      }
       if (e.timer <= 0) {
-        if (e.kind === "windSprite") {
-          cb.shots.push({ id: nextId++, shape: "wind", owner: "puff", hostile: true, source: e.i, x: e.x, y: standY(e.x, e.z, getGame().progress.solved) + 0.9, z: e.z, y1: p.y + 0.8, vx: e.dx * 3.2, vz: e.dz * 3.2, life: 3.5, age: 0, radius: 0.42, damage: def.damage, knock: 0.8, stun: 0, size: 1 });
-          e.state = "recover";
-          e.timer = def.recover;
-          audio.play("wind");
-          return;
-        }
         e.state = "lunge";
         e.timer = e.kind === "raiderDrone" ? 0.48 : e.kind === "thunderBeetle" ? 0.4 : 0.32;
         e.struck = false;
@@ -1106,14 +1181,14 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
       return;
     }
     case "return":
-      if (here && dPlayer < def.notice * 0.8 && dHome < def.leash * 0.7 && (!onCloudIsle() || awakeEnemies(e.zone) < 4)) {
+      if (here && dPlayer < def.notice * 0.8 && dHome < def.leash * 0.7 && hasAttackSlot(e) && (!isRanged(e.kind) || rangedClear(e))) {
         e.state = "chase";
         return;
       }
       if (moveEnemy(e, e.homeX, e.homeZ, def.speed * 0.8, dt) < 1e-4 || dHome < 0.3) {
         e.state = "idle";
         e.timer = 1;
-        e.hp = def.hp;
+        e.hp = spawnDef(e).hp;
       }
       return;
   }
@@ -1170,45 +1245,51 @@ export function wakeUp() {
 
 function updateShots(dt: number) {
   const solved = getGame().progress.solved;
+  const gates = gatesOf(getGame().progress);
   for (const s of cb.shots) {
     if (s.life <= 0) continue;
-    s.age += dt;
-    const wind = projectileWind(s.x, s.z);
-    s.vx += wind.x * dt;
-    s.vz += wind.z * dt;
-    s.x += s.vx * dt;
-    s.z += s.vz * dt;
-    s.y += (s.y1 - s.y) * Math.min(1, dt * 4);
-    if (s.hostile) {
-      const p = rt.player;
-      const v = Math.hypot(s.vx, s.vz) || 1;
-      if (Math.hypot(p.x - s.x, p.z - s.z) < playerRadius() + s.radius) {
-        // Puffs cause light damage but do not move the player: Cloud Isle wind never pushes them.
-        hurtPlayer(s.damage, s.vx / v, s.vz / v, 0);
+    // Swept substeps stop slow frames skipping thin walls or a target in the path.
+    const travel = Math.min(dt, Math.max(0, s.life - s.age));
+    const count = Math.max(1, Math.ceil(Math.hypot(s.vx, s.vz) * travel / 0.12));
+    const step = travel / count;
+    for (let n = 0; n < count && s.life > 0; n++) {
+      s.age += step;
+      s.x += s.vx * step;
+      s.y += (s.vy ?? 0) * step;
+      s.z += s.vz * step;
+      if (!isWalkable(s.x, s.z, gates, 0.12) || (s.hostile && combatZoneAt(s.x, s.z) !== currentCombatZone())) {
         s.life = 0;
+        break;
       }
-      if (combatZoneAt(s.x, s.z) !== currentCombatZone()) s.life = 0;
-      continue;
-    }
-    if (cb.beacon.active) {
-      const pylon = BEACON_PYLONS.findIndex((p, i) => cb.beacon.pylons[i].phase !== "down" && Math.hypot(p.x - s.x, p.z - s.z) < 1.05 + s.radius);
-      if (pylon >= 0) { strikePylon(pylon, s.owner); s.life = 0; continue; }
-    }
-    for (const e of cb.enemies) {
-      if (!alive(e) || e.zone !== currentCombatZone()) continue;
-      const r = ENEMIES[e.kind].radius + s.radius;
-      if (Math.abs(e.x - s.x) > r || Math.abs(e.z - s.z) > r || Math.hypot(e.x - s.x, e.z - s.z) > r) continue;
-      const v = Math.hypot(s.vx, s.vz) || 1;
-      hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
-      // Big bubbles and big fireballs splash the enemies next to the one they hit.
-      if (s.size > 1.3) {
-        for (const o of cb.enemies) if (o !== e && alive(o) && o.zone === e.zone && Math.hypot(o.x - e.x, o.z - e.z) < 1.8) hit(o, s.damage * 0.5, s.knock * 0.6, s.stun, (o.x - e.x) / 1.8, (o.z - e.z) / 1.8, s.owner, s.basic);
+      if (s.hostile) {
+        const p = rt.player;
+        const v = Math.hypot(s.vx, s.vz) || 1;
+        if (Math.hypot(p.x - s.x, p.z - s.z) < playerRadius() + s.radius) {
+          // Ranged shots cause light damage without moving the player.
+          hurtPlayer(s.damage, s.vx / v, s.vz / v, 0);
+          s.life = 0;
+        }
+        continue;
       }
-      s.life = 0;
-      break;
+      if (cb.beacon.active) {
+        const pylon = BEACON_PYLONS.findIndex((p, i) => cb.beacon.pylons[i].phase !== "down" && Math.hypot(p.x - s.x, p.z - s.z) < 1.05 + s.radius);
+        if (pylon >= 0) { strikePylon(pylon, s.owner); s.life = 0; continue; }
+      }
+      for (const e of cb.enemies) {
+        if (!alive(e) || e.zone !== currentCombatZone()) continue;
+        const r = ENEMIES[e.kind].radius + s.radius;
+        if (Math.abs(e.x - s.x) > r || Math.abs(e.z - s.z) > r || Math.hypot(e.x - s.x, e.z - s.z) > r) continue;
+        const v = Math.hypot(s.vx, s.vz) || 1;
+        hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
+        // Big bubbles and big fireballs splash the enemies next to the one they hit.
+        if (s.size > 1.3) {
+          for (const o of cb.enemies) if (o !== e && alive(o) && o.zone === e.zone && Math.hypot(o.x - e.x, o.z - e.z) < 1.8) hit(o, s.damage * 0.5, s.knock * 0.6, s.stun, (o.x - e.x) / 1.8, (o.z - e.z) / 1.8, s.owner, s.basic);
+        }
+        s.life = 0;
+        break;
+      }
+      if (s.y < standY(s.x, s.z, solved) + 0.1) s.life = 0;
     }
-    // Into a wall or the ground ahead: it pops.
-    if (s.y < standY(s.x, s.z, solved) + 0.1) s.life = 0;
   }
   cb.shots = cb.shots.filter((s) => s.age < s.life);
 }

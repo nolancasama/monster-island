@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ENEMIES } from "../data/combat";
 import {
   CLOUD_CHESTS, CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLES, CLOUD_ROUTE_REQUIRED,
   CLOUD_SPAWNS, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS, OBSERVATORY, BEACON,
@@ -73,12 +74,23 @@ describe("Cloud Isle slice A ground", () => {
   it("puts every enemy on its area ground, and projects invalid saved ground", () => {
     for (const e of CLOUD_ENEMY_SPAWNS) {
       expect(cloudZoneAt(e.x, e.z)).toBe(e.zone);
-      expect(cloudWalkable(e.x, e.z, ALL_OPEN, .5)).toBe(true);
+      expect(cloudWalkable(e.x, e.z, ALL_OPEN, ENEMIES[e.kind].radius), `${e.kind} ${e.x},${e.z}`).toBe(true);
     }
     const p = cloudNearestWalkable(999, -999, .35, {});
     expect(cloudWalkable(p.x, p.z, {}, .35)).toBe(true);
     expect(cloudNearestWalkable(NaN, Infinity, .35, {})).toEqual(CLOUD_DOCK.spawn);
     expect(cloudY(0, 90)).toBeGreaterThan(cloudY(0, 0));
+  });
+  it("adds shooter replacements on reachable Cloud Isle ground without changing encounter counts", () => {
+    const reach = flood(ALL_OPEN);
+    expect(["stormbreakCoast", "skyrootCanopy", "thunderGrotto", "ancientObservatory"].map(zone =>
+      CLOUD_ENEMY_SPAWNS.filter(e => e.zone === zone).length)).toEqual([6, 6, 6, 4]);
+    const shooters = CLOUD_ENEMY_SPAWNS.filter(e => e.kind === "raiderShooter");
+    expect(shooters.length).toBeGreaterThan(0);
+    for (const e of shooters) {
+      expect(reach(e.x, e.z, 1.5), `${e.zone} ${e.x},${e.z}`).toBe(true);
+      expect(["stormCrab", "raiderDrone"]).toContain(e.replaces);
+    }
   });
   it("supplies wind acceleration only as a projectile/light-prop query", () => {
     expect(cloudWindAt(-4, 20).x).toBeGreaterThan(0);
@@ -182,7 +194,7 @@ describe("Ancient Observatory and Storm Beacon ground", () => {
   it("places four mixed enemies on the observatory floor and keeps the arena bounded", () => {
     const enemies = CLOUD_ENEMY_SPAWNS.filter(e => e.zone === "ancientObservatory");
     expect(enemies).toHaveLength(4);
-    expect(new Set(enemies.map(e => e.kind))).toEqual(new Set(["windSprite", "raiderDrone", "thunderBeetle"]));
+    expect(new Set(enemies.map(e => e.kind))).toEqual(new Set(["windSprite", "raiderShooter", "thunderBeetle"]));
     expect(cloudY(0, 145)).toBe(22);
     expect(cloudY(0, 155)).toBeGreaterThan(22);
     expect(cloudY(0, 169)).toBe(37);

@@ -149,7 +149,7 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   await page.waitForTimeout(3000);
   s = await state(page);
   expect(s.act2.enemies[0].hp).toBe(20);
-  expect(s.act2.shots).toBe(0);
+  expect(s.act2.projectiles.filter(shot => !shot.hostile)).toHaveLength(0);
   expect(s.act2.enemies[0].state).not.toBe("idle");
 
   // J: the vine whip knocks it out; its coins come to the player.

@@ -15,7 +15,7 @@ export type CloudStageId = typeof CLOUD_STAGES[number];
 export const CLOUD_PUZZLES = ["coastWindmill", "coastCrate", "canopyVine", "canopyGlide", "canopyGust", "grottoRaft", "grottoBoiler", "obsLeafy", "obsBubbo", "obsPuff", "obsEmber"] as const;
 export const OBSERVATORY_PUZZLES = ["obsLeafy", "obsBubbo", "obsPuff", "obsEmber"] as const;
 export type CloudPuzzleId = typeof CLOUD_PUZZLES[number];
-export type CloudEnemyKind = "stormCrab" | "windSprite" | "raiderDrone" | "thunderBeetle";
+export type CloudEnemyKind = "stormCrab" | "windSprite" | "raiderDrone" | "raiderShooter" | "thunderBeetle";
 export interface CloudGates { cleared?: readonly string[]; solved?: readonly string[]; tunnelOpen?: boolean; observatoryLamps?: readonly string[] }
 const rect = (x0: number, x1: number, z0: number, z1: number): WalkShape => ({ kind: "rect", x0, x1, z0, z1 });
 const disc = (x: number, z: number, r: number): WalkShape => ({ kind: "disc", x, z, r });
@@ -164,10 +164,10 @@ export const CLOUD_PUZZLE_RULES: Record<CloudPuzzleId, { friend: CompanionId; ne
   obsPuff: { friend: "puff", need: "fly", command: "cmdBlow", noun: "the observatory turbine", result: { en: "The turbine spins! Puff's dial lamp lights up.", ja: "風車が回った！パフのランプがついた。" } },
   obsEmber: { friend: "ember", need: "fire", command: "cmdBurn", noun: "the observatory steam valve", result: { en: "Steam opens the valve! Ember's dial lamp lights up.", ja: "蒸気で弁が開いた！エンバーのランプがついた。" } },
 };
-export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnemyKind }> = [
+export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnemyKind; replaces?: "stormCrab" | "raiderDrone" }> = [
   { zone: "stormbreakCoast", kind: "stormCrab", x: -2, z: 16 },
   { zone: "stormbreakCoast", kind: "windSprite", x: 5, z: 21 },
-  { zone: "stormbreakCoast", kind: "stormCrab", x: -3, z: 26 },
+  { zone: "stormbreakCoast", kind: "raiderShooter", replaces: "stormCrab", x: -3, z: 26 },
   { zone: "stormbreakCoast", kind: "windSprite", x: 4, z: 31 },
   { zone: "stormbreakCoast", kind: "stormCrab", x: -4, z: 38 },
   { zone: "stormbreakCoast", kind: "windSprite", x: 3, z: 40 },
@@ -176,10 +176,10 @@ export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnem
   { zone: "windfallJunction", kind: "windSprite", x: 0, z: 95 },
   ...([-1, 1] as const).flatMap(side => [106, 114, 123].flatMap((z, i) => [
     { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? "windSprite" as const : "stormCrab" as const, x: side * 17, z },
-    { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? "raiderDrone" as const : "thunderBeetle" as const, x: side * 24, z: z + (i === 2 ? 1 : .5) },
+    { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? (i === 1 ? "raiderShooter" as const : "raiderDrone" as const) : "thunderBeetle" as const, replaces: side < 0 && i === 1 ? "raiderDrone" as const : undefined, x: side * 24, z: z + (i === 2 ? 1 : .5) },
   ])),
   { zone: "ancientObservatory", kind: "windSprite", x: -4, z: 139 },
-  { zone: "ancientObservatory", kind: "raiderDrone", x: 4, z: 142 },
+  { zone: "ancientObservatory", kind: "raiderShooter", replaces: "raiderDrone", x: 4, z: 142 },
   { zone: "ancientObservatory", kind: "thunderBeetle", x: -4, z: 148 },
   { zone: "ancientObservatory", kind: "windSprite", x: 4, z: 151 },
 ];

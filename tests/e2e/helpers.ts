@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { BROWSER_STUBS } from "./stubs";
 
 export interface MiState {
+  time: number;
   screen: string;
   mode: string;
   micState: string;
@@ -35,7 +36,7 @@ export interface MiState {
     question: string | null;
   } | null;
   line: { by: string; en: string } | null;
-  player: { x: number; z: number; y: number; ground: number; riding: boolean; climbing: boolean };
+  player: { x: number; z: number; y: number; yaw: number; ground: number; riding: boolean; climbing: boolean };
   monsters: Record<string, { x: number; z: number; mode: string; visible: boolean; air: number }>;
   palm: number;
   stones: number;
@@ -59,9 +60,10 @@ export interface MiState {
     hp: number;
     mp: Record<string, number>;
     knockedOut: boolean;
-    enemies: Array<{ i: number; zone: string; kind: string; state: string; hp: number; x: number; z: number }>;
+    enemies: Array<{ i: number; zone: string; kind: string; state: string; hp: number; x: number; z: number; yaw: number; timer: number }>;
     drops: number;
     shots: number;
+    projectiles: Array<{ id: number; hostile: boolean; source?: number; x: number; y: number; z: number; vx: number; vz: number; age: number; life: number; radius: number }>;
     ship: { visible: boolean; x: number; y: number; z: number; cage: boolean };
     cliffRope: number;
     unlock: Record<string, number>;

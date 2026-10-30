@@ -628,10 +628,12 @@ export const RUIN_PILLARS: Vec2[] = (() => {
 })();
 
 /** One normal enemy: its type and where it lives in its zone. */
-export type EnemyKind = "gloomlet" | "snapjaw" | "shellback";
+export type EnemyKind = "gloomlet" | "snapjaw" | "shellback" | "forestSpitter" | "raiderShooter";
 export interface EnemySpawn {
   zone: ZoneId;
   kind: EnemyKind;
+  /** Preserve the replaced spawn's HP and rewards while changing its attacks. */
+  replaces?: "gloomlet" | "snapjaw" | "shellback";
   x: number;
   z: number;
 }
@@ -639,27 +641,27 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   // The tutorial: one, then two, then a mixed pair.
   { zone: "forest1", kind: "gloomlet", x: 74.6, z: -162.8 },
   { zone: "forest1", kind: "gloomlet", x: 75.6, z: -170.2 },
-  { zone: "forest1", kind: "gloomlet", x: 66.4, z: -167.8 },
+  { zone: "forest1", kind: "forestSpitter", replaces: "gloomlet", x: 66.4, z: -167.8 },
   { zone: "forest1", kind: "snapjaw", x: 72.6, z: -178.6 },
   { zone: "forest1", kind: "gloomlet", x: 85, z: -177.2 },
   // The grove: more enemies, simple ground.
   { zone: "grove", kind: "gloomlet", x: 62, z: -203.2 },
-  { zone: "grove", kind: "gloomlet", x: 38.8, z: -211.6 },
+  { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 38.8, z: -211.6 },
   { zone: "grove", kind: "snapjaw", x: 51.5, z: -211.8 },
   { zone: "grove", kind: "gloomlet", x: 48.6, z: -216.4 },
-  { zone: "grove", kind: "gloomlet", x: 46.4, z: -226.8 },
+  { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 46.4, z: -226.8 },
   { zone: "grove", kind: "snapjaw", x: 48.5, z: -232.2 },
   { zone: "grove", kind: "gloomlet", x: 37.8, z: -233.8 },
   { zone: "grove", kind: "snapjaw", x: 56, z: -239.5 },
   // The canopy: fewer enemies, harder ground.
   { zone: "canopy", kind: "gloomlet", x: 97, z: -203.3 },
   { zone: "canopy", kind: "snapjaw", x: 106, z: -208.6 },
-  { zone: "canopy", kind: "gloomlet", x: 105.2, z: -230.6 },
+  { zone: "canopy", kind: "forestSpitter", replaces: "gloomlet", x: 105.2, z: -230.6 },
   { zone: "canopy", kind: "snapjaw", x: 112, z: -235 },
   // The causeway: tougher pairs, and the shrine's guards.
-  { zone: "causeway", kind: "snapjaw", x: 62, z: -248.2 },
+  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 62, z: -248.2 },
   { zone: "causeway", kind: "shellback", x: 61.4, z: -258.4 },
-  { zone: "causeway", kind: "snapjaw", x: 85, z: -247.4 },
+  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 85, z: -247.4 },
   { zone: "causeway", kind: "shellback", x: 91.6, z: -260.1 },
   { zone: "causeway", kind: "gloomlet", x: 95, z: -249.6 },
   { zone: "causeway", kind: "shellback", x: 103.4, z: -251.8 },
@@ -667,7 +669,7 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   // The coast: a lighter last stretch.
   { zone: "coast", kind: "gloomlet", x: 65.4, z: -272.4 },
   { zone: "coast", kind: "gloomlet", x: 85.2, z: -280.4 },
-  { zone: "coast", kind: "snapjaw", x: 77.4, z: -284.6 },
+  { zone: "coast", kind: "raiderShooter", replaces: "snapjaw", x: 77.4, z: -284.6 },
   { zone: "coast", kind: "gloomlet", x: 64, z: -278 },
   { zone: "canopy", kind: "gloomlet", x: 98, z: -207 },
 ];

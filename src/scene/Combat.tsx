@@ -1,5 +1,5 @@
-import { useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame, useGame } from "../game/store";
@@ -44,7 +44,7 @@ const ALERT = textSprite("!", "#e8483f");
 const STARS = textSprite("★", "#ffd23f");
 
 function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
-  const geo = useMemo(() => ["stormCrab", "windSprite", "raiderDrone", "thunderBeetle"].includes(kind) ? cloudEnemyGeometry(kind as CloudEnemyKind) : enemyGeometry(kind as LowlandEnemyKind), [kind]);
+  const geo = useMemo(() => ["stormCrab", "windSprite", "raiderDrone", "raiderShooter", "thunderBeetle", "forestSpitter"].includes(kind) ? cloudEnemyGeometry(kind as CloudEnemyKind | "forestSpitter") : enemyGeometry(kind as LowlandEnemyKind), [kind]);
   const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), []);
   const shadow = useMemo(() => shadowMaterial(0.3), []);
   const root = useRef<THREE.Group>(null);
@@ -54,7 +54,8 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
   const tell = useRef<THREE.Mesh>(null);
   const def = ENEMIES[kind];
   const ring = kind === "thunderBeetle";
-  const hovering = kind === "windSprite" || kind === "raiderDrone";
+  const hovering = kind === "windSprite" || kind === "raiderDrone" || kind === "raiderShooter";
+  const ranged = kind === "windSprite" || kind === "forestSpitter" || kind === "raiderShooter";
   const tellGeo = useMemo(() => {
     const g = ring ? new THREE.RingGeometry(0.9, 1, 32) : new THREE.PlaneGeometry(1, 1);
     g.rotateX(-Math.PI / 2);
@@ -80,11 +81,12 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     let shake = 0;
     if (hovering) hop = Math.sin(t * 4 + e.i) * 0.13;
     if (e.state === "windup") {
-      // The tell: it crouches, shakes and glows red before it lunges.
+      // Ranged foes swell as they charge; melee foes crouch before lunging.
       const k = 1 - e.timer / def.windup;
-      squash = 1 - 0.22 * Math.min(1, k * 1.6);
+      squash = ranged ? 1 + 0.12 * k : 1 - 0.22 * Math.min(1, k * 1.6);
+      if (ranged) scale = 1 + 0.22 * k;
       shake = Math.sin(t * 40) * 0.05 * k;
-      lean = -0.25 * k;
+      lean = ranged ? -0.06 * k : -0.25 * k;
     } else if (e.state === "lunge") {
       squash = 1.15;
       lean = 0.45;
@@ -98,10 +100,11 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     m.position.set(shake, hop, 0);
     m.scale.set(scale / Math.sqrt(squash), scale * squash, scale / Math.sqrt(squash));
     m.rotation.x = lean;
-    // A hit flashes it white; the wind-up glows it red.
+    // Emissive body colours keep every charge readable without extra draws.
     const flash = Math.max(0, 1 - (t - e.hitT) / 0.18);
     const warn = e.state === "windup" ? 0.35 + Math.sin(t * 22) * 0.25 : 0;
-    mat.emissive.setRGB(flash + warn, flash * 0.9 + (ring ? warn * 0.8 : 0), flash * 0.9 + (ring ? warn * 0.6 : 0));
+    const seed = kind === "forestSpitter", wind = kind === "windSprite";
+    mat.emissive.setRGB(flash + warn * (seed ? 0.55 : wind ? 0.35 : 1), flash * 0.9 + warn * (seed ? 1 : wind || ring ? 0.8 : 0), flash * 0.9 + warn * (wind ? 1 : ring ? 0.6 : 0));
     if (tell.current) {
       tell.current.visible = e.state === "windup" || (ring && e.state === "lunge");
       if (ring) {
@@ -226,29 +229,51 @@ function Drops() {
 function Shots() {
   const mats = useMemo(
     () => ({
-      bubble: new THREE.MeshLambertMaterial({ color: "#9fe6ff", transparent: true, opacity: 0.75, emissive: "#1f6f9f" }),
-      wind: new THREE.MeshBasicMaterial({ color: "#f2fbff", transparent: true, opacity: 0.7 }),
-      fireball: new THREE.MeshBasicMaterial({ color: "#ffb03a" })
+      bubble: new THREE.MeshLambertMaterial({ color: "#ffffff", transparent: true, opacity: 0.75, emissive: "#1f2f2f" }),
+      wind: new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.7 }),
+      fireball: new THREE.MeshBasicMaterial({ color: "#ffffff" })
     }),
     []
   );
   const geos = useMemo(() => ({ bubble: new THREE.SphereGeometry(1, 12, 8), wind: new THREE.TorusGeometry(0.8, 0.28, 6, 12), fireball: new THREE.IcosahedronGeometry(1, 1) }), []);
   const refs = { bubble: useRef<THREE.InstancedMesh>(null), wind: useRef<THREE.InstancedMesh>(null), fireball: useRef<THREE.InstancedMesh>(null) };
+  const trails = useRef<THREE.InstancedMesh>(null);
+  const trailGeo = useMemo(() => {
+    const geo = new THREE.CylinderGeometry(0.35, 0, 1, 6);
+    geo.rotateX(Math.PI / 2);
+    geo.translate(0, 0, -0.5);
+    return geo;
+  }, []);
+  const trailMat = useMemo(() => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6, depthWrite: false }), []);
   const glowMat = useMemo(() => additiveSprite("#ff8a2a", 0.8), []);
   const glows = useRef<Array<THREE.Sprite | null>>([]);
   const o = useMemo(() => new THREE.Object3D(), []);
+  const tint = useMemo(() => new THREE.Color(), []);
   useFrame(() => {
     const count = { bubble: 0, wind: 0, fireball: 0 };
     let g = 0;
+    let nt = 0;
     for (const s of cb.shots) {
       const kind = s.shape as keyof typeof count;
-      if (!(kind in count)) continue;
+      if (!(kind in count) || count[kind] >= 16) continue;
+      const sourceKind = s.hostile && s.source !== undefined ? cb.enemies[s.source]?.kind : null;
+      tint.set(sourceKind === "forestSpitter" ? "#b2dc60" : sourceKind === "raiderShooter" ? "#ff4055" : kind === "bubble" ? "#9fe6ff" : kind === "fireball" ? "#ffb03a" : "#f2fbff");
       o.position.set(s.x, s.y, s.z);
       o.rotation.set(kind === "wind" ? Math.PI / 2 : 0, Math.atan2(s.vx, s.vz), rt.time * 12);
       o.scale.setScalar(s.radius * (kind === "wind" ? 0.8 : 1));
       o.updateMatrix();
-      refs[kind].current?.setMatrixAt(count[kind]++, o.matrix);
-      if (kind === "fireball" && g < 6) {
+      const mesh = refs[kind].current;
+      mesh?.setMatrixAt(count[kind], o.matrix);
+      mesh?.setColorAt(count[kind]++, tint);
+      if (trails.current && nt < 48) {
+        const speed = Math.hypot(s.vx, s.vz);
+        o.rotation.set(0, Math.atan2(s.vx, s.vz), 0);
+        o.scale.set(s.radius, s.radius, Math.max(0.01, Math.min(s.age * speed, 0.8 + speed * 0.1)));
+        o.updateMatrix();
+        trails.current.setMatrixAt(nt, o.matrix);
+        trails.current.setColorAt(nt++, tint);
+      }
+      if (kind === "fireball" && !s.hostile && g < 6) {
         const sp = glows.current[g++];
         if (sp) {
           sp.visible = true;
@@ -262,6 +287,12 @@ function Shots() {
       if (!m) continue;
       m.count = count[k];
       m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    if (trails.current) {
+      trails.current.count = nt;
+      trails.current.instanceMatrix.needsUpdate = true;
+      if (trails.current.instanceColor) trails.current.instanceColor.needsUpdate = true;
     }
     for (let k = g; k < 6; k++) if (glows.current[k]) glows.current[k]!.visible = false;
   });
@@ -270,6 +301,7 @@ function Shots() {
       {(Object.keys(geos) as Array<keyof typeof geos>).map((k) => (
         <instancedMesh key={k} ref={refs[k]} args={[geos[k], mats[k], 16]} frustumCulled={false} />
       ))}
+      <instancedMesh ref={trails} args={[trailGeo, trailMat, 48]} frustumCulled={false} />
       {[0, 1, 2, 3, 4, 5].map((k) => (
         <sprite key={k} ref={(el) => (glows.current[k] = el)} material={glowMat} visible={false} />
       ))}
@@ -432,6 +464,19 @@ function Airship() {
 }
 
 export function CombatScene() {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    const frustum = new THREE.Frustum();
+    const matrix = new THREE.Matrix4();
+    const point = new THREE.Vector3();
+    const onScreen = (x: number, y: number, z: number) => {
+      matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(matrix);
+      return frustum.containsPoint(point.set(x, y, z));
+    };
+    cb.onScreen = onScreen;
+    return () => { if (cb.onScreen === onScreen) cb.onScreen = null; };
+  }, [camera]);
   return (
     <>
       <Enemies />

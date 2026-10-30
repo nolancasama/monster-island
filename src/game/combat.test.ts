@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { basicAttack, cb, combatTick, crabDamage, hooks, resetBeaconFight, resetCombat, specialAttack, travelCombat, wakeUp } from "./combat";
+import { basicAttack, cb, combatTick, crabDamage, hooks, isRanged, resetBeaconFight, resetCombat, specialAttack, travelCombat, wakeUp, type Shot } from "./combat";
 import { newProgress } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { region } from "./world/region";
-import { ENEMIES, type CompanionId } from "./data/combat";
+import { COMBAT, ENEMIES, type CompanionId, type EnemyKind } from "./data/combat";
 import { BEACON_PYLONS } from "./logic/beacon";
+import { CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
+import { ENEMY_SPAWNS } from "./world/lowland";
 
 vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn() } }));
 
@@ -20,16 +22,220 @@ beforeEach(() => {
   rt.time = rt.playTime = 10;
   Object.assign(rt.player, { x: 0, z: 20, y: 2, yaw: 0, speed: 0, climbY: null });
   resetCombat();
+  cb.onScreen = () => true;
   cb.cloudZones.current = "stormbreakCoast";
 });
 
-afterEach(() => { region.world = "home"; });
+afterEach(() => { region.world = "home"; cb.onScreen = null; });
 
 function changeWorld(world: "home" | "cloud") {
   setGame(g => ({ progress: { ...g.progress, act3: { ...g.progress.act3, world } } }));
   region.world = world;
   travelCombat();
 }
+
+function advanceCombat(seconds: number) {
+  const frames = Math.ceil(seconds * 60);
+  for (let i = 0; i < frames; i++) {
+    rt.time += 1 / 60; rt.playTime += 1 / 60;
+    combatTick(1 / 60);
+  }
+}
+
+function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
+  for (const e of cb.enemies) e.state = "gone";
+  const e = cb.enemies[0];
+  Object.assign(e, { kind, zone: "stormbreakCoast", x, z, homeX: x, homeZ: z, hp: 100, state: "recover", timer: 99, kx: 0, kz: 0 });
+  return e;
+}
+
+describe("facing-directed player attacks", () => {
+  for (const friend of ["bubbo", "puff", "ember"] as const) {
+    for (const upgrade of [false, true]) {
+      it(`${friend}${upgrade ? " upgraded" : ""} hits an enemy in its path without changing yaw`, () => {
+        const e = loneEnemy();
+        setGame(g => ({ progress: { ...g.progress, active: friend, act2: { ...g.progress.act2, upgrades: upgrade ? [friend] : [] } } }));
+        cb.stance.friend = friend; cb.stance.k = 1;
+        expect(basicAttack()).toBe(true);
+        expect(rt.player.yaw).toBe(0);
+        expect(cb.shots).toHaveLength(friend === "puff" && upgrade ? 2 : 1);
+        for (const shot of cb.shots) {
+          expect(shot.vx).toBeCloseTo(0);
+          expect(shot.vz).toBe(COMBAT[friend].basic.speed);
+          expect(shot.radius).toBeGreaterThanOrEqual(.8);
+        }
+        advanceCombat(.7);
+        expect(e.hp).toBeLessThan(100);
+      });
+
+      it(`${friend}${upgrade ? " upgraded" : ""} misses an enemy that leaves the path after firing`, () => {
+        const e = loneEnemy();
+        setGame(g => ({ progress: { ...g.progress, active: friend, act2: { ...g.progress.act2, upgrades: upgrade ? [friend] : [] } } }));
+        cb.stance.friend = friend; cb.stance.k = 1;
+        expect(basicAttack()).toBe(true);
+        const shots = [...cb.shots], velocity = shots.map(s => ({ vx: s.vx, vy: s.vy, vz: s.vz }));
+        e.x = e.homeX = 5;
+        rt.player.yaw = Math.PI / 2;
+        advanceCombat(.7);
+        expect(e.hp).toBe(100);
+        shots.forEach((shot, i) => expect({ vx: shot.vx, vy: shot.vy, vz: shot.vz }).toEqual(velocity[i]));
+      });
+    }
+
+    it(`${friend} does not snap toward an off-axis enemy when firing`, () => {
+      loneEnemy("stormCrab", 4, 24);
+      cb.stance.friend = friend; cb.stance.k = 1;
+      expect(basicAttack()).toBe(true);
+      expect(rt.player.yaw).toBe(0);
+      expect(cb.move).toMatchObject({ tx: 0, tz: 20 + COMBAT[friend].basic.range });
+      expect(cb.shots[0].vx).toBeCloseTo(0);
+    });
+  }
+
+  for (const friend of ["bubbo", "puff"] as const) {
+    it(`${friend}'s directional special keeps facing and misses an off-axis enemy`, () => {
+      const e = loneEnemy("stormCrab", 4, 20);
+      cb.stance.friend = friend; cb.stance.k = 1;
+      expect(specialAttack()).toBe(true);
+      expect(rt.player.yaw).toBe(0);
+      expect(e.hp).toBe(100);
+      expect(cb.move).toMatchObject({ tx: 0, tz: 20 + COMBAT[friend].special.range });
+    });
+  }
+
+  it("retains Ember's area burst damage around the player", () => {
+    const e = loneEnemy("stormCrab", 3, 20);
+    cb.stance.friend = "ember"; cb.stance.k = 1;
+    expect(specialAttack()).toBe(true);
+    expect(e.hp).toBe(70);
+  });
+});
+
+describe("shared ranged enemy rules", () => {
+  it("retains the replaced spawn's health in both worlds and after returning", () => {
+    const expectOriginalHealth = (spawns: typeof ENEMY_SPAWNS | typeof CLOUD_ENEMY_SPAWNS) => {
+      spawns.forEach((spawn, i) => {
+        if (spawn.replaces) expect(cb.enemies[i].hp, `${spawn.zone} ${i}`).toBe(ENEMIES[spawn.replaces].hp);
+      });
+    };
+    expectOriginalHealth(CLOUD_ENEMY_SPAWNS);
+    changeWorld("home");
+    expectOriginalHealth(ENEMY_SPAWNS);
+    changeWorld("cloud");
+    expectOriginalHealth(CLOUD_ENEMY_SPAWNS);
+  });
+
+  for (const kind of ["forestSpitter", "raiderShooter", "windSprite"] as const) {
+    it(`${kind} warns for 0.8 seconds, aims at fire time, then pauses for 2.5 seconds`, () => {
+      const e = loneEnemy(kind);
+      e.state = "chase";
+      combatTick(.01);
+      expect(e.state).toBe("windup");
+      expect(e.timer).toBeCloseTo(.8);
+      advanceCombat(.6);
+      expect(cb.shots).toHaveLength(0);
+      if (kind === "windSprite") expect(Math.abs(e.x)).toBeGreaterThan(.01);
+      rt.player.x = 2;
+      advanceCombat(.21);
+      expect(e.state).toBe("recover");
+      expect(cb.shots).toHaveLength(1);
+      const shot = cb.shots[0], speed = Math.hypot(shot.vx, shot.vz);
+      expect(speed).toBeCloseTo(3.2);
+      expect(shot.vx / shot.vz).toBeCloseTo((rt.player.x - e.x) / (rt.player.z - e.z));
+      expect(e.timer).toBeCloseTo(2.5, 1);
+      const velocity = { vx: shot.vx, vy: shot.vy, vz: shot.vz };
+      rt.player.x = -2;
+      advanceCombat(.3);
+      expect({ vx: shot.vx, vy: shot.vy, vz: shot.vz }).toEqual(velocity);
+      advanceCombat(2);
+      expect(e.state).toBe("recover");
+      expect(e.timer).toBeGreaterThan(0);
+    });
+
+    it(`${kind} approaches from beyond nine metres and backs off below three, including recovery`, () => {
+      const e = loneEnemy(kind, 0, 31);
+      e.state = "chase";
+      combatTick(.1);
+      expect(e.z).toBeLessThan(31);
+      expect(e.state).toBe("chase");
+      Object.assign(e, { x: 0, z: 22, homeX: 0, homeZ: 22, state: "recover", timer: 2 });
+      combatTick(.1);
+      expect(e.z).toBeGreaterThan(22);
+      expect(cb.shots).toHaveLength(0);
+      Object.assign(e, { z: 22, state: "windup", timer: .01 });
+      combatTick(.02);
+      expect(e.state).not.toBe("windup");
+      expect(cb.shots).toHaveLength(0);
+    });
+  }
+
+  it("keeps at most two ranged awake, including re-entry and a basic hit", () => {
+    loneEnemy();
+    for (let i = 0; i < 3; i++) Object.assign(cb.enemies[i], { kind: "windSprite", x: i - 1, z: 27, homeX: i - 1, homeZ: 27, state: "idle", zone: "stormbreakCoast", hp: 100 });
+    combatTick(.01);
+    const awake = () => cb.enemies.filter(e => isRanged(e.kind) && !["idle", "return", "gone", "ko"].includes(e.state));
+    expect(awake()).toHaveLength(2);
+    cb.enemies[2].state = "return";
+    combatTick(.01);
+    expect(awake()).toHaveLength(2);
+    // A direct shot can still damage the sleeper without granting another attack slot.
+    Object.assign(cb.enemies[2], { x: 0, z: 22, homeX: 0, homeZ: 22, state: "idle" });
+    cb.stance.friend = "leafy"; cb.stance.k = 1;
+    expect(basicAttack()).toBe(true);
+    expect(cb.enemies[2].hp).toBeLessThan(100);
+    expect(awake()).toHaveLength(2);
+  });
+
+  for (const blockedBy of ["off screen", "unreachable ground", "solid line of sight", "other zone"] as const) {
+    it(`does not wake or fire from ${blockedBy}`, () => {
+      const e = loneEnemy("raiderShooter");
+      if (blockedBy === "off screen") cb.onScreen = () => false;
+      if (blockedBy === "unreachable ground") Object.assign(e, { x: -6, z: 18, homeX: -6, homeZ: 18 });
+      if (blockedBy === "solid line of sight") {
+        Object.assign(rt.player, { x: -6, z: 15, y: cloudY(-6, 15) });
+        Object.assign(e, { x: -6, z: 23, homeX: -6, homeZ: 23 });
+      }
+      if (blockedBy === "other zone") Object.assign(e, { x: 0, z: 8, homeX: 0, homeZ: 8 });
+      e.state = "idle"; e.timer = 99;
+      combatTick(.01);
+      expect(e.state).toBe("idle");
+      e.state = "windup"; e.timer = .001;
+      combatTick(.01);
+      expect(cb.shots).toHaveLength(0);
+    });
+  }
+
+  function hostileShot(x: number, z: number, vx: number, vz: number): Shot {
+    return { id: 9000, shape: "wind", owner: "puff", hostile: true, source: 0, x, y: 10, z, y1: 10,
+      vx, vz, life: 5, age: 0, radius: .42, damage: 5, knock: 0, stun: 0, size: 1 };
+  }
+
+  it("blocks a hostile shot on a solid even when one frame would carry it through", () => {
+    loneEnemy().state = "gone";
+    Object.assign(rt.player, { x: -6, z: 15 });
+    cb.shots.push(hostileShot(-6, 21, 0, -3.2));
+    combatTick(2);
+    expect(cb.shots).toHaveLength(0);
+    expect(cb.vitals.hp).toBe(100);
+  });
+
+  it("blocks hostile shots at a closed stage barrier", () => {
+    loneEnemy().state = "gone";
+    Object.assign(rt.player, { x: 0, z: 40 });
+    cb.shots.push(hostileShot(0, 42, 0, 3.2));
+    combatTick(1.5);
+    expect(cb.shots).toHaveLength(0);
+  });
+
+  it("removes hostile shots at the border into the safe dock", () => {
+    loneEnemy().state = "gone";
+    Object.assign(rt.player, { x: 0, z: 12 });
+    cb.shots.push(hostileShot(0, 10.5, 0, -3.2));
+    combatTick(1);
+    expect(cb.shots).toHaveLength(0);
+    expect(cb.vitals.hp).toBe(100);
+  });
+});
 
 describe("Cloud Isle combat", () => {
   it("armours the crab's front only against basic attacks", () => {
@@ -41,7 +247,7 @@ describe("Cloud Isle combat", () => {
   });
 
   it("keeps at most four coast enemies awake", () => {
-    for (const e of cb.enemies) Object.assign(e, { x: 0, z: 22, state: "idle" });
+    for (const e of cb.enemies) Object.assign(e, { kind: "stormCrab", x: 0, z: 22, state: "idle" });
     combatTick(0.016);
     expect(cb.enemies.filter(e => e.state === "alert")).toHaveLength(4);
     expect(cb.enemies.filter(e => e.zone === "stormbreakCoast" && e.state === "idle")).toHaveLength(2);
@@ -80,7 +286,7 @@ describe("Cloud Isle combat", () => {
   });
 
   it("damages a fifth sleeping enemy without waking a fifth attacker", () => {
-    cb.enemies.forEach((e, i) => Object.assign(e, { x: 0, z: 22, yaw: 0, hp: 100, state: i < 4 ? "windup" : i === 4 ? "idle" : "gone" }));
+    cb.enemies.forEach((e, i) => Object.assign(e, { kind: "stormCrab", x: 0, z: 22, yaw: 0, hp: 100, state: i < 4 ? "windup" : i === 4 ? "idle" : "gone" }));
     cb.stance.friend = "leafy";
     cb.stance.k = 1;
     expect(basicAttack()).toBe(true);
@@ -91,7 +297,7 @@ describe("Cloud Isle combat", () => {
   });
 
   it("a returning enemy waits for an awake slot", () => {
-    cb.enemies.forEach((e, i) => Object.assign(e, { x: 0, z: 22, homeX: 0, homeZ: 22, state: i < 4 ? "windup" : i === 4 ? "return" : "gone" }));
+    cb.enemies.forEach((e, i) => Object.assign(e, { kind: "stormCrab", x: 0, z: 22, homeX: 0, homeZ: 22, state: i < 4 ? "windup" : i === 4 ? "return" : "gone" }));
     combatTick(0.016);
     expect(cb.enemies.filter(e => !["idle", "return", "ko", "gone"].includes(e.state))).toHaveLength(4);
     expect(cb.enemies[4].state).toBe("idle");
@@ -127,10 +333,10 @@ describe("Cloud Isle combat", () => {
     expect(cb.cloudZones.defeated.stormbreakCoast).toBeUndefined();
   });
 
-  it("fires a slow drifting wind puff that damages without moving the player", () => {
+  it("fires a slow straight wind puff that damages without moving the player", () => {
     for (const e of cb.enemies) e.state = "gone";
     const e = cb.enemies[1];
-    Object.assign(e, { x: 0, z: 22, kind: "windSprite", state: "windup", timer: 0, dx: 0, dz: -1 });
+    Object.assign(e, { x: 0, z: 27, homeX: 0, homeZ: 27, kind: "windSprite", state: "windup", timer: 0, dx: 0, dz: -1 });
     combatTick(0.016);
     expect(e.state).toBe("recover");
     expect(cb.shots).toHaveLength(1);

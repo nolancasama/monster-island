@@ -36,6 +36,54 @@ Git is the source of truth for detailed code-change history.
 
 ## 2026-10-30 — Gameplay polish Part 2 — decisions made while building
 
+### Combat (slice B1: items 8 and 9)
+
+- **Straight player shots replace Act 2's forgiving projectile aim.** Bubbo,
+  Puff and Ember fire along the active friend's facing, without selecting an
+  enemy, turning the player or changing velocity after launch. Basic hit radii
+  are 0.85 m (upgrades capped at 1 m), with pooled coloured trails. Twin Wind
+  launches two parallel shots with offset origins. Launch elevation uses the
+  terrain ahead along that facing, so Bubbo's low mouth clears uphill ground;
+  the resulting vertical velocity is also fixed at launch. Leafy's whip and pull keep
+  their existing targeting; water jet and wind cone use the firing facing,
+  and the fire area burst keeps its existing area. Pylons remain physical shot
+  targets; their close-range aim preference applies only to targeted melee
+  and area moves. Existing puzzle abilities and boss specials remain free at
+  zero MP; ordinary combat special costs are unchanged.
+- **Ranged enemies replace existing slots.** Forest Spitters inhabit the
+  lowland forests; Raider Shooters inhabit the causeway, both coasts, Skyroot
+  Canopy and the Observatory. Spawn indices, coordinates, stage counts,
+  respawn memory, original HP and original reward distributions are retained
+  through explicit replacement metadata. The debug kill-zone command still
+  uses normal knock-out bookkeeping.
+- Spitters, Shooters and Wind Sprites share a 0.8 s swell/glow tell, a slow
+  3.2 m/s shot aimed at the player's position **when firing**, and a 2.5 s
+  recovery. They hold 6–9 m distance and retreat within 3 m, cancelling an
+  unfinished charge. At most two ranged enemies can be awake in an area,
+  including interrupted and returning enemies reacquiring an attack slot;
+  Cloud Isle also retains its four-enemy total cap. Firing and ranged wake-up
+  require the actual camera frustum, the player's area, reachable ground and
+  an unobstructed ground sight line. Interrupting them disperses their shots.
+  Wind Sprites retain their sideways drift during the charge.
+- Combat projectiles keep their launch velocity even in Cloud Isle wind
+  lanes; loose drops retain wind movement. Small swept simulation steps stop
+  shots at scenery, closed barriers and gaps, and hostile shots disappear at
+  area borders before reaching safe ground. This supersedes the older Wind
+  Sprite wind-bending behavior for combat shots.
+- Companion following and safe-zone transitions belong to the later slice;
+  this slice does not change them or the camera profiles.
+- Browser assumptions updated: `act2.spec.ts` now distinguishes hostile shots
+  from player shots when asserting that friends never attack automatically.
+  Its fights and `act3.spec.ts` already face enemies explicitly through
+  `nearEnemy`, so no homing-based fight shortcut is retained. The new
+  `combat-polish.spec.ts` exercises committed shots and actual moving misses.
+- Evidence in `.tmp/shots/polish2/combat/` contains 15 native gameplay views
+  per size (1366×768 and 1280×800): charge, flight, dodge, all three friends'
+  moving-target misses, hostile bolts stopped by solid scenery, and a player
+  bubble stopped by the raider barricade wall. `render-report.json` records
+  every view and live projectile position; the peak is 90 calls / 90,337
+  triangles, below the 120 / 140k budget.
+
 ### Camera
 
 - All gameplay follow cameras are authored in `src/scene/cameraProfiles.ts`.

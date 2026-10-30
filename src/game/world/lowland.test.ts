@@ -5,6 +5,7 @@ import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId
 } from "./lowland";
 import type { ObstacleId } from "../types";
+import { ENEMIES } from "../data/combat";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
@@ -89,8 +90,25 @@ describe("the lowland below the sanctuary", () => {
     const { near } = reachable(gates(["canopyVines"]));
     for (const [id, place] of Object.entries(ACT2_OBSTACLE_PLACE)) expect(near(place.x, place.z, 1), id).toBe(true);
     for (const e of ENEMY_SPAWNS) {
-      expect(isWalkable(e.x, e.z, gates(["canopyVines", "canopyRope", "groveLilies", "causewayGate"]), 0.5), `${e.zone} ${e.x},${e.z}`).toBe(true);
+      const radius = e.kind === "forestSpitter" || e.kind === "raiderShooter" ? ENEMIES[e.kind].radius : .5;
+      expect(isWalkable(e.x, e.z, gates(["canopyVines", "canopyRope", "groveLilies", "causewayGate"]), radius), `${e.zone} ${e.x},${e.z}`).toBe(true);
       expect(zoneAt(e.x, e.z), `${e.x},${e.z}`).toBe(e.zone);
+    }
+  });
+
+  it("replaces forest and coast/causeway spawns without changing stage-clear totals", () => {
+    expect(STAGES.map(zone => [zone, ENEMY_SPAWNS.filter(e => e.zone === zone).length])).toEqual([
+      ["forest1", 5], ["grove", 8], ["canopy", 5], ["causeway", 7], ["coast", 4],
+    ]);
+    for (const zone of ["forest1", "grove", "canopy"] as const) {
+      const ranged = ENEMY_SPAWNS.filter(e => e.zone === zone && e.kind === "forestSpitter");
+      expect(ranged.length, zone).toBeGreaterThan(0);
+      expect(ranged.every(e => e.replaces === "gloomlet"), zone).toBe(true);
+    }
+    for (const zone of ["causeway", "coast"] as const) {
+      const ranged = ENEMY_SPAWNS.filter(e => e.zone === zone && e.kind === "raiderShooter");
+      expect(ranged.length, zone).toBeGreaterThan(0);
+      expect(ranged.every(e => e.replaces === "snapjaw"), zone).toBe(true);
     }
   });
 
