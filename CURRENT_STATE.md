@@ -61,11 +61,8 @@ tests, build, full Playwright 51/51 (51 min).
 3. Optional polish: courtyard shoulder framing; bigger/whole-island debug map.
 
 ## Codex / Delegated Work
-Slice K implemented locally at the existing Cloud Isle layout: attachment-based
-environment kit, connected trees/branches, supported bridges and prop repairs;
-no collision or gameplay changes. Home-island trees inspected and unchanged.
-Typecheck, 341 unit tests and build passed. The required
-`npx playwright test tests/e2e/act3.spec.ts` exited 1 before test startup because
-the sandbox refuses the preview listener (`listen EPERM`, port 4176). Rendering
-evidence and Act 3 acceptance remain outstanding. Evidence status:
-`.tmp/shots/expansion/kit/render-report.json`. No commit or push.
+Slices L (Coming Soon lock), K (Cloud Isle environment kit) and W (frontier
+wall) are merged into this branch and accepted by the controller: unit tests,
+build, rendered before/after screenshots and budgets
+(`.tmp/shots/expansion/{kit,wall}/render-report.json`), and the Act 3 /
+Act 2 / debug browser specs for the lock.

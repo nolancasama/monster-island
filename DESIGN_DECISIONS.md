@@ -1219,11 +1219,52 @@ Hollow furnishings/roof repairs and broken dock remnants now have physical
 supports. The home-island trees in `models/nature.ts` already join their crowns
 and trunks; they and Storm Beacon's connected machinery are unchanged.
 
-Rendering evidence is still required: this environment refused the preview
-listener with `listen EPERM` on 127.0.0.1:4176. No screenshots or per-view WebGL
-budget measurements are claimed. `scripts/cloud-kit-shots.mjs` records matched
-before/after close-ups and gameplay views at both requested sizes when a
-preview server is available, checks the budget and compares against baseline.
-Typecheck, 341 unit tests and build passed. The required
-`npx playwright test tests/e2e/act3.spec.ts` exited 1 at web-server startup with
-the same permission error, before any test executed. Slice K remains unaccepted.
+Accepted by the controller from rendered evidence
+(`scripts/cloud-kit-shots.mjs`, `MI_URL` selects the server): canopies now sit
+on their trunks, render cost is within a few hundred triangles of the baseline
+in every view. Known gap left for slice X2: the giant canopy trunks still
+descend into a void below the drawn ground; the expansion must give every
+grounded kit part real terrain beneath it.
+
+## 2026-10-31 — HOME Sanctuary frontier wall (slice W)
+
+- The ancient wall follows the north cliff shoulder from (54, -144.5),
+  along the lookout lip, to (92, -144.5). Foundations sample the entire rotated
+  footprint against both `groundY` and the existing rendered cliff cap and
+  faceted boulders. Heights are cached once; the temporary sampling mesh is
+  disposed and never rendered. This corrects the earlier wall disappearing
+  inside the brown rock shoulders. Both tips are below the rock surface on
+  unwalkable terrain. Unit rays check visibility above the actual cliff mesh
+  along both runs and check the embedded tips. A roofless watchtower west of
+  the lookout, staggered stone courses, moss, vines and broken crenellations
+  share one merged vertex-coloured geometry.
+- At the ledge the wall is .5 m high, with occasional broken teeth up
+  to .25 m. Taller masonry stays on the shoulders. The modest gatehouse
+  frames the existing Act 2 rope at (75.5, -150.35). Camera profiles, the
+  original story lookout shot, courtyard pillars, Sanctuary puzzles and
+  story remain unchanged. The real forest and coast remain the intended
+  scenery; no backdrop or duplicate landscape was added.
+- The opaque gate and its collision read only `progress.act2.started`.
+  The open passage retains the existing landing and bidirectional rope.
+  Collision adds only the masonry footprints and the closed gate. Lowland
+  floor/zone limits and enemy spawns, leash rules and combat are unchanged;
+  unit tests check spawn positions, the reachable leash area, movement toward
+  the shelf, gate traversal and terrain contact in the actual merged mesh.
+- Static stone and vegetation use one draw, plus one closed-gate draw; both
+  are culled beyond 180 m from the camera. The complete geometry, including
+  the shut gate, is unit checked at no more than 1,000 triangles, replacing
+  the previous stacks of redundant boxes.
+  `scripts/shots-wall.mjs` captures matched before/after lookout follow,
+  original story lookout, courtyard, view-beyond-lair and both wall sides,
+  shut/open at both Chromebook sizes. It records renderer counts and frame
+  times, checks matched cameras and enforces 120 calls / 140k triangles,
+  at most three added calls and 4,000 added triangles. Views whose baseline
+  already exceeds 140k may add at most 1,000 triangles. Every view in a phase
+  is captured before budgets are evaluated; failures are collected together
+  and produce a nonzero exit. `--dist <dir>` intercepts requests at
+  `http://mi.local/` and serves built files with MIME types directly from disk,
+  without binding a port. The existing read-only acceptance surface is
+  `window.__mi.state().progress.act2.started`; there is no new state machine.
+- Accepted by the controller from no-port captures of all 48 views: the
+  wall adds at most 3 draw calls and ~1,000 triangles per view, the lookout
+  and courtyard still show the forest, coast and town beyond.
