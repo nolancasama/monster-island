@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { GATE_PILLARS, LAVA, SANCTUARY_GATE, groundY } from "../game/world/island";
 import { flatMat, glowTexture, occluderMat } from "./materials";
+import { FrontierWall } from "./FrontierWall";
 import {
   gardenGeometry,
   CAVE_TORCHES,
@@ -222,5 +223,6 @@ export function Volcano() {
     <Lava />
     <Cave />
     <Gate />
+    <FrontierWall />
   </group>;
 }

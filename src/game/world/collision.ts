@@ -40,6 +40,7 @@ import {
   shoreZ
 } from "./island";
 import { bridgeSurfaceY } from "./bridge";
+import { FRONTIER_GATE_SOLID, FRONTIER_SOLIDS } from "./frontierWall";
 import { STAGES, type StageId, CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
 
 export interface Circle {
@@ -112,6 +113,8 @@ export function solidsFor(gates: Gates): readonly SolidShape[] {
   const key = keyOf(gates);
   if (solidCache[key]) return solidCache[key];
   const solids = [...STATIC_SOLIDS, PALM_SOLIDS[gates.solved.includes("fallenPalm") ? "resting" : "fallen"]];
+  solids.push(...FRONTIER_SOLIDS);
+  if (!gates.act2) solids.push(FRONTIER_GATE_SOLID);
   if (gates.solved.includes("bridge")) solids.push(...BRIDGE_RAILS);
   if (!gates.forest) solids.push({ kind: "box", x: BRAMBLE.x, z: BRAMBLE.z, hx: (BRAMBLE_BLOCK.x1 - BRAMBLE_BLOCK.x0) / 2, hz: 0.5, yaw: 0 });
   if (!gates.solved.includes("lava")) solids.push({ kind: "box", x: (LAVA.x0 + LAVA.x1) / 2, z: (LAVA.z0 + LAVA.z1) / 2, hx: (LAVA.x1 - LAVA.x0) / 2, hz: (LAVA.z1 - LAVA.z0) / 2, yaw: 0 });

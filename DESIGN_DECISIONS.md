@@ -1186,3 +1186,52 @@ Coming Soon Lock" is accepted. The frozen spec is
   to keep the view. Rejected: a new progress flag.
 - **Sliced delivery** (L, W, K, X1–X3 in the spec), each verified on its own.
 - **Enemy density** capped at 1.5× per stage; required clears unchanged.
+
+## 2026-10-31 — HOME Sanctuary frontier wall (slice W)
+
+- The ancient wall follows the north cliff shoulder from (54, -144.5),
+  along the lookout lip, to (92, -144.5). Foundations sample the entire rotated
+  footprint against both `groundY` and the existing rendered cliff cap and
+  faceted boulders. Heights are cached once; the temporary sampling mesh is
+  disposed and never rendered. This corrects the earlier wall disappearing
+  inside the brown rock shoulders. Both tips are below the rock surface on
+  unwalkable terrain. Unit rays check visibility above the actual cliff mesh
+  along both runs and check the embedded tips. A roofless watchtower west of
+  the lookout, staggered stone courses, moss, vines and broken crenellations
+  share one merged vertex-coloured geometry.
+- At the ledge the wall is .5 m high, with occasional broken teeth up
+  to .25 m. Taller masonry stays on the shoulders. The modest gatehouse
+  frames the existing Act 2 rope at (75.5, -150.35). Camera profiles, the
+  original story lookout shot, courtyard pillars, Sanctuary puzzles and
+  story remain unchanged. The real forest and coast remain the intended
+  scenery; no backdrop or duplicate landscape was added.
+- The opaque gate and its collision read only `progress.act2.started`.
+  The open passage retains the existing landing and bidirectional rope.
+  Collision adds only the masonry footprints and the closed gate. Lowland
+  floor/zone limits and enemy spawns, leash rules and combat are unchanged;
+  unit tests check spawn positions, the reachable leash area, movement toward
+  the shelf, gate traversal and terrain contact in the actual merged mesh.
+- Static stone and vegetation use one draw, plus one closed-gate draw; both
+  are culled beyond 180 m from the camera. The complete geometry, including
+  the shut gate, is unit checked at no more than 1,000 triangles, replacing
+  the previous stacks of redundant boxes.
+  `scripts/shots-wall.mjs` captures matched before/after lookout follow,
+  original story lookout, courtyard, view-beyond-lair and both wall sides,
+  shut/open at both Chromebook sizes. It records renderer counts and frame
+  times, checks matched cameras and enforces 120 calls / 140k triangles,
+  at most three added calls and 4,000 added triangles. Views whose baseline
+  already exceeds 140k may add at most 1,000 triangles. Every view in a phase
+  is captured before budgets are evaluated; failures are collected together
+  and produce a nonzero exit. `--dist <dir>` intercepts requests at
+  `http://mi.local/` and serves built files with MIME types directly from disk,
+  without binding a port. The existing read-only acceptance surface is
+  `window.__mi.state().progress.act2.started`; there is no new state machine.
+- Typecheck, all 322 unit tests and build pass. Both requested no-port
+  captures (`--phase=before --dist .tmp/shots/expansion/wall/before-build`
+  and `--phase=after --dist dist`) were attempted. Installed Chromium aborts
+  before loading a page because macOS denies Mach-port registration. The
+  existing before/after lookout PNGs were inspected, but fresh captures,
+  visual iteration and measured per-view budgets remain blocked. Existing
+  PNGs depict the previous implementation. The pre-wall bundle is preserved
+  in `.tmp/shots/expansion/wall/before-build/`; `render-report.json` records
+  the blocker. Controller acceptance is pending; no Playwright suite was run.

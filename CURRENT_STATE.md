@@ -57,4 +57,16 @@ tests, build, full Playwright 51/51 (51 min).
 3. Optional polish: courtyard shoulder framing; bigger/whole-island debug map.
 
 ## Codex / Delegated Work
-None pending; nothing uncommitted from workers.
+Slice W is corrected locally: the HOME frontier extends across both rendered
+cliff shoulders, samples the existing rock mesh for its foundations, and retains
+the low lookout parapet, ruined watchtower and `act2.started` rope gate.
+The entire wall plus closed gate has at most 1,000 triangles (unit checked), two
+merged draws and distant culling. Typecheck, all 322 unit tests and build pass.
+No commit or push. Controller acceptance remains pending. Both requested
+`scripts/shots-wall.mjs --dist ...` phases were attempted without a local port,
+but installed Chromium aborts on macOS Mach-port registration (permission denied)
+before loading a page. New captures, visual iteration and measured per-view
+budgets could not be completed; existing PNGs show the previous implementation.
+The capture runner now records all 24 views per phase before budget evaluation
+and lists every budget failure. Blocker/status artifact:
+`.tmp/shots/expansion/wall/render-report.json`; pre-wall build: `before-build/`.
