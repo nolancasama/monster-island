@@ -10,25 +10,38 @@ type CloudState = MiState & { progress: MiState["progress"] & { act3: Act3 }; ac
 const cloudState = (page: Page) => state(page) as Promise<CloudState>;
 const folder = ".tmp/shots/act3";
 
-function harborSave() {
+function harborSave(voyageDone = false) {
   const p = newProgress();
   for (const id of ["leafy","bubbo","puff","ember","lumo"] as const) p.monsters[id] = {discovered:true,friend:true,asked:{},canKnown:{},described:{name:true,size:true,part:true},invited:true};
   p.active = "leafy"; p.metMaple = true; p.endings = 3; p.bag = {fish:5,apples:5};
   p.solved = ["fallenPalm","river","bridge","cliff","lava","cave","gateLeaf","gateDrop","gateWing","gateFlame"];
   p.act2 = {...p.act2,started:true,lumoTaken:true,descended:true,portFound:true,harbor:true,bought:true,checkpoint:"port",zone:"port",cleared:["forest1","grove","canopy","causeway","coast"],tutorial:["attack","coins","special","eat","rest","switch"]};
+  p.act3.voyageDone = voyageDone;
   return JSON.stringify({v:4,progress:p,player:{x:76,z:-328,yaw:Math.PI},seconds:3000});
 }
 
-async function seed(page: Page) {
+async function seed(page: Page, voyageDone = false) {
   await page.addInitScript(save => {
-    if (!sessionStorage.getItem("act3-seeded")) {localStorage.setItem("mi.save.v4",save);sessionStorage.setItem("act3-seeded","1");}
-  },harborSave());
+    if (!sessionStorage.getItem("act3-seeded")) {localStorage.setItem("mi.save.v4",save);localStorage.setItem("mi.debug.save",save);sessionStorage.setItem("act3-seeded","1");}
+  },harborSave(voyageDone));
 }
 async function use(page: Page, name: string, touch: boolean) {
   await hook(page,"goTo",name,1.25);
   await waitFor(page,s=>s.mode === "explore" && s.focus?.id === name,30_000,`focus ${name}`);
   if (touch) await page.getByTestId("touch-action").click();
   else await page.keyboard.press("KeyE");
+}
+
+async function openShip(page: Page) {
+  await hook(page,"openCloudShip",true);
+  await waitFor(page,s=>s.cloudIsleOpen,5_000,"HARNESS_PRECONDITION_FAILED: e2e ship hook");
+}
+async function openShipFromDebugMenu(page: Page) {
+  await page.keyboard.press("Control+Shift+KeyD");
+  await expect(page.getByTestId("debug-cloud-ship"), "HARNESS_PRECONDITION_FAILED: debug ship control").toHaveText("Cloud Isle ship: locked");
+  await page.getByTestId("debug-cloud-ship").click();
+  await expect(page.getByTestId("debug-cloud-ship")).toHaveText("Cloud Isle ship: open");
+  await page.keyboard.press("Escape");
 }
 async function defeat(page: Page, i: number, touch: boolean) {
   for (let n=0;n<30;n++) {
@@ -118,6 +131,7 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
       }
     };
 
+    await openShip(page);
     await use(page,"harbor",touch); await tap(page,"yesLetsGo");
     for(const beat of ["raiseSail","turnLeft"]){await waitFor(page,s=>Boolean(s.prompt?.choices.includes(beat)));await shot(beat);await tap(page,beat);}
     await waitFor(page,s=>Boolean(s.prompt?.choices.includes("itsWindy"))); await shot("weather");
@@ -356,6 +370,7 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     expect((await cloudState(page)).act3.world).toBe("cloud"); expect((await cloudState(page)).act3.voyage.active).toBe(false);
     expect((await cloudState(page)).progress.act3).toMatchObject({beaconDefeated:true,skyFortressClue:true,family:{aftermathSeen:true}});
     await use(page,"cloudGull",touch); await tap(page,"yesLetsGo"); await waitFor(page,s=>s.mode==="explore" && (s as CloudState).act3.world==="home");
+    await openShip(page);
     await use(page,"harbor",touch); await tap(page,"yesLetsGo"); await waitFor(page,s=>s.mode==="explore" && (s as CloudState).act3.world==="cloud");
     expect((await cloudState(page)).progress.act3.family.tunnelOpen).toBe(true);
     if(touch) await expect(page.getByTestId("joystick")).toBeVisible();
@@ -365,6 +380,52 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     await writeFile(`${folder}/render-report.json`,JSON.stringify({budget:{calls:120,triangles:140000},views:[...existing.filter(v=>!v.name.endsWith(label)),...report]},null,2));
   });
 }
+
+for (const voyageDone of [false, true]) {
+  test(`default ship lock keeps Gull at Port Town (voyageDone=${voyageDone})`, async ({ page }) => {
+    await seed(page, voyageDone);
+    await boot(page, "");
+    await chooseMode(page, "tap");
+    await expect(page.getByTestId("btn-continue"), "HARNESS_PRECONDITION_FAILED: harbour save available").toBeVisible();
+    await page.getByTestId("btn-continue").click();
+    await waitFor(page, s => s.mode === "explore" && s.progress.act2.harbor && !s.cloudIsleOpen, 30_000, "HARNESS_PRECONDITION_FAILED: locked harbour lead save");
+    const before = await cloudState(page);
+    expect(before.progress.act3).toMatchObject({ world: "home", voyageDone });
+    await hook(page, "goTo", "harbor", 1.25);
+    await waitFor(page, s => s.mode === "explore" && s.focus?.id === "harbor", 30_000, "HARNESS_PRECONDITION_FAILED: Gull in focus");
+    const at = (await state(page)).player;
+    await page.keyboard.press("KeyE");
+    await expect(page.getByTestId("line")).toHaveText("The ship to Cloud Isle isn't ready yet. Coming soon!");
+    expect((await state(page)).prompt).toBeNull();
+    await page.screenshot({ path: `.tmp/shots/act3/coming-soon-dialogue-${voyageDone}.png` });
+    await page.getByTestId("next").click();
+    await waitFor(page, s => s.mode === "explore");
+    const after = await cloudState(page);
+    expect(after.act2.banner).toBe("Cloud Isle — Coming Soon!");
+    expect(after.act3.voyage.active).toBe(false);
+    expect(after.act3.world).toBe("home");
+    expect(after.act2.zone).toBe("port");
+    expect(after.player.x).toBe(at.x);
+    expect(after.player.z).toBe(at.z);
+    expect(after.progress.act3).toEqual(before.progress.act3);
+    await page.screenshot({ path: `.tmp/shots/act3/coming-soon-notice-${voyageDone}.png` });
+  });
+}
+
+test("the ?debug=1 ship toggle opens Gull's voyage offer for testing", async ({ page }) => {
+  await seed(page);
+  await boot(page, "debug=1&fast=1");
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, s => s.mode === "explore" && s.progress.act2.harbor && !s.cloudIsleOpen, 30_000, "HARNESS_PRECONDITION_FAILED: locked harbour lead save");
+  await openShipFromDebugMenu(page);
+  expect((await state(page)).cloudIsleOpen).toBe(true);
+  await hook(page, "goTo", "harbor", 1.25);
+  await waitFor(page, s => s.mode === "explore" && s.focus?.id === "harbor", 30_000, "HARNESS_PRECONDITION_FAILED: Gull in focus");
+  await page.keyboard.press("KeyE");
+  await waitFor(page, s => Boolean(s.prompt?.choices.includes("yesLetsGo")), 15_000, "voyage offer");
+  expect((await cloudState(page)).act3.world).toBe("home");
+});
 
 test("Act 3 test fixtures cannot grant Cloud Isle without the harbour lead",async({page})=>{
   await boot(page); await chooseMode(page,"tap"); await page.getByTestId("btn-start").click(); await waitFor(page,s=>s.mode==="explore");

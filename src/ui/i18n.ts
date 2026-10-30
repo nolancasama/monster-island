@@ -1,4 +1,5 @@
 import type { Text } from "../game/types";
+import { cloudIsleOpen, CLOUD_ISLE_SOON } from "../game/release";
 import type { Objective } from "../game/logic/progress";
 import { MONSTERS } from "../game/data/monsters";
 import { FOODS } from "../game/data/foods";
@@ -88,7 +89,7 @@ export function objectiveText(o: Objective): Text {
     case "harbor":
       return { en: "Ask at the harbor: Where is the ship?", ja: "みなとの じむしょで ふねの ことを きこう" };
     case "act2Done":
-      return { en: "Sail with Captain Gull to Cloud Isle!", ja: "ガルせんちょうと クラウドじまへ いこう!" };
+      return cloudIsleOpen() ? { en: "Sail with Captain Gull to Cloud Isle!", ja: "ガルせんちょうと クラウドじまへ いこう!" } : CLOUD_ISLE_SOON;
     case "skyFortress": return { en: "Find the Sky Fortress", ja: "空の とりでを さがそう" };
     case "cloudDial": return { en: "Light the four dial lamps", ja: "４人の ともだちと ランプを ともそう" };
     case "cloudBeacon": return { en: "Stop Officer Squall's weather machine!", ja: "スコールの 天気マシンを とめよう！" };

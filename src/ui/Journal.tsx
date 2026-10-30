@@ -1,4 +1,6 @@
 import { setGame, useGame } from "../game/store";
+import { cloudIsleOpen, CLOUD_ISLE_SOON } from "../game/release";
+import { useDebug } from "../game/debugState";
 import { COLOR_HEX, MONSTERS, MONSTER_ORDER, LIVE_MONSTERS } from "../game/data/monsters";
 import { FOODS, islandFoods } from "../game/data/foods";
 import { favoriteKnown, optionalLines } from "../game/logic/progress";
@@ -21,9 +23,11 @@ function hear(id: MonsterId, text: string) {
 }
 
 function Page({ id }: { id: MonsterId }) {
+  useDebug(s => s.cloudIsleShipOpen);
   const progress = useGame((s) => s.progress);
   const def = MONSTERS[id];
   const r = progress.monsters[id];
+  const shipLocked = progress.act2.harbor && progress.act3.world === "home" && !cloudIsleOpen();
   const live = LIVE_MONSTERS.includes(id);
   if (!r.discovered) {
     return (
@@ -146,8 +150,8 @@ function Page({ id }: { id: MonsterId }) {
       )}
       {id === "lumo" && progress.act2.lumoTaken && (
         <p className="j-taken" data-testid="journal-lumo-taken">
-          <b>{progress.act3.skyFortressClue ? "Find the Sky Fortress — Lumo is still in the raiders' cage!" : progress.act3.family.drawingSeen ? "Reach the Ancient Observatory and find Lumo" : progress.act2.harbor ? "Sail with Captain Gull to Cloud Isle!" : "Taken by the sky raiders!"}</b>{" "}
-          <Ja>{progress.act3.skyFortressClue ? "空の とりでを さがそう。ルモは まだ とうぞくの かごの中！" : progress.act3.family.drawingSeen ? "こだいの てんもんだいへ いって ルモを さがそう" : progress.act2.harbor ? "ガルせんちょうと クラウドじまへ!" : "そらの とうぞくに つれて いかれた! たすけに いこう"}</Ja>
+          <b>{shipLocked ? CLOUD_ISLE_SOON.en : progress.act3.skyFortressClue ? "Find the Sky Fortress — Lumo is still in the raiders' cage!" : progress.act3.family.drawingSeen ? "Reach the Ancient Observatory and find Lumo" : progress.act2.harbor ? "Sail with Captain Gull to Cloud Isle!" : "Taken by the sky raiders!"}</b>{" "}
+          <Ja>{shipLocked ? CLOUD_ISLE_SOON.ja : progress.act3.skyFortressClue ? "空の とりでを さがそう。ルモは まだ とうぞくの かごの中！" : progress.act3.family.drawingSeen ? "こだいの てんもんだいへ いって ルモを さがそう" : progress.act2.harbor ? "ガルせんちょうと クラウドじまへ!" : "そらの とうぞくに つれて いかれた! たすけに いこう"}</Ja>
         </p>
       )}
       {r.friend && def.companion !== false && (

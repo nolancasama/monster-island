@@ -12,6 +12,14 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     await page.keyboard.press("Control+Shift+KeyD");
     const menu = page.getByTestId("debug-menu");
     await expect(menu).toBeVisible();
+    const ship = page.getByTestId("debug-cloud-ship");
+    await expect(ship, "HARNESS_PRECONDITION_FAILED: debug ship toggle").toHaveText("Cloud Isle ship: locked");
+    expect((await state(page)).cloudIsleOpen).toBe(false);
+    await ship.click();
+    await expect(ship).toHaveText("Cloud Isle ship: open");
+    expect((await state(page)).cloudIsleOpen).toBe(true);
+    await ship.click();
+    await expect(ship).toHaveText("Cloud Isle ship: locked");
     const shots = `.tmp/shots/debug-menu`;
     await page.screenshot({ path: `${shots}/menu-${size.width}x${size.height}.png` });
     await page.getByTestId("debug-jump-market").click();
@@ -34,6 +42,11 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     await expect(menu).toBeHidden();
     await page.keyboard.press("Backquote");
     await expect(menu).toBeVisible();
+    await ship.click();
+    await expect(ship).toHaveText("Cloud Isle ship: open");
+    await page.reload();
+    await expect(page.getByTestId("title"), "HARNESS_PRECONDITION_FAILED: reload finished").toBeVisible();
+    expect((await state(page)).cloudIsleOpen).toBe(false);
   });
 }
 

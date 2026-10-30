@@ -1,4 +1,5 @@
 import type { FamilyId } from "../data/family";
+import { cloudIsleOpen, CLOUD_ISLE_SHIP_SOON, CLOUD_ISLE_SOON } from "../release";
 import { MONSTERS } from "../data/monsters";
 import { COMPANION_IDS } from "../data/combat";
 import { cb, hooks, resetBeaconFight, travelCombat, wakeUp } from "../combat";
@@ -32,12 +33,18 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * ease(t);
 const command = (id: PhraseId, help: string) => ask({ kind: "command", options: [id], readSentence: true, tapAlways: true, help });
 
 /** Called inside the harbour's existing script, or the Cloud dock script. */
+export async function cloudIsleComingSoon() {
+  await say("harbor", CLOUD_ISLE_SHIP_SOON.en, CLOUD_ISLE_SHIP_SOON.ja);
+  banner({ title: CLOUD_ISLE_SOON.en, ja: CLOUD_ISLE_SOON.ja, tone: "quest" }, 3000);
+}
+
 export async function sailWithGull() {
   const p = getGame().progress;
+  const home = p.act3.world === "home";
+  if (home && !cloudIsleOpen()) { await cloudIsleComingSoon(); return; }
   if (!p.act2.harbor) return;
   if (p.act3.skyFortressClue) await say("harbor", "The Sky Fortress? We need a bigger boat... Next chapter!", "空の とりで？ もっと 大きな ふねが いるね……つぎの おはなしで！");
-  const home = p.act3.world === "home";
-  if (p.act3.voyageDone) {
+  if (!home || p.act3.voyageDone) {
     const answer = await ask({ kind: "command", options: ["yesLetsGo"], tapAlways: true, cancellable: true, readQuestion: true,
       question: { by: "harbor", en: home ? "Sail to Cloud Isle?" : "Sail to Port Town?", ja: home ? "クラウドじまへ いくかい?" : "みなとまちへ かえるかい?" }, help: "じゅんびが できたら こたえよう" });
     if (!answer) return;
