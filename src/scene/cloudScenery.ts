@@ -13,10 +13,52 @@ export const cloudTreePlacements = Array.from({ length: 100 }, (_, i) => {
 // Only on dry land above the beach, clear of the crane bridge's open water.
 }).filter(p => cloudLandMask(p.x, p.z) && cloudGroundY(p.x, p.z) > 1.6 && !(p.x > -46 && p.x < -37 && p.z > 56 && p.z < 82));
 export function canopyTreeKits(): GroundedPlacement[] {
-  return [[-30, 286], [-30, 296], [-11, 294], [-29, 307]].map(([x, z], i) => {
-    const y = cloudY(x, z);
-    return { id: `canopy-tree-${i}`, yaw: 0, position: [x, .3, z], kit: giantTree({ height: y + 9.2,
-      platformHeight: y - .3, platformReach: [x === -11 ? -9 : 9, 0, z === 307 ? -2 : 0] }) };
+  // Gentle terrain shoulders outside the carved paths and clearings keep the
+  // complete root footprints grounded, with trunks clear of the walking lane.
+  const sites = [
+    { x: -44, z: 300, target: [-35, 298] },
+    { x: -38, z: 306, target: [-33, 303] },
+    { x: -39, z: 336, target: [-44, 334] },
+    // East of the high path, out of the follow camera's view ahead.
+    { x: -28, z: 372, target: [-45, 374] },
+    { x: -27, z: 380, target: [-45, 380] },
+  ];
+  return sites.map(({ x, z, target: [tx, tz] }, i) => {
+    // Use the same high-rest rule as landscapeKits. The integral rock pad
+    // spans the slope; its top sits at the highest ground, its foot below all
+    // footprint samples. A provisional kit gives the actual kit footprint.
+    const footprint = giantTree();
+    let low = cloudGroundY(x, z), high = low;
+    for (const part of footprint.parts.filter(p => p.ground)) {
+      for (const dx of [part.bounds.min.x, part.bounds.max.x]) for (const dz of [part.bounds.min.z, part.bounds.max.z]) {
+        const y = cloudGroundY(x + dx, z + dz);
+        low = Math.min(low, y); high = Math.max(high, y);
+      }
+    }
+    footprint.geometry.dispose();
+    const walk = cloudY(tx, tz), padHeight = high - low + 1;
+    const options = { height: Math.max(25, walk - high + padHeight + 12), crownRadius: 4.8,
+      padHeight, platformHeight: 14, platformReach: [tx - x, 0, tz - z] as KitPoint };
+    // padHeight changes the trunk's sockets. Measure the public anchor rather
+    // than assuming that platformHeight is measured from the ground plane.
+    const probe = giantTree(options);
+    const platformHeight = options.platformHeight + walk - high - .08 - probe.anchors["walkwayBranch.platform"].point[1];
+    probe.geometry.dispose();
+    return { id: `skyroot-tree-${i}`, yaw: 0, position: [x, high, z],
+      kit: giantTree({ ...options, platformHeight }) };
+  });
+}
+/** Junction props are rendered with the route mouths, not the coast scenery. */
+export function junctionKits(): GroundedPlacement[] {
+  return ROUTE_MOUTHS.map(m => {
+    const kit = ruinedArch(5.2, 5, 1.4), c = Math.cos(m.yaw), s = Math.sin(m.yaw);
+    let y = cloudGroundY(m.x, m.z);
+    for (const part of kit.parts.filter(p => p.ground)) {
+      for (const dx of [part.bounds.min.x, part.bounds.max.x]) for (const dz of [part.bounds.min.z, part.bounds.max.z]) {
+        y = Math.min(y, cloudGroundY(m.x + dx * c + dz * s, m.z - dx * s + dz * c));
+      }
+    }
+    return { id: `route-arch-${m.x}`, kit, position: [m.x, y, m.z], yaw: m.yaw };
   });
 }
 export function landscapeKits(): GroundedPlacement[] {
@@ -37,7 +79,6 @@ export function landscapeKits(): GroundedPlacement[] {
   put("shelter-tree", giantTree({ height: 24, platformHeight: 14, crownRadius: 6, padHeight: 3 }), -34, 204, 0, "high");
   put("supply-camp", shelterFrame(5, 2.4, 3), 32, 104);
   for (const [x, z] of [[-49, 70], [48, 129]]) put(`sea-mouth-${x}`, caveMouth(9, 5, 7), x, z);
-  for (const m of ROUTE_MOUTHS) put(`route-arch-${m.x}`, ruinedArch(5.2, 5, 1.4), m.x, m.z);
   for (const [x, z] of COAST_ROCKS) {
     put(`rock-${z}`, rockFormation(), x, z);
   }

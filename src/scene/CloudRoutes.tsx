@@ -3,73 +3,166 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { useGame } from "../game/store";
-import { CANOPY_GLIDE, CLOUD_ELECTRIC_PANELS, CLOUD_ROUTE_GATES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
+import { CANOPY_GLIDE, CANOPY_GUST_SPUR, CLOUD_CHASMS, CLOUD_DECKS, CLOUD_ELECTRIC_PANELS, CLOUD_PUZZLE_BARRIERS, CLOUD_ROUTE_GATES, CLOUD_ZONES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
+import { cloudGroundY } from "../game/world/cloudTerrain";
 import { flatMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { addKit, branch, bridge, caveMouth } from "./models/cloudKit";
-import { canopyTreeKits } from "./cloudScenery";
+import { canopyTreeKits, junctionKits } from "./cloudScenery";
 export { canopyTreeKits } from "./cloudScenery";
 import { audio } from "../audio/audio";
 
 const at = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
 const bark = "#626652", rock = "#293c50";
-function span(b: PartBuilder, ax: number, az: number, bx: number, bz: number, width: number, color: string, dy = -.25, height = .4) {
-  const len = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az);
-  // Short sections follow precisely the same height function as collision.
-  for (let i = 0; i < Math.ceil(len); i++) {
-    const t = (i + .5) / Math.ceil(len), x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-    b.box(width, height, len / Math.ceil(len) + .15, x, cloudY(x, z) + dy, z, color, yaw);
+const gustTrail = CANOPY_GUST_SPUR.find(s => s.kind === "trail")!;
+const viewpoint = CANOPY_GUST_SPUR.find(s => s.kind === "disc")!;
+
+/** Actual post extents, shared with the rendered-foundation grounding test. */
+export function canopyDeckSupports() {
+  const posts: Array<{ x: number; z: number; bottom: number; top: number; radius: number }> = [];
+  const put = (x: number, z: number) => {
+    const radius = .22, top = cloudY(x, z) - .24;
+    let bottom = cloudGroundY(x, z);
+    for (const dx of [-radius, radius]) for (const dz of [-radius, radius]) bottom = Math.min(bottom, cloudGroundY(x + dx, z + dz));
+    // The terrain triangles interpolate through grid vertices, including the
+    // sharp drop under the spur. Include the enclosing 2/4 m grid cells rather
+    // than seating a short post on the continuous shoulder above that chord.
+    const foot = radius * 1.3;
+    for (let gx = Math.floor((x - foot) / 4) * 4; gx <= Math.ceil((x + foot) / 4) * 4; gx += 2) {
+      for (let gz = Math.floor((z - foot) / 4) * 4; gz <= Math.ceil((z + foot) / 4) * 4; gz += 2) bottom = Math.min(bottom, cloudGroundY(gx, gz));
+    }
+    bottom -= .3; // embed beneath the terrain grid's interpolated surface
+    if (top > bottom) posts.push({ x, z, bottom, top, radius });
+  };
+  for (let i = 1; i < gustTrail.pts.length; i++) {
+    const [ax, az] = gustTrail.pts[i - 1], [bx, bz] = gustTrail.pts[i];
+    const length = Math.hypot(bx - ax, bz - az), steps = Math.ceil(length / 5);
+    for (let j = 0; j <= steps; j++) for (const side of [-1, 1]) {
+      put(ax + (bx - ax) * j / steps + (bz - az) / length * (gustTrail.w - .25) * side,
+        az + (bz - az) * j / steps - (bx - ax) / length * (gustTrail.w - .25) * side);
+    }
   }
+  for (let i = 0; i < 8; i++) {
+    const angle = i * Math.PI / 4;
+    put(viewpoint.x + Math.cos(angle) * (viewpoint.r - .7), viewpoint.z + Math.sin(angle) * (viewpoint.r - .7));
+  }
+  put(viewpoint.x, viewpoint.z);
+  return posts;
 }
-/** Current layout only. Branch sockets are public for later walkway placement. */
 export function canopyFoundationGeometry() {
   const b = new PartBuilder();
-  for (const p of canopyTreeKits()) {
-    b.cyl(5.4, 7, 6.3, p.position[0], -6, p.position[2], "#394b53", 10);
-    p.kit.geometry.dispose();
+  for (const p of canopyDeckSupports()) {
+    b.cyl(p.radius, p.radius * 1.3, p.top - p.bottom, p.x, p.bottom, p.z, bark, 6);
+    // Branch braces overlap the post head and the underside of the planks.
+    addKit(b, branch([.85, .25, 0], .22), [p.x, p.top - .25, p.z]);
+    addKit(b, branch([-.85, .25, 0], .22), [p.x, p.top - .25, p.z]);
+  }
+  const beam = (ax: number, az: number, bx: number, bz: number) => {
+    const steps = Math.ceil(Math.hypot(bx - ax, bz - az) / 4);
+    for (let i = 0; i < steps; i++) {
+      const x = THREE.MathUtils.lerp(ax, bx, i / steps), z = THREE.MathUtils.lerp(az, bz, i / steps);
+      const nx = THREE.MathUtils.lerp(ax, bx, (i + 1) / steps), nz = THREE.MathUtils.lerp(az, bz, (i + 1) / steps);
+      addKit(b, branch([nx - x, cloudY(nx, nz) - cloudY(x, z), nz - z], .3), [x, cloudY(x, z) - .45, z]);
+    }
+  };
+  // Continuous bearers join the post heads and carry the planks between them.
+  for (let i = 1; i < gustTrail.pts.length; i++) {
+    const [ax, az] = gustTrail.pts[i - 1], [bx, bz] = gustTrail.pts[i], length = Math.hypot(bx - ax, bz - az);
+    for (const side of [-1, 0, 1]) {
+      const dx = (bz - az) / length * (gustTrail.w - .25) * side, dz = -(bx - ax) / length * (gustTrail.w - .25) * side;
+      beam(ax + dx, az + dz, bx + dx, bz + dz);
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    const angle = i * Math.PI / 4;
+    beam(viewpoint.x, viewpoint.z, viewpoint.x + Math.cos(angle) * (viewpoint.r - .7), viewpoint.z + Math.sin(angle) * (viewpoint.r - .7));
   }
   return b.build();
+}
+function deckDistance(s: typeof CLOUD_DECKS[number], x: number, z: number): number {
+  if (s.kind === "disc") return Math.hypot(x - s.x, z - s.z) - s.r;
+  if (s.kind === "rect") return Math.max(s.x0 - x, x - s.x1, s.z0 - z, z - s.z1);
+  let distance = Infinity;
+  for (let i = 1; i < s.pts.length; i++) {
+    const [ax, az] = s.pts[i - 1], [bx, bz] = s.pts[i], dx = bx - ax, dz = bz - az;
+    const t = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
+    distance = Math.min(distance, Math.hypot(x - ax - dx * t, z - az - dz * t) - s.w);
+  }
+  return distance;
+}
+/** Short, tessellated planks follow cloudY across their entire walking face. */
+function deckPlank(b: PartBuilder, x: number, z: number) {
+  const corners = [[x, z], [x, z + .5], [x + 1, z + .5], [x + 1, z]];
+  const points = [0, -.26].flatMap(dy => corners.flatMap(([px, pz]) => [px, cloudY(px, pz) + .025 + dy, pz]));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+  g.setIndex([0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0]);
+  g.computeVertexNormals();
+  b.add(g, Math.round(z * 2) % 3 ? "#9d875f" : "#897553", [0, 0, 0]);
 }
 function canopyGeometry() {
   const b = new PartBuilder();
-  b.add(canopyFoundationGeometry(), "#394b53", [0, 0, 0]);
-  span(b, -9, 279, -20, 286, 5.5, bark);
-  span(b, -20, 304, -10, 311, 5.5, bark);
-  span(b, -10, 311, 0, 312, 5.5, "#8c907d");
-  span(b, -26, 302, -32, 303, 4, bark);
-  for (const [z0, z1] of [[284, 289.5], [291.5, 298.5], [300.5, 306]]) {
-    span(b, -20, z0, -20, z1, 14, "#707d64", -.28, .28);
-    for (const x of [-26, -22, -18, -14]) {
-      span(b, x, z0, x, z1, 3, "#6f775e", -.8, .8);
-      // Heavy tapered roots beneath the walking tops make the height readable.
-      addKit(b, branch([0, cloudY(x, z1) - cloudY(x, z0), z1 - z0], .8), [x, cloudY(x, z0) - 1, z0]);
+  b.add(canopyFoundationGeometry(), bark, [0, 0, 0]);
+  const cells = new Set<string>();
+  for (const s of CLOUD_DECKS) {
+    const bounds = s.kind === "disc" ? [s.x - s.r, s.x + s.r, s.z - s.r, s.z + s.r]
+      : s.kind === "rect" ? [s.x0, s.x1, s.z0, s.z1]
+      : [Math.min(...s.pts.map(p => p[0])) - s.w, Math.max(...s.pts.map(p => p[0])) + s.w,
+        Math.min(...s.pts.map(p => p[1])) - s.w, Math.max(...s.pts.map(p => p[1])) + s.w];
+    for (let x = Math.floor(bounds[0]); x < bounds[1]; x++) for (let z = Math.floor(bounds[2] * 2) / 2; z < bounds[3]; z += .5) {
+      // Include cells touching the edge, so every playable boundary is carried.
+      if (deckDistance(s, x + .5, z + .25) <= Math.hypot(.5, .25)) cells.add(`${x},${z}`);
     }
   }
-  b.cyl(3, 3.2, .4, -32, cloudY(-32, 303) - .4, 303, bark, 8);
-  for (const { position, kit } of canopyTreeKits()) {
-    const [x, , z] = position, y = cloudY(x, z);
-    // A full rock buttress carries every root, continuously below sea level.
-    addKit(b, kit, position);
-    // Hanging vines sit at the edges, never between camera and walker.
-    for (const dx of [-1, 1]) b.cyl(.045, .045, 7, x + dx * 1.2, y + 1, z, "#82946b", 5);
+  for (const cell of cells) { const [x, z] = cell.split(",").map(Number); deckPlank(b, x, z); }
+  // Low open rails on the sea side, with no rail across the entrance.
+  const rail = (ax: number, az: number, bx: number, bz: number) => {
+    const length = Math.hypot(bx - ax, bz - az), steps = Math.ceil(length / 1.5), yaw = Math.atan2(bx - ax, bz - az);
+    for (let i = 0; i < steps; i++) {
+      const t = (i + .5) / steps, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      b.box(.11, .11, length / steps + .1, x, cloudY(x, z) + 1.05, z, "#b6a77c", yaw);
+      if (i % 2 === 0) b.cyl(.085, .1, 1.2, x, cloudY(x, z) - .1, z, bark, 5);
+    }
+  };
+  for (let i = 1; i < gustTrail.pts.length; i++) {
+    const [ax, az] = gustTrail.pts[i - 1], [bx, bz] = gustTrail.pts[i], length = Math.hypot(bx - ax, bz - az);
+    const dx = -(bz - az) / length * gustTrail.w, dz = (bx - ax) / length * gustTrail.w;
+    rail(ax + dx, az + dz, bx + dx, bz + dz);
   }
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI * (.25 + i * .15), c = a + Math.PI * .15;
+    rail(viewpoint.x + Math.cos(a) * viewpoint.r, viewpoint.z + Math.sin(a) * viewpoint.r,
+      viewpoint.x + Math.cos(c) * viewpoint.r, viewpoint.z + Math.sin(c) * viewpoint.r);
+  }
+  for (const { position, kit, yaw } of canopyTreeKits()) addKit(b, kit, position, yaw);
   for (const p of [CANOPY_GLIDE.from, CANOPY_GLIDE.to]) {
-    b.cyl(1.25, 1.4, .1, p.x, cloudY(p.x, p.z) + .05, p.z, "#c4cda1", 8);
-    b.torus(.85, .08, at(p.x, p.z, .18), [Math.PI / 2, 0, 0], "#e6dfb0");
-    // Feather-shaped pad marker.
-    b.boxAt(.22, .04, .85, at(p.x, p.z, .2), [0, -.5, 0], "#526f68");
+    // Pads end exactly on their lips; no geometry crosses the open glide gap.
+    b.cyl(.95, 1.05, .08, p.x, cloudY(p.x, p.z) + .025, p.z, "#c4cda1", 8);
+    b.torus(.72, .06, at(p.x, p.z, .14), [Math.PI / 2, 0, 0], "#e6dfb0");
+    b.boxAt(.22, .04, .75, at(p.x, p.z, .17), [0, -.5, 0], "#526f68");
   }
-  // Junction ruins frame both mouths and the actual observatory above them.
-  for (const side of [-1, 1]) {
-    b.cyl(.7, 1, 2.8, side * 6.5, 11, 274, "#929381", 6);
-    b.boxAt(2.1, .15, .65, [side * 6.5, 13.6, 274], [0, side * .55, 0], "#c4b78c");
-  }
-  b.cyl(2.1, 2.3, .12, 0, 11, 271, "#858a78", 8);
   return b.build();
 }
-function bridgeGeometry() {
-  return bridge({ length: 2, width: 14, deckAt: t => cloudY(-20, 289.5 + t * 2) - cloudY(-20, 289.5) }).geometry;
+const vineBarrier = CLOUD_PUZZLE_BARRIERS.find(b => b.puzzle === "canopyVine")!;
+const vineChasm = CLOUD_CHASMS.find(c => c.z0 === vineBarrier.z0)!;
+const vineTrail = CLOUD_ZONES.skyrootCanopy.walk.filter(s => s.kind === "trail").find(s => s.pts.some((p, i) => i > 0 && s.pts[i - 1][1] < vineChasm.z0 && p[1] > vineChasm.z1))!;
+const vineSegment = vineTrail.pts.findIndex((p, i) => i > 0 && vineTrail.pts[i - 1][1] < vineChasm.z0 && p[1] > vineChasm.z1);
+const [vineA, vineB] = [vineTrail.pts[vineSegment - 1], vineTrail.pts[vineSegment]];
+const vineSlope = (vineB[0] - vineA[0]) / (vineB[1] - vineA[1]);
+// The ends rest 1.3 m back on level ground: the 2 m terrain grid slopes into the gap at its lip.
+const vineLength = vineChasm.z1 - vineChasm.z0 + 2.6;
+export const canopyBridgePlacement = {
+  x: THREE.MathUtils.lerp(vineA[0], vineB[0], ((vineChasm.z0 + vineChasm.z1) / 2 - vineA[1]) / (vineB[1] - vineA[1])),
+  // The trail crosses at an angle. Its complete footprint, including both
+  // lips, must fit inside this z-aligned bridge and the barrier's x range.
+  z: vineChasm.z0 - 1.3, length: vineLength,
+  width: Math.min(vineBarrier.x1 - vineBarrier.x0, vineTrail.w * 2 * Math.hypot(1, vineSlope) + vineLength * Math.abs(vineSlope) + .4),
+};
+export function canopyBridgeKit() {
+  const { x, z, length, width } = canopyBridgePlacement;
+  return bridge({ length, width, deckAt: t => cloudY(x, z + t * length) - cloudY(x, z) });
 }
+function bridgeGeometry() { return canopyBridgeKit().geometry; }
 function grottoGeometry() {
   const b = new PartBuilder();
   // A closed shell, with high ceiling above every gameplay camera. Portals
@@ -107,6 +200,17 @@ function grottoGeometry() {
 }
 function mouthsGeometry() {
   const b = new PartBuilder();
+  for (const { position, kit, yaw } of junctionKits()) addKit(b, kit, position, yaw);
+  // Broken, low masonry follows the eastern overlook's cliff, leaving the
+  // panoramic view open above the player's shoulders.
+  const overlook = CLOUD_ZONES.windfallJunction.walk.filter(s => s.kind === "disc").reduce((a, p) => p.x > a.x ? p : a);
+  for (let i = 0; i < 7; i++) {
+    if (i === 2 || i === 5) continue;
+    const angle = -.9 + i * .3, x = overlook.x + Math.cos(angle) * (overlook.r - .25), z = overlook.z + Math.sin(angle) * (overlook.r - .25);
+    const y = cloudGroundY(x, z) - .18, yaw = Math.PI / 2 - angle;
+    b.box(1.35, .55 + i % 3 * .18, .65, x, y, z, "#65706e", yaw);
+    b.box(1.45, .16, .78, x, y + .55 + i % 3 * .18, z, "#929381", yaw);
+  }
   for (const [x, z] of [[12, 281], [12, 309]]) {
     const y = cloudY(x, z);
     addKit(b, caveMouth(6.4, 8, 3), [x, y - .85, z]);
@@ -158,10 +262,17 @@ function ElectricPanels() {
 }
 function RouteWind({ stopped }: { stopped: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null), dummy = useMemo(() => new THREE.Object3D(), []);
+  const gustBarrier = CLOUD_PUZZLE_BARRIERS.find(b => b.puzzle === "canopyGust")!;
+  const gustX = (gustBarrier.x0 + gustBarrier.x1) / 2;
+  const gustZ = THREE.MathUtils.lerp(gustTrail.pts[0][1], gustTrail.pts[1][1],
+    (gustX - gustTrail.pts[0][0]) / (gustTrail.pts[1][0] - gustTrail.pts[0][0]));
+  const trails = CLOUD_ZONES.skyrootCanopy.walk.filter(s => s.kind === "trail");
   useFrame(() => {
     for (let i = 0; i < 32; i++) {
       const gust = i >= 20, t = (rt.time * .3 + i / 20) % 1;
-      const x = gust ? -29 + (t - .5) * 4 : -26 + t * 14, z = gust ? 303 + Math.sin(i * 7) : 283 + (i * 2.37) % 24;
+      const trail = trails[i % trails.length], j = i % (trail.pts.length - 1), a = trail.pts[j], b = trail.pts[j + 1];
+      const x = gust ? gustX + (t - .5) * 7 : THREE.MathUtils.lerp(a[0], b[0], t);
+      const z = gust ? gustZ + Math.sin(i * 7) : THREE.MathUtils.lerp(a[1], b[1], t);
       dummy.position.set(x, cloudY(x, z) + .5 + i % 3 * .4, z);
       dummy.scale.setScalar(gust && stopped ? 0 : Math.sin(t * Math.PI)); dummy.updateMatrix(); ref.current?.setMatrixAt(i, dummy.matrix);
     }
@@ -191,7 +302,7 @@ export function CloudRoutes({ inside }: { inside: boolean }) {
   const vine = a.puzzles.includes("canopyVine"), raft = a.puzzles.includes("grottoRaft"), boiler = a.puzzles.includes("grottoBoiler");
   return <>
     {!inside && <><mesh geometry={canopy} material={flatMat} /><mesh geometry={mouths} material={flatMat} />
-      <mesh geometry={bridge} material={flatMat} position={at(-20, 289.5)} rotation={[vine ? 0 : 1.25, 0, 0]} />
+      <mesh geometry={bridge} material={flatMat} position={at(canopyBridgePlacement.x, canopyBridgePlacement.z)} rotation={[vine ? 0 : 1.25, 0, 0]} />
       <RouteWind stopped={a.puzzles.includes("canopyGust")} />
     </>}
     {inside && <>

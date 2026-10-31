@@ -2,30 +2,40 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { cloudGeometry } from "./CloudIsle";
 import { cloudY } from "../game/world/cloudisle";
+import { cloudGroundY } from "../game/world/cloudTerrain";
 import { arenaGeometry } from "./StormBeacon";
 import { canopyTreeKits, cloudRouteGeometry } from "./CloudRoutes";
 
 describe("Cloud Isle's single real landscape", () => {
-  it("puts each current canopy platform socket on its carrying branch beneath a walkway", () => {
+  it("seats the canopy trees on the hillside with platform sockets beneath the current route", () => {
     const geometry = cloudRouteGeometry.canopyGeometry();
+    const terrain = cloudGeometry.terrainTiles();
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.updateMatrixWorld(true);
-    for (const { position, kit } of canopyTreeKits()) {
+    const world = new THREE.Group();
+    [geometry, ...terrain].forEach(g => world.add(new THREE.Mesh(g, material)));
+    world.updateMatrixWorld(true);
+    const trees = canopyTreeKits();
+    expect(trees.length).toBeGreaterThanOrEqual(4); expect(trees.length).toBeLessThanOrEqual(6);
+    for (const { position, kit } of trees) {
       const socket = new THREE.Vector3(...kit.anchors["walkwayBranch.platform"].point).add(new THREE.Vector3(...position));
       const floor = cloudY(socket.x, socket.z);
       expect(socket.y).toBeLessThanOrEqual(floor);
       expect(floor - socket.y).toBeLessThan(.3);
-      const hit = new THREE.Raycaster(new THREE.Vector3(socket.x, floor + .1, socket.z), new THREE.Vector3(0, -1, 0), 0, .5).intersectObject(mesh)[0];
+      const hit = new THREE.Raycaster(new THREE.Vector3(socket.x, floor + .1, socket.z), new THREE.Vector3(0, -1, 0), 0, .5).intersectObject(world, true)[0];
       expect(hit, "branch endpoint is under a real rendered walkway").toBeDefined();
       expect(Math.abs(hit.point.y - floor)).toBeLessThan(.2);
-      // Each root flare meets real rock, whose skirt continues below the sea.
+      // Deep integral pads grip the hillside rather than reaching to sea level.
       const ground = kit.parts.find(p => p.id === "ground")!.bounds;
-      expect(ground.min.y + position[1]).toBeLessThan(-.4);
-      expect(kit.parts.find(p => p.id === "trunk")!.bounds.min.y).toBeLessThan(ground.max.y);
+      expect(ground.min.y + position[1]).toBeLessThan(cloudGroundY(position[0], position[2]));
+      const trunk = kit.parts.find(p => p.id === "trunk")!.bounds;
+      expect(trunk.min.y).toBeLessThan(ground.max.y);
+      expect(trunk.max.x - trunk.min.x).toBeGreaterThanOrEqual(3);
+      const crowns = kit.parts.filter(p => p.id.includes("crown"));
+      expect(crowns.length).toBeGreaterThan(0);
+      for (const crown of crowns) expect(crown.bounds.min.y + position[1] - floor).toBeGreaterThanOrEqual(6);
       kit.geometry.dispose();
     }
-    geometry.dispose(); material.dispose();
+    geometry.dispose(); terrain.forEach(g => g.dispose()); material.dispose();
   });
   it("fits the player and real beacon in the Cloud follow lens at both target sizes", () => {
     for (const [w,h] of [[1366,768],[1280,800]]) for (const z of [1,20,36,42]) {
