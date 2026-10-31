@@ -61,7 +61,10 @@ export interface MiState {
     hp: number;
     mp: Record<string, number>;
     knockedOut: boolean;
-    enemies: Array<{ i: number; zone: string; kind: string; state: string; hp: number; x: number; z: number; yaw: number; timer: number }>;
+    inferno: { age: number; held: boolean } | null;
+    cyclone: { id: number; age: number; carried: number[] } | null;
+    bombChain: { id: number } | null;
+    enemies: Array<{ i: number; zone: string; kind: string; state: string; hp: number; x: number; z: number; yaw: number; timer: number; air: number; control: string | null; burning: boolean }>;
     drops: number;
     shots: number;
     projectiles: Array<{ id: number; hostile: boolean; source?: number; x: number; y: number; z: number; vx: number; vz: number; age: number; life: number; radius: number }>;

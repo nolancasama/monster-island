@@ -622,7 +622,7 @@ export function basicAttack(): boolean {
         else if (!startControl(e, "grabbed", 0.45, f)) { e.kx += ux * 5; e.kz += uz * 5; }
       }
     }
-    audio.play("vines");
+    audio.play("whip");
   } else if (move.shape === "blast") {
     const degrees = up ? 80 : 60;
     pushFx("blast", o.x, o.y, o.z, ux, uz, yaw, range);

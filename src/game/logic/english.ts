@@ -64,6 +64,9 @@ export type PhraseId =
   | "cmdPush"
   | "cmdBlow"
   | "cmdBurn"
+  | "cmdPop"
+  | "cmdStop"
+  | "cmdSpin"
   | "cmdFly" | "cmdSplash"
   | "yesLetsGo" | "raiseSail" | "turnLeft" | "itsWindy" | "itsSunny" | "itsRainy" | "look"
   | "imAFriend" | "yesItIs" | "whereLumo" | "yesIWill";
@@ -237,6 +240,9 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   cmdPush: { id: "cmdPush", en: "Push!", keys: [COMMAND_WORDS.push], distractors: ["cmdPull", "cmdBurn"] },
   cmdBlow: { id: "cmdBlow", en: "Blow!", keys: [COMMAND_WORDS.blow], distractors: ["cmdBurn", "cmdPull"] },
   cmdBurn: { id: "cmdBurn", en: "Burn!", keys: [COMMAND_WORDS.burn], distractors: ["cmdBlow", "cmdPush"] },
+  cmdPop: { id: "cmdPop", en: "Pop!", keys: [["pop", "pops", "poppu"]], distractors: ["cmdStop", "cmdSpin"] },
+  cmdStop: { id: "cmdStop", en: "Stop!", keys: [["stop", "stops", "sutoppu"]], distractors: ["cmdPop", "cmdBurn"] },
+  cmdSpin: { id: "cmdSpin", en: "Spin!", keys: [["spin", "spins", "supin"]], distractors: ["cmdBurn", "cmdStop"] },
   cmdFly: { id: "cmdFly", en: "Fly!", keys: [ABILITY_WORDS.fly], distractors: ["cmdPull", "cmdBurn"] },
   cmdSplash: { id: "cmdSplash", en: "Splash!", keys: [["splash", "splashes", "splashu", "supurasshu", "splish", "sprash"]], distractors: ["cmdPull", "cmdFly"] }
 };

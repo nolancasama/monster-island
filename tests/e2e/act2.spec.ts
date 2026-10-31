@@ -302,12 +302,12 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   expect(s.progress.bag).toMatchObject({ apples: 1, berries: 1 });
   expect(s.objective).toEqual({ id: "harbor" });
 
-  // The trainer lists the moves; practising "Pull!" earns coins once.
+  // The trainer lists the moves; practising "Stop!" earns coins once.
   await use(page, "trainer");
   await waitFor(page, (x) => x.act2.panel === "trainer", 15_000, "trainer's list");
-  await expect(page.getByTestId("trainer-leafy")).toContainText("Super Whip");
+  await expect(page.getByTestId("trainer-leafy")).toContainText("Double Grab");
   await page.getByTestId("practise-leafy").click();
-  await answer(page, "cmdPull");
+  await answer(page, "cmdStop");
   s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.trained.includes("leafy"), 15_000, "practised");
   expect(s.progress.act2.coins).toBe(64 + 10);
 

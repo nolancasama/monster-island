@@ -22,11 +22,11 @@ export const UI = {
   moveTouch: { en: "Move with the stick.", ja: "スティックで いどう。" },
   switch: { en: "Open the journal (M) and choose a friend!", ja: "ずかん(M)で ともだちを えらぼう!" },
   // Act 2's tutorial (each shows until it is understood).
-  attack: { en: "An enemy! Press J to attack. Hold J to keep going!", ja: "てきだ! J で こうげき。おしつづけると れんぞく こうげき!" },
-  attackTouch: { en: "An enemy! Tap the big button to attack!", ja: "てきだ! おおきい ボタンで こうげき!" },
+  attack: { en: "Face an enemy! J: Ember burns, Bubbo traps, Leafy throws, Puff blows! Hold J to repeat. No MP!", ja: "てきの ほうへ J! ほのお・あわ・つる・かぜの わざ。MPなし! おしつづけると れんぞく!" },
+  attackTouch: { en: "Face an enemy! Tap: Ember burns, Bubbo traps, Leafy throws, Puff blows! Hold to repeat. No MP!", ja: "てきの ほうへ タップ! ほのお・あわ・つる・かぜの わざ。MPなし! おしつづけると れんぞく!" },
   coins: { en: "Coins! Walk near them to pick them up.", ja: "コインだ! ちかくを あるくと ひろえるよ" },
-  special: { en: "Press K for a special move! It uses MP.", ja: "K で とくべつな わざ! MPを つかうよ" },
-  specialTouch: { en: "Tap the special button! It uses MP.", ja: "とくべつな わざの ボタンを タップ! MPを つかうよ" },
+  special: { en: "K uses MP: Inferno burns, Bubble Bomb pops, Root Snare stops, Cyclone carries! Hold K for longer Inferno.", ja: "K は MPを つかうよ。ひろい ほのお・あわの ばくだん・ねっこの わな・たつまき! ほのおは ながおしで ながく!" },
+  specialTouch: { en: "Tap the special button! MP powers Inferno, Bubble Bomb, Root Snare or Cyclone. One tap gives a full fire burst!", ja: "MPで ひろい ほのお・あわの ばくだん・ねっこの わな・たつまき! ほのおも いちど タップで OK!" },
   eat: { en: "HP or MP low? Press F to eat food!", ja: "HPや MPが へったら F で たべよう!" },
   eatTouch: { en: "HP or MP low? Tap Eat!", ja: "HPや MPが へったら「Eat」を タップ!" },
   switchAct2: { en: "Press 1-4 to change friends. Each friend fights in its own way!", ja: "1〜4 で ともだちを かえよう。それぞれ たたかいかたが ちがうよ!" }

@@ -2,11 +2,24 @@ import { describe, expect, it } from "vitest";
 import { judgeSpeech, matchesPhrase } from "./speechMatch";
 import { COLOR_PHRASE, LIKE_PHRASE, PHRASES, PHRASE_IDS, type PhraseId } from "./english";
 import { ISLAND_FOODS } from "../data/foods";
+import { COMBAT, type CompanionId } from "../data/combat";
 
 const P = (ids: PhraseId[]) => ids.map((id) => PHRASES[id]);
 const LIKE_OPTIONS = P(ISLAND_FOODS.map((f) => LIKE_PHRASE[f]));
 
 describe("English response matching", () => {
+  it("matches all elemental special words and accent variants without confusing commands", () => {
+    const commands = { ember: "cmdBurn", bubbo: "cmdPop", leafy: "cmdStop", puff: "cmdSpin" } as const;
+    const options = P(Object.values(commands));
+    for (const friend of Object.keys(commands) as CompanionId[]) {
+      expect(judgeSpeech([COMBAT[friend].special.word], options)).toMatchObject({ kind: "match", id: commands[friend] });
+    }
+    for (const [heard, id] of [["barn", "cmdBurn"], ["poppu", "cmdPop"], ["sutoppu", "cmdStop"], ["supin", "cmdSpin"]]) {
+      expect(judgeSpeech([heard], options)).toMatchObject({ kind: "match", id });
+    }
+    expect(judgeSpeech(["pop stop"], options).kind).toBe("unclear");
+    for (const heard of ["pull", "push", "blow"]) expect(judgeSpeech([heard], options).kind).toBe("none");
+  });
   it("matches Phase 3 phrases and accent variants without single-word questions", () => {
     for (const text of ["Can you make fire?", "ken you make fia", "kan fire"]) {
       expect(judgeSpeech([text], P(["canFire", "canFly", "canSwim"]))).toMatchObject({ id: "canFire" });
