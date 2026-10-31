@@ -12,6 +12,7 @@ import { additiveSprite, glowTexture, smoothMat } from "./materials";
 import { foodGeometry } from "./models/props";
 import { monsterTop } from "./Monsters";
 import type { FoodId } from "../game/types";
+import { splashParticle } from "./splashParticle";
 
 function canvasTexture(draw: (g: CanvasRenderingContext2D) => void, size = 64): THREE.CanvasTexture {
   const c = document.createElement("canvas");
@@ -89,11 +90,7 @@ const BURSTS: Record<Effect["kind"], Burst> = {
     life: 0.8,
     color: new THREE.Color("#e8fbff"),
     size: 0.2,
-    pos: (e, i, t, o) => {
-      const a = rnd(e.id * 19 + i) * Math.PI * 2;
-      const v = 1 + rnd(i * 5) * 1.2;
-      o.set(e.x + Math.cos(a) * t * v, e.y + t * 3.4 - t * t * 6, e.z + Math.sin(a) * t * v);
-    }
+    pos: (e, i, t, o) => splashParticle(e.x, e.y, e.z, e.id, i, t, o)
   },
   poof: {
     life: 0.6,

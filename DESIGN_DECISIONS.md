@@ -1487,3 +1487,26 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
   enemy's state, air, control kind, burning flag and resistance expiry for
   controller acceptance. Scene edits only retain hostile-shot compatibility
   and ignore the new FX until E3; no new rendering or world objects.
+
+## 2026-11-01 — Slice E3: pooled elemental combat visuals
+
+- Enemy bodies and overhead markers follow the simulation's air offset;
+  shadows and attack tells remain on the ground. Traps wobble, carried
+  bodies spin, burns carry two billboard flames, and six roots per snare
+  rise and retract over short presentation-only transitions.
+- Seven shared instanced batches cover all combat FX and projectiles:
+  additive billboards, bubble spheres, segmented vines, root spikes,
+  translucent cone shells, flat rings and curved wind streaks. Transparent
+  double-sided batches force one pass, keeping the maximum at seven draws
+  regardless of overlapping moves. Buffers, colors and transforms are
+  preallocated; hostile shots retain distinct colors in the billboard pool.
+  Removed the unused whip, pull, jet, burst and old friendly projectile
+  renderers. Bubble pops reuse the world splash particle trajectory.
+- FX records own duration and position, including live cyclone coordinates.
+  Inferno uses a wider, taller flickering breath cone and follows Ember's
+  mouth and facing. The current E2 simulation stubs emit only short-lived
+  breath/cyclone FX; this visual slice does not extend their gameplay
+  lifetime or invent a travelling cyclone in the renderer.
+- No gameplay state machine changed. Existing read-only
+  window.__mi.state().act2 enemy air/control/burning fields remain the
+  controller's semantic state surface; cb.fx and cb.shots drive presentation.
