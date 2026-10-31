@@ -171,7 +171,7 @@ function observatoryApproachUnlocked(a: Act3): boolean {
 /** Valid floor beyond a puzzle can still be unreachable floor. Check the side
  * of every route crossing as well as collision at the saved point itself. */
 function cloudSavePositionUnlocked(a: Act3, x: number, z: number): boolean {
-  if (!a.cleared.includes("stormbreakCoast") && z > 43.7) return false;
+  if (!a.cleared.includes("stormbreakCoast") && z > 157.6) return false;
   const zone = cloudZoneAt(x, z);
   if (zone === "backTunnel" || zone === "windfallJunction" || zone === "skyrootCanopy" || zone === "thunderGrotto"
     || zone === "observatoryApproach" || zone === "ancientObservatory" || zone === "stormBeacon") {
@@ -245,10 +245,11 @@ export function decodeSave(text: string | null): SaveData | null {
   // same solids and gates movement uses. Progress and the v3 format stay intact.
   let safe;
   if (p.act3.world === "cloud") {
-    let x = num(pl.x, NaN), z = num(pl.z, NaN);
+    const oldLayout = !isObj(src.act3) || src.act3.cloudLayout !== 2;
+    let { x, z } = oldLayout ? CLOUD_SPAWNS[p.act3.area] : { x: num(pl.x, NaN), z: num(pl.z, NaN) };
     // An autosave during the authored hop resumes on its nearest marked pad.
-    if (x < -12 && z > 118.15 && z < 120.85 && p.act3.puzzles.includes("canopyGlide")) {
-      ({ x, z } = z < 119.5 ? CANOPY_GLIDE.from : CANOPY_GLIDE.to);
+    if (x < -12 && z > 298.15 && z < 300.85 && p.act3.puzzles.includes("canopyGlide")) {
+      ({ x, z } = z < 299.5 ? CANOPY_GLIDE.from : CANOPY_GLIDE.to);
     }
     // A position in valid but story-locked ground is still invalid for this
     // save. Keep it on the accessible side before projecting out of solids.

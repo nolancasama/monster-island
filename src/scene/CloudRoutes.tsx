@@ -6,7 +6,9 @@ import { useGame } from "../game/store";
 import { CANOPY_GLIDE, CLOUD_ELECTRIC_PANELS, CLOUD_ROUTE_GATES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
 import { flatMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
-import { addKit, branch, bridge, caveMouth, giantTree } from "./models/cloudKit";
+import { addKit, branch, bridge, caveMouth } from "./models/cloudKit";
+import { canopyTreeKits } from "./cloudScenery";
+export { canopyTreeKits } from "./cloudScenery";
 import { audio } from "../audio/audio";
 
 const at = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
@@ -20,20 +22,22 @@ function span(b: PartBuilder, ax: number, az: number, bx: number, bz: number, wi
   }
 }
 /** Current layout only. Branch sockets are public for later walkway placement. */
-export function canopyTreeKits() {
-  return [[-30, 106], [-30, 116], [-11, 114], [-29, 127]].map(([x, z]) => {
-    const y = cloudY(x, z);
-    return { position: [x, .3, z] as [number, number, number], kit: giantTree({ height: y + 9.2,
-      platformHeight: y - .3, platformReach: [x === -11 ? -9 : 9, 0, z === 127 ? -2 : 0] }) };
-  });
+export function canopyFoundationGeometry() {
+  const b = new PartBuilder();
+  for (const p of canopyTreeKits()) {
+    b.cyl(5.4, 7, 6.3, p.position[0], -6, p.position[2], "#394b53", 10);
+    p.kit.geometry.dispose();
+  }
+  return b.build();
 }
 function canopyGeometry() {
   const b = new PartBuilder();
-  span(b, -9, 99, -20, 106, 5.5, bark);
-  span(b, -20, 124, -10, 131, 5.5, bark);
-  span(b, -10, 131, 0, 132, 5.5, "#8c907d");
-  span(b, -26, 122, -32, 123, 4, bark);
-  for (const [z0, z1] of [[104, 109.5], [111.5, 118.5], [120.5, 126]]) {
+  b.add(canopyFoundationGeometry(), "#394b53", [0, 0, 0]);
+  span(b, -9, 279, -20, 286, 5.5, bark);
+  span(b, -20, 304, -10, 311, 5.5, bark);
+  span(b, -10, 311, 0, 312, 5.5, "#8c907d");
+  span(b, -26, 302, -32, 303, 4, bark);
+  for (const [z0, z1] of [[284, 289.5], [291.5, 298.5], [300.5, 306]]) {
     span(b, -20, z0, -20, z1, 14, "#707d64", -.28, .28);
     for (const x of [-26, -22, -18, -14]) {
       span(b, x, z0, x, z1, 3, "#6f775e", -.8, .8);
@@ -41,9 +45,10 @@ function canopyGeometry() {
       addKit(b, branch([0, cloudY(x, z1) - cloudY(x, z0), z1 - z0], .8), [x, cloudY(x, z0) - 1, z0]);
     }
   }
-  b.cyl(3, 3.2, .4, -32, cloudY(-32, 123) - .4, 123, bark, 8);
+  b.cyl(3, 3.2, .4, -32, cloudY(-32, 303) - .4, 303, bark, 8);
   for (const { position, kit } of canopyTreeKits()) {
     const [x, , z] = position, y = cloudY(x, z);
+    // A full rock buttress carries every root, continuously below sea level.
     addKit(b, kit, position);
     // Hanging vines sit at the edges, never between camera and walker.
     for (const dx of [-1, 1]) b.cyl(.045, .045, 7, x + dx * 1.2, y + 1, z, "#82946b", 5);
@@ -56,44 +61,44 @@ function canopyGeometry() {
   }
   // Junction ruins frame both mouths and the actual observatory above them.
   for (const side of [-1, 1]) {
-    b.cyl(.7, 1, 2.8, side * 6.5, 11, 94, "#929381", 6);
-    b.boxAt(2.1, .15, .65, [side * 6.5, 13.6, 94], [0, side * .55, 0], "#c4b78c");
+    b.cyl(.7, 1, 2.8, side * 6.5, 11, 274, "#929381", 6);
+    b.boxAt(2.1, .15, .65, [side * 6.5, 13.6, 274], [0, side * .55, 0], "#c4b78c");
   }
-  b.cyl(2.1, 2.3, .12, 0, 11, 91, "#858a78", 8);
+  b.cyl(2.1, 2.3, .12, 0, 11, 271, "#858a78", 8);
   return b.build();
 }
 function bridgeGeometry() {
-  return bridge({ length: 2, width: 14, deckAt: t => cloudY(-20, 109.5 + t * 2) - cloudY(-20, 109.5) }).geometry;
+  return bridge({ length: 2, width: 14, deckAt: t => cloudY(-20, 289.5 + t * 2) - cloudY(-20, 289.5) }).geometry;
 }
 function grottoGeometry() {
   const b = new PartBuilder();
   // A closed shell, with high ceiling above every gameplay camera. Portals
   // are at the southwest and northwest corners; exterior draws separately.
-  for (let z = 96; z < 135; z++) {
+  for (let z = 276; z < 315; z++) {
     const y = cloudY(20, z);
     b.box(30, .8, 1.05, 24, y - .82, z + .5, "#344656");
     for (const x of [9, 39]) b.box(2.5, 42, 1.1, x, 9, z + .5, rock);
   }
-  b.box(32, 2, 41, 24, 49, 115.5, "#233344");
-  b.box(26, 42, 2, 27, 9, 96, rock);
-  b.box(20, 42, 2, 30, 9, 134.8, rock);
-  for (const [x, z] of [[12, 103], [29, 108], [30, 117], [12, 123], [36, 126], [22, 132]]) {
+  b.box(32, 2, 41, 24, 49, 295.5, "#233344");
+  b.box(26, 42, 2, 27, 9, 276, rock);
+  b.box(20, 42, 2, 30, 9, 314.8, rock);
+  for (const [x, z] of [[12, 283], [29, 288], [30, 297], [12, 303], [36, 306], [22, 312]]) {
     const y = cloudY(x, z);
     b.add(new THREE.DodecahedronGeometry(2.6, 0), "#354b60", [x, y + 2.2, z], [0, z, .2], [1, 1.8, 1]);
     for (let i = 0; i < 3; i++) b.add(new THREE.ConeGeometry(.35 + i * .06, 1.7 + i * .4, 5), "#69bbc9", [x + (i - 1) * .65, y + 1 + i * .2, z - 1.6], [0, i, -.18 + i * .15]);
   }
   // Underground pool and waterfall share the room; no outdoor sea drawn here.
-  b.box(14, .08, 2.2, 20, cloudY(20, 110.5) + .05, 110.5, "#307a94");
-  b.box(2, 11, .12, 34, cloudY(34, 112) + 1, 112, "#75b9ca");
-  b.cyl(2.6, 3.2, .08, 33, cloudY(33, 112), 112, "#3d8ca5", 12);
+  b.box(14, .08, 2.2, 20, cloudY(20, 290.5) + .05, 290.5, "#307a94");
+  b.box(2, 11, .12, 34, cloudY(34, 292) + 1, 292, "#75b9ca");
+  b.cyl(2.6, 3.2, .08, 33, cloudY(33, 292), 292, "#3d8ca5", 12);
   // Basin, channels, boiler and overhead pipes: old raider machinery.
-  b.cyl(1, 1.2, .8, 23.8, cloudY(23.8, 108), 108, "#6d7b80", 8);
-  for (const z of [108, 117]) {
+  b.cyl(1, 1.2, .8, 23.8, cloudY(23.8, 288), 288, "#6d7b80", 8);
+  for (const z of [288, 297]) {
     b.cyl(.85, 1, 1.8, 25.8, cloudY(25.8, z), z, "#716d5e", 8);
     b.cyl(.22, .22, 3, 25.8, cloudY(25.8, z) + 1.7, z, "#8e8972", 6);
     b.torus(.7, .1, at(25.8, z, 1.2), [Math.PI / 2, 0, 0], "#d0a36a");
   }
-  for (let z = 113; z < 125; z += 2) b.box(.22, .22, 2.1, 27.2, cloudY(27.2, z) + 2.4, z, "#ad8e66");
+  for (let z = 293; z < 305; z += 2) b.box(.22, .22, 2.1, 27.2, cloudY(27.2, z) + 2.4, z, "#ad8e66");
   for (const p of CLOUD_ELECTRIC_PANELS) {
     b.box(p.w + .3, .12, p.d + .3, p.x, cloudY(p.x, p.z), p.z, "#747e7c");
     for (const dx of [-1, 1]) b.box(.12, .13, p.d, p.x + dx * (p.w / 2 - .2), cloudY(p.x, p.z) + .05, p.z, "#c3b687");
@@ -102,7 +107,7 @@ function grottoGeometry() {
 }
 function mouthsGeometry() {
   const b = new PartBuilder();
-  for (const [x, z] of [[12, 101], [12, 129]]) {
+  for (const [x, z] of [[12, 281], [12, 309]]) {
     const y = cloudY(x, z);
     addKit(b, caveMouth(6.4, 8, 3), [x, y - .85, z]);
     b.box(5, 5.5, .1, x + 1, y + .1, z + 1.5, "#142536");
@@ -156,7 +161,7 @@ function RouteWind({ stopped }: { stopped: boolean }) {
   useFrame(() => {
     for (let i = 0; i < 32; i++) {
       const gust = i >= 20, t = (rt.time * .3 + i / 20) % 1;
-      const x = gust ? -29 + (t - .5) * 4 : -26 + t * 14, z = gust ? 123 + Math.sin(i * 7) : 103 + (i * 2.37) % 24;
+      const x = gust ? -29 + (t - .5) * 4 : -26 + t * 14, z = gust ? 303 + Math.sin(i * 7) : 283 + (i * 2.37) % 24;
       dummy.position.set(x, cloudY(x, z) + .5 + i % 3 * .4, z);
       dummy.scale.setScalar(gust && stopped ? 0 : Math.sin(t * Math.PI)); dummy.updateMatrix(); ref.current?.setMatrixAt(i, dummy.matrix);
     }
@@ -169,7 +174,7 @@ function Steam({ lit }: { lit: boolean }) {
   useFrame(() => {
     for (let i = 0; i < 12; i++) {
       const t = (rt.time * .35 + i / 6) % 1, x = i < 6 ? 14 : 26;
-      dummy.position.set(x + Math.sin(i * 3) * .2, cloudY(x, 117) + t * 3.5, 117);
+      dummy.position.set(x + Math.sin(i * 3) * .2, cloudY(x, 297) + t * 3.5, 297);
       dummy.scale.setScalar((.15 + t * .35) * (i < 6 || lit ? 1 : 0)); dummy.updateMatrix(); ref.current?.setMatrixAt(i, dummy.matrix);
     }
     if (ref.current) ref.current.instanceMatrix.needsUpdate = true;
@@ -186,17 +191,17 @@ export function CloudRoutes({ inside }: { inside: boolean }) {
   const vine = a.puzzles.includes("canopyVine"), raft = a.puzzles.includes("grottoRaft"), boiler = a.puzzles.includes("grottoBoiler");
   return <>
     {!inside && <><mesh geometry={canopy} material={flatMat} /><mesh geometry={mouths} material={flatMat} />
-      <mesh geometry={bridge} material={flatMat} position={at(-20, 109.5)} rotation={[vine ? 0 : 1.25, 0, 0]} />
+      <mesh geometry={bridge} material={flatMat} position={at(-20, 289.5)} rotation={[vine ? 0 : 1.25, 0, 0]} />
       <RouteWind stopped={a.puzzles.includes("canopyGust")} />
     </>}
     {inside && <>
       <mesh geometry={grotto} material={flatMat} /><ElectricPanels /><Steam lit={boiler} />
-      <pointLight position={at(20, 115, 5)} color="#67bfe6" intensity={8} distance={29} decay={1} />
-      <pointLight position={at(25, 117, 2)} color="#ffad61" intensity={boiler ? 8 : 2} distance={13} decay={1} />
-      {[[12, 103], [29, 108], [30, 117], [12, 123], [36, 126]].map(([x, z]) => <sprite key={`${x},${z}`} material={glow} position={at(x, z, 1.7)} scale={[3, 3, 1]} />)}
-      <sprite material={fire} position={at(25.8, 117, 1)} scale={boiler ? [2, 2, 1] : [.5, .5, 1]} />
-      <mesh position={at(20, 110.5, raft ? .18 : -1)}><boxGeometry args={[14, .25, 2.4]} /><meshLambertMaterial color="#9a8965" /></mesh>
-      {!boiler && <RouteGate x={20} z={119.5} open={false} />}
+      <pointLight position={at(20, 295, 5)} color="#67bfe6" intensity={8} distance={29} decay={1} />
+      <pointLight position={at(25, 297, 2)} color="#ffad61" intensity={boiler ? 8 : 2} distance={13} decay={1} />
+      {[[12, 283], [29, 288], [30, 297], [12, 303], [36, 306]].map(([x, z]) => <sprite key={`${x},${z}`} material={glow} position={at(x, z, 1.7)} scale={[3, 3, 1]} />)}
+      <sprite material={fire} position={at(25.8, 297, 1)} scale={boiler ? [2, 2, 1] : [.5, .5, 1]} />
+      <mesh position={at(20, 290.5, raft ? .18 : -1)}><boxGeometry args={[14, .25, 2.4]} /><meshLambertMaterial color="#9a8965" /></mesh>
+      {!boiler && <RouteGate x={20} z={299.5} open={false} />}
     </>}
     {CLOUD_ROUTE_GATES.filter(g => inside === (g.zone === "thunderGrotto")).map(g => <RouteGate key={g.zone} x={g.x} z={g.z} open={a.cleared.includes(g.zone)} />)}
   </>;

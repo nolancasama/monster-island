@@ -13,6 +13,7 @@ export type FamilyMilestone = "met" | "trusted" | "drawingSeen" | "tunnelOpen" |
 export type ErrandId = "bag" | "firewood" | "moss";
 
 export interface Act3 {
+  cloudLayout: 2;
   voyageDone: boolean;
   world: "home" | "cloud";
   area: CloudAreaId;
@@ -36,7 +37,7 @@ export interface Act3 {
 
 export function newAct3(): Act3 {
   return {
-    voyageDone: false, world: "home", area: "cloudDock", hollowFound: false,
+    cloudLayout: 2, voyageDone: false, world: "home", area: "cloudDock", hollowFound: false,
     family: { met: false, trusted: false, drawingSeen: false, tunnelOpen: false, aftermathSeen: false },
     errands: { bag: false, firewood: 0, moss: false, bagRewarded: false, firewoodRewarded: false, mossRewarded: false, pickups: [] },
     stew: 0, cleared: [], chests: [], puzzles: [], observatoryLamps: [], beaconDefeated: false, skyFortressClue: false, checkpoint: "dock"

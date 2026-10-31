@@ -32,7 +32,7 @@ describe("Cloud Isle's single real landscape", () => {
       const y = cloudY(0,z), camera = new THREE.PerspectiveCamera(80,w/h,.1,900);
       camera.position.set(0,y+1.1+10*Math.sin(.55),z-(10*Math.cos(.55)-3));
       camera.lookAt(0,y+1.1,z+3); camera.setViewOffset(w,h,0,-h*.2,w,h); camera.updateMatrixWorld();
-      const spire = new THREE.Vector3(0,51.5,169).project(camera);
+      const spire = new THREE.Vector3(0,51.5,349).project(camera);
       const player = new THREE.Vector3(0,y+.9,z).project(camera);
       expect(Math.abs(spire.x)).toBeLessThan(1); expect(spire.y).toBeGreaterThan(0); expect(spire.y).toBeLessThan(1);
       expect(Math.abs(player.x)).toBeLessThan(1); expect(Math.abs(player.y)).toBeLessThan(1);
@@ -43,22 +43,26 @@ describe("Cloud Isle's single real landscape", () => {
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geometry, material);
     const summit = arenaGeometry(), beacon = new THREE.Mesh(summit,material);
-    beacon.position.set(0,37,169);
+    beacon.position.set(0,37,349);
     const world = new THREE.Group(); world.add(mesh,beacon); world.updateMatrixWorld(true);
     for (const z of [1, 20, 36]) {
       const origin = new THREE.Vector3(0, cloudY(0, z) + 1.1 + 10 * Math.sin(.55), z - (10 * Math.cos(.55) - 3));
-      const target = new THREE.Vector3(0, 51.5, 169), direction = target.clone().sub(origin).normalize();
-      const hit = new THREE.Raycaster(origin, direction, 0, 240).intersectObject(world,true)[0];
+      const target = new THREE.Vector3(0, 51.5, 349), direction = target.clone().sub(origin).normalize();
+      const hit = new THREE.Raycaster(origin, direction, 0, 450).intersectObject(world,true)[0];
       expect(hit, `summit ray from z=${z}`).toBeDefined();
-      expect(hit.point.z, `no nearer landscape hides summit from z=${z}`).toBeGreaterThan(163);
+      expect(hit.point.z, `no nearer landscape hides summit from z=${z}`).toBeGreaterThan(343);
       expect(hit.point.y).toBeGreaterThan(45);
     }
     geometry.dispose(); summit.dispose(); material.dispose();
   });
   it("keeps terrain and landscape static geometry well below the full gameplay triangle budget", () => {
-    const geometries = [...cloudGeometry.terrainTiles(), cloudGeometry.landscapeGeometry(), cloudGeometry.shelterGeometry("base")];
-    const triangles = geometries.reduce((n, g) => n + (g.index?.count ?? g.getAttribute("position").count) / 3, 0);
-    expect(triangles).toBeLessThan(40000);
-    geometries.forEach(g => g.dispose());
+    const count = (g: THREE.BufferGeometry) => (g.index?.count ?? g.getAttribute("position").count) / 3;
+    // The whole island heightfield, even if every band is in view: a few draws, under a third of the budget.
+    const terrain = cloudGeometry.terrainTiles();
+    expect(terrain.length).toBeLessThanOrEqual(8);
+    expect(terrain.reduce((n, g) => n + count(g), 0)).toBeLessThan(45000);
+    const rest = [cloudGeometry.landscapeGeometry(), cloudGeometry.shelterGeometry("base")];
+    expect(rest.reduce((n, g) => n + count(g), 0)).toBeLessThan(40000);
+    [...terrain, ...rest].forEach(g => g.dispose());
   });
 });

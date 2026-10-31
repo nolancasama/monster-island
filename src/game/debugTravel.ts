@@ -1,3 +1,4 @@
+import { CLOUD_BOUNDS } from "./world/cloudisle";
 import { getGame, setGame } from "./store";
 import { rt, resetRuntime } from "./runtime";
 import { resetCombat, travelCombat, cb } from "./combat";
@@ -67,7 +68,7 @@ export function nearestDebugGround(x: number, z: number): { x: number; z: number
   // open sea, so find a valid world point if that local search exhausts it.
   if (!isWalkable(at.x, at.z, gates, PLAYER_R)) {
     let best = Infinity;
-    const bounds = rt.world === "cloud" ? { x0: -36, x1: 36, z0: -10, z1: 182 } : { x0: -40, x1: 125, z0: -338, z1: 20 };
+    const bounds = rt.world === "cloud" ? CLOUD_BOUNDS : { x0: -40, x1: 125, z0: -338, z1: 20 };
     for (let pz = bounds.z0; pz <= bounds.z1; pz += .5) for (let px = bounds.x0; px <= bounds.x1; px += .5) {
       const distance = (px - x) ** 2 + (pz - z) ** 2;
       if (distance < best && isWalkable(px, pz, gates, PLAYER_R)) { at = { x: px, z: pz }; best = distance; }

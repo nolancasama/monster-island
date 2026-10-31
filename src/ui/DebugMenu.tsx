@@ -1,3 +1,4 @@
+import { CLOUD_BOUNDS } from "../game/world/cloudisle";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { debugEnabled } from "../game/debugAccess";
 import { cloudIsleShipDebugEnabled, setCloudIsleShipOpen } from "../game/release";
@@ -14,7 +15,7 @@ import "./debug.css";
 
 const BOUNDS = {
   home: { x0: -40, x1: 125, z0: -345, z1: 20 },
-  cloud: { x0: -38, x1: 38, z0: -12, z1: 184 }
+  cloud: CLOUD_BOUNDS
 };
 
 function usePosition() {
