@@ -4,7 +4,7 @@ import { PLAYER_R, nearestWalkable, gatesOf, standY } from "./world/collision";
 import { SPAWN, VOLCANO_PATH, BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOOD_SOURCES, FOREST_SIGN, MONSTER_STONE, ROPE } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
-import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId } from "./world/cloudisle";
+import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
 import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
@@ -25,6 +25,8 @@ export const travelTarget = (name: string): { x: number; z: number } | null => {
       if (name === "cloudGull") return CLOUD_DOCK.gull;
       if (name === "observatoryRest") return OBSERVATORY.rest;
       if (name === "beaconLift") return OBSERVATORY.lift;
+      if (name === "glideForward") return CANOPY_GLIDE.from;
+      if (name === "glideBack") return CANOPY_GLIDE.to;
       if (name === "hollowRest") return HOLLOW.rest;
       if (name === "tala" || name === "bo" || name === "kiko") return HOLLOW[name];
       if (name in CLOUD_OBSTACLE_PLACE) return CLOUD_OBSTACLE_PLACE[name as keyof typeof CLOUD_OBSTACLE_PLACE];
