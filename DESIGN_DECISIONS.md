@@ -141,3 +141,18 @@
   light per chamber. Cave-mouth arches stand at `GROTTO_MOUTHS`.
 - Interior views: 28–51 calls, ~20k triangles. SwiftShader drops to ~9 fps
   with the chamber lights; real-GPU cost is to be checked on a Chromebook.
+
+## 2026-10-31 — Slice X3-scene: observatory complex, fog, colours
+
+- The forecourt is paved; each side terrace is a stone slab with a broken
+  balustrade and its mechanism on the outer edge; plank walkways lead to the
+  two round tower platforms, each backed by the ruined north wall of its
+  tower (staggered courses, broken top). Views 32–86 calls, ≤ 80k triangles.
+- **Fog back to 260 m** (its pre-X1 value): more of the island and the
+  massif's flank shows from the coast; every gameplay view stays ≤ 107 calls,
+  ≤ 98k triangles.
+- Hollow shell and tunnel walls are lighter rock (no near-black slabs).
+- **Open:** the mountain does not yet read as a landmark from the dock — the
+  massif's southern flank rises gently and the summit is > 400 m away. Options
+  are a steeper massif (deep canyons around the Hollow and junction) or a
+  longer cut-off for the summit alone; left for the user's decision.

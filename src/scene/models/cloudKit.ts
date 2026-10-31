@@ -163,7 +163,7 @@ export function rockFormation(): KitComposite {
 }
 export function cliffSegment(width = 8, height = 8, depth = 3): KitComposite {
   const a = new Assembly();
-  const face = a.box("face", [width, height, depth], null, [0, height / 2 - .3, 0], "#394b53", true);
+  const face = a.box("face", [width, height, depth], null, [0, height / 2 - .3, 0], "#6b726c", true);
   a.box("ledge", [width, .35, depth + .5], a.anchors["face.top"], [0, -.08, 0], "#51685d");
   a.socket("face", "ground", plus(face.point, [0, -height / 2, 0]));
   return a.finish();
