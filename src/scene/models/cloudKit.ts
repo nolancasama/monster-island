@@ -73,10 +73,10 @@ class Assembly {
   }
 }
 
-function roots(a: Assembly, parent: KitAnchor, radius: number) {
+function roots(a: Assembly, parent: KitAnchor, radius: number, drop = .55) {
   for (let i = 0; i < 4; i++) {
     const angle = i * Math.PI / 2 + .4;
-    a.limb(`root${i}`, parent, [Math.cos(angle) * radius * 1.5, -.55, Math.sin(angle) * radius * 1.5], radius * .35, .12, bark, true);
+    a.limb(`root${i}`, parent, [Math.cos(angle) * radius * 1.5, -drop, Math.sin(angle) * radius * 1.5], radius * .35, .12, bark, true);
   }
 }
 export function rootFlare(): KitComposite {
@@ -98,16 +98,20 @@ export interface GiantTreeOptions {
   /** Direction/length to an existing walkway, relative to this trunk. */
   platformReach?: KitPoint;
   crownRadius?: number;
+  /** Height of the rock outcrop the roots grip; taller on a hillside. */
+  padHeight?: number;
 }
-export function giantTree({ height = 24, platformHeight = 14, platformReach = [9, 0, 0], crownRadius = 4.8 }: GiantTreeOptions = {}): KitComposite {
+export function giantTree({ height = 24, platformHeight = 14, platformReach = [9, 0, 0], crownRadius = 4.8, padHeight = 1.1 }: GiantTreeOptions = {}): KitComposite {
   const a = new Assembly();
   // The canopy has no terrain mesh beneath it. Carry the roots on a real rock
   // contact rather than ending the tree in empty air above the sea.
-  const ground = a.add("ground", new THREE.CylinderGeometry(3.4, 3.8, 1.1, 7), "#394b53", null,
-    [0, -.55, 0], [0, 0, 0], true);
+  const ground = a.add("ground", new THREE.CylinderGeometry(3.4, 3.8, padHeight, 7), "#394b53", null,
+    [0, -padHeight / 2, 0], [0, 0, 0], true);
   const contact = a.socket(ground.part, "contact", [0, 0, 0]);
-  const top = a.limb("trunk", contact, [0, height, 0], 2.2, 1.5, "#535c50", true, [0, -.35, 0]);
-  roots(a, a.anchors["trunk.base"], 2.2);
+  // The trunk runs down into a deep outcrop (the default pad keeps it .35 m in).
+  const top = a.limb("trunk", contact, [0, height, 0], 2.2, 1.5, "#535c50", true, [0, -Math.max(.35, padHeight - .75), 0]);
+  // On a deep outcrop the roots grip its top, where they are seen.
+  if (padHeight > 1.1) roots(a, contact, 2.2, 1.4); else roots(a, a.anchors["trunk.base"], 2.2);
   const fork = a.socket("trunk", "fork", plus(top.point, [0, -3, 0]));
   const crownTips = [
     a.limb("crownLeft", fork, [-4, 2.5, 0], .85, .42),

@@ -56,7 +56,7 @@ describe("companions leaving combat", () => {
   const destinations = [
     { name: "Fern Crossing", world: "home", hostile: [76, -183], safe: [76, -188] },
     { name: "Port Town", world: "home", hostile: [76, -287], safe: [76, -293] },
-    { name: "Hidden Hollow", world: "cloud", hostile: [-5, 47], safe: [-10, 50] }
+    { name: "Hidden Hollow", world: "cloud", hostile: [0, 151], safe: [-10, 190] }
   ] as const;
 
   for (const destination of destinations) for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
@@ -91,12 +91,12 @@ describe("companions leaving combat", () => {
     it(`projects ${friend}'s dismount away from the Hollow campfire`, () => {
       setGame(g => ({ progress: { ...g.progress, active: friend } }));
       const perched = COMBAT[friend].stance !== "ride";
-      Object.assign(rt.player, perched ? { x: -15.1, z: 57.3 } : { x: -17.2, z: 56 });
+      Object.assign(rt.player, perched ? { x: -15.1, z: 197.3 } : { x: -17.2, z: 196 });
       Object.assign(cb.stance, { friend, k: 1 });
       rt.monsters[friend].mode = "script";
       combatTick(.01);
       const m = rt.monsters[friend];
-      expect(Math.hypot(m.x + 16, m.z - 56)).toBeGreaterThanOrEqual(.65 + MONSTERS[friend].radius);
+      expect(Math.hypot(m.x + 16, m.z - 196)).toBeGreaterThanOrEqual(.65 + MONSTERS[friend].radius);
       expect(isWalkable(m.x, m.z, gatesOf(getGame().progress), MONSTERS[friend].radius, MONSTERS[friend].can.includes("swim"))).toBe(true);
     });
   }
@@ -260,10 +260,14 @@ describe("shared ranged enemy rules", () => {
     it(`does not wake or fire from ${blockedBy}`, () => {
       const e = loneEnemy("raiderShooter");
       if (blockedBy === "off screen") cb.onScreen = () => false;
-      if (blockedBy === "unreachable ground") Object.assign(e, { x: -6, z: 18, homeX: -6, homeZ: 18 });
+      if (blockedBy === "unreachable ground") {
+        Object.assign(e, { x: 8, z: 17, homeX: 8, homeZ: 17 });
+        expect(isWalkable(e.x,e.z,gatesOf(getGame().progress),ENEMIES[e.kind].radius)).toBe(false);
+      }
       if (blockedBy === "solid line of sight") {
-        Object.assign(rt.player, { x: -6, z: 15, y: cloudY(-6, 15) });
-        Object.assign(e, { x: -6, z: 23, homeX: -6, homeZ: 23 });
+        // The coast rock at (-6, 32) stands between them.
+        Object.assign(rt.player, { x: -1, z: 34, y: cloudY(-1, 34) });
+        Object.assign(e, { x: -9, z: 28, homeX: -9, homeZ: 28 });
       }
       if (blockedBy === "other zone") Object.assign(e, { x: 0, z: 8, homeX: 0, homeZ: 8 });
       e.state = "idle"; e.timer = 99;
@@ -336,7 +340,7 @@ describe("Cloud Isle combat", () => {
 
   it("keeps electric panels safe before their pulse, then deals light damage without knock-back", () => {
     for (const e of cb.enemies) e.state = "gone";
-    Object.assign(rt.player, { x: 17, z: 115 });
+    Object.assign(rt.player, { x: 17, z: 295 });
     cb.safeUntil = 0;
     rt.time = 4;
     combatTick(.016);
@@ -352,7 +356,7 @@ describe("Cloud Isle combat", () => {
     rt.time = 6.5;
     combatTick(.016);
     expect(cb.vitals.hp).toBe(95);
-    expect(rt.player).toMatchObject({ x: 17, z: 115 });
+    expect(rt.player).toMatchObject({ x: 17, z: 295 });
   });
 
   it("damages a fifth sleeping enemy without waking a fifth attacker", () => {
@@ -456,7 +460,7 @@ describe("Storm Beacon world combat integration", () => {
     setGame(g => ({ progress: { ...g.progress, active: friend, act3: { ...g.progress.act3, area: "stormBeacon",
       cleared: ["ancientObservatory"], observatoryLamps: ["leafy", "bubbo", "puff", "ember"], checkpoint: "observatory" } } }));
     for (const e of cb.enemies) e.state = "gone";
-    Object.assign(rt.player, { x: -7, z: 163, y: 37, yaw: 0, speed: 0 });
+    Object.assign(rt.player, { x: -7, z: 343, y: 37, yaw: 0, speed: 0 });
     cb.cloudZones.current = "stormBeacon";
     cb.stance.friend = friend;
     cb.stance.k = 1;
@@ -515,7 +519,7 @@ describe("Storm Beacon world combat integration", () => {
 
   it("Leafy's actual sweep hits an exposed pylon without a projectile or battle screen", () => {
     enterArena("leafy");
-    Object.assign(rt.player, { x: -7, z: 165.5 });
+    Object.assign(rt.player, { x: -7, z: 345.5 });
     cb.beacon.pylons[0].phase = "exposed";
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.power).toBe(2);
@@ -525,7 +529,7 @@ describe("Storm Beacon world combat integration", () => {
   it("Puff's attack must point along the gust to cancel its real push", () => {
     enterArena("puff");
     // Far enough from pylons to preserve the intended attack direction.
-    Object.assign(rt.player, { x: 0, z: 157, yaw: -Math.PI / 2 });
+    Object.assign(rt.player, { x: 0, z: 337, yaw: -Math.PI / 2 });
     cb.beacon.attack = "gustTell"; cb.beacon.timer = 1; cb.beacon.gust = { x: 1, z: 0 };
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.gustCancelled).toBe(false);
@@ -541,7 +545,7 @@ describe("Storm Beacon world combat integration", () => {
 
   it("uses free boss specials at zero MP while retaining ordinary coast MP costs", () => {
     enterArena("leafy");
-    Object.assign(rt.player, { x: -7, z: 164 });
+    Object.assign(rt.player, { x: -7, z: 344 });
     cb.vitals.mp.leafy = 0; cb.beacon.pylons[0].phase = "exposed";
     expect(specialAttack()).toBe(true);
     expect(cb.beacon.power).toBe(2);

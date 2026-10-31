@@ -1,8 +1,7 @@
 import { BEACON_ARENA } from "../game/logic/beacon";
 import { TUNNEL } from "../game/world/island";
 import { CLIFF_ROPE, inLowland } from "../game/world/lowland";
-import { BACK_TUNNEL } from "../game/world/cloudisle";
-import { nearestOnTrail } from "../game/world/lowland";
+import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
 
 export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean }
 export interface Framing { yaw: number; pitch: number; dist: number; ahead: number }
@@ -35,7 +34,15 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   { ...DEFAULT_CAMERA, id: "beacon-arena", fov: 80, viewShift: -.2, trackYaw: true, contains: (p, m) => p.cloud && p.y > BEACON_ARENA.y - 3 - m && Math.hypot(p.x - BEACON_ARENA.x, p.z - BEACON_ARENA.z) < BEACON_ARENA.radius + 1 + m,
     resolve: (p, previous) => ({ ...DEFAULT_CAMERA, yaw: Math.hypot(p.x - BEACON_ARENA.x, p.z - BEACON_ARENA.z) > 2.5 ? Math.atan2(p.x - BEACON_ARENA.x, p.z - BEACON_ARENA.z) : previous.yaw }) },
   { ...DEFAULT_CAMERA, id: "cloud-back-tunnel", yaw: Math.PI, dist: 7, ahead: 1.5, fov: 80, viewShift: -.2,
-    contains: (p, m) => p.cloud && p.z > 65 - m && p.z < 83 + m && nearestOnTrail(BACK_TUNNEL, p.x, p.z).d < 2.2 + m },
+    contains: p => p.cloud && cloudZoneAt(p.x, p.z) === "backTunnel" },
+  { ...DEFAULT_CAMERA, id: "cloud-sea-cave", yaw: Math.PI, pitch: .4, dist: 6, ahead: 1, fov: 80, viewShift: -.15,
+    contains: (p, m) => p.cloud && Math.hypot(p.x - CLOUD_CHESTS[0].x, p.z - CLOUD_CHESTS[0].z) < 6 + m },
+  { ...DEFAULT_CAMERA, id: "cloud-hollow", yaw: Math.PI, pitch: .48, dist: 7, ahead: 1.5, fov: 80, viewShift: -.2,
+    contains: p => p.cloud && cloudZoneAt(p.x, p.z) === CLOUD_ZONES.hiddenHollow.id },
+  { ...DEFAULT_CAMERA, id: "cloud-overlook", yaw: Math.PI, pitch: .65, dist: 12, ahead: 3, fov: 80, viewShift: -.2,
+    contains: (p, m) => p.cloud && CLOUD_ZONES.stormbreakCoast.walk.some(s => s.kind === "disc" && s.r === 4 && Math.hypot(p.x-s.x,p.z-s.z) < s.r + m) },
+  { ...DEFAULT_CAMERA, id: "cloud-grotto", yaw: Math.PI, pitch: .48, dist: 8, ahead: 2, fov: 80, viewShift: -.2,
+    contains: p => p.cloud && cloudZoneAt(p.x, p.z) === "thunderGrotto" },
   { ...DEFAULT_CAMERA, id: "cloud", yaw: Math.PI, fov: 80, viewShift: -.2, contains: p => p.cloud },
   { ...DEFAULT_CAMERA, id: "lowland-rope-foot", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) && p.z > CLIFF_ROPE.foot.z - 6 - m,
     resolve: p => { const k = smooth((p.z - (CLIFF_ROPE.foot.z - 6)) / 5); return { yaw: 0, pitch: .55 + .6 * k, dist: 10 - 2 * k, ahead: 3 * (1 - k) }; } },

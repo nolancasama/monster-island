@@ -1,30 +1,39 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { rt } from "../game/runtime";
 import { getGame, useGame } from "../game/store";
 import { NPCS } from "../game/data/town";
 import {
-  BACK_TUNNEL, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
-  CLOUD_ZONES, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS,
+  CLOUD_BOUNDS, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
+  CLOUD_ZONES, COAST_GATE, HOLLOW_APPROACH, HOLLOW, RAIDER_BARRICADE,
   cloudY, type CloudGates,
 } from "../game/world/cloudisle";
 import { nearestOnTrail, PIER2, type WalkShape } from "../game/world/lowland";
+import { cloudGroundY, cloudLandMask } from "../game/world/cloudTerrain";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { npcGeometry } from "./models/lowland";
-import { addKit, branch, bridge, caveMouth, cliffSegment, giantTree, mountainConifer, ruinedArch, shelterFrame, shelterShelf, waterfallSurround } from "./models/cloudKit";
+import { addKit, bridge, mountainConifer } from "./models/cloudKit";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import { voyageStorm } from "./voyageWeather";
 import { CloudRoutes } from "./CloudRoutes";
 import { Observatory, SummitWeather, SkyFortress, CagedLumo, HollowAftermath } from "./Observatory";
+import { cloudTreePlacements, coniferY, landscapeKits, shelterKits } from "./cloudScenery";
 import { StormBeacon } from "./StormBeacon";
 
-export const CLOUD_FOG = { color: "#71818c", near: 38, far: 260 };
+export const CLOUD_FOG = { color: "#71818c", near: 40, far: 200 };
 export const cloudView = { visible: false, fog: CLOUD_FOG, barriers: { coast: 0, tunnel: 0 } };
 const near = (x: number, z: number, radius = 0) => Math.hypot(rt.camera.pos.x - x, rt.camera.pos.z - z) < CLOUD_FOG.far + radius;
 const ground = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
-const dark = "#394b53", stone = "#65706e", timber = "#66513d";
+const stone = "#65706e", timber = "#66513d";
+/** Arc follows the same concealed turns as movement and the footprints. */
+function approachPoint(t: number) {
+  const k = Math.min(HOLLOW_APPROACH.length - 1.00001, t * (HOLLOW_APPROACH.length - 1));
+  const i = Math.floor(k), a = HOLLOW_APPROACH[i], b = HOLLOW_APPROACH[i + 1], u = k - i;
+  return { x: a[0] + (b[0] - a[0]) * u, z: a[1] + (b[1] - a[1]) * u };
+}
 
 function CloudSky() {
   const { scene } = useThree();
@@ -60,86 +69,101 @@ function inShape(s: WalkShape, x: number, z: number): boolean {
 const shapes = Object.values(CLOUD_ZONES).flatMap(z => z.walk);
 function onGround(x: number, z: number) { return shapes.some(s => inShape(s, x, z)); }
 
-/** The only terrain representation, split into spatial tiles. Shore edges are
- * lowered rock skirts; there is no second panorama mesh. */
+/** Heightfield chunks include a submerged apron around the island. */
+/** The only terrain representation: the island heightfield, built in 48 m
+ * chunks (2 m grid near walkable ground, 4 m on the open mountain, a short
+ * skirt on every chunk edge hiding seams between the two) and merged into
+ * 96 m east-west bands, one draw each. The whole island is ~42k triangles. */
 function terrainTiles(): THREE.BufferGeometry[] {
-  const out: THREE.BufferGeometry[] = [];
-  for (let iz = -1; iz < 5; iz++) for (let ix = -2; ix < 2; ix++) {
-    const positions: number[] = [], colors: number[] = [];
-    const color = new THREE.Color();
-    for (let z = iz * 32; z < iz * 32 + 32; z++) for (let x = ix * 32; x < ix * 32 + 32; x++) {
-      if (!onGround(x + .5, z + .5) || z < -3) continue;
-      // The canopy's actual branches/bridges and cave's floor are their sole
-      // ground representation. Never fill the scripted glide gap with land.
-      if (z >= 134 || z >= 104 && z < 126 && x < -12 || z >= 100 && x > 9) continue;
-      if (x + .5 > -14.8 && x + .5 < -12.5 && z > 20 && z < 32) continue;
-      color.set(z > 50 && x < -4 ? "#85745f" : z < 12 ? "#8b8875" : "#6a7868");
-      color.multiplyScalar(.92 + Math.sin(x * 23 + z * 15) * .055);
-      for (const [dx, dz] of [[0, 0], [0, 1], [1, 0], [1, 0], [0, 1], [1, 1]]) {
-        positions.push(x + dx, cloudY(x + dx, z + dz), z + dz); colors.push(color.r, color.g, color.b);
+  const size = 48, bands = new Map<number, THREE.BufferGeometry[]>();
+  const x0 = Math.floor((CLOUD_BOUNDS.x0 - 110) / size), x1 = Math.ceil((CLOUD_BOUNDS.x1 + 110) / size);
+  const z0 = Math.floor((CLOUD_BOUNDS.z0 - 50) / size), z1 = Math.ceil((Math.max(CLOUD_BOUNDS.z1, 480) + 50) / size);
+  const color = new THREE.Color();
+  for (let iz = z0; iz < z1; iz++) for (let ix = x0; ix < x1; ix++) {
+    const ox = ix * size, oz = iz * size;
+    // Chunks touching land or its 20 m underwater apron.
+    let include = false, nearWalk = false;
+    for (let z = oz - 20; z <= oz + size + 20 && !include; z += 4)
+      for (let x = ox - 20; x <= ox + size + 20; x += 4) if (cloudLandMask(x, z)) { include = true; break; }
+    if (!include) continue;
+    for (let z = oz - 12; z <= oz + size + 12 && !nearWalk; z += 2)
+      for (let x = ox - 12; x <= ox + size + 12; x += 2) if (onGround(x, z)) { nearWalk = true; break; }
+    const step = nearWalk ? 2 : 4, positions: number[] = [], colors: number[] = [];
+    const paint = (x: number, z: number, y: number, slope: number) => {
+      const shade = slope > 55 ? "#6f6c64" : slope > 35 ? "#948e80"
+        : y < 0 ? "#b5a47e" : y < .6 ? "#cdb98e" : y < 1.5 ? "#e2cf9f"
+        : y > 26 ? "#86a06a" : y > 14 ? "#6fa553" : "#7cbc5c";
+      color.set(shade).multiplyScalar(.93 + .07 * Math.sin(x * .31 + z * .23));
+      colors.push(color.r, color.g, color.b, color.r, color.g, color.b, color.r, color.g, color.b);
+    };
+    const tri = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number, slope: number) => {
+      positions.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+      paint((ax + bx + cx) / 3, (az + bz + cz) / 3, Math.max(ay, by, cy), slope);
+    };
+    for (let z = oz; z < oz + size; z += step) for (let x = ox; x < ox + size; x += step) {
+      // Preserve the open water below the optional crane bridge.
+      if (x + step / 2 > -43 && x + step / 2 < -40 && z + step > 59 && z < 79) continue;
+      const a = cloudGroundY(x, z), b = cloudGroundY(x, z + step), c = cloudGroundY(x + step, z), d = cloudGroundY(x + step, z + step);
+      if (Math.max(a, b, c, d) < -6) continue;
+      const slope = Math.atan(Math.max(Math.abs(a - c), Math.abs(a - b), Math.abs(d - b), Math.abs(d - c)) / step) * 180 / Math.PI;
+      tri(x, a, z, x, b, z + step, x + step, c, z, slope);
+      tri(x + step, c, z, x, b, z + step, x + step, d, z + step, slope);
+    }
+    // Edge skirts (1.5 m) close any crack against a neighbour of the other resolution.
+    for (let t = 0; t < size; t += step) {
+      for (const [ax, az, bx, bz] of [[ox + t, oz, ox + t + step, oz], [ox + size, oz + t, ox + size, oz + t + step],
+        [ox + t + step, oz + size, ox + t, oz + size], [ox, oz + t + step, ox, oz + t]]) {
+        const ya = cloudGroundY(ax, az), yb = cloudGroundY(bx, bz);
+        if (Math.max(ya, yb) < -6) continue;
+        // Coloured like the ground they border, so seams never draw as dark lines.
+        tri(ax, ya, az, bx, yb, bz, ax, ya - 1.5, az, 0); tri(bx, yb, bz, bx, yb - 1.5, bz, ax, ya - 1.5, az, 0);
       }
     }
     if (!positions.length) continue;
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-    g.computeVertexNormals(); g.computeBoundingSphere(); out.push(g);
+    g.computeVertexNormals(); g.computeBoundingSphere();
+    const band = Math.floor(oz / (size * 2));
+    bands.set(band, [...bands.get(band) ?? [], g]);
   }
-  return out;
+  return [...bands.entries()].sort((a, b) => a[0] - b[0]).map(([band, parts]) => {
+    const g = mergeGeometries(parts)!;
+    parts.forEach(p => p.dispose());
+    g.computeBoundingSphere();
+    g.userData.terrainChunk = { z: band * size * 2, depth: size * 2 };
+    return g;
+  });
 }
 function landscapeGeometry() {
   const b = new PartBuilder(5);
-  // Forest shelves carry the instanced trees. Their sheer sides distinguish
-  // non-walkable mountainside from the open route without an invisible sea.
-  for (let z = 15; z <= 103; z += 11) for (const side of [-1, 1]) {
-    if (side < 0 && z > 43 && z < 86) continue;
-    const y = cloudY(side * 21, z);
-    b.box(17, y + 1, 12, side * 21.5, -1, z, dark);
-    b.box(17, .15, 12, side * 21.5, y - .15, z, "#51685d");
-  }
-  // Sea cliffs continue below the floor, so every coast has real thickness.
-  for (let z = 9; z < 44; z += 5) {
-    for (const x of [-10.5, 12.5]) {
-      b.add(new THREE.DodecahedronGeometry(3.8, 0), dark, [x, cloudY(x, z) - 1.9, z], [0, z, .2], [1, 1.1, 1.1]);
-    }
-  }
-  // The raider road is deliberately a dead end, visible alongside the shelter.
-  b.box(6, 8, 10, 5, 0, 61, dark);
-  // Entrance pillars belong to the cliff; the continuous interior is drawn
-  // separately so its walls never dissolve through the scenery material.
-  addKit(b, waterfallSurround(11, 10.6), [-10.5, 3.15, 49.8]);
-  // The back tunnel has side ribs and a high roof, open towards the lens.
-  for (let i = 1; i < BACK_TUNNEL.length; i++) {
-    const [ax, az] = BACK_TUNNEL[i - 1], [bx, bz] = BACK_TUNNEL[i];
-    const len = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az);
-    const mx = (ax + bx) / 2, mz = (az + bz) / 2, y = cloudY(mx, mz);
-    for (const side of [-1, 1]) addKit(b, cliffSegment(1.2, 4.9, len + 1),
-      [mx + Math.cos(yaw) * side * 2.8, y, mz - Math.sin(yaw) * side * 2.8], yaw);
-    b.box(6.8, 1, len + 1, mx, y + 4.5, mz, dark, yaw);
-  }
-  // Real mountain mass beyond this slice; these are not alternate copies.
-  for (const [x, z, h, r] of [[-46, 124, 23, 15], [49, 124, 20, 15], [0, 153, 20, 15], [0, 169, 35, 12]]) {
-    b.cone(r, h, x, 1, z, "#4c5e64", 7);
-  }
-  // Giant tree with a wind-bent trunk above the shelter.
-  addKit(b, giantTree({ height: 11.2, platformHeight: 2.2, platformReach: [5, 0, -1.5], crownRadius: 6 }), [-15, 16.6, 61]);
-  // Dock is intact; the old pier beside it is shattered.
+  for (const p of landscapeKits()) addKit(b, p.kit, p.position, p.yaw);
+  // Intact working dock and the weathered remains of the neighbouring pier.
   b.box(3, .3, 9, 0, .5, -5, timber);
-  for (const x of [-1.3, 1.3]) for (const z of [-8, -4, 0]) b.cyl(.13, .16, 2, x, -.7, z, timber, 6);
-  for (let i = 0; i < 5; i++) {
-    const z = -3 - i * 1.1;
-    b.boxAt(1.8, .18, .6, [5, .4 - i * .08, z], [0, i * .2, -.12], timber);
-    addKit(b, branch([0, 1.25 - i * .08, 0], .13), [5, -.9, z]);
+  for (const x of [-1.3, 1.3]) for (const z of [-8, -4, 0]) b.cyl(.13, .16, 2, x, -1, z, timber, 6);
+  for (let i = 0; i < 5; i++) b.boxAt(1.8,.18,.6,[11,.4-i*.08,-3-i*1.1],[0,i*.2,-.12],timber);
+  // A beached shipwreck: ribs overlap a continuous keel in the second inlet.
+  b.box(1.1,.55,9,-25,cloudY(-25,61),61,timber,-.4);
+  for(let i=0;i<6;i++) {
+    const z=57+i*1.4;
+    b.boxAt(6,.3,.3,[-25,cloudY(-25,z)+.7,z],[0,-.4,.22],timber);
   }
-  // Optional sea cave and cove have unmistakable mouths around their rewards.
-  for (const [x, z] of [[-17, 30], [17, 39]]) {
-    addKit(b, caveMouth(6, 3.5, 5), [x, cloudY(x, z) - .15, z]);
-  }
-  // Small old ruins show the direction of the next route without opening it.
-  for (const m of ROUTE_MOUTHS) {
-    addKit(b, ruinedArch(5.2, 5, 1.4), [m.x, 10.95, m.z]);
-  }
+  // The abandoned supply camp occupies the third clearing's inland rim.
+  for(const [x,z] of [[29,105],[32,106],[30,108],[34,108]]) crate(b,x,cloudY(x,z),z,1);
+
   return b.build();
+}
+function SpatialMesh({ geometry, material = flatMat }: { geometry: THREE.BufferGeometry; material?: THREE.Material }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    // Terrain bands span the island's width: cull on their z extent alone.
+    const band = geometry.userData.terrainChunk as { z: number; depth: number } | undefined;
+    if (ref.current && band) {
+      const dz = Math.max(band.z - rt.camera.pos.z, 0, rt.camera.pos.z - band.z - band.depth);
+      ref.current.visible = dz < CLOUD_FOG.far;
+    }
+  });
+  return <mesh ref={ref} geometry={geometry} material={material} />;
 }
 
 function crate(b: PartBuilder, x: number, y: number, z: number, s = 1) {
@@ -170,7 +194,7 @@ function hollowShellGeometry() {
   for (const x of [-24, -2]) for (const z of [51, 57, 63]) {
     b.add(new THREE.DodecahedronGeometry(2.6, 0), "#67695d", [x, 6.8, z], [.1, z, .2], [.4, 1.5, 1.25]);
   }
-  return b.build();
+  return b.build().translate(0, 0, 140);
 }
 
 function HollowShell() {
@@ -180,25 +204,25 @@ function HollowShell() {
     b.box(13, 10.5, 2, -19, 4, 49.3, "#555954");
     b.box(7, 10.5, 2, -3.5, 4, 49.3, "#555954");
     b.box(7, 3.5, 2, -10, 11, 49.3, "#555954");
-    return b.build();
+    return b.build().translate(0, 0, 140);
   }, []);
   useFrame(() => {
     // The near wall is cut away only when the lens is outside it. The side
     // walls, rear wall and ceiling continue to close the whole visible room.
-    if (front.current) front.current.visible = rt.camera.pos.z > 50.5;
+    if (front.current) front.current.visible = rt.camera.pos.z > 190.5;
   });
   return <>
     <mesh geometry={shell} material={flatMat} />
     <mesh ref={front} geometry={facade} material={flatMat} />
     {/* Normal +z: from inside, this is the bright back of the waterfall;
         from the approach it cannot sit between the lens and the family. */}
-    <mesh position={[-10, 8.1, 50.4]}><planeGeometry args={[5.5, 8.2]} /><meshBasicMaterial color="#cce8e0" transparent opacity={.78} /></mesh>
+    <mesh position={[-10, 8.1, 190.4]}><planeGeometry args={[5.5, 8.2]} /><meshBasicMaterial color="#cce8e0" transparent opacity={.78} /></mesh>
   </>;
 }
 function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
   const b = new PartBuilder(1);
   if (upgrade === "base") {
-    const f = HOLLOW.fire;
+    const f = { ...HOLLOW.fire, z: HOLLOW.fire.z - 140 };
     for (let i = 0; i < 7; i++) { const a = i * Math.PI * 2 / 7; b.sphere(.25, f.x + Math.sin(a) * .6, 4.16, f.z + Math.cos(a) * .6, stone, [1, .55, 1], 6); }
     b.cyl(.34, .26, .45, f.x, 4.35, f.z, "#413e3b", 8);
     b.torus(.3, .045, [f.x, 4.8, f.z], [Math.PI / 2, 0, 0], "#967957");
@@ -217,8 +241,8 @@ function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
     for (let i = 0; i < 5; i++) { b.cyl(.025, .025, .4, -19.5 + i * .5, 5.4, 63, "#b7a983", 4); b.sphere(.18, -19.5 + i * .5, 5.3, 63, "#8ba5a3", [.5, 1.7, .6], 6); }
     b.box(2.2, .9, .06, -9, 5.1, 63.8, "#c7b687");
     // The map and patched boards used to hang in front of the cave walls.
-    addKit(b, shelterFrame(2.2, 2.1, .12), [-9, 4, 63.8]);
-    addKit(b, shelterFrame(1.6, 1.6, .12), [-21.3, 4, 56]);
+
+
     b.boxAt(.06, .8, .03, [-9.2, 5.5, 63.75], [0, 0, -.5], "#718575");
     b.boxAt(.06, .7, .03, [-8.7, 5.5, 63.75], [0, 0, .5], "#718575");
     for (let i = 0; i < 3; i++) b.box(.22, .22, .22, -9 + i * .33, 4, 58.3, ["#cb915e", "#7f9e89", "#9a7d97"][i]);
@@ -228,7 +252,7 @@ function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
     // The unrepaired shelf leans, making the first upgrade legible.
     b.boxAt(1.6, .13, .6, [-7, 4.7, 61.5], [0, 0, -.16], timber);
   } else if (upgrade === "bag") {
-    addKit(b, shelterShelf(), [-7, 4, 61.5]);
+
     for (let i = 0; i < 3; i++) b.sphere(.22, -7.6 + i * .55, 5.95, 61.5, "#c3a97a", [1, 1.1, 1], 6);
   } else if (upgrade === "wood") {
     b.box(2.2, .35, 1.9, -16, 4, 56, "#b2936b");
@@ -242,7 +266,8 @@ function shelterGeometry(upgrade: "base" | "bag" | "wood" | "moss") {
     b.box(1.2, .1, 1.3, -12.8, 4.26, 60.6, "#c0a283");
     for (const x of [-19, -9]) b.sphere(.2, x, 4.12, 62, "#b9d29a", [1.5, .6, 1], 6);
   }
-  return b.build();
+  for (const p of shelterKits(upgrade)) addKit(b, p.kit, [p.position[0],p.position[1],p.position[2]-140]);
+  return b.build().translate(0, 0, 140);
 }
 
 function familyGeometry(who: "tala" | "bo" | "kiko") {
@@ -273,7 +298,8 @@ function FamilyMember({ who }: { who: "tala" | "bo" | "kiko" }) {
     g.visible = near(p.x, p.z);
     if (dash) {
       const t = Math.min(1, Math.max(0, rt.kikoTrail));
-      g.position.set(1 - t * 11, cloudY(1 - t * 11, 43 + t * 7) + Math.abs(Math.sin(t * 30)) * .13, 43 + t * 7);
+      const p = approachPoint(t);
+      g.position.set(p.x, cloudY(p.x, p.z) + Math.abs(Math.sin(t * 30)) * .13, p.z);
       g.rotation.y = -Math.PI / 2;
     } else {
       g.position.set(p.x, cloudY(p.x, p.z) + Math.sin(rt.time * 2.1 + p.x) * .018, p.z);
@@ -291,7 +317,7 @@ function DiscoveryTrail() {
   const footprints = useMemo(() => {
     const b = new PartBuilder();
     for (let i = 0; i < 9; i++) {
-      const t = i / 8, x = -t * 10 + (i % 2 ? .12 : -.12), z = 44.8 + t * 5.2;
+      const t = i / 8, p = approachPoint(t), x = p.x + (i % 2 ? .12 : -.12), z = p.z;
       b.sphere(.12, x, cloudY(x, z) + .018, z, "#b6b58c", [.8, .08, 1.6], 6);
       // Bent leaves frame the small footprints, disturbed by Kiko's dash.
       b.boxAt(.08, .55, .07, [x + .4, cloudY(x, z) + .18, z], [.6, 0, -.6], "#97a27b");
@@ -301,7 +327,7 @@ function DiscoveryTrail() {
   const glow = useMemo(() => additiveSprite("#e1dfab", .32), []);
   useFrame(() => {
     if (!ref.current) return;
-    const t = (rt.time * .18) % 1, x = -t * 10, z = 44.8 + t * 5.2;
+    const t = (rt.time * .18) % 1, { x, z } = approachPoint(t);
     ref.current.position.set(x, cloudY(x, z) + .25, z); ref.current.scale.setScalar(.3 + Math.sin(t * Math.PI) * .18);
   });
   return <group visible={a.cleared.includes("stormbreakCoast") && !a.hollowFound}><mesh geometry={footprints} material={flatMat} /><sprite ref={ref} material={glow} /></group>;
@@ -326,15 +352,15 @@ function Barriers() {
     const open = getGame().progress.act3.cleared.includes("stormbreakCoast");
     cloudView.barriers.coast = THREE.MathUtils.damp(cloudView.barriers.coast, open ? 1 : 0, 4, dt);
     cloudView.barriers.tunnel = THREE.MathUtils.damp(cloudView.barriers.tunnel, getGame().progress.act3.family.tunnelOpen ? 1 : 0, 4, dt);
-    if (cr.current) cr.current.position.y = cloudY(0, 44) - cloudView.barriers.coast * 2.6;
-    if (tr.current) tr.current.position.y = cloudY(-15, 64) - cloudView.barriers.tunnel * 2.6;
+    if (cr.current) cr.current.position.y = cloudY(COAST_GATE.x, COAST_GATE.z) - cloudView.barriers.coast * 2.6;
+    if (tr.current) tr.current.position.y = cloudY(HOLLOW.tunnel.x, HOLLOW.tunnel.z) - cloudView.barriers.tunnel * 2.6;
   });
   return <>
     <mesh ref={cr} geometry={coast} material={flatMat} position={ground(0, COAST_GATE.z)} />
-    <mesh ref={tr} geometry={tunnel} material={flatMat} position={ground(-15, 64)} />
+    <mesh ref={tr} geometry={tunnel} material={flatMat} position={ground(HOLLOW.tunnel.x, HOLLOW.tunnel.z)} />
     <mesh geometry={road} material={flatMat} position={ground(RAIDER_BARRICADE.x, RAIDER_BARRICADE.z)} />
     {/* Warm stone is retained behind the moved gate, with sight through its ribs. */}
-    {a.family.tunnelOpen && <mesh geometry={tunnel} material={flatMat} position={ground(-19, 63, -.3)} rotation={[0, .8, Math.PI / 2]} scale={[.45, .4, .5]} />}
+    {a.family.tunnelOpen && <mesh geometry={tunnel} material={flatMat} position={ground(-19, 203, -.3)} rotation={[0, .8, Math.PI / 2]} scale={[.45, .4, .5]} />}
   </>;
 }
 
@@ -363,7 +389,7 @@ function WindAndWater() {
     }
     if (grass.current) grass.current.instanceMatrix.needsUpdate = true;
     if (falls.current) {
-      const d = Math.hypot(rt.player.x + 10, rt.player.z - 50);
+      const d = Math.hypot(rt.player.x + 10, rt.player.z - 190);
       falls.current.scale.x = THREE.MathUtils.lerp(falls.current.scale.x, d < 3 ? .22 : 1, .08);
       falls.current.position.x = d < 3 ? -12 : -10;
     }
@@ -373,11 +399,11 @@ function WindAndWater() {
   return <>
     <instancedMesh ref={streaks} args={[windGeo, windMat, 24]} frustumCulled={false} />
     <instancedMesh ref={grass} args={[grassGeo, flatMat, 64]} frustumCulled={false} />
-    <mesh ref={falls} position={[-10, 9, 49.3]}><boxGeometry args={[5, 10, .12]} /><meshLambertMaterial color="#b5d9d9" transparent opacity={.5} depthWrite={false} /></mesh>
-    <mesh position={[-10, 4.04, 47.7]} rotation={[-Math.PI / 2, 0, 0]}><circleGeometry args={[3.5, 16]} /><meshLambertMaterial color="#a1c2bf" transparent opacity={.55} depthWrite={false} /></mesh>
+    <mesh ref={falls} position={[-10, 9, 189.3]}><boxGeometry args={[5, 10, .12]} /><meshLambertMaterial color="#b5d9d9" transparent opacity={.5} depthWrite={false} /></mesh>
+    <mesh position={[-13, 4.04, 185.5]} rotation={[-Math.PI / 2, 0, 0]}><circleGeometry args={[3.5, 16]} /><meshLambertMaterial color="#a1c2bf" transparent opacity={.55} depthWrite={false} /></mesh>
     <sprite ref={fire} position={ground(HOLLOW.fire.x, HOLLOW.fire.z, .65)} material={glow} />
-    <sprite ref={lantern} position={ground(-11, 60.5, 2)} material={lamp} />
-    <pointLight position={ground(-14, 57, 2.4)} color="#ffc281" intensity={6} distance={16} decay={1.6} />
+    <sprite ref={lantern} position={ground(-11, 200.5, 2)} material={lamp} />
+    <pointLight position={ground(-14, 197, 2.4)} color="#ffc281" intensity={6} distance={16} decay={1.6} />
     <mesh position={ground(-11, 60.5, 1.7)}><cylinderGeometry args={[.16, .18, .35, 6]} /><meshBasicMaterial color="#e6ba72" /></mesh>
   </>;
 }
@@ -385,14 +411,12 @@ function WindAndWater() {
 function Vegetation() {
   const geometry = useMemo(() => mountainConifer().geometry, []);
   const tiles = useMemo(() => {
-    const result: Array<Array<{ x: number; z: number; s: number }>> = [[], [], [], []];
-    for (let i = 0; i < 115; i++) {
-      const z = 10 + (i * 7.137) % 93, side = i % 2 ? -1 : 1;
-      const x = side * (13 + ((i * 3.731) % 13));
-      if (x < -5 && z > 46 && z < 84) continue;
-      result[Math.min(3, Math.floor(z / 28))].push({ x, z, s: .7 + (i % 6) * .15 });
+    const result = new Map<number, typeof cloudTreePlacements>();
+    for (const p of cloudTreePlacements) {
+      const key = Math.floor(p.z / 32);
+      result.set(key, [...(result.get(key) ?? []), p]);
     }
-    return result;
+    return [...result.values()];
   }, []);
   return <>{tiles.map((items, i) => <Trees key={i} items={items} geometry={geometry} />)}</>;
 }
@@ -400,7 +424,7 @@ function Trees({ items, geometry }: { items: Array<{ x: number; z: number; s: nu
   const ref = useRef<THREE.InstancedMesh>(null), dummy = useMemo(() => new THREE.Object3D(), []);
   useEffect(() => {
     const m = ref.current; if (!m) return;
-    items.forEach((p, i) => { dummy.position.set(p.x, cloudY(p.x, p.z) - .5, p.z); dummy.rotation.set(0, .15 + (i % 3) * .1, 0); dummy.scale.setScalar(p.s); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
+    items.forEach((p, i) => { dummy.position.set(p.x, coniferY(p), p.z); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(p.s); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
     m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere();
   }, [items, dummy]);
   useFrame(() => { if (ref.current) { const s = ref.current.boundingSphere; ref.current.visible = !s || near(s.center.x, s.center.z, s.radius); } });
@@ -408,33 +432,29 @@ function Trees({ items, geometry }: { items: Array<{ x: number; z: number; s: nu
 }
 
 function CoastProps() {
-  const a = useGame(s => s.progress.act3), rotor = useRef<THREE.Group>(null), light = useRef<THREE.Mesh>(null);
+  const a = useGame(s => s.progress.act3), rotor = useRef<THREE.Group>(null);
   const base = useMemo(() => {
     const b = new PartBuilder();
-    for (const [x, z] of [[-6, 18], [8, 29], [-5, 36]]) b.cyl(.55, .9, 2.5, x, cloudY(x, z), z, dark, 7);
-    for (const [x, z] of [[-3, 8], [4, 13], [7, 36]]) crate(b, x, cloudY(x, z), z, .9);
-    b.box(.35, 4.8, .35, -10.5, cloudY(-10.5, 27), 27, timber);
-    b.box(5.5, .2, .25, -12, cloudY(-12, 27) + 3.7, 27, timber);
-    b.cyl(.4, .5, .22, 12, cloudY(12, 35), 35, "#c6b577", 8);
+    b.box(.35,4.8,.35,-37,cloudY(-37,65),65,timber);
+    b.box(7.5,.2,.25,-40,cloudY(-40,65)+3.7,65,timber);
+    b.cyl(.5,.6,.22,40,cloudY(40,120),120,"#c6b577",8);
     return b.build();
   }, []);
   const blades = useMemo(() => { const b = new PartBuilder();
-    for (let i = 0; i < 4; i++) b.boxAt(.45, 1.65, .12, [Math.sin(i * Math.PI / 2) * 1.03, Math.cos(i * Math.PI / 2) * 1.03, 0], [0, 0, -i * Math.PI / 2], "#c1b48c"); return b.build(); }, []);
-  const loose = useMemo(() => { const b = new PartBuilder(); b.box(.45, .08, .3, 0, 0, 0, "#aa986d"); return b.build(); }, []);
+    for (let i=0;i<4;i++) b.boxAt(.45,1.65,.12,[Math.sin(i*Math.PI/2)*1.03,Math.cos(i*Math.PI/2)*1.03,0],[0,0,-i*Math.PI/2],"#c1b48c");
+    return b.build(); }, []);
   const coveGate = useMemo(() => barrierGeometry(6.4), []);
-  const seaBridge = useMemo(() => bridge({ length: Math.hypot(5, 6), width: 2.1,
-    deckAt: t => cloudY(-12 - 5 * t, 24 + 6 * t) - cloudY(-12, 24) }).geometry, []);
+  const seaBridge = useMemo(() => bridge({ length: Math.hypot(7,4), width: 3.2,
+    deckAt: t => cloudY(-38-7*t,65+4*t)-cloudY(-38,65) }).geometry, []);
   useFrame((_, dt) => {
-    if (rotor.current && getGame().progress.act3.puzzles.includes("coastWindmill")) rotor.current.rotation.z += dt * 2.4;
-    if (light.current) { light.current.position.x = -5 + ((rt.time * 1.1) % 8); light.current.rotation.y = Math.sin(rt.time) * .3; }
+    if(rotor.current && getGame().progress.act3.puzzles.includes("coastWindmill")) rotor.current.rotation.z += dt*2.4;
   });
   return <>
     <mesh geometry={base} material={flatMat} />
-    <group ref={rotor} position={ground(-10.5, 27, 4)}><mesh geometry={blades} material={flatMat} /></group>
-    <mesh ref={light} geometry={loose} material={flatMat} position={ground(-5, 20, .1)} />
-    {a.puzzles.includes("coastWindmill") && <mesh geometry={seaBridge} material={flatMat} position={ground(-12, 24)} rotation={[0, Math.atan2(-5, 6), 0]} />}
-    {!a.puzzles.includes("coastCrate") && <mesh geometry={coveGate} material={flatMat} position={ground(14, 36.5)} rotation={[0, Math.PI / 2, 0]} />}
-    <mesh position={ground(a.puzzles.includes("coastCrate") ? 12 : 10.8, 35, .4)}><boxGeometry args={[.8, .8, .8]} /><meshLambertMaterial color="#9e8558" /></mesh>
+    <group ref={rotor} position={ground(-37,65,4)}><mesh geometry={blades} material={flatMat} /></group>
+    {a.puzzles.includes("coastWindmill") && <mesh geometry={seaBridge} material={flatMat} position={ground(-38,65)} rotation={[0,Math.atan2(-7,4),0]} />}
+    {!a.puzzles.includes("coastCrate") && <mesh geometry={coveGate} material={flatMat} position={ground(41.5,123)} rotation={[0,Math.PI/2,0]} />}
+    <mesh position={ground(a.puzzles.includes("coastCrate") ? 40 : 38.8,120,.4)}><boxGeometry args={[.8,.8,.8]} /><meshLambertMaterial color="#9e8558" /></mesh>
   </>;
 }
 
@@ -450,7 +470,7 @@ function PickupsAndChests({ inside }: { inside: boolean }) {
     return { bag: bag.build(), firewood: wood.build(), moss: moss.build() };
   }, []);
   return <>
-    {CLOUD_PICKUPS.filter(p => inside === (p.x > 9 && p.z > 100) && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
+    {CLOUD_PICKUPS.filter(p => inside === (p.x > 9 && p.z > 280) && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
     {CLOUD_CHESTS.filter(c => inside === (c.id === "cloudCrystalChest")).map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
   </>;
 }
@@ -541,7 +561,7 @@ export function CloudIsle() {
     <CloudSky />
     <group visible={!inside}>
     <CloudSea />
-    {land.map((g, i) => <mesh key={i} geometry={g} material={flatMat} />)}
+    {land.map((g, i) => <SpatialMesh key={i} geometry={g} />)}
     <mesh geometry={landscape} material={occluderMat} />
     <HollowShell />
     <mesh geometry={room} material={flatMat} />

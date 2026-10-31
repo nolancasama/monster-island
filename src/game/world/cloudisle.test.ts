@@ -39,7 +39,7 @@ describe("Cloud Isle slice A ground", () => {
       const p = CLOUD_SPAWNS[area]; expect(reach(p.x, p.z), area).toBe(true);
     }
     for (const p of [HOLLOW.rest, HOLLOW.tala, HOLLOW.bo, HOLLOW.kiko, CLOUD_DOCK.gull]) expect(reach(p.x, p.z)).toBe(true);
-    for (const p of [...CLOUD_PICKUPS, ...CLOUD_CHESTS].filter(p => p.z <= 100)) expect(reach(p.x, p.z), p.id).toBe(true);
+    for (const p of [...CLOUD_PICKUPS, ...CLOUD_CHESTS].filter(p => p.z <= 280)) expect(reach(p.x, p.z), p.id).toBe(true);
     for (const m of ROUTE_MOUTHS) expect(reach(m.x, m.z, 2)).toBe(true);
   });
   it("requires the coast first clear, including mounted edge approaches, and always allows retreat", () => {
@@ -49,23 +49,23 @@ describe("Cloud Isle slice A ground", () => {
       expect(reach(HOLLOW.center.x, HOLLOW.center.z)).toBe(false);
       for (const e of CLOUD_ENEMY_SPAWNS.filter(e => e.zone === "stormbreakCoast")) expect(reach(e.x, e.z, 1.5)).toBe(true);
       for (let x = -12; x <= 12; x += .3) expect(cloudWalkable(x, COAST_GATE.z, g, radius)).toBe(false);
-      expect(cloudMove(0, 42, 0, 46, radius, g).z).toBeLessThan(COAST_GATE.z);
-      expect(cloudMove(0, 42, 0, 46, radius, OPEN).z).toBeCloseTo(46);
-      expect(cloudMove(0, 42, 0, 39, radius, g).z).toBeCloseTo(39);
+      expect(cloudMove(0, 156, 0, 160, radius, g).z).toBeLessThan(COAST_GATE.z);
+      expect(cloudMove(0, 156, 0, 160, radius, OPEN).z).toBeCloseTo(160);
+      expect(cloudMove(0, 156, 0, 153, radius, g).z).toBeCloseTo(153);
     }
   });
   it("needs the family's tunnel and never opens the raider road", () => {
-    expect(flood({ ...OPEN, tunnelOpen: false })(0, 90)).toBe(false);
-    expect(flood(OPEN, .35, ["hiddenHollow"])(0, 90)).toBe(false);
+    expect(flood({ ...OPEN, tunnelOpen: false })(0, 270)).toBe(false);
+    expect(flood(OPEN, .35, ["hiddenHollow"])(0, 270)).toBe(false);
     for (const radius of [.35, .7]) {
-      for (let x = 1; x <= 9; x += .3) expect(cloudWalkable(x, RAIDER_BARRICADE.z, OPEN, radius)).toBe(false);
-      expect(cloudMove(5, 55, 5, 60, radius, OPEN).z).toBeLessThan(RAIDER_BARRICADE.z);
+      for (let x = 26; x <= 34; x += .3) expect(cloudWalkable(x, RAIDER_BARRICADE.z, OPEN, radius)).toBe(false);
+      expect(cloudMove(30, 149, 30, 154, radius, OPEN).z).toBeLessThan(RAIDER_BARRICADE.z);
     }
-    expect(cloudWalkable(0, 137, ALL_OPEN, .35)).toBe(true);
+    expect(cloudWalkable(0, 317, ALL_OPEN, .35)).toBe(true);
   });
   it("keeps both optional coves closed until their own free ability puzzle", () => {
-    expect(flood({ ...OPEN, solved: [] })(-17, 30)).toBe(false);
-    expect(flood({ ...OPEN, solved: [] })(17, 39)).toBe(false);
+    expect(flood({ ...OPEN, solved: [] })(-49, 70)).toBe(false);
+    expect(flood({ ...OPEN, solved: [] })(48, 129)).toBe(false);
     const reach = flood({ ...OPEN, solved: [] });
     for (const id of ["coastWindmill", "coastCrate"] as const) {
       const p = CLOUD_OBSTACLE_PLACE[id]; expect(reach(p.x, p.z, 1.2)).toBe(true);
@@ -79,7 +79,7 @@ describe("Cloud Isle slice A ground", () => {
     const p = cloudNearestWalkable(999, -999, .35, {});
     expect(cloudWalkable(p.x, p.z, {}, .35)).toBe(true);
     expect(cloudNearestWalkable(NaN, Infinity, .35, {})).toEqual(CLOUD_DOCK.spawn);
-    expect(cloudY(0, 90)).toBeGreaterThan(cloudY(0, 0));
+    expect(cloudY(0, 270)).toBeGreaterThan(cloudY(0, 0));
   });
   it("adds shooter replacements on reachable Cloud Isle ground without changing encounter counts", () => {
     const reach = flood(ALL_OPEN);
@@ -93,9 +93,9 @@ describe("Cloud Isle slice A ground", () => {
     }
   });
   it("supplies wind acceleration only as a projectile/light-prop query", () => {
-    expect(cloudWindAt(-4, 20).x).toBeGreaterThan(0);
-    expect(cloudWindAt(2, 34).x).toBeLessThan(0);
-    expect(cloudWindAt(-13, 57)).toEqual({ x: 0, z: 0 });
+    expect(cloudWindAt(6, 30).x).toBeGreaterThan(0);
+    expect(cloudWindAt(-24, 65).x).toBeLessThan(0);
+    expect(cloudWindAt(-13, 197)).toEqual({ x: 0, z: 0 });
   });
 });
 
@@ -109,11 +109,11 @@ describe("Cloud Isle mountain routes", () => {
       const gates = { ...ALL_OPEN, cleared: ["stormbreakCoast", route.area] };
       for (const radius of [.35, .7]) {
         const reach = flood(gates, radius, [route.other], CLOUD_SPAWNS.windfallJunction);
-        expect(reach(route.x, 106), "route mouth").toBe(true);
-        expect(reach(route.x, 123), "far route ground").toBe(true);
-        expect(reach(0, 132), "shared observatory approach").toBe(true);
-        const retreat = flood(gates, radius, [route.other], { x: 0, z: 132 });
-        expect(retreat(0, 90), "retreat to junction").toBe(true);
+        expect(reach(route.x, 286), "route mouth").toBe(true);
+        expect(reach(route.x, 303), "far route ground").toBe(true);
+        expect(reach(0, 312), "shared observatory approach").toBe(true);
+        const retreat = flood(gates, radius, [route.other], { x: 0, z: 312 });
+        expect(retreat(0, 270), "retreat to junction").toBe(true);
       }
     });
     for (const missing of route.required) {
@@ -123,8 +123,8 @@ describe("Cloud Isle mountain routes", () => {
           const reach = flood(gates, radius, [route.other], CLOUD_SPAWNS.windfallJunction);
           const place = CLOUD_OBSTACLE_PLACE[missing];
           expect(reach(place.x, place.z, 1.5), "required interaction reachable").toBe(true);
-          expect(reach(route.x, 123), "cannot bypass required mechanism").toBe(false);
-          expect(reach(0, 132), "cannot reach approach through this route").toBe(false);
+          expect(reach(route.x, 303), "cannot bypass required mechanism").toBe(false);
+          expect(reach(0, 312), "cannot reach approach through this route").toBe(false);
         }
       });
     }
@@ -132,11 +132,11 @@ describe("Cloud Isle mountain routes", () => {
       for (const radius of [.35, .7]) {
         const gates = { ...ALL_OPEN, cleared: ["stormbreakCoast"] };
         const reach = flood(gates, radius, [route.other], CLOUD_SPAWNS.windfallJunction);
-        expect(reach(route.x, 123)).toBe(true);
-        expect(reach(0, 132)).toBe(false);
-        for(let x=route.x-10;x<=route.x+10;x+=.3) expect(cloudWalkable(x,127,gates,radius),`gate edge ${x}`).toBe(false);
-        const retreat = flood(gates, radius, [route.other], { x: route.x, z: 123 });
-        expect(retreat(0, 90)).toBe(true);
+        expect(reach(route.x, 303)).toBe(true);
+        expect(reach(0, 312)).toBe(false);
+        for(let x=route.x-10;x<=route.x+10;x+=.3) expect(cloudWalkable(x,307,gates,radius),`gate edge ${x}`).toBe(false);
+        const retreat = flood(gates, radius, [route.other], { x: route.x, z: 303 });
+        expect(retreat(0, 270)).toBe(true);
       }
     });
   }
@@ -147,7 +147,7 @@ describe("Cloud Isle mountain routes", () => {
     for (const route of routes) expect(CLOUD_ENEMY_SPAWNS.filter(e => e.zone === route.area)).toHaveLength(6);
     const reach = flood(ALL_OPEN);
     for (const p of [...CLOUD_PICKUPS, ...CLOUD_CHESTS]) expect(reach(p.x, p.z, 1.5), p.id).toBe(true);
-    expect(flood({ ...ALL_OPEN, solved: CLOUD_PUZZLES.filter(id => id !== "canopyGust") })(-32, 123)).toBe(false);
+    expect(flood({ ...ALL_OPEN, solved: CLOUD_PUZZLES.filter(id => id !== "canopyGust") })(-32, 303)).toBe(false);
   });
   it("gives electric panels a visible safe window longer than 1.5 seconds every cycle", () => {
     for(const offset of [0,1.2]) {
@@ -183,11 +183,11 @@ describe("Ancient Observatory and Storm Beacon ground", () => {
     for (const radius of [.35, .7]) {
       for (const missing of ["leafy", "bubbo", "puff", "ember"]) {
         const gates = { ...ALL_OPEN, observatoryLamps: ALL_OPEN.observatoryLamps!.filter(id => id !== missing) };
-        expect(flood(gates, radius, [], CLOUD_SPAWNS.ancientObservatory)(0, 169), missing).toBe(false);
-        expect(cloudMove(0, 153, 0, 160, radius, gates).z).toBeLessThan(154.5);
+        expect(flood(gates, radius, [], CLOUD_SPAWNS.ancientObservatory)(0, 349), missing).toBe(false);
+        expect(cloudMove(0, 333, 0, 340, radius, gates).z).toBeLessThan(334.5);
       }
       const uncleared = { ...ALL_OPEN, cleared: ALL_OPEN.cleared!.filter(id => id !== "ancientObservatory") };
-      expect(cloudWalkable(0, 155, uncleared, radius)).toBe(false);
+      expect(cloudWalkable(0, 335, uncleared, radius)).toBe(false);
     }
   });
 
@@ -195,12 +195,12 @@ describe("Ancient Observatory and Storm Beacon ground", () => {
     const enemies = CLOUD_ENEMY_SPAWNS.filter(e => e.zone === "ancientObservatory");
     expect(enemies).toHaveLength(4);
     expect(new Set(enemies.map(e => e.kind))).toEqual(new Set(["windSprite", "raiderShooter", "thunderBeetle"]));
-    expect(cloudY(0, 145)).toBe(22);
-    expect(cloudY(0, 155)).toBeGreaterThan(22);
-    expect(cloudY(0, 169)).toBe(37);
-    const pushed = cloudMove(10, 169, 30, 169, .35, ALL_OPEN);
+    expect(cloudY(0, 325)).toBe(22);
+    expect(cloudY(0, 335)).toBeGreaterThan(22);
+    expect(cloudY(0, 349)).toBe(37);
+    const pushed = cloudMove(10, 349, 30, 349, .35, ALL_OPEN);
     expect(cloudWalkable(pushed.x, pushed.z, ALL_OPEN, .35)).toBe(true);
     expect(pushed.x).toBeLessThan(12);
-    expect(cloudNearestWalkable(0, 169, .35, ALL_OPEN)).toEqual({ x: 0, z: 169 });
+    expect(cloudNearestWalkable(0, 349, .35, ALL_OPEN)).toEqual({ x: 0, z: 349 });
   });
 });
