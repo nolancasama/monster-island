@@ -1,7 +1,8 @@
-import { BEACON, CLOUD_BOUNDS, CLOUD_ZONES, cloudY } from "./cloudisle";
+import { BEACON, CLOUD_BOUNDS, CLOUD_CHASMS, CLOUD_DECKS, CLOUD_ZONES, cloudY } from "./cloudisle";
 import { nearestOnTrail, type WalkShape } from "./lowland";
 
-const shapes = Object.values(CLOUD_ZONES).flatMap(zone => zone.walk);
+// Decks are drawn as walkways, so the ground is carved only to the other shapes.
+const shapes = Object.values(CLOUD_ZONES).flatMap(zone => zone.walk).filter(s => !CLOUD_DECKS.includes(s));
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 const smooth = (x: number) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -87,7 +88,25 @@ export function cloudGroundY(x: number, z: number): number {
   // A 3 m level shoulder (beyond a 2 m grid triangle's 2.83 m diagonal) keeps
   // the drawn surface exactly at walking height wherever the player can stand.
   const d = distanceToWalk(x, z);
-  if (d <= 3) return cloudY(x, z);
-  const blend = smooth((d - 3) / 6);
-  return cloudY(x, z) * (1 - blend) + natural * blend;
+  const carved = d <= 3 ? cloudY(x, z) : cloudY(x, z) * (1 - smooth((d - 3) / 6)) + natural * smooth((d - 3) / 6);
+  return Math.min(carved, underDeck(x, z), inChasm(x, z));
+}
+/** Under and beside a deck (but not under the carved ground it leaves from)
+ * the ground stays at least 2.5 m below the walkway. */
+function onDeck(x: number, z: number): boolean {
+  return CLOUD_DECKS.some(s => shapeDistance(s, x, z) < 2) && walkDistance(x, z) > 0;
+}
+function underDeck(x: number, z: number): number {
+  return onDeck(x, z) ? cloudY(x, z) - 2.5 : Infinity;
+}
+/** Inside a puzzle gap the ground falls 8 m below the path. */
+function chasmAt(x: number, z: number): boolean {
+  return CLOUD_CHASMS.some(c => x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1);
+}
+function inChasm(x: number, z: number): number {
+  return chasmAt(x, z) ? cloudY(x, z) - 8 : Infinity;
+}
+/** Walkable ground the terrain itself does not carry (decks, bridged gaps). */
+export function cloudOffTerrain(x: number, z: number): boolean {
+  return onDeck(x, z) || chasmAt(x, z);
 }

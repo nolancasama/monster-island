@@ -37,6 +37,9 @@ export const COAST_SEA_BRIDGE = trail([[-38, 65], [-45, 69]], 1.6);
 export const COAST_ROCKS = [[-6, 32], [-14, 52], [-29, 76], [18, 102], [32, 126], [6, 146], [-32, 176], [-24, 188]] as const;
 export const HOLLOW_APPROACH: Array<[number, number]> = [[0, 158], [-12, 169], [-27, 177], [-29, 187], [-19, 185], [-10, 190], [-12, 193]];
 export const BACK_TUNNEL: Array<[number, number]> = [[-15, 202], [-17, 212], [-32, 223], [-29, 237], [-17, 244], [-20, 253], [-7, 261], [0, 265]];
+/** The far-west branch walkway to the gust-lane viewpoint: 16 m above the
+ * hillside, drawn as a deck on the giant trees rather than carved ground. */
+export const CANOPY_GUST_SPUR: WalkShape[] = [trail([[-50, 332], [-62, 338], [-72, 341]], 2.4), disc(-72, 341, 5)];
 export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile: boolean; walk: WalkShape[] }> = {
   cloudDock: { id: "cloudDock", name: { en: "Cloud Isle Dock", ja: "雲の島の船着き場" }, hostile: false, walk: [rect(-10, 10, -3, 14), rect(-1.5, 1.5, -9, 0), disc(8, 5, 5)] },
   stormbreakCoast: { id: "stormbreakCoast", name: { en: "Stormbreak Coast", ja: "嵐の海岸" }, hostile: true,
@@ -52,7 +55,7 @@ export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile
     walk: [trail([[-18, 285], [-28, 293], [-30, 300]], 3.2), disc(-30, 298, 9),
       trail([[-30, 301], [-36, 315], [-50, 329]], 3.2), disc(-50, 332, 9.5),
       trail([[-50, 332], [-43, 347], [-38, 354], [-38, 361], [-49, 377]], 3.2), disc(-49, 377, 9.5),
-      trail([[-50, 332], [-62, 338], [-72, 341]], 2.4), disc(-72, 341, 5),
+      ...CANOPY_GUST_SPUR,
       trail([[-49, 377], [-42, 389], [-28, 394], [-20, 400], [0, 402]], 3.2)] },
   thunderGrotto: { id: "thunderGrotto", name: { en: "Thunder Grotto", ja: "雷の洞窟" }, hostile: true,
     walk: [trail([[9, 279], [20, 286]], 2.7), rect(13, 27, 284, 306), trail([[20, 304], [10, 311], [14, 340], [20, 369], [16, 393], [10, 401], [0, 402]], 2.7), trail([[26, 302], [31, 303]], 2), disc(32, 303, 3)] },
@@ -107,6 +110,15 @@ export const CLOUD_PUZZLE_BARRIERS = [
   { puzzle: "canopyGust", x0: -62, x1: -60, z0: 331, z1: 348 },
 ] as const;
 export const CANOPY_GLIDE = { from: { x: -38, z: 353.9 }, to: { x: -38, z: 358.1 } };
+/** Walk shapes drawn as timber/branch walkways: the terrain is not carved
+ * to them and stays well below. */
+export const CLOUD_DECKS: readonly WalkShape[] = CANOPY_GUST_SPUR;
+/** Gaps a puzzle spans (a bridge, a scripted glide): the terrain drops away
+ * beneath them so they read as gaps, never as level ground. */
+export const CLOUD_CHASMS = CLOUD_PUZZLE_BARRIERS.filter(b => b.puzzle === "canopyVine" || b.puzzle === "canopyGlide")
+  .map(b => b.puzzle === "canopyGlide"
+    ? { x0: b.x0, x1: b.x1, z0: CANOPY_GLIDE.from.z + 1.1, z1: CANOPY_GLIDE.to.z - 1.1 }
+    : { x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 });
 export const CLOUD_ELECTRIC_PANELS = [
   { x: 17, z: 295, w: 3, d: 2, phase: 0 },
   { x: 23, z: 303, w: 3, d: 2, phase: 1.2 },
