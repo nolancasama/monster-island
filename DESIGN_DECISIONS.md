@@ -1578,3 +1578,36 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
 - The intact thicket's circular target footprint is also solid. Object cone
   visibility tests stop at the target's near rim so its own solid does not
   occlude a fire hit; intervening scenery still blocks the query.
+## 2026-11-01 — Slice E5: elemental move words, HUD and acceptance spec
+
+- Trainer rows show both COMBAT move names, Japanese MoveDef.hint lines,
+  and the special's MP cost. Combat buttons retain the Storm Beacon's
+  existing 0 MP override. Trainer dialogue and attack/special tutorial text
+  describe the elemental effects; treat banners describe the current upgrades.
+- Special practice uses Burn / Pop / Stop / Spin. Added phrase definitions
+  and accent variants for Pop / Stop / Spin, retaining Pull / Push / Blow
+  for existing English obstacles. The shared speech matcher needs no rule
+  change; unit coverage checks commands against the real COMBAT words.
+- Touch J captures its pointer and clears held input on friend/input/mode
+  changes or unmount. Existing touch K calls specialAttack once; Inferno's
+  fixed 1.2-second burst already lives in the simulation. Existing keyboard
+  key-up removes KeyK from the held-key set consumed by sim.ts, so no new
+  combat rules or keyboard wiring are needed.
+- elements.spec.ts uses existing save/stub/fixture hooks, fresh isolated
+  forest1 enemies and full MP. Setup waits identify unreached conditions as
+  HARNESS_PRECONDITION_FAILED; effect checks wait on semantic state. Exact
+  special cost is checked with the game clock frozen, before regeneration.
+  Existing read-only window.__mi.state().act2 enemies (burning/control/air),
+  inferno, cyclone and bombChain are the acceptance surface; no state
+  machine or writable hook was added.
+- This checkout has no elemental secrets implementation, saved secrets
+  field or puffLeaves exposure (E4a), so secret persistence coverage cannot
+  be authored against a real surface yet. Old move names remain only in
+  historical documentation, test comments and internal audio identifiers,
+  with none in user-visible text.
+- Browser acceptance belongs to the controller. Neither Playwright nor its
+  intentional wrong-target negative control is run here, per the order's
+  sandbox exception; the spec documents the negative-control mutation.
+- Vine Grab uses the existing whip sound while Root Snare retains vines,
+  giving all eight moves distinct existing sound cues. This is the only
+  combat.ts edit and changes presentation only, with no simulation rules.

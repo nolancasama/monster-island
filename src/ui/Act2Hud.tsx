@@ -97,6 +97,7 @@ function Moves() {
     return () => window.clearInterval(t);
   }, []);
   const active = progress.active as CompanionId | null;
+  useEffect(() => () => { cb.touchHold = false; }, [active, touch, mode]);
   if (!active || mode !== "explore" || !inHostileZone()) return null;
   const c = COMBAT[active];
   const food = favouriteFood(active);
@@ -127,6 +128,7 @@ function Moves() {
   if (touch) {
     const hold = (on: boolean) => (e: React.PointerEvent) => {
       e.preventDefault();
+      if (on) e.currentTarget.setPointerCapture(e.pointerId);
       cb.touchHold = on;
       if (on) basicAttack();
     };
@@ -330,9 +332,11 @@ function TrainerPanel() {
                   <span>
                     <kbd>J</kbd> {c.basic.word} — {c.basic.name.en} <Ja>{c.basic.name.ja}</Ja>
                   </span>
+                  <Ja>{c.basic.hint.ja}</Ja>
                   <span>
                     <kbd>K</kbd> {c.special.word} — {c.special.name.en} ({c.special.cost} MP) <Ja>{c.special.name.ja}</Ja>
                   </span>
+                  <Ja>{c.special.hint.ja}</Ja>
                   <span className={up ? "learned" : "locked"}>
                     {up ? "★ " : "☆ "}
                     {c.upgrade.name.en} {up ? "(learned!)" : `— ${RECIPES[id].treat.en}`} <Ja>{up ? "おぼえた!" : `${RECIPES[id].treat.ja}で おぼえる`}</Ja>

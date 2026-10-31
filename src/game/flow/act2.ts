@@ -596,7 +596,8 @@ function kitchen(): Promise<void> {
     audio.voice(friend, "excited");
     effect("sparkle", m.x, groundY(m.x, m.z) + 1.2, m.z);
     const up = COMBAT[friend].upgrade.name;
-    banner({ title: `${MONSTERS[friend].name} learned ${up.en}!`, sub: friend === "puff" ? "Two wind shots at once!" : "A bigger, stronger basic attack!", ja: `${MONSTERS[friend].name}は ${up.ja}を おぼえた!`, tone: "clear" }, 3600);
+    const upgradeHint = { leafy: "Grab two enemies and bash them together!", bubbo: "Trap bigger enemies in bubbles!", puff: "Blow enemies away with wider wind!", ember: "Breathe farther and burn longer!" };
+    banner({ title: `${MONSTERS[friend].name} learned ${up.en}!`, sub: upgradeHint[friend], ja: `${MONSTERS[friend].name}は ${up.ja}を おぼえた!`, tone: "clear" }, 3600);
     await say(friend, "Yummy! I feel strong!", "おいしい! ちからが わいてきた!");
     await ask({ kind: "command", options: ["thankYou"], readSentence: true, help: "コックさんに おれいを いおう" });
     m.mode = friend === getGame().progress.active ? "follow" : "party";
@@ -609,12 +610,17 @@ function trainer(): Promise<void> {
   return run(async () => {
     faceKeeper("trainer");
     await say("trainer", "Hi! I'm Coach Rex. I know every monster move!", "やあ! コーチの レックスだ。モンスターの わざは なんでも しってるぞ!");
-    await say("trainer", "Press J for a basic attack. Press K for a special move!", "J で ふつうの こうげき。K で とくべつな わざ!");
+    await say("trainer", "Face an enemy! J is free. K uses MP.", "てきの ほうを むこう! J は MPなし。K は MPを つかうよ。");
+    await say("trainer", "Press J: Ember breathes fire. Bubbo traps an enemy in a bubble!", "J: エンバーは ほのおを はく。バボは あわで てきを うかせるよ!");
+    await say("trainer", "Leafy grabs and throws. Puff blows enemies away!", "リーフィは つかんで なげる。パフは かぜで てきを とばすよ!");
+    await say("trainer", "Press K: Burn! makes wide fire. Pop! bursts a big bubble.", "K: Burn! は ひろい ほのお。Pop! は おおきな あわの ばくだん。");
+    await say("trainer", "Stop! roots enemies. Spin! makes a cyclone that carries them!", "Stop! は ねっこで とめる。Spin! は たつまきで はこぶよ!");
+    await say("trainer", "Tap K for a fire burst. Hold K on a keyboard for longer fire!", "K を いちど おすと ほのおが でるよ。キーボードで おしつづけると ながく でるよ!");
     setGame({ panel: "trainer" });
   });
 }
 
-const COMMAND_PHRASE: Record<CompanionId, PhraseId> = { leafy: "cmdPull", bubbo: "cmdPush", puff: "cmdBlow", ember: "cmdBurn" };
+const COMMAND_PHRASE: Record<CompanionId, PhraseId> = { leafy: "cmdStop", bubbo: "cmdPop", puff: "cmdSpin", ember: "cmdBurn" };
 
 /** Practise one friend's special command with the trainer (the first time gives coins). */
 export function practiseCommand(friend: CompanionId): Promise<void> {
