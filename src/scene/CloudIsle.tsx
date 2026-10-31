@@ -8,8 +8,7 @@ import { NPCS } from "../game/data/town";
 import {
   CLOUD_BOUNDS, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
   CLOUD_ZONES, COAST_GATE, HOLLOW_APPROACH, HOLLOW, RAIDER_BARRICADE,
-  cloudY, type CloudGates,
-} from "../game/world/cloudisle";
+  cloudY, cloudZoneAt, type CloudGates } from "../game/world/cloudisle";
 import { nearestOnTrail, PIER2, type WalkShape } from "../game/world/lowland";
 import { cloudGroundY, cloudLandMask } from "../game/world/cloudTerrain";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
@@ -470,8 +469,8 @@ function PickupsAndChests({ inside }: { inside: boolean }) {
     return { bag: bag.build(), firewood: wood.build(), moss: moss.build() };
   }, []);
   return <>
-    {CLOUD_PICKUPS.filter(p => inside === (p.x > 9 && p.z > 280) && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
-    {CLOUD_CHESTS.filter(c => inside === (c.id === "cloudCrystalChest")).map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
+    {CLOUD_PICKUPS.filter(p => inside === (cloudZoneAt(p.x, p.z) === "thunderGrotto") && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
+    {CLOUD_CHESTS.filter(c => inside === (cloudZoneAt(c.x, c.z) === "thunderGrotto")).map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
   </>;
 }
 

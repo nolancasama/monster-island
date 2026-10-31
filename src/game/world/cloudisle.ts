@@ -37,8 +37,9 @@ export const COAST_SEA_BRIDGE = trail([[-38, 65], [-45, 69]], 1.6);
 export const COAST_ROCKS = [[-6, 32], [-14, 52], [-29, 76], [18, 102], [32, 126], [6, 146], [-32, 176], [-24, 188]] as const;
 export const HOLLOW_APPROACH: Array<[number, number]> = [[0, 158], [-12, 169], [-27, 177], [-29, 187], [-19, 185], [-10, 190], [-12, 193]];
 export const BACK_TUNNEL: Array<[number, number]> = [[-15, 202], [-17, 212], [-32, 223], [-29, 237], [-17, 244], [-20, 253], [-7, 261], [0, 265]];
-/** Thunder Grotto. The mouth and exit trails are open air; every other shape
- * is underground, under the mountain (CLOUD_CAVES). */
+/** Thunder Grotto, entirely underground (CLOUD_CAVES). Its open-air mouth and
+ * exit trails belong to the junction and the observatory approach, so being
+ * in the grotto's zone means being inside the cave. */
 const GROTTO_MOUTH_TRAIL = trail([[9, 279], [14, 284]], 2.7);
 const GROTTO_EXIT_TRAIL = trail([[22, 390], [10, 401], [0, 402]], 2.7);
 const GROTTO_CAVE: WalkShape[] = [
@@ -63,7 +64,9 @@ export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile
   windfallJunction: { id: "windfallJunction", name: { en: "Windfall Junction", ja: "風の分かれ道" }, hostile: true,
     walk: [disc(0, 273, 14), trail([[-8, 280], [-21, 288]], 3.2), trail([[0, 273], [9, 279]], 2.5),
       trail([[10, 271], [26, 265], [38, 266]], 3), disc(38, 266, 4),
-      trail([[-8, 269], [-17, 262], [-23, 268]], 2.5), disc(-23, 268, 4)] },
+      trail([[-8, 269], [-17, 262], [-23, 268]], 2.5), disc(-23, 268, 4),
+      // The open-air approach to the grotto's mouth.
+      GROTTO_MOUTH_TRAIL] },
   skyrootCanopy: { id: "skyrootCanopy", name: { en: "Skyroot Canopy", ja: "空根の樹冠" }, hostile: true,
     // Forest floor, two raised clearings, winding ramps, and a west viewpoint.
     walk: [trail([[-18, 285], [-28, 293], [-30, 300]], 3.2), disc(-30, 298, 9),
@@ -74,10 +77,11 @@ export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile
   thunderGrotto: { id: "thunderGrotto", name: { en: "Thunder Grotto", ja: "雷の洞窟" }, hostile: true,
     // Entry mouth, entry chamber, underground lake (raft), crystal side
     // chamber, steam machinery (boiler gate), electric corridor, exit climb.
-    walk: [GROTTO_MOUTH_TRAIL, ...GROTTO_CAVE, GROTTO_EXIT_TRAIL] },
+    walk: [...GROTTO_CAVE] },
   observatoryApproach: { id: "observatoryApproach", name: { en: "Ancient Observatory — Entrance", ja: "古代の天文台・入口" }, hostile: false,
     // A forecourt where both routes arrive, with the rest point.
-    walk: [rect(-16, 16, 399, 406)] },
+    // The grotto's exit climbs into open air here.
+    walk: [rect(-16, 16, 399, 406), GROTTO_EXIT_TRAIL] },
   ancientObservatory: { id: "ancientObservatory", name: { en: "Ancient Observatory", ja: "古代の天文台" }, hostile: true,
     // The central hall and dial, a terrace on each side, and two broken towers
     // reached by walkways; the lift corridor north of the hall rises to the beacon.

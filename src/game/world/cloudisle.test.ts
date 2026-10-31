@@ -255,9 +255,13 @@ describe("Thunder Grotto chambers", () => {
       expect(cloudWalkable(p.x + dx, p.z + dz, ALL_OPEN, 0)).toBe(true);
     }
   });
-  it("keeps the caves inside the grotto, with an open-air mouth at each end", () => {
-    for (const s of CLOUD_CAVES) expect(CLOUD_ZONES.thunderGrotto.walk).toContain(s);
-    expect(CLOUD_CAVES.length).toBeLessThan(CLOUD_ZONES.thunderGrotto.walk.length);
-    for (const m of GROTTO_MOUTHS) expect(cloudZoneAt(m.x, m.z)).toBe("thunderGrotto");
+  it("is entirely cave, entered through an open-air mouth at each end", () => {
+    expect([...CLOUD_CAVES]).toEqual(CLOUD_ZONES.thunderGrotto.walk);
+    // Each mouth joins open-air ground (junction or approach) to the cave.
+    for (const m of GROTTO_MOUTHS) {
+      const zones = new Set([[-3.5, 0], [3.5, 0], [0, -3.5], [0, 3.5], [2.5, 2.5], [-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5]].map(([dx, dz]) => cloudZoneAt(m.x + dx, m.z + dz)));
+      expect(zones.has("thunderGrotto")).toBe(true);
+      expect([...zones].some(z => z === "windfallJunction" || z === "observatoryApproach")).toBe(true);
+    }
   });
 });

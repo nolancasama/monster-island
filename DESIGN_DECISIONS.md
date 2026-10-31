@@ -126,3 +126,18 @@
   scanning the whole island (the scan took ~1.3 s per call at this size — a
   visible stall on every off-path dismount, knock-out or save projection).
   Same lattice and tie-break, identical results on 150 random points, ~37 ms.
+
+## 2026-10-31 — Slice X2b-scene: the grotto interior
+
+- The grotto is entirely cave: its open-air mouth and exit trails belong to
+  the junction and the approach, so "in the grotto zone" means inside, and
+  outdoor scenery is hidden only there.
+- The cave is generated from `CLOUD_CAVES` on a 1 m grid: a stone floor at
+  walking height (water in the raft channel), inward-facing rock walls on
+  every footprint edge and a rough ceiling 6.5 m up. Walls and ceiling use the
+  line-of-sight material and back-face culling, so the follow camera behind a
+  narrow passage still sees the player. Crystal clusters ring the crystal
+  chamber; the boiler, chimneys and pipes stand at the boiler gate; one cool
+  light per chamber. Cave-mouth arches stand at `GROTTO_MOUTHS`.
+- Interior views: 28–51 calls, ~20k triangles. SwiftShader drops to ~9 fps
+  with the chamber lights; real-GPU cost is to be checked on a Chromebook.
