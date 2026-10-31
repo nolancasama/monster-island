@@ -1435,3 +1435,27 @@ save and never writes `mi.save.v4`.
   massif's southern flank rises gently and the summit is > 400 m away. Options
   are a steeper massif (deep canyons around the Hollow and junction) or a
   longer cut-off for the summit alone; left for the user's decision.
+
+## 2026-11-01 — Elemental combat brief: accepted, with these changes
+
+Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
+- J becomes each friend's signature power (Fire Breath, Bubble Trap, Vine
+  Grab, Wind Blast); K the tactical version (Inferno, Bubble Bomb, Root
+  Snare, Cyclone). Old moves removed, not kept as options.
+- No auto-turn or target lock: every move uses the facing at the press; only
+  Vine Grab selects, and only inside its forward cone with a clear line.
+- Height is a scripted `air` value capped at 2.4 m (fixed camera), not
+  physics. Heavy enemies (shellback, thunder beetle) are never lifted or
+  carried; the Storm Beacon keeps its pylon rules.
+- Knock-off hazards are an explicit data list (pond, canopy gaps, Cloud
+  chasms, sea edge), not inferred from walkability, so outcomes are
+  predictable; KOs go through the normal stage-credit path.
+- Inferno: a tap is a fixed 1.2 s burst on keyboard and touch; keyboard hold
+  extends it to 3 s while MP lasts.
+- Scope bounded to four single-friend secrets and two two-friend puzzles on
+  the home lowland (reachable live). English "Can you…?" unlocks and
+  required progression unchanged. Rejected: converting existing obstacles to
+  attack puzzles (would bypass the English loop); new Cloud Isle secrets
+  while it is locked; per-combo damage bonuses.
+- Permanent secret states save in `progress.act2.secrets` (save v4, unknown
+  ids dropped on load).
