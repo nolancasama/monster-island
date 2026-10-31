@@ -6,7 +6,7 @@ import { rt } from "./runtime";
 import { region } from "./world/region";
 import { COMBAT, ENEMIES, type CompanionId, type EnemyKind } from "./data/combat";
 import { BEACON_PYLONS } from "./logic/beacon";
-import { CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
+import { BEACON, CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
 import { ENEMY_SPAWNS } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
 import { PLAYER_R, gatesOf, isWalkable, standY } from "./world/collision";
@@ -340,7 +340,7 @@ describe("Cloud Isle combat", () => {
 
   it("keeps electric panels safe before their pulse, then deals light damage without knock-back", () => {
     for (const e of cb.enemies) e.state = "gone";
-    Object.assign(rt.player, { x: 17, z: 295 });
+    Object.assign(rt.player, { x: 32.5, z: 370 }); // the first electric panel
     cb.safeUntil = 0;
     rt.time = 4;
     combatTick(.016);
@@ -356,7 +356,7 @@ describe("Cloud Isle combat", () => {
     rt.time = 6.5;
     combatTick(.016);
     expect(cb.vitals.hp).toBe(95);
-    expect(rt.player).toMatchObject({ x: 17, z: 295 });
+    expect(rt.player).toMatchObject({ x: 32.5, z: 370 });
   });
 
   it("damages a fifth sleeping enemy without waking a fifth attacker", () => {
@@ -460,7 +460,7 @@ describe("Storm Beacon world combat integration", () => {
     setGame(g => ({ progress: { ...g.progress, active: friend, act3: { ...g.progress.act3, area: "stormBeacon",
       cleared: ["ancientObservatory"], observatoryLamps: ["leafy", "bubbo", "puff", "ember"], checkpoint: "observatory" } } }));
     for (const e of cb.enemies) e.state = "gone";
-    Object.assign(rt.player, { x: -7, z: 343, y: 37, yaw: 0, speed: 0 });
+    Object.assign(rt.player, { x: -7, z: BEACON_PYLONS[0].z - 5, y: BEACON.y, yaw: 0, speed: 0 });
     cb.cloudZones.current = "stormBeacon";
     cb.stance.friend = friend;
     cb.stance.k = 1;
@@ -519,7 +519,7 @@ describe("Storm Beacon world combat integration", () => {
 
   it("Leafy's actual sweep hits an exposed pylon without a projectile or battle screen", () => {
     enterArena("leafy");
-    Object.assign(rt.player, { x: -7, z: 345.5 });
+    Object.assign(rt.player, { x: -7, z: BEACON_PYLONS[0].z - 2.5 });
     cb.beacon.pylons[0].phase = "exposed";
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.power).toBe(2);
@@ -529,7 +529,7 @@ describe("Storm Beacon world combat integration", () => {
   it("Puff's attack must point along the gust to cancel its real push", () => {
     enterArena("puff");
     // Far enough from pylons to preserve the intended attack direction.
-    Object.assign(rt.player, { x: 0, z: 337, yaw: -Math.PI / 2 });
+    Object.assign(rt.player, { x: 0, z: BEACON.z - 12, yaw: -Math.PI / 2 });
     cb.beacon.attack = "gustTell"; cb.beacon.timer = 1; cb.beacon.gust = { x: 1, z: 0 };
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.gustCancelled).toBe(false);
@@ -545,7 +545,7 @@ describe("Storm Beacon world combat integration", () => {
 
   it("uses free boss specials at zero MP while retaining ordinary coast MP costs", () => {
     enterArena("leafy");
-    Object.assign(rt.player, { x: -7, z: 344 });
+    Object.assign(rt.player, { x: -7, z: BEACON_PYLONS[0].z - 4 });
     cb.vitals.mp.leafy = 0; cb.beacon.pylons[0].phase = "exposed";
     expect(specialAttack()).toBe(true);
     expect(cb.beacon.power).toBe(2);

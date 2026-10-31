@@ -1,7 +1,9 @@
-import { CLOUD_BOUNDS, CLOUD_ZONES, cloudY } from "./cloudisle";
+import { BEACON, CLOUD_BOUNDS, CLOUD_CAVES, CLOUD_CHASMS, CLOUD_DECKS, CLOUD_ZONES, cloudY } from "./cloudisle";
 import { nearestOnTrail, type WalkShape } from "./lowland";
 
-const shapes = Object.values(CLOUD_ZONES).flatMap(zone => zone.walk);
+// Decks are drawn as walkways and caves run under the mountain, so the ground
+// is carved only to the other shapes.
+const shapes = Object.values(CLOUD_ZONES).flatMap(zone => zone.walk).filter(s => !CLOUD_DECKS.includes(s) && !CLOUD_CAVES.includes(s));
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 const smooth = (x: number) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -52,14 +54,21 @@ function coastStrip(x: number, z: number): number {
   const margin = 14 + 5 * Math.sin(x / 11 + z / 17) + 3 * Math.sin(z / 7 - x / 19);
   return margin - distanceToWalk(x, z);
 }
+// The massif and its peak follow the beacon, so moving the summit areas north
+// carries the mountain with them.
+// Its south edge stays just past the Hollow (z 150) so the junction and both
+// routes stand on the mountain, never on a coastal strip.
+const PEAK_Z = BEACON.z + 32, MASSIF_S = 150, MASSIF_N = PEAK_Z + 60;
+const MASSIF_Z = (MASSIF_S + MASSIF_N) / 2;
 function massif(x: number, z: number): number {
-  const cx = 6 * Math.sin(z / 47), rx = 76 + 7 * Math.sin(z / 31), rz = 175;
-  const nx = (x - cx) / rx, nz = (z - 305) / rz;
+  const cx = 6 * Math.sin(z / 47), rx = 76 + 7 * Math.sin(z / 31), rz = (MASSIF_N - MASSIF_S) / 2;
+  const nx = (x - cx) / rx, nz = (z - MASSIF_Z) / rz;
   const r = Math.pow(Math.abs(nx) ** 3 + Math.abs(nz) ** 3, 1 / 3);
   return (1 - r) * 80 + 3 * Math.sin(x / 13 + z / 17) + 1.6 * Math.sin(x / 7 - z / 23);
 }
 function shoreDistance(x: number, z: number): number {
-  return Math.max(coastStrip(x, z), massif(x, z));
+  // Land reaches at least 8 m beyond every cave wall.
+  return Math.max(coastStrip(x, z), massif(x, z), 8 - caveDistance(x, z));
 }
 export function cloudLandMask(x: number, z: number): number {
   return shoreDistance(x, z) >= 0 ? 1 : 0;
@@ -72,8 +81,8 @@ export function cloudGroundY(x: number, z: number): number {
   const knolls = smooth((shore - 4) / 10) * (2.2 + 1.8 * Math.sin(x / 9 + z / 13) * Math.sin(z / 11 - x / 17));
   // The mountain body: rises with its depth inland and northward to the summit.
   const body = smooth(massif(x, z) / 45);
-  const north = smooth((z - 130) / 230);
-  const summit = 34 * Math.exp(-((x / 40) ** 2 + ((z - 372) / 34) ** 2));
+  const north = smooth((z - 130) / (PEAK_Z - 142));
+  const summit = 34 * Math.exp(-((x / 40) ** 2 + ((z - PEAK_Z) / 34) ** 2));
   const ridges = (3.2 * Math.sin(x / 15 + z / 37) + 1.8 * Math.sin(x / 8 - z / 26)) * north;
   const noise = .5 * Math.sin(x / 5 + z / 11) * Math.sin(z / 8 - x / 13);
   const mountain = body * (6 + north * 24 + summit + ridges);
@@ -81,7 +90,36 @@ export function cloudGroundY(x: number, z: number): number {
   // A 3 m level shoulder (beyond a 2 m grid triangle's 2.83 m diagonal) keeps
   // the drawn surface exactly at walking height wherever the player can stand.
   const d = distanceToWalk(x, z);
-  if (d <= 3) return cloudY(x, z);
-  const blend = smooth((d - 3) / 6);
-  return cloudY(x, z) * (1 - blend) + natural * blend;
+  const carved = d <= 3 ? cloudY(x, z) : cloudY(x, z) * (1 - smooth((d - 3) / 6)) + natural * smooth((d - 3) / 6);
+  return Math.max(Math.min(carved, underDeck(x, z), inChasm(x, z)), overCave(x, z));
+}
+/** Under and beside a deck (but not under the carved ground it leaves from)
+ * the ground stays at least 2.5 m below the walkway. */
+function onDeck(x: number, z: number): boolean {
+  return CLOUD_DECKS.some(s => shapeDistance(s, x, z) < 2) && walkDistance(x, z) > 0;
+}
+function underDeck(x: number, z: number): number {
+  return onDeck(x, z) ? cloudY(x, z) - 2.5 : Infinity;
+}
+/** Over a cave (and 4 m around its walls) the mountain stays at least 7 m
+ * above the cave floor. */
+function caveDistance(x: number, z: number): number {
+  let d = Infinity;
+  for (const s of CLOUD_CAVES) d = Math.min(d, shapeDistance(s, x, z));
+  return d;
+}
+function overCave(x: number, z: number): number {
+  // The open-air mouths stay carved: the mountain rises behind them.
+  return caveDistance(x, z) < 4 && distanceToWalk(x, z) > 3 ? cloudY(x, z) + 7 : -Infinity;
+}
+/** Inside a puzzle gap the ground falls 8 m below the path. */
+function chasmAt(x: number, z: number): boolean {
+  return CLOUD_CHASMS.some(c => x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1);
+}
+function inChasm(x: number, z: number): number {
+  return chasmAt(x, z) ? cloudY(x, z) - 8 : Infinity;
+}
+/** Walkable ground the terrain itself does not carry (decks, bridged gaps). */
+export function cloudOffTerrain(x: number, z: number): boolean {
+  return onDeck(x, z) || chasmAt(x, z) || (caveDistance(x, z) < 4 && distanceToWalk(x, z) > 3);
 }

@@ -4,7 +4,7 @@ import { world } from "./lib/cloud-source.mjs";
 const { cloudGroundY, cloudLandMask } = await import("../src/game/world/cloudTerrain.ts");
 
 const { CLOUD_ZONES, CLOUD_SPAWNS, CLOUD_CHESTS, COAST_GATE, HOLLOW, OBSERVATORY, BEACON } = world;
-const x0 = -115, z0 = -50, width = 231, height = 481;
+const x0 = -115, z0 = -50, width = 231, height = 571;
 const pixels = Buffer.alloc((width * 4 + 1) * height);
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 function distance(s, x, z) {

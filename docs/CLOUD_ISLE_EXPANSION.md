@@ -148,6 +148,30 @@ landmass, slopes or mountain between them. Replaced by:
   and landmarks outlined (Node + zlib only), so layout can be judged without
   WebGL.
 
+## 2b. X2 layout (frozen 2026-10-31)
+
+- The observatory approach, observatory and beacon (and their constants,
+  props, cameras, the lift and the summit of `cloudGroundY`) move rigidly
+  **+90 m in z**, so the junction and both routes span z ≈ 265–400.
+- **Junction (~900 m²):** crossroads plateau around (0, ~275); an overlook
+  spur to the east ending at a cliff edge with a panoramic view of the coast;
+  a short optional path to the junction chest; the two route mouths leave
+  clearly apart (west up into the trees, east down into a rock cut).
+- **Skyroot Canopy (~1,500 m², west, x ≈ -20…-75):** first a forest-floor
+  section among giant trees standing on real terrain, then ramps and walkways
+  climbing onto platforms carried by trunks/branches (kit sockets). The vine
+  bridge (required) and the glide gap (required) are ≥ 25 m apart; the
+  optional gust-lane branch leads to the canopy chest at a far-west
+  viewpoint. Exit east to the approach at z ≈ 400.
+- **Thunder Grotto (~1,500 m², east, x ≈ 20…75):** connected chambers —
+  entry chamber, underground lake (raft basin, required), optional crystal
+  side chamber (crystal chest), steam machinery (boiler gate, required),
+  electric-panel corridor (same timing rules), exit mouth climbing to the
+  approach. Drawn only when the camera is in or near it.
+- Enemies per route ≤ 1.5× today's (≤ 9), required clears stay 6; at most 4
+  awake. X2a = shift + junction + canopy (the grotto keeps its shape, joined
+  to the moved approach by a longer exit trail); X2b = grotto.
+
 ## 3. Environment kit and trees
 
 - New `src/scene/models/cloudKit.ts` (PartBuilder, vertex colours, the

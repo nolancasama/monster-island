@@ -105,24 +105,32 @@ export function giantTree({ height = 24, platformHeight = 14, platformReach = [9
   const a = new Assembly();
   // The canopy has no terrain mesh beneath it. Carry the roots on a real rock
   // contact rather than ending the tree in empty air above the sea.
-  const ground = a.add("ground", new THREE.CylinderGeometry(3.4, 3.8, padHeight, 7), "#394b53", null,
+  const ground = a.add("ground", new THREE.CylinderGeometry(3.4, 3.8, padHeight, 7), "#7b8074", null,
     [0, -padHeight / 2, 0], [0, 0, 0], true);
   const contact = a.socket(ground.part, "contact", [0, 0, 0]);
   // The trunk runs down into a deep outcrop (the default pad keeps it .35 m in).
-  const top = a.limb("trunk", contact, [0, height, 0], 2.2, 1.5, "#535c50", true, [0, -Math.max(.35, padHeight - .75), 0]);
+  const top = a.limb("trunk", contact, [0, height, 0], 2.2, 1.3, "#7a6650", true, [0, -Math.max(.35, padHeight - .75), 0]);
   // On a deep outcrop the roots grip its top, where they are seen.
-  if (padHeight > 1.1) roots(a, contact, 2.2, 1.4); else roots(a, a.anchors["trunk.base"], 2.2);
-  const fork = a.socket("trunk", "fork", plus(top.point, [0, -3, 0]));
+  if (padHeight > 1.1) roots(a, contact, 2.2, Math.max(1.4, padHeight * .5)); else roots(a, a.anchors["trunk.base"], 2.2);
+  // A broad umbrella crown: five limbs spread from two forks, each carrying a
+  // large foliage cluster, plus the leader's own. Every cluster encloses the
+  // tip of the wood that carries it.
+  const low = a.socket("trunk", "forkLow", plus(top.point, [0, -height * .3, 0]));
+  const high = a.socket("trunk", "fork", plus(top.point, [0, -height * .12, 0]));
+  const r = crownRadius;
   const crownTips = [
-    a.limb("crownLeft", fork, [-4, 2.5, 0], .85, .42),
+    a.limb("crownWest", low, [-r * 1.25, r * .7, .4], .9, .45, "#7a6650"),
+    a.limb("crownEast", low, [r * 1.2, r * .75, -.6], .9, .45, "#7a6650"),
+    a.limb("crownNorth", high, [.5, r * .55, r * 1.1], .75, .4, "#7a6650"),
+    a.limb("crownSouth", high, [-.4, r * .6, -r * 1.05], .75, .4, "#7a6650"),
     top,
-    a.limb("crownRight", fork, [4, 2.8, .6], .85, .42),
   ];
+  const greens = ["#5f9a57", "#6eab60", "#7cb86a", "#68a35c", "#86c070"];
   crownTips.forEach((tip, i) => {
-    // Centre is on its supporting wood; the full lower crown encloses the tip.
-    const geo = new THREE.IcosahedronGeometry(1, 0);
-    geo.scale(crownRadius, crownRadius * .48, crownRadius * .85);
-    a.add(`foliage${i}`, geo, ["#577463", "#708371", "#68856b"][i], tip, [0, .45, 0]);
+    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const size = i === 4 ? r * 1.15 : r;
+    geo.scale(size, size * .55, size * .9);
+    a.add(`foliage${i}`, geo, greens[i], tip, [0, .5, 0]);
   });
   const shoulder = a.socket("trunk", "branchSocket", plus(a.anchors["trunk.base"].point, [0, platformHeight - 2.2, 0]));
   const tip = a.limb("walkwayBranch", shoulder, [platformReach[0], 1.55 + platformReach[1], platformReach[2]], 1.25, .85);
@@ -173,7 +181,7 @@ function archAssembly(width: number, height: number, depth: number, color: strin
   return a;
 }
 export function caveMouth(width = 6.4, height = 6, depth = 3): KitComposite {
-  return archAssembly(width, height, depth, "#293c50").finish();
+  return archAssembly(width, height, depth, "#59625b").finish();
 }
 export function ruinedArch(width = 5.2, height = 4.8, depth = 1.4): KitComposite {
   return archAssembly(width, height, depth, "#929381").finish();
