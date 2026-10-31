@@ -187,9 +187,11 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
         bands:[290,310,350,390],far:{x:-26,z:395},gate:CLOUD_ROUTE_GATES[0],
         upper:[[-38,361],[-49,377],[-42,389],[-28,394],[-26,395]],exit:[[-20,400],[0,402]],lower:[[-36,315],[-30,301],[-30,298]]},
       {area:"thunderGrotto",mouth:ROUTE_MOUTHS[1],first:"grottoRaft",second:"grottoBoiler",moss:"grottoMoss",wood:"grottoWood",chest:"cloudCrystalChest",
-        firstBefore:{x:20,z:288},firstAfter:{x:20,z:294},middle:{x:20,z:294},secondBefore:{x:20,z:297},secondAfter:{x:20,z:303},
-        bands:[284,290,300,310],far:{x:14.5,z:395},gate:CLOUD_ROUTE_GATES[1],
-        upper:[[20,304],[10,311],[14,340],[20,369],[16,393],[14.5,395]],exit:[[10,401],[0,402]],lower:[[20,294],[20,286]]},
+        // Entry chamber, the lake's raft channel, the machinery chamber's boiler
+        // gate, the electric corridor, and the last cave point before the exit gate.
+        firstBefore:{x:52,z:319.5},firstAfter:{x:52,z:325},middle:{x:52,z:336},secondBefore:{x:38.3,z:358},secondAfter:{x:36,z:364.5},
+        bands:[290,305,340,360],far:{x:25,z:387},gate:CLOUD_ROUTE_GATES[1],
+        upper:[[30,374],[28,384],[25,387]],exit:[[10,401],[0,402]],lower:[[52,325],[52,318],[48,312],[40,306],[28,298]]},
     ] as const) {
       await hook(page,"cloudArea","windfallJunction");
       // Route mouths are immediately open; no Junction clear or gate is needed.
@@ -251,7 +253,11 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
       await move(0,OBSERVATORY.z-1); await move(OBSERVATORY.entrance.x,OBSERVATORY.entrance.z);
       for(const [x,z] of [...route.exit].reverse()) await move(x,z);
       for(const [x,z] of [...route.upper].reverse()) await move(x,z);
-      if(route.area==="skyrootCanopy") await use(page,"glideBack",touch);
+      if(route.area==="skyrootCanopy") {
+        await use(page,"glideBack",touch);
+        // The return glide is a scripted 1.8 s hop; walk on only once it has landed.
+        await waitFor(page,s=>s.mode==="explore" && Math.hypot(s.player.x-CANOPY_GLIDE.from.x,s.player.z-CANOPY_GLIDE.from.z)<.1,15_000,"glide back landed");
+      }
       else await move(route.secondBefore.x,route.secondBefore.z);
       await move(route.middle.x,route.middle.z);
       for(const [x,z] of route.lower) await move(x,z);
