@@ -1611,3 +1611,35 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
 - Vine Grab uses the existing whip sound while Root Snare retains vines,
   giving all eight moves distinct existing sound cues. This is the only
   combat.ts edit and changes presentation only, with no simulation rules.
+
+## 2026-11-01 — Slice E4b: lowland elemental secret scenery
+
+- Secrets.tsx reads ELEMENT_OBJECTS, SECRET_SITES and the existing runtime
+  object records / act2.secrets. Closed hedges, shell fencing, stone slab,
+  leaf-covered wooden hatch, timber landing and furnace enclosure follow
+  the six blocker boxes. Opening retracts their full footprints and leaves
+  low rims / floors around the original chest positions. No collision,
+  gameplay coordinates, terrain heights or chest rewards were changed.
+- Temporary states show separate three-metre statue pulls, a crate moving
+  onto its decorative lift pad, cleared leaves and the furnace fire. Paired
+  statue plinths meet at the centre; their carvings nest side by side. The
+  pad and high switch are visual cues around E4a's existing crate target,
+  not additional gameplay targets. The existing ground-level pockets are
+  presented with shallow steps / dark floors rather than new underground
+  terrain or a new ledge height.
+- Completion uses .55-second visual slides / retractions: the shell key
+  arcs into its post slot, gates part, the slab slides aside, the hatch
+  opens, the plank bridge drops and furnace doors retract. The thicket
+  leaves charred stubs and ash; the furnace retains glowing embers. Saved
+  completions mount open. The six existing Chest components remain intact.
+- Five global instanced geometry batches cover boxes, thorns, faceted
+  stone / shells, rings and pointed autumn leaf quads (two triangles each).
+  Each site's geometry stays below 3,000 triangles; the largest is the
+  thicket at about 2,050. Distance culling limits submissions to nearby
+  scenery. Buffers, scratch transforms and colours are allocated on mount.
+  Burning / lit objects and solved furnace embers reuse ElementEffects'
+  existing sprite batch and flame shader, adding no flame draw calls.
+- No gameplay state machine or harness checks were added. The existing
+  read-only window.__mi.state().act2.elementObjects and .act2.secrets
+  remain the semantic inspection surfaces. Controller screenshots own
+  before / after visual acceptance; no browser acceptance was run here.

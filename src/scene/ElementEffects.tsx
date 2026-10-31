@@ -7,6 +7,7 @@ import { rt } from "../game/runtime";
 import { monsterRootY } from "../game/ride";
 import { getGame } from "../game/store";
 import { standY } from "../game/world/collision";
+import { ELEMENT_OBJECTS } from "../game/world/elementObjects";
 import { splashParticle } from "./splashParticle";
 
 // Seven draws total, independent of the number of enemies or overlapping FX.
@@ -203,6 +204,30 @@ export function ElementEffects() {
     const t = rt.time, game = getGame(), zone = currentCombatZone();
     const active = game.progress.act2.started;
     if (active) {
+      // Environmental fire uses the same instanced flame sprites as Ember.
+      // Read the backing runtime records to avoid allocating semantic snapshots per frame.
+      if (cb.world === "home") for (const object of ELEMENT_OBJECTS) {
+        const state = cb.elementObjects[object.id]?.state;
+        const complete = game.progress.act2.secrets.includes(object.id);
+        if (complete && object.id !== "comboFurnace") continue;
+        if (!complete && state !== "burning" && state !== "lit") continue;
+        if (Math.hypot(object.x - rt.player.x, object.z - rt.player.z) > 48) continue;
+        const y = standY(object.x, object.z, game.progress.solved);
+        if (object.id === "comboFurnace") {
+          draw.sprite(object.x, y + .45, object.z + .75, 1.4, .8, "#ff7923", .65);
+          if (complete) {
+            for (let i = 0; i < 3; i++) draw.sprite(object.x - .3 + i * .3, y + .4, object.z + .4,
+              .13, .13, "#ffb82e", .65 + Math.sin(t * 3 + i) * .15);
+            continue;
+          }
+        }
+        for (let i = 0; i < 5; i++) {
+          const a = i * 2.4 + t * .7, r = state === "burning" ? .5 : .26;
+          draw.sprite(object.x + Math.cos(a) * r, y + .55 + (i % 2) * .28,
+            object.z + Math.sin(a) * r + (state === "lit" ? .3 : 0),
+            .48, .95 + Math.sin(t * 19 + i) * .18, i % 2 ? "#ffb82e" : "#ff7923", .95, true);
+        }
+      }
       for (const s of cb.shots) {
         if (Math.hypot(s.x - rt.player.x, s.z - rt.player.z) > 48) continue;
         if (s.hostile || s.shape === "hostile") {
