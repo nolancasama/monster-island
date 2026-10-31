@@ -1,12 +1,13 @@
 # Current State
 
 ## Live
-`main` = `201990a`, deployed by Pages run 40871708332 (2026-10-29).
+`main` deployed 2026-10-31 (Act 3 branch fast-forwarded at `f108ed9`, then
+the debug live-shortcut/teleport branch merged on top).
 https://nolancasama.github.io/monster-island/
 
-Live: the prologue, Act 2 "The Hunt for Lumo" (kidnapping, lowland, real-time
-combat, Port Town, harbour lead), the forest expansion and the continuity
-polish. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
+Live: the prologue, Act 2 "The Hunt for Lumo", the forest expansion, the
+continuity polish, Act 3 Cloud Isle, gameplay polish Parts 1–2 and the debug
+menu. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
 
 **Private preview:** https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr
 (an older Act 2 build; microphone blocked inside it). Use the live site for

@@ -22,7 +22,7 @@
 .debug-coordinates { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0; align-items: end; }
 .debug-coordinates label { flex: 1; min-width: 65px; }
 .debug-coordinates input { display: block; width: 100%; box-sizing: border-box; }
-.debug-map { position: relative; height: 290px; max-width: 100%; margin: 8px auto; background: #1e3a4b; }
+.debug-map { position: relative; height: clamp(340px, calc(100dvh - 370px), 460px); max-width: 100%; margin: 8px auto; background: #1e3a4b; }
 .debug-map canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 .debug-map-player, .debug-map-cursor, .debug-map-north { position: absolute; pointer-events: none; }
 .debug-map-player { width: 7px; height: 7px; background: white; border: 1px solid #1c2525; border-radius: 50%; transform: translate(-50%, -50%); }
@@ -35,3 +35,9 @@
 .debug-message { display: block; margin-top: 12px; padding: 8px; background: #e9edda; border-radius: 6px; min-height: 20px; }
 @media (max-width: 950px) { .debug-columns { grid-template-columns: 1fr 1fr; } .debug-cheats { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .debug-columns { grid-template-columns: 1fr; } .debug-dialog { padding: 12px; } .debug-back { padding: 8px; } }
+@media (min-width: 951px) {
+  .debug-dialog { display: flex; flex-direction: column; box-sizing: border-box; width: min(1280px, 100%); overflow: hidden; }
+  .debug-columns { min-height: 0; grid-template-columns: minmax(300px, 1.2fr) minmax(350px, 1fr) minmax(220px, .8fr); }
+  .debug-columns > section { min-height: 0; overflow-y: auto; }
+  .debug-dialog header, .debug-position, .debug-message { flex-shrink: 0; }
+}
