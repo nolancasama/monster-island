@@ -182,19 +182,28 @@ interface ElementObject {
 
 ### Secrets (home lowland, optional, off the main path)
 
-| Id | Friend | Discovery | Result |
-|---|---|---|---|
-| `emberThicket` | Ember | Dry thorny thicket in the first forest/grove edge; J or K ignites it, it burns for 1.5 s | Thicket gone; small cave nook with a chest |
-| `bubboLedgeKey` | Bubbo | A key-shell on the ground below a ledge with a locked shell gate; Bubble Trap lifts it onto the ledge slot | Gate opens; treasure ledge with a chest |
-| `leafyStatues` | Leafy | Two stone statues ~6 m apart; Vine Grab on each pulls it 3 m toward the centre plinth (two grabs) | Statues meet, plinth sinks, steps down to an underground chest chamber (shallow sunken room, not a new zone) |
-| `puffLeaves` | Puff | Big leaf pile on old flagstones; Wind Blast or Cyclone blows it away | Trapdoor visible; walking onto it opens it; chest below |
-| `comboCrateLift` | Leafy + Bubbo | A crate beyond a stream; Leafy pulls it onto a lift pad; Bubbo lifts it to a high switch | Bridge plank drops; chest island |
-| `comboFurnace` | Ember + Puff | Cold furnace with a bellows-vent; Ember lights it; Puff's wind into the vent while lit makes it roar | Furnace door melts open; chest |
+| Id | Friend | Discovery | Result | E4a placement: stage; object (x, z); closed pocket centre / half extents; chest (x, z) |
+|---|---|---|---|---|
+| `emberThicket` | Ember | Dry thorny thicket in the first forest/grove edge; J or K ignites it, it burns for 1.5 s | Thicket gone; small cave nook with a chest | forest1; (89, −171.5); (89, −175) / (1.5, 2.4); (89, −176) |
+| `bubboLedgeKey` | Bubbo | A key-shell on the ground below a ledge with a locked shell gate; Bubble Trap lifts it onto the ledge slot | Gate opens; treasure ledge with a chest | grove; (56.8, −218); (60, −214) / (1.7, 2); (60, −214) |
+| `leafyStatues` | Leafy | Two stone statues ~6 m apart; Vine Grab on each pulls it 3 m toward the centre plinth (two grabs) | Statues meet, plinth sinks, steps down to an underground chest chamber (shallow sunken room, not a new zone) | causeway; (66, −252), (72, −252), centre (69, −252); (69, −256) / (2, 2); (69, −257) |
+| `puffLeaves` | Puff | Big leaf pile on old flagstones; Wind Blast or Cyclone blows it away | Trapdoor visible; walking onto it opens it; chest below | canopy; (112, −208); (112, −212) / (1.9, 2.1); (112, −212.5) |
+| `comboCrateLift` | Leafy + Bubbo | A crate beyond a stream; Leafy pulls it onto a lift pad; Bubbo lifts it to a high switch | Bridge plank drops; chest island | grove; (43, −229); (42, −234) / (1.6, 1.8); (42, −233.5) |
+| `comboFurnace` | Ember + Puff | Cold furnace with a bellows-vent; Ember lights it; Puff's wind into the vent while lit makes it roar | Furnace door melts open; chest | coast; (79.8, −274); (83, −276) / (1.8, 1.6); (83, −276.8) |
 
 Each completed secret: one sparkle + chime + toast ("Secret found!"), and a
 journal count ("Secrets 2/6"). Each must be solvable with one J press per
 step (no precision timing). Placement: the slice that builds them picks
 spots off the main path in existing lowland stages and records them here.
+
+E4a uses existing side clearings and walkable pockets for the rewards; no
+terrain, height changes, stream, ledge, chamber or object rendering is added.
+The thicket's 0.8 m interaction footprint is itself solid until completion.
+The closed pocket footprints enclose each reward until completion, including
+the crate puzzle's plank landing. E4b supplies their visual presentation.
+The furnace stays lit for eight seconds of active play; repeated fire does
+not extend that clock. The trapdoor walking trigger remains outside its
+closed chest pocket so the player can step onto it after clearing the leaves.
 
 ## 4. HUD, words, touch
 

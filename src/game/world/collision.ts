@@ -42,6 +42,7 @@ import {
 import { bridgeSurfaceY } from "./bridge";
 import { FRONTIER_GATE_SOLID, FRONTIER_SOLIDS } from "./frontierWall";
 import { STAGES, type StageId, CLIFF_FOOT_Z, lowlandDeckY, lowlandSolids, lowlandWalkable } from "./lowland";
+import { SECRET_IDS, secretSolids } from "./elementObjects";
 
 export interface Circle {
   x: number;
@@ -78,23 +79,25 @@ export interface Gates {
   /** Act 2 has begun (Lumo was taken): the lowland below the sanctuary is open. */
   act2?: boolean;
   cleared?: readonly StageId[];
+  secrets?: readonly string[];
 }
 
 export const CLOSED: Gates = { solved: [] };
 
 /** The gates a saved game has opened. */
-export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[] }; act3?: { world: string; cleared: readonly string[]; puzzles: readonly string[]; family: {tunnelOpen:boolean}; observatoryLamps?: readonly string[] } }): Gates {
+export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act2?: { started: boolean; cleared?: readonly StageId[]; secrets?: readonly string[] }; act3?: { world: string; cleared: readonly string[]; puzzles: readonly string[]; family: {tunnelOpen:boolean}; observatoryLamps?: readonly string[] } }): Gates {
   if (p.act3?.world === "cloud") return { solved: p.solved, act2: true, cloud: { cleared: p.act3.cleared, solved: p.act3.puzzles, tunnelOpen: p.act3.family.tunnelOpen, observatoryLamps: p.act3.observatoryLamps } };
   const act2 = p.act2?.started === true;
-  const key = stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared);
-  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared };
+  const key = `${stateKey(p.solved, p.endings >= 1, p.endings >= 2, act2, p.act2?.cleared)}:${secretKey(p.act2?.secrets)}`;
+  return gateCache[key] ??= { solved: p.solved, forest: p.endings >= 1, volcano: p.endings >= 2, act2, cleared: p.act2?.cleared, secrets: p.act2?.secrets };
 }
 
 const GATE_IDS: readonly ObstacleId[] = [
   "fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame",
   "groveLilies", "canopyVines", "canopyRope", "causewayGate"
 ];
-const gateCache: Gates[] = [];
+const gateCache: Record<string, Gates> = {};
+const secretKey = (secrets: readonly string[] = []) => SECRET_IDS.reduce((key, id, i) => key | (secrets.includes(id) ? 1 << i : 0), 0);
 function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false, act2 = false, cleared: readonly StageId[] = []): number {
   let key = (forest ? 1 << 14 : 0) | (volcano ? 1 << 15 : 0) | (act2 ? 1 << 16 : 0);
   for (let i = 0; i < GATE_IDS.length; i++) if (solved.includes(GATE_IDS[i])) key |= 1 << i;
@@ -125,11 +128,16 @@ export function solidsFor(gates: Gates): readonly SolidShape[] {
 
 /** The lowland has its own solids: walkers there never test the rest of the island's, and the other way round. */
 const LOWLAND_OBSTACLES: Obstacles[] = [{ circles: [], boxes: [], shapes: lowlandSolids() }];
+const lowlandSecretCache: Obstacles[][] = [];
 const inLowlandSet = (z: number) => z < CLIFF_FOOT_Z + 0.5;
 
 export function obstaclesFor(gates: Gates, z = 0): Obstacles[] {
   if (gates.cloud) return [{ circles: [], boxes: [], shapes: cloudSolids() }];
-  if (inLowlandSet(z)) return LOWLAND_OBSTACLES;
+  if (inLowlandSet(z)) {
+    if (!gates.act2) return LOWLAND_OBSTACLES;
+    const key = secretKey(gates.secrets);
+    return lowlandSecretCache[key] ??= [{ circles: [], boxes: [], shapes: [...LOWLAND_OBSTACLES[0].shapes!, ...secretSolids(gates.secrets)] }];
+  }
   const key = keyOf(gates);
   return obstacleCache[key] ??= [{ circles: [], boxes: [], shapes: solidsFor(gates) }];
 }

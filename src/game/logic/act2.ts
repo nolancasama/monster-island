@@ -32,6 +32,8 @@ export interface Act2 {
   upgrades: CompanionId[];
   /** One-time treasure chests opened. */
   chests: string[];
+  /** Completed optional elemental secrets; intermediate steps are runtime only. */
+  secrets: string[];
   /** Tutorial hints already understood (never shown again). */
   tutorial: TutorialStep[];
   checkpoint: Checkpoint;
@@ -51,7 +53,7 @@ export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo
 export function newAct2(): Act2 {
   return {
     started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
-    chests: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
+    chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
   };
 }
 
@@ -221,14 +223,14 @@ export function practise(p: Progress, friend: CompanionId): Progress {
 /** Food that will become coins when this unopened chest is collected. */
 export function chestFoodOverflow(p: Progress, id: string): number {
   const c = CHESTS.find((x) => x.id === id);
-  if (!c?.food || p.act2.chests.includes(id) || !p.act2.started) return 0;
+  if (!c?.food || (c.secret && !p.act2.secrets.includes(c.secret)) || p.act2.chests.includes(id) || !p.act2.started) return 0;
   return Math.max(0, c.food.n - Math.max(0, bagMax(p) - (p.bag[c.food.id] ?? 0)));
 }
 
 /** Open a one-time chest: overflow becomes one coin each, alongside all other rewards. */
 export function openChest(p: Progress, id: string): Progress {
   const c = CHESTS.find((x) => x.id === id);
-  if (!c || p.act2.chests.includes(id) || !p.act2.started) return p;
+  if (!c || (c.secret && !p.act2.secrets.includes(c.secret)) || p.act2.chests.includes(id) || !p.act2.started) return p;
   let next = withAct2(p, { chests: [...p.act2.chests, id] });
   next = addCoins(next, c.coins + chestFoodOverflow(p, id));
   if (c.amber) next = addItem(next, "amber", c.amber);

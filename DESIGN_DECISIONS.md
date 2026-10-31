@@ -1545,3 +1545,36 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
 - No gameplay state machine changed. Existing read-only
   window.__mi.state().act2 enemy air/control/burning fields remain the
   controller's semantic state surface; cb.fx and cb.shots drive presentation.
+
+## 2026-11-01 — Slice E4a: optional lowland environmental secrets
+
+- Added seven tagged interaction footprints for six secrets (the statues have
+  separate target ids). Their coordinates, reward pockets and chest positions
+  are recorded in elemental spec §3. They reuse existing off-path floor in
+  forest1, grove, canopy, causeway and coast; no terrain or scene rendering is
+  added. Every interaction target is at least four metres from enemy spawns
+  and all chests. Closed pocket solids enclose each reward rather than adding
+  a bypassable thin door; they disappear through the existing collision gate
+  queries only when that secret completes. Required routes remain unchanged.
+- Move geometry feeds one tagged-event dispatcher: fire cones burn, bubbles
+  lift, vines/root circles grab, wind cones/cyclones blow, and bombs dispatch
+  bomb events to breakable objects. The current secrets do not accept bombs.
+  Vine Grab chooses one object only when no eligible enemy is closer; every
+  elemental step works with one free J press.
+- Intermediate states are runtime only: separate pulled statues, crate on its
+  pad, cleared leaves, 1.5-second thicket burn and an eight-second lit furnace.
+  Active-play clocks pause with combat; repeated fire never extends them.
+  Walking onto the cleared leaf footprint completes its trapdoor. Only the
+  six final ids enter act2.secrets; save v4 remains unchanged and old v4 saves
+  default to an empty list. Partial steps reset on load, completed ids do not.
+- Six chest rewards require completion both in focus selection and the pure
+  reward rule. Completion reuses the sparkle FX, ascending sparkle chime and
+  bilingual secret toast; the journal has a Secrets n/6 line.
+- Controller state is read-only at window.__mi.state().act2.elementObjects
+  (state and remaining active seconds) and .act2.secrets. The nearSecret(id)
+  hook approaches the named target facing it; leafyStatuesEast addresses the
+  second statue. The hook changes neither puzzle progress nor friendship.
+  Browser acceptance remains owned by the controller.
+- The intact thicket's circular target footprint is also solid. Object cone
+  visibility tests stop at the target's near rim so its own solid does not
+  occlude a fire hit; intervening scenery still blocks the query.

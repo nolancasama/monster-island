@@ -1,0 +1,54 @@
+import type { StageId } from "./lowland";
+import type { SolidShape } from "./island";
+
+export type ElementTag = "flammable" | "grabbable" | "windy" | "liftable" | "breakable" | "heavy" | "anchored" | "trigger";
+export type ElementEvent = "burn" | "grab" | "wind" | "lift" | "bomb";
+export interface ElementObject {
+  id: string;
+  world: "home" | "cloud";
+  x: number; z: number; r: number;
+  tags: ElementTag[];
+  on?: Partial<Record<ElementEvent, { becomes: string; secret?: string }>>;
+}
+
+export const SECRET_IDS = ["emberThicket", "bubboLedgeKey", "leafyStatues", "puffLeaves", "comboCrateLift", "comboFurnace"] as const;
+export type SecretId = (typeof SECRET_IDS)[number];
+
+/** Optional pockets on existing land. Closed footprints enclose the reward so
+ * it cannot be reached by walking around a thin door. No terrain is added. */
+export const SECRET_SITES: Record<SecretId, {
+  stage: StageId;
+  blocker: SolidShape;
+  solidTarget?: boolean;
+  chest: { x: number; z: number };
+  approach: { x: number; z: number };
+}> = {
+  emberThicket: { stage: "forest1", blocker: { kind: "box", x: 89, z: -175, hx: 1.5, hz: 2.4, yaw: 0 }, solidTarget: true, chest: { x: 89, z: -176 }, approach: { x: 87, z: -170 } },
+  bubboLedgeKey: { stage: "grove", blocker: { kind: "box", x: 60, z: -214, hx: 1.7, hz: 2, yaw: 0 }, chest: { x: 60, z: -214 }, approach: { x: 54.5, z: -218 } },
+  leafyStatues: { stage: "causeway", blocker: { kind: "box", x: 69, z: -256, hx: 2, hz: 2, yaw: 0 }, chest: { x: 69, z: -257 }, approach: { x: 66, z: -249.5 } },
+  puffLeaves: { stage: "canopy", blocker: { kind: "box", x: 112, z: -212, hx: 1.9, hz: 2.1, yaw: 0 }, chest: { x: 112, z: -212.5 }, approach: { x: 109.5, z: -208.5 } },
+  comboCrateLift: { stage: "grove", blocker: { kind: "box", x: 42, z: -234, hx: 1.6, hz: 1.8, yaw: 0 }, chest: { x: 42, z: -233.5 }, approach: { x: 43, z: -231 } },
+  comboFurnace: { stage: "coast", blocker: { kind: "box", x: 83, z: -276, hx: 1.8, hz: 1.6, yaw: 0 }, chest: { x: 83, z: -276.8 }, approach: { x: 77.4, z: -274 } },
+};
+
+export const ELEMENT_OBJECTS: readonly ElementObject[] = [
+  { id: "emberThicket", world: "home", x: 89, z: -171.5, r: .8, tags: ["flammable"], on: { burn: { becomes: "burning", secret: "emberThicket" } } },
+  { id: "bubboLedgeKey", world: "home", x: 56.8, z: -218, r: .6, tags: ["liftable"], on: { lift: { becomes: "slotted", secret: "bubboLedgeKey" } } },
+  { id: "leafyStatues", world: "home", x: 66, z: -252, r: .7, tags: ["grabbable", "heavy"], on: { grab: { becomes: "pulled", secret: "leafyStatues" } } },
+  { id: "leafyStatuesEast", world: "home", x: 72, z: -252, r: .7, tags: ["grabbable", "heavy"], on: { grab: { becomes: "pulled", secret: "leafyStatues" } } },
+  { id: "puffLeaves", world: "home", x: 112, z: -208, r: .9, tags: ["windy", "trigger"], on: { wind: { becomes: "cleared", secret: "puffLeaves" } } },
+  { id: "comboCrateLift", world: "home", x: 43, z: -229, r: .7, tags: ["grabbable", "liftable"], on: { grab: { becomes: "onPad" }, lift: { becomes: "raised", secret: "comboCrateLift" } } },
+  { id: "comboFurnace", world: "home", x: 79.8, z: -274, r: .8, tags: ["flammable", "windy", "anchored"], on: { burn: { becomes: "lit" }, wind: { becomes: "open", secret: "comboFurnace" } } },
+];
+
+export const EVENT_TAG: Record<ElementEvent, ElementTag> = { burn: "flammable", grab: "grabbable", wind: "windy", lift: "liftable", bomb: "breakable" };
+export function secretOf(o: ElementObject): SecretId {
+  return o.id === "leafyStatuesEast" ? "leafyStatues" : o.id as SecretId;
+}
+
+export function secretSolids(secrets: readonly string[] = []): SolidShape[] {
+  return SECRET_IDS.filter(id => !secrets.includes(id)).flatMap(id => {
+    const site = SECRET_SITES[id], o = ELEMENT_OBJECTS.find(o => o.id === id)!;
+    return site.solidTarget ? [site.blocker, { kind: "circle", x: o.x, z: o.z, r: o.r } as SolidShape] : [site.blocker];
+  });
+}

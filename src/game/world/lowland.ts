@@ -1,6 +1,7 @@
 import type { ObstacleId, Text, Vec2 } from "../types";
 import type { SolidShape } from "./island";
 import { bridgeSurfaceY } from "./bridge";
+import { SECRET_IDS, SECRET_SITES, type SecretId } from "./elementObjects";
 
 /**
  * Act 2: the prehistoric lowland below the sanctuary's cliff, north of the
@@ -517,6 +518,7 @@ export const FORK_SIGN = { x: 78.6, z: -198.2, yaw: 0 };
 
 export interface ChestDef {
   id: string;
+  secret?: SecretId;
   x: number;
   z: number;
   yaw: number;
@@ -533,6 +535,7 @@ export const CHESTS: ChestDef[] = [
   { id: "rootHollowChest", x: 63, z: -170, yaw: 0.7, coins: 12, amber: 0, food: { id: "berries", n: 1 } },
   { id: "coastChest", x: 62.8, z: -275.5, yaw: 1, coins: 18, amber: 0, food: { id: "fish", n: 1 } },
   { id: "shrineChest", x: 108.6, z: -252.6, yaw: -1.6, coins: 40, amber: 1, food: { id: "meat", n: 2 } },
+  ...SECRET_IDS.map(secret => ({ id: `${secret}Chest`, secret, ...SECRET_SITES[secret].chest, yaw: 0, coins: 20, amber: 1 })),
 ];
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */

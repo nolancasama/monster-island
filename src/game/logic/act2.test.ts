@@ -204,7 +204,7 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
 
   it("all chest overflow becomes coins, preserving amber and the food that fits, once", () => {
     for (const c of CHESTS) for (const room of [0, 1, 99]) {
-      const p = { ...p0, bag: c.food ? { [c.food.id]: 99 - room } : {} };
+      const p = { ...p0, act2: { ...p0.act2, secrets: c.secret ? [c.secret] : [] }, bag: c.food ? { [c.food.id]: 99 - room } : {} };
       const overflow = c.food ? Math.max(0, c.food.n - room) : 0;
       expect(chestFoodOverflow(p, c.id)).toBe(overflow);
       const opened = openChest(p, c.id);

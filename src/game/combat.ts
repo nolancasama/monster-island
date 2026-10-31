@@ -15,7 +15,9 @@ import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
 import { debugPaused, useDebug } from "./debugState";
-import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
+import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
+import { objectState, secretEvent, tickSecrets, type ElementState, type SecretProgress } from "./logic/secrets";
+import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementObject } from "./world/elementObjects";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -206,6 +208,8 @@ export const cb = {
   cyclone: null as Cyclone | null,
   inferno: null as null | { age: number; tick: number },
   bombChain: null as BombChain | null,
+  /** Partial environmental steps never enter the save. */
+  elementObjects: {} as Record<string, ElementState>,
   drops: [] as Drop[],
   fx: [] as Fx[],
   stance: { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 } as Stance,
@@ -253,6 +257,7 @@ export function resetCombat() {
   cb.zones = newZoneMemory();
   cb.cloudZones = { current: null, defeated: {}, leftAt: {} };
   cb.world = onCloudIsle() ? "cloud" : "home";
+  cb.elementObjects = {};
   cb.shots = [];
   cb.drops = [];
   cb.fx = [];
@@ -553,6 +558,64 @@ function upgraded(f: CompanionId) {
   return getGame().progress.act2.upgrades.includes(f);
 }
 
+const secretProgress = (): SecretProgress => ({ secrets: getGame().progress.act2.secrets, objects: cb.elementObjects });
+
+function applySecretProgress(next: SecretProgress) {
+  const before = getGame().progress.act2.secrets;
+  cb.elementObjects = next.objects;
+  const found = next.secrets.filter(id => !before.includes(id));
+  if (!found.length) return;
+  updateProgress(p => ({ ...p, act2: { ...p.act2, secrets: next.secrets } }));
+  for (const id of found) {
+    const o = ELEMENT_OBJECTS.find(o => o.id === id)!;
+    effect("sparkle", o.x, standY(o.x, o.z, getGame().progress.solved) + 1, o.z);
+    audio.play("sparkle");
+    toast({ en: "Secret found!", ja: "ひみつを みつけた!", tone: "good" }, 2500);
+  }
+}
+
+const OBJECT_EVENT: Partial<Record<MoveDef["shape"], ElementEvent>> = {
+  breath: "burn", inferno: "burn", trap: "lift", bomb: "bomb", grab: "grab", snare: "grab", blast: "wind", cyclone: "wind"
+};
+
+/** Every move reuses its area/path test here; tags and responses own behaviour.
+ * A grab supplies the nearest enemy distance and selects at most one object. */
+function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) => boolean, nearest = Infinity): ElementObject | null {
+  const event = OBJECT_EVENT[shape];
+  if (!event) return null;
+  const p = rt.player, progress = secretProgress();
+  const objects = ELEMENT_OBJECTS.filter(o => o.world === cb.world && !progress.secrets.includes(secretOf(o)) && o.tags.includes(EVENT_TAG[event]) && o.on?.[event] && contains(o))
+    .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+  let selected: ElementObject | null = null;
+  for (const o of objects) {
+    if (shape === "grab" && Math.hypot(o.x - p.x, o.z - p.z) >= nearest) continue;
+    const before = secretProgress();
+    const next = secretEvent(o.id, event, before);
+    if (next === before) continue;
+    applySecretProgress(next);
+    selected = o;
+    if (shape === "grab" || shape === "trap") break;
+  }
+  return selected;
+}
+
+/** Read-only semantic snapshot shared by the browser harness and E4b. */
+export function elementObjectStates() {
+  const p = secretProgress();
+  return ELEMENT_OBJECTS.map(o => ({ id: o.id, world: o.world, x: o.x, z: o.z, ...objectState(o, p) }));
+}
+
+function objectCone(range: number, degrees: number) {
+  const gates = gatesOf(getGame().progress), p = rt.player;
+  return (o: ElementObject) => {
+    if (!inCone(p, p.yaw, o, range, degrees)) return false;
+    // Stop the ray at the near rim: a solid target must not occlude itself.
+    const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
+    const k = d > 0 ? Math.max(0, d - o.r - .1) / d : 0;
+    return clearLine(p, { x: p.x + dx * k, z: p.z + dz * k }, (x, z) => isWalkable(x, z, gates, .08));
+  };
+}
+
 /** Origin of a friend's attack (its mouth or hands). */
 function originOf(f: CompanionId): { x: number; y: number; z: number } {
   const pose = mountPose(f);
@@ -595,6 +658,7 @@ export function basicAttack(): boolean {
   } else if (move.shape === "breath") {
     pushFx("breath", o.x, o.y, o.z, ux, uz, yaw, range);
     hitBeaconShape(f, range, ux, uz, "cone", 50);
+    dispatchObjects(move.shape, objectCone(range, 50));
     for (const e of coneTargets(range, 50)) {
       hit(e, move.damage, 0, 0, ux, uz, f, true);
       if (alive(e)) e.burn = ignite(e.burn, rt.time);
@@ -604,7 +668,9 @@ export function basicAttack(): boolean {
     pushFx("vine", o.x, o.y, o.z, ux, uz, yaw, range);
     hitBeaconShape(f, range, ux, uz, "cone", 70);
     const targets = coneTargets(range, 70);
-    const pair = up ? targets.filter(e => ENEMIES[e.kind].weightClass !== "heavy").slice(0, 2) : [];
+    const enemy = targets[0];
+    const grabbedObject = dispatchObjects(move.shape, objectCone(range, 70), enemy ? Math.hypot(enemy.x - rt.player.x, enemy.z - rt.player.z) : Infinity);
+    const pair = up && !grabbedObject ? targets.filter(e => ENEMIES[e.kind].weightClass !== "heavy").slice(0, 2) : [];
     if (pair.length === 2) {
       const centre = { x: (pair[0].x + pair[1].x) / 2, z: (pair[0].z + pair[1].z) / 2 };
       for (const e of pair) {
@@ -612,7 +678,7 @@ export function basicAttack(): boolean {
         else hit(e, move.damage, 0, 0, ux, uz, f, true);
       }
     } else {
-      const e = pickTarget(range);
+      const e = grabbedObject ? null : enemy;
       if (e) {
         hit(e, move.damage, 0, 0, ux, uz, f, true);
         if (ENEMIES[e.kind].weightClass === "heavy") {
@@ -627,6 +693,7 @@ export function basicAttack(): boolean {
     const degrees = up ? 80 : 60;
     pushFx("blast", o.x, o.y, o.z, ux, uz, yaw, range);
     hitBeaconShape(f, range, ux, uz, "cone", degrees);
+    dispatchObjects(move.shape, objectCone(range, degrees));
     for (const e of coneTargets(range, degrees)) {
       hit(e, move.damage, 0, 0, ux, uz, f, true);
       if (!alive(e)) continue;
@@ -684,6 +751,7 @@ export function specialAttack(): boolean {
       const centre = moveCircle(p.x, p.z, aim.x, aim.z, 0.08, gatesOf(getGame().progress));
       pushFx("snare", centre.x, standY(centre.x, centre.z, getGame().progress.solved) + 0.5, centre.z, 0, 0, yaw, move.radius);
       hitBeaconShape(f, move.radius, 0, 0, "circle", 0, { ...p, ...centre });
+      dispatchObjects(move.shape, o => Math.hypot(o.x - centre.x, o.z - centre.z) <= move.radius + o.r);
       for (const e of cb.enemies) {
         if (!alive(e) || e.zone !== currentCombatZone() || Math.hypot(e.x - centre.x, e.z - centre.z) > move.radius) continue;
         hit(e, move.damage, 0, 0, ux, uz, f);
@@ -725,6 +793,7 @@ function infernoTick() {
   const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw), o = originOf("ember");
   pushFx("breath", o.x, o.y, o.z, ux, uz, p.yaw, range);
   hitBeaconShape("ember", range, ux, uz, "cone", 80);
+  dispatchObjects(move.shape, objectCone(range, 80));
   for (const e of coneTargets(range, 80)) {
     hit(e, move.damage, 0, 0, ux, uz, "ember");
     if (alive(e)) e.burn = ignite(e.burn, rt.time);
@@ -752,6 +821,7 @@ function detonateBomb(s: Shot) {
   cb.bombChain = { id: nextId++, x: s.x, z: s.z, t0: rt.time, ...chain };
   pushFx("bomb", s.x, s.y, s.z, 0, 0, 0, move.radius);
   hitBeaconShape("bubbo", move.radius, 0, 0, "circle", 0, { ...rt.player, x: s.x, z: s.z });
+  dispatchObjects("bomb", o => Math.hypot(o.x - s.x, o.z - s.z) <= move.radius + o.r);
   // Pop first: fall damage samples current air, before explosion knock can move it.
   for (const pop of chain.pops) {
     const e = enemies.find(e => e.i === pop.i)!;
@@ -813,6 +883,7 @@ function updateCyclone(dt: number) {
     }
   }
   hitBeaconShape("puff", 1.4, 0, 0, "circle", 0, { ...rt.player, x: c.x, z: c.z });
+  dispatchObjects("cyclone", o => Math.hypot(o.x - c.x, o.z - c.z) <= 1.4 + o.r);
   const enemies = cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone());
   let carried = enemies.filter(e => e.control?.kind === "carried" && e.control.source === c.id).length;
   c.bubbles = c.bubbles.filter(i => enemies.some(e => e.i === i && e.control?.kind === "trapped"));
@@ -1298,6 +1369,7 @@ export function combatTick(dt: number) {
   const live = g.mode === "explore" && !isRunning();
   updateBeaconFight(dt, live, zone);
   if (live && !cb.knockedOut) {
+    if (world === "home") applySecretProgress(tickSecrets(secretProgress(), dt, p));
     updateInferno(dt);
     updateCyclone(dt);
   }
@@ -1620,6 +1692,11 @@ function updateShots(dt: number) {
       s.y += (s.vy ?? 0) * step;
       s.z += s.vz * step;
       reflectShot(s);
+      if (!s.hostile && s.shape !== "hostile" && dispatchObjects(s.shape, o => Math.hypot(o.x - s.x, o.z - s.z) <= o.r + s.radius)) {
+        if (s.shape === "bomb") detonateBomb(s);
+        s.life = 0;
+        break;
+      }
       if (!isWalkable(s.x, s.z, gates, 0.12) || (s.hostile && combatZoneAt(s.x, s.z) !== currentCombatZone())) {
         if (s.shape === "bomb") detonateBomb(s);
         s.life = 0;

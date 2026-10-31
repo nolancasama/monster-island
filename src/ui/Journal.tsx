@@ -189,6 +189,7 @@ export function Journal() {
             <Icon id="close" size={22} />
           </button>
         </header>
+        <p data-testid="journal-secrets">Secrets {progress.act2.secrets.length}/6</p>
         <nav className="j-tabs">
           {MONSTER_ORDER.map((id) => {
             const r = progress.monsters[id];

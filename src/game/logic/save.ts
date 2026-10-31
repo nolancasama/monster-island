@@ -8,6 +8,7 @@ import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
+import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
@@ -82,6 +83,7 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   const amber = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(num(items.amber, 0))));
   if (amber) a.items.amber = amber;
   a.chests = list(raw.chests, CHESTS.map((c) => c.id));
+  a.secrets = list(raw.secrets, SECRET_IDS);
   a.tutorial = list(raw.tutorial, TUTORIAL_STEPS);
   a.upgrades = list<CompanionId>(raw.upgrades, COMPANION_IDS).filter((id) => p.monsters[id].friend);
   a.trained = list<CompanionId>(raw.trained, COMPANION_IDS);

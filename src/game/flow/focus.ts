@@ -89,7 +89,7 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
   }
   // Nothing else is near the sanctuary; the rest is down in the lowland.
   if (rt.player.z > -152) return;
-  for (const c of CHESTS) if (!p.act2.chests.includes(c.id)) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
+  for (const c of CHESTS) if (!p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret))) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {
     if (isSolved(p, id) || !obstacleAvailable(p, id as ObstacleId)) continue;

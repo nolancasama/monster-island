@@ -11,7 +11,8 @@ import { cameraRef } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
-import { cb, companionVisible, stageStatus, type EnemyState } from "./combat";
+import { cb, companionVisible, elementObjectStates, stageStatus, type EnemyState } from "./combat";
+import { ELEMENT_OBJECTS, SECRET_SITES, secretOf } from "./world/elementObjects";
 import { ENEMIES } from "./data/combat";
 import { travelCombat } from "./combat";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_ELECTRIC_PANELS, electricPanelActive, electricPanelPhase, type CloudAreaId } from "./world/cloudisle";
@@ -80,6 +81,8 @@ export function installE2eHook(seed: number) {
         lowland: { visible: lowlandView.visible, fog: { ...lowlandView.fog }, barriers: { ...lowlandView.barriers } },
         playTime: rt.playTime,
         act2: {
+          secrets: [...g.progress.act2.secrets],
+          elementObjects: elementObjectStates(),
           scene: rt.act2Scene,
           stage: stageStatus() ? { remaining: stageStatus()!.remaining } : null,
           zone: cb.zones.current,
@@ -106,6 +109,14 @@ export function installE2eHook(seed: number) {
     },
     /** Stand next to a named thing (a monster, a food, maple, palm, river, stone), facing it. */
     goTo: goToTarget,
+    /** Approach an environmental object without changing progress or its state.
+     * leafyStatuesEast addresses the second statue independently. */
+    nearSecret(id: string) {
+      const o = ELEMENT_OBJECTS.find(o => o.id === id);
+      if (!o || getGame().progress.act3.world !== o.world) throw new Error(`Secret unavailable: ${id}`);
+      const at = id === "leafyStatuesEast" ? { x: 72, z: -249.5 } : SECRET_SITES[secretOf(o)].approach;
+      return placePlayer(at.x, at.z, o.x, o.z);
+    },
     /** Collision-respecting movement probe: unlike teleport this cannot cross gates. */
     moveTo(x: number, z: number) {
       const p = rt.player;
