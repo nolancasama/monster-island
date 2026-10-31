@@ -1,7 +1,8 @@
 import type { CompanionId } from "../data/combat";
+import { BEACON } from "../world/cloudisle";
 
-export const BEACON_ARENA = { x: 0, z: 349, y: 37, radius: 12 };
-export const BEACON_PYLONS = [{ x: -7, z: 348 }, { x: 7, z: 348 }, { x: 0, z: 355 }] as const;
+export const BEACON_ARENA = { ...BEACON, radius: 12 };
+export const BEACON_PYLONS = [{ x: -7, z: BEACON.z - 1 }, { x: 7, z: BEACON.z - 1 }, { x: 0, z: BEACON.z + 6 }] as const;
 export type PylonPhase = "shielded" | "charging" | "exposed" | "down";
 export interface BeaconPylon { phase: PylonPhase; timer: number; shorted: boolean }
 export interface BeaconState {
@@ -44,7 +45,7 @@ export function tickBeacon(state: BeaconState, dt: number, player: { x: number; 
     } else {
       state.attack = "lightningTell"; state.timer = 1.2;
       // Only one ring tracks the player's starting position. Most of the arena stays safe.
-      state.rings = [{ x: player.x, z: player.z }, { x: -player.x * .5, z: 349 + (349 - player.z) * .5 }];
+      state.rings = [{ x: player.x, z: player.z }, { x: -player.x * .5, z: BEACON.z + (BEACON.z - player.z) * .5 }];
     }
   } else if (state.attack === "gustTell") { state.attack = state.gustCancelled ? "calm" : "gust"; state.timer = state.gustCancelled ? 3.5 : .7; if (state.gustCancelled) state.turn++; }
   else if (state.attack === "lightningTell") { state.attack = "lightning"; state.timer = .35; }

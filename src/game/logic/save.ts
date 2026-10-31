@@ -248,8 +248,8 @@ export function decodeSave(text: string | null): SaveData | null {
     const oldLayout = !isObj(src.act3) || src.act3.cloudLayout !== 2;
     let { x, z } = oldLayout ? CLOUD_SPAWNS[p.act3.area] : { x: num(pl.x, NaN), z: num(pl.z, NaN) };
     // An autosave during the authored hop resumes on its nearest marked pad.
-    if (x < -12 && z > 298.15 && z < 300.85 && p.act3.puzzles.includes("canopyGlide")) {
-      ({ x, z } = z < 299.5 ? CANOPY_GLIDE.from : CANOPY_GLIDE.to);
+    if (x < -12 && z > CANOPY_GLIDE.from.z + .75 && z < CANOPY_GLIDE.to.z - .75 && p.act3.puzzles.includes("canopyGlide")) {
+      ({ x, z } = z < (CANOPY_GLIDE.from.z + CANOPY_GLIDE.to.z) / 2 ? CANOPY_GLIDE.from : CANOPY_GLIDE.to);
     }
     // A position in valid but story-locked ground is still invalid for this
     // save. Keep it on the accessible side before projecting out of solids.

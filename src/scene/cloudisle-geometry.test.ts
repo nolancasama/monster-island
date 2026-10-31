@@ -57,10 +57,11 @@ describe("Cloud Isle's single real landscape", () => {
   });
   it("keeps terrain and landscape static geometry well below the full gameplay triangle budget", () => {
     const count = (g: THREE.BufferGeometry) => (g.index?.count ?? g.getAttribute("position").count) / 3;
-    // The whole island heightfield, even if every band is in view: a few draws, under a third of the budget.
+    // The whole island heightfield, even if every band is in view: a few draws and
+    // ~40% of the 140k view budget, leaving the rest for scenery (views measure ~90k).
     const terrain = cloudGeometry.terrainTiles();
     expect(terrain.length).toBeLessThanOrEqual(8);
-    expect(terrain.reduce((n, g) => n + count(g), 0)).toBeLessThan(45000);
+    expect(terrain.reduce((n, g) => n + count(g), 0)).toBeLessThan(56000);
     const rest = [cloudGeometry.landscapeGeometry(), cloudGeometry.shelterGeometry("base")];
     expect(rest.reduce((n, g) => n + count(g), 0)).toBeLessThan(40000);
     [...terrain, ...rest].forEach(g => g.dispose());

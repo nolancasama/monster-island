@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { BEACON } from "../world/cloudisle";
 import { cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./beacon";
 
-const player = { x: 0, z: 344 };
+const player = { x: 0, z: (BEACON.z - 5) };
 const live = () => Object.assign(newBeacon(), { active: true });
 describe("Storm Beacon", () => {
   it("telegraphs charge, opens for six seconds, and re-shields if missed", () => {
@@ -40,7 +41,7 @@ describe("Storm Beacon", () => {
     const b = live(); b.turn = 1; b.timer = 0; tickBeacon(b, 0, player);
     expect(b.attack).toBe("lightningTell");
     expect(b.rings[0]).toEqual(player);
-    tickBeacon(b, 1.19, { x: 6, z: 348 }); expect(b.attack).toBe("lightningTell");
+    tickBeacon(b, 1.19, { x: 6, z: (BEACON.z - 1) }); expect(b.attack).toBe("lightningTell");
     expect(b.rings[0]).toEqual(player);
     tickBeacon(b, .02, player); expect(b.attack).toBe("lightning");
   });

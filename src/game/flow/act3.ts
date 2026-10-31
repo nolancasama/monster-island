@@ -5,7 +5,7 @@ import { COMPANION_IDS } from "../data/combat";
 import { cb, hooks, resetBeaconFight, travelCombat, wakeUp } from "../combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, effect, rt } from "../runtime";
-import { CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, OBSERVATORY, RAIDER_BARRICADE, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
+import { BEACON, CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, OBSERVATORY, RAIDER_BARRICADE, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
 import { PIER2, SERVICES } from "../world/lowland";
 import { gatesOf, nearestWalkable, PLAYER_R } from "../world/collision";
 import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, defeatBeacon, discoverSkyFortress, discoverHollow, eatStew, markFamily, observatoryLiftReady, openCloudChest, reachObservatory, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
@@ -160,9 +160,9 @@ export function cloudCandidates(): Array<{ focus: Focus; reach: number }> {
   }
   add("raiderRoad", "the raider barricade", {x:RAIDER_BARRICADE.x,z:RAIDER_BARRICADE.z-2}, "Look at", "sign");
   add("junctionRoutes", "the mountain routes", {x:0,z:CLOUD_SPAWNS.windfallJunction.z+7}, "Look at", "sign");
-  add("observatoryEntrance", "the Ancient Observatory", {x:0,z:313}, "Look at", "sign");
+  add("observatoryEntrance", "the Ancient Observatory", {x:0,z:(OBSERVATORY.z - 4)}, "Look at", "sign");
   add("beaconLift", "the Storm Beacon lift", OBSERVATORY.lift, "Use", "obstacle");
-  if (a.observatoryLamps.length === 4) add("beaconLiftDown", "the observatory lift", {x:0,z:339}, "Return on", "obstacle");
+  if (a.observatoryLamps.length === 4) add("beaconLiftDown", "the observatory lift", {x:0,z:(OBSERVATORY.z + 22)}, "Return on", "obstacle");
   return out;
 }
 
@@ -175,7 +175,7 @@ export function cloudInteract(f: Focus) {
     }
     const down = f.id === "beaconLiftDown", start = {x:rt.player.x,z:rt.player.z};
     rt.player.frozen = true;
-    await over(2.5, k => { rt.player.x = lerp(start.x,0,k); rt.player.z = lerp(start.z,down ? 333 : 340,k); });
+    await over(2.5, k => { rt.player.x = lerp(start.x,0,k); rt.player.z = lerp(start.z,down ? (OBSERVATORY.z + 16) : (OBSERVATORY.z + 23),k); });
     rt.player.y = cloudY(rt.player.x,rt.player.z); rt.camera.snap = true;
     saveNow();
   });
@@ -304,7 +304,7 @@ function cloudObstacle(id: CloudPuzzleId) {
     animate(active,"power"); audio.play(id.startsWith("obs") ? active === "bubbo" ? "splash" : active === "puff" ? "whoosh" : active === "ember" ? "fireball" : "vines" : "vines");
     updateProgress(pr => solveCloudPuzzle(pr,id));
     if (id.startsWith("obs")) {
-      effect("sparkle",0,22.6,325); audio.play("correct");
+      effect("sparkle",0,22.6,(OBSERVATORY.dial.z - .5)); audio.play("correct");
       if (observatoryLiftReady(getGame().progress.act3)) { audio.play("stones"); toast({en:"Four lamps! The Storm Beacon lift is ready!",ja:"４つの ランプ！ 嵐の とうへの リフトが うごいた！",tone:"good"},4000); }
       saveNow();
     }
@@ -414,7 +414,7 @@ async function resolution() {
   updateProgress(defeatBeacon);
   saveNow();
   rt.act3Scene = "powerDown";
-  shot({x:13,y:47,z:333},{x:0,y:40,z:350});
+  shot({x:13,y:47,z:(OBSERVATORY.z + 16)},{x:0,y:40,z:(BEACON.z + 1)});
   audio.play("rumble");
   await over(3, () => {});
   rt.act3Scene = "stormBreak";
@@ -422,23 +422,23 @@ async function resolution() {
   await over(2,() => {});
   await say("self", "The machine stopped! The storm is breaking!", "マシンが とまった！ あらしが はれて いく！");
   const ship = rt.ship, cage = ship.cage;
-  ship.visible = true; ship.scale = 1; ship.x = 0; ship.y = 48; ship.z = 353; ship.yaw = Math.PI;
-  cage.visible = true; cage.closed = 1; cage.x = -2.3; cage.y = 46.4; cage.z = 353;
+  ship.visible = true; ship.scale = 1; ship.x = 0; ship.y = 48; ship.z = (BEACON.z + 4); ship.yaw = Math.PI;
+  cage.visible = true; cage.closed = 1; cage.x = -2.3; cage.y = 46.4; cage.z = (BEACON.z + 4);
   rt.act3Scene = "squallRope";
-  shot({x:10,y:43,z:341},{x:0,y:44,z:353});
+  shot({x:10,y:43,z:(BEACON.z - 8)},{x:0,y:44,z:(BEACON.z + 4)});
   audio.play("ko");
   await over(4,k => { rt.squallLift = k * 10; });
   rt.act3Scene = "lumoGlow";
-  shot({x:5,y:48.8,z:345},{x:cage.x,y:cage.y+1.3,z:cage.z});
+  shot({x:5,y:48.8,z:(BEACON.z - 4)},{x:cage.x,y:cage.y+1.3,z:cage.z});
   audio.play("sparkle");
   await over(2,() => {});
   await say("self", "Lumo! The raider captain still has the cage!", "ルモ！ とうぞくの せんちょうが まだ かごを もっている！");
   rt.act3Scene = "skyFortress";
   const from = {x:ship.x,y:ship.y,z:ship.z};
   await over(9,k => {
-    ship.x = lerp(from.x,0,k); ship.y = lerp(from.y,64,k); ship.z = lerp(from.z,427,k);
+    ship.x = lerp(from.x,0,k); ship.y = lerp(from.y,64,k); ship.z = lerp(from.z,(BEACON.z + 78),k);
     cage.x = ship.x-2.3; cage.y = ship.y-1.6; cage.z = ship.z;
-    shot({x:16,y:50,z:331},{x:0,y:59,z:405});
+    shot({x:16,y:50,z:(OBSERVATORY.z + 14)},{x:0,y:59,z:(BEACON.z + 56)});
   });
   await over(2,() => {});
   await say("self", "They are flying north to the Sky Fortress. We will find Lumo!", "きたの 空の とりでへ とんで いく。かならず ルモを みつけよう！");

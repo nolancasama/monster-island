@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BEACON } from "../game/world/cloudisle";
 import { CAMERA_PROFILES, DEFAULT_CAMERA, cameraProfileAt, type CameraPoint } from "./cameraProfiles";
 import { CLIFF_ROPE } from "../game/world/lowland";
 import { GATE_PILLARS, groundY } from "../game/world/island";
@@ -44,13 +45,13 @@ describe("authored camera profiles", () => {
   });
 
   it("keeps the beacon lens radially outside the player and holds heading near its mast", () => {
-    for (const [x, z] of [[8, 349], [-8, 349], [0, 357], [0, 341]]) {
+    for (const [x, z] of [[8, BEACON.z], [-8, BEACON.z], [0, (BEACON.z + 8)], [0, (BEACON.z - 8)]]) {
       const p = point(x, z, true, 37);
       const profile = cameraProfileAt(p);
       expect(profile.id).toBe("beacon-arena");
       const frame = profile.resolve!(p, DEFAULT_CAMERA);
-      expect(Math.sin(frame.yaw) * x + Math.cos(frame.yaw) * (z - 349)).toBeGreaterThan(7.9);
-      expect(profile.resolve!(point(0, 349, true, 37), frame).yaw).toBe(frame.yaw);
+      expect(Math.sin(frame.yaw) * x + Math.cos(frame.yaw) * (z - BEACON.z)).toBeGreaterThan(7.9);
+      expect(profile.resolve!(point(0, BEACON.z, true, 37), frame).yaw).toBe(frame.yaw);
     }
   });
 

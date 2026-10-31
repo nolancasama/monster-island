@@ -54,9 +54,12 @@ function coastStrip(x: number, z: number): number {
 }
 // The massif and its peak follow the beacon, so moving the summit areas north
 // carries the mountain with them.
-const MASSIF_Z = BEACON.z - 35, PEAK_Z = BEACON.z + 32;
+// Its south edge stays just past the Hollow (z 150) so the junction and both
+// routes stand on the mountain, never on a coastal strip.
+const PEAK_Z = BEACON.z + 32, MASSIF_S = 150, MASSIF_N = PEAK_Z + 60;
+const MASSIF_Z = (MASSIF_S + MASSIF_N) / 2;
 function massif(x: number, z: number): number {
-  const cx = 6 * Math.sin(z / 47), rx = 76 + 7 * Math.sin(z / 31), rz = 175;
+  const cx = 6 * Math.sin(z / 47), rx = 76 + 7 * Math.sin(z / 31), rz = (MASSIF_N - MASSIF_S) / 2;
   const nx = (x - cx) / rx, nz = (z - MASSIF_Z) / rz;
   const r = Math.pow(Math.abs(nx) ** 3 + Math.abs(nz) ** 3, 1 / 3);
   return (1 - r) * 80 + 3 * Math.sin(x / 13 + z / 17) + 1.6 * Math.sin(x / 7 - z / 23);

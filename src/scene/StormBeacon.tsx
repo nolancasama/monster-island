@@ -118,7 +118,7 @@ export function StormBeacon() {
   const dummy = useMemo(() => new THREE.Object3D(), []);
   useFrame((_,dt) => {
     const defeated = getGame().progress.act3.beaconDefeated, b = cb.beacon;
-    const dist = Math.hypot(rt.camera.pos.x, rt.camera.pos.z - 349);
+    const dist = Math.hypot(rt.camera.pos.x, rt.camera.pos.z - BEACON_ARENA.z);
     if (root.current) root.current.visible = dist < 440 && getGame().progress.act3.area !== "thunderGrotto";
     // Small parts (the officer, pylon lights and shields) are specks from the coast: draw them near only.
     if (near.current) near.current.visible = dist < 90;
@@ -151,7 +151,7 @@ export function StormBeacon() {
       gust.current.visible = b.active && !b.gustCancelled && (b.attack === "gustTell" || b.attack === "gust");
       for (let i = 0; i < 12; i++) {
         const phase = (rt.time * (b.attack === "gust" ? 12 : 2) + i * 1.9) % 20;
-        dummy.position.set((phase - 10) * b.gust.x, 37.35 + (i % 3) * .35, 341 + (i % 6) * 2.6);
+        dummy.position.set((phase - 10) * b.gust.x, 37.35 + (i % 3) * .35, (BEACON_ARENA.z - 8) + (i % 6) * 2.6);
         dummy.scale.set(b.attack === "gust" ? 3.5 : 1.8, .05, .07);
         dummy.rotation.set(0, 0, -.08);
         dummy.updateMatrix(); gust.current.setMatrixAt(i, dummy.matrix);
@@ -170,16 +170,16 @@ export function StormBeacon() {
     });
   });
   return <group ref={root}>
-    <mesh geometry={geo} material={flatMat} position={[0, 37, 349]} />
-    <group ref={rotor} position={[0, 42.7, 349]}>
+    <mesh geometry={geo} material={flatMat} position={[0, 37, BEACON_ARENA.z]} />
+    <group ref={rotor} position={[0, 42.7, BEACON_ARENA.z]}>
       <mesh geometry={rotorGeo} material={flatMat} />
     </group>
-    <mesh ref={core} position={[0, 40.3, 349]}><sphereGeometry args={[.85, 12, 8]} /><meshBasicMaterial color="#b3f1ff" /></mesh>
+    <mesh ref={core} position={[0, 40.3, BEACON_ARENA.z]}><sphereGeometry args={[.85, 12, 8]} /><meshBasicMaterial color="#b3f1ff" /></mesh>
     <group ref={near}>
-      <mesh ref={squall} geometry={officer} material={flatMat} position={[0, 37.15, 353.8]} />
+      <mesh ref={squall} geometry={officer} material={flatMat} position={[0, 37.15, BEACON_ARENA.z + 4.8]} />
       {BEACON_PYLONS.map((_, i) => <StormPylon key={i} index={i} />)}
     </group>
-    <mesh ref={rope} position={[0, 44.8, 353.8]} visible={false}><cylinderGeometry args={[.045, .045, 1, 5]} /><meshBasicMaterial color="#d8c392" /></mesh>
+    <mesh ref={rope} position={[0, 44.8, BEACON_ARENA.z + 4.8]} visible={false}><cylinderGeometry args={[.045, .045, 1, 5]} /><meshBasicMaterial color="#d8c392" /></mesh>
     {[0, 1].map(i => <mesh key={`ring${i}`} ref={m => { ringRefs.current[i] = m; }} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
       <ringGeometry args={[1.8, 2.15, 40]} /><meshBasicMaterial color="#ffcb55" transparent opacity={.7} depthWrite={false} side={THREE.DoubleSide} />
     </mesh>)}

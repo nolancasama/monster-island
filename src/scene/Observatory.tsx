@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { useGame } from "../game/store";
 import { COMPANION_IDS, type CompanionId } from "../game/data/combat";
-import { CLOUD_OBSTACLE_PLACE, OBSERVATORY, cloudY } from "../game/world/cloudisle";
+import { BEACON, CLOUD_OBSTACLE_PLACE, OBSERVATORY, cloudY } from "../game/world/cloudisle";
 import { flatMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { lumoParts } from "./models/monsters";
@@ -15,29 +15,29 @@ const brass = "#b49b59", stone = "#8d9897";
 
 function observatoryGeometry() {
   const b = new PartBuilder();
-  b.box(19,.65,22,0,21.35,324,stone);
+  b.box(19,.65,22,0,21.35,(OBSERVATORY.z + 7),stone);
   // The surviving tall window frames open directly onto the clouds. The
   // camera-side facade is ruined, keeping the fixed follow view unobstructed.
-  for (const x of [-9,9]) for (const z of [316,322,328,334]) {
-    if (z===316 || z===334) b.box(.65,7,.8,x,22,z,stone);
-    if (z<334 && z!==322) { b.box(.8,.6,5.3,x,28.5,z+3,stone); b.box(.5,.15,5.3,x,23.5,z+3,brass); }
+  for (const x of [-9,9]) for (const z of [(OBSERVATORY.z - 1),(OBSERVATORY.z + 5),(OBSERVATORY.z + 11),(OBSERVATORY.z + 17)]) {
+    if (z===(OBSERVATORY.z - 1) || z===(OBSERVATORY.z + 17)) b.box(.65,7,.8,x,22,z,stone);
+    if (z<(OBSERVATORY.z + 17) && z!==(OBSERVATORY.z + 5)) { b.box(.8,.6,5.3,x,28.5,z+3,stone); b.box(.5,.15,5.3,x,23.5,z+3,brass); }
   }
-  for (const x of [-6,-2,2,6]) b.box(.65,6,.8,x,22,334,stone);
-  b.box(17,.6,.9,0,28,334,stone);
-  b.torus(3,.18,[0,22.12,325],[Math.PI/2,0,0],brass);
-  b.cyl(2.7,2.8,.14,0,22,325,"#3b5863",24);
-  b.cyl(.1,.12,.2,0,22.1,325,brass,6);
+  for (const x of [-6,-2,2,6]) b.box(.65,6,.8,x,22,(OBSERVATORY.z + 17),stone);
+  b.box(17,.6,.9,0,28,(OBSERVATORY.z + 17),stone);
+  b.torus(3,.18,[0,22.12,(OBSERVATORY.dial.z - .5)],[Math.PI/2,0,0],brass);
+  b.cyl(2.7,2.8,.14,0,22,(OBSERVATORY.dial.z - .5),"#3b5863",24);
+  b.cyl(.1,.12,.2,0,22.1,(OBSERVATORY.dial.z - .5),brass,6);
   for (let i=0;i<12;i++) {
     const a=i*Math.PI/6;
-    b.boxAt(.15,.05,.4,[Math.sin(a)*2.3,22.19,325+Math.cos(a)*2.3],[0,a,0],brass);
+    b.boxAt(.15,.05,.4,[Math.sin(a)*2.3,22.19,(OBSERVATORY.dial.z - .5)+Math.cos(a)*2.3],[0,a,0],brass);
   }
   // Broken upper walkways and fallen brass gear teeth establish the ruin.
   for (const side of [-1,1]) {
-    addKit(b, observatoryBay(side), [side*9,22,325]);
-    for (let i=0;i<4;i++) b.boxAt(.9,.3,.7,[side*(7-i*.4),22.2,316+i*.3],[.1,i*.4,.15],stone);
-    addKit(b, observatoryGear(), [side*7,25.35,330], side*.2);
-    b.box(1.2,1.1,1.1,side*7.4,22,318,"#766044");
-    b.add(new THREE.TorusGeometry(.22,.05,4,12,Math.PI*1.45),"#eadc9c",[side*7.4,22.7,317.43],[0,0,-.7]);
+    addKit(b, observatoryBay(side), [side*9,22,(OBSERVATORY.dial.z - .5)]);
+    for (let i=0;i<4;i++) b.boxAt(.9,.3,.7,[side*(7-i*.4),22.2,(OBSERVATORY.z - 1)+i*.3],[.1,i*.4,.15],stone);
+    addKit(b, observatoryGear(), [side*7,25.35,(OBSERVATORY.z + 13)], side*.2);
+    b.box(1.2,1.1,1.1,side*7.4,22,(OBSERVATORY.z + 1),"#766044");
+    b.add(new THREE.TorusGeometry(.22,.05,4,12,Math.PI*1.45),"#eadc9c",[side*7.4,22.7,OBSERVATORY.z + .43],[0,0,-.7]);
   }
   b.box(2.3,.15,2.3,OBSERVATORY.rest.x,22,OBSERVATORY.rest.z,"#dac79e");
   b.cyl(.35,.5,1,OBSERVATORY.rest.x+1,22,OBSERVATORY.rest.z,"#7c916b",6);
@@ -87,15 +87,15 @@ export function Observatory() {
   const platform=useRef<THREE.Mesh>(null);
   const lift=useMemo(()=>{
     const b=new PartBuilder();
-    for(let z=334;z<341;z+=.4) for(const x of [-1.65,1.65]) b.box(.18,.25,.5,x,cloudY(0,z)-.26,z,brass);
-    for(const x of [-2.3,2.3]) b.cyl(.12,.12,16,x,22,335,brass,6);
+    for(let z=(OBSERVATORY.z + 17);z<(BEACON.z - 8);z+=.4) for(const x of [-1.65,1.65]) b.box(.18,.25,.5,x,cloudY(0,z)-.26,z,brass);
+    for(const x of [-2.3,2.3]) b.cyl(.12,.12,16,x,22,OBSERVATORY.lift.z,brass,6);
     return b.build();
   },[]);
   useFrame(()=>{
     if(needle.current)needle.current.rotation.y=rt.time*.16;
-    if(details.current)details.current.visible=Math.hypot(rt.camera.pos.x,rt.camera.pos.z-325)<46;
+    if(details.current)details.current.visible=Math.hypot(rt.camera.pos.x,rt.camera.pos.z-(OBSERVATORY.dial.z - .5))<46;
     if(platform.current) {
-      const z=rt.player.z>=333 && rt.player.z<=340.5 ? Math.max(334,Math.min(340,rt.player.z)) : 334;
+      const z=rt.player.z>=(OBSERVATORY.z + 16) && rt.player.z<=(OBSERVATORY.z + 23.5) ? Math.max((OBSERVATORY.z + 17),Math.min((OBSERVATORY.z + 23),rt.player.z)) : (OBSERVATORY.z + 17);
       platform.current.position.set(0,cloudY(0,z)-.12,z);
     }
   });
@@ -104,11 +104,11 @@ export function Observatory() {
     <group ref={details}>
     {COMPANION_IDS.map((id,i)=><group key={id}>
       <Mechanism friend={id} solved={a.observatoryLamps.includes(id)}/>
-      <mesh position={[Math.sin(i*Math.PI/2)*1.5,22.3,325+Math.cos(i*Math.PI/2)*1.5]}>
+      <mesh position={[Math.sin(i*Math.PI/2)*1.5,22.3,(OBSERVATORY.dial.z - .5)+Math.cos(i*Math.PI/2)*1.5]}>
         <sphereGeometry args={[.25,8,6]}/><meshBasicMaterial color={a.observatoryLamps.includes(id)?colors[id]:"#26353c"}/>
       </mesh>
     </group>)}
-    <mesh ref={needle} position={[0,22.25,325]}><boxGeometry args={[.12,.06,3.5]}/><meshBasicMaterial color="#f9e4a2"/></mesh>
+    <mesh ref={needle} position={[0,22.25,(OBSERVATORY.dial.z - .5)]}><boxGeometry args={[.12,.06,3.5]}/><meshBasicMaterial color="#f9e4a2"/></mesh>
     {a.observatoryLamps.length===4 && <><mesh geometry={lift} material={flatMat}/><mesh ref={platform}><boxGeometry args={[3.2,.24,2.2]}/><meshLambertMaterial color="#c7ad70"/></mesh></>}
     </group>
   </>;
@@ -124,7 +124,7 @@ export function SummitWeather() {
   const bolts=useMemo(()=>{
     const b=new PartBuilder();
     for(let i=0;i<4;i++) {
-      const a=i*Math.PI/2+.4,x=Math.sin(a)*18,z=349+Math.cos(a)*18;
+      const a=i*Math.PI/2+.4,x=Math.sin(a)*18,z=BEACON.z+Math.cos(a)*18;
       b.boxAt(.09,1.7,.08,[x,39,z],[0,0,-.4],"#c1e9ff");
       b.boxAt(.09,1.3,.08,[x+.4,37.8,z],[0,0,.4],"#e2f5ff");
     }
@@ -136,7 +136,7 @@ export function SummitWeather() {
       puffs.current.visible=spread.current<.98;
       for(let i=0;i<36;i++) {
         const a=i*Math.PI*2/36+rt.time*.035, radius=18+(i%3)*1.5+spread.current*18;
-        dummy.position.set(Math.sin(a)*radius,38+Math.sin(a*3+i)*1.2+spread.current*6,349+Math.cos(a)*radius);
+        dummy.position.set(Math.sin(a)*radius,38+Math.sin(a*3+i)*1.2+spread.current*6,BEACON.z+Math.cos(a)*radius);
         dummy.scale.set(2.4,1.2,1.7);dummy.scale.multiplyScalar(1-spread.current);
         dummy.updateMatrix();puffs.current.setMatrixAt(i,dummy.matrix);
       }
@@ -151,9 +151,9 @@ export function SkyFortress() {
   const defeated=useGame(s=>s.progress.act3.beaconDefeated);
   const geo=useMemo(()=>{
     const b=new PartBuilder();
-    b.add(new THREE.DodecahedronGeometry(9,0),"#7189a5",[0,64,450],[0,.2,0],[2,.5,1]);
+    b.add(new THREE.DodecahedronGeometry(9,0),"#7189a5",[0,64,(BEACON.z + 101)],[0,.2,0],[2,.5,1]);
     for(const [x,h] of [[-10,7],[-5,10],[0,14],[6,9],[11,6]]) {
-      b.box(3,h,4,x,66,450,"#61758f");b.cone(2,h*.3,x,66+h,450,"#50657f",5);
+      b.box(3,h,4,x,66,(BEACON.z + 101),"#61758f");b.cone(2,h*.3,x,66+h,(BEACON.z + 101),"#50657f",5);
     }
     return b.build();
   },[]);

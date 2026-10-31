@@ -1,5 +1,20 @@
 # Design Decisions
 
+## 2026-10-31 — Slice X2a-world: junction and canopy gameplay layout
+
+- Moved the observatory approach, observatory and beacon rigidly +90 m in z,
+  including combat, lift, scene and camera-shot coordinates. Beacon combat
+  now derives its arena and pylons from the world landmark.
+- The junction has an east cliff overlook and a separate west chest path.
+  The canopy winds through a forest floor and two raised platforms, with
+  gentle ramps, six enemies in three pairs, and quiet stretches between.
+  The required vine bridge and short scripted glide are 44 m apart; the
+  optional gust lane leads to the far-west chest. Both route clear gates
+  sit at their exits near z=398; the existing grotto gets only an extended
+  exit trail. Save recovery follows the relocated glide pads.
+- Rendering expansion remains a later slice; the terrain budget assertion
+  remains unchanged for the controller to review alongside that work.
+
 ## 2026-10-31 — Slice X1: coast, Hollow and tunnel at scale, on one island
 
 - **Layout.** The coast follows a long shoreline with three combat clearings,

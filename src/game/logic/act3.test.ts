@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BEACON, CANOPY_GLIDE, OBSERVATORY } from "../world/cloudisle";
 import { newProgress, type Progress } from "./progress";
 import { bestFood, findPort, hearLead, markDescended, startAct2 } from "./act2";
 import { claimErrand, clearCloudStage, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, discoverHollow, eatStew, markFamily, newAct3, openCloudChest, restCloud, solveCloudPuzzle, travelCloud, observatoryReached, reachObservatory, observatoryLiftReady, defeatBeacon, discoverSkyFortress } from "./act3";
@@ -262,7 +263,7 @@ describe("additive Cloud Isle v4 saves", () => {
       }
     }
     const locked: Progress = { ...travelCloud(completeVoyage(harbor()), "cloud"), act3: { ...newAct3(), world: "cloud", voyageDone: true, area } };
-    const raw = JSON.parse(encodeSave(locked, { x: 0, z: 349, yaw: 1 }, 90));
+    const raw = JSON.parse(encodeSave(locked, { x: 0, z: BEACON.z, yaw: 1 }, 90));
     delete raw.progress.act3.cloudLayout;
     const loaded = decodeSave(JSON.stringify(raw))!;
     expect(loaded.progress.act3.cloudLayout).toBe(2);
@@ -319,11 +320,11 @@ describe("additive Cloud Isle v4 saves", () => {
       p = collectErrandPickup(p, route === "skyrootCanopy" ? "canopyWood" : "grottoWood");
       p = openCloudChest(p, route === "skyrootCanopy" ? "cloudCanopyChest" : "cloudCrystalChest");
       p = { ...p, act3: { ...p.act3, area: route } };
-      const point = { x: route === "skyrootCanopy" ? -20 : 20, z: 304, yaw: 1 };
+      const point = route === "skyrootCanopy" ? { x: -49, z: 377, yaw: 1 } : { x: 20, z: 304, yaw: 1 };
       expect(save(p, point).progress).toEqual(p);
       expect(save(p, point).player).toEqual(point);
       const approach = { ...p, act3: { ...p.act3, area: "observatoryApproach" as const } };
-      expect(save(approach, { x: 0, z: 312, yaw: 1 }).progress.act3.area).toBe("observatoryApproach");
+      expect(save(approach, { x: 0, z: OBSERVATORY.entrance.z, yaw: 1 }).progress.act3.area).toBe("observatoryApproach");
     }
   });
 
@@ -353,7 +354,7 @@ describe("additive Cloud Isle v4 saves", () => {
 
   it("projects saves behind every missing required puzzle back to that route's entrance", () => {
     for (const route of ["skyrootCanopy", "thunderGrotto"] as const) {
-      const point = { x: route === "skyrootCanopy" ? -20 : 20, z: 304, yaw: 1 };
+      const point = route === "skyrootCanopy" ? { x: -49, z: 377, yaw: 1 } : { x: 20, z: 304, yaw: 1 };
       for (const missing of CLOUD_ROUTE_REQUIRED[route]) {
         let p = hollow();
         for (const id of CLOUD_ROUTE_REQUIRED[route]) if (id !== missing) p = solveCloudPuzzle(p, id);
@@ -366,34 +367,34 @@ describe("additive Cloud Isle v4 saves", () => {
 
   it("keeps the shared approach locked until a clear route and all its required puzzles", () => {
     const base = hollow();
-    const approach = { x: 0, z: 312, yaw: 1 };
+    const approach = { x: 0, z: OBSERVATORY.entrance.z, yaw: 1 };
     let p: Progress = { ...base, act3: { ...base.act3, area: "observatoryApproach" } };
     expect(save(p, approach).player).toEqual({ ...CLOUD_SPAWNS.windfallJunction, yaw: 1 });
     p = clearCloudStage(p, "skyrootCanopy", CLOUD_ENEMY_SPAWNS.map((_, i) => i));
     expect(save(p, approach).player.z).toBeLessThan(280);
     p = solveCloudPuzzle(solveCloudPuzzle(p, "canopyVine"), "canopyGlide");
     expect(save(p, approach).player).toEqual(approach);
-    expect(save(p, { x: 12, z: 310, yaw: 1 }).player).toEqual({ x: 12, z: 310, yaw: 1 });
+    expect(save(p, { x: 12, z: (OBSERVATORY.entrance.z - 2), yaw: 1 }).player).toEqual({ x: 12, z: (OBSERVATORY.entrance.z - 2), yaw: 1 });
   });
 
   it("resumes an interrupted glide on a marked pad rather than over the gap", () => {
     let p = hollow();
     p = solveCloudPuzzle(solveCloudPuzzle(p, "canopyVine"), "canopyGlide");
     p = { ...p, act3: { ...p.act3, area: "skyrootCanopy" } };
-    expect(save(p, { x: -20, z: 299, yaw: 1 }).player).toEqual({ x: -20, z: 297.4, yaw: 1 });
-    expect(save(p, { x: -20, z: 300, yaw: 1 }).player).toEqual({ x: -20, z: 301.6, yaw: 1 });
+    expect(save(p, { x: CANOPY_GLIDE.from.x, z: CANOPY_GLIDE.from.z + 1.6, yaw: 1 }).player).toEqual({ ...CANOPY_GLIDE.from, yaw: 1 });
+    expect(save(p, { x: CANOPY_GLIDE.to.x, z: CANOPY_GLIDE.to.z - 1.6, yaw: 1 }).player).toEqual({ ...CANOPY_GLIDE.to, yaw: 1 });
   });
 
   it("round-trips observatory clear, partial lamps, entrance checkpoint and valid interior ground", () => {
     let p = observatory();
     p = solveCloudPuzzle(solveCloudPuzzle(p, "obsEmber"), "obsLeafy");
-    const point = { x: -3, z: 325, yaw: 1 };
+    const point = { x: -3, z: (OBSERVATORY.dial.z - .5), yaw: 1 };
     const loaded = save(p, point);
     expect(loaded.progress).toEqual(p);
     expect(loaded.player).toEqual(point);
     expect(cloudWakeArea(loaded.progress)).toBe("observatory");
     const outside = { ...p, act3: { ...p.act3, area: "stormBeacon" as const } };
-    const blocked = save(outside, { x: 0, z: 349, yaw: 1 });
+    const blocked = save(outside, { x: 0, z: BEACON.z, yaw: 1 });
     expect(blocked.progress.act3.area).toBe("ancientObservatory");
     expect(blocked.player).toEqual({ ...CLOUD_SPAWNS.ancientObservatory, yaw: 1 });
   });
@@ -402,7 +403,7 @@ describe("additive Cloud Isle v4 saves", () => {
     let p = observatory();
     for (const id of OBSERVATORY_PUZZLES) p = solveCloudPuzzle(p, id);
     p = { ...p, act3: { ...p.act3, area: "stormBeacon" } };
-    const point = { x: 0, z: 345, yaw: 1 };
+    const point = { x: 0, z: (BEACON.z - 4), yaw: 1 };
     expect(save(p, point).progress).toEqual(p);
     expect(save(p, point).player).toEqual(point);
     expect(Object.keys(save(p, point).progress.act3)).not.toContain("pylons");
@@ -416,7 +417,7 @@ describe("additive Cloud Isle v4 saves", () => {
 
   it("rejects forged observatory and ending fields before their route, clear, lamp and friend prerequisites", () => {
     const forge = (p: Progress, override: Record<string, unknown>) => {
-      const raw = JSON.parse(encodeSave(p, { x: 0, z: 325, yaw: 1 }, 0));
+      const raw = JSON.parse(encodeSave(p, { x: 0, z: (OBSERVATORY.dial.z - .5), yaw: 1 }, 0));
       Object.assign(raw.progress.act3, { observatoryLamps: ["leafy", "bubbo", "puff", "ember", "leafy", "bad"],
         beaconDefeated: true, skyFortressClue: true, checkpoint: "observatory",
         family: { ...p.act3.family, aftermathSeen: true }, ...override });
