@@ -1,4 +1,4 @@
-import { CLOUD_BOUNDS, CLOUD_ZONES, cloudY } from "./cloudisle";
+import { BEACON, CLOUD_BOUNDS, CLOUD_ZONES, cloudY } from "./cloudisle";
 import { nearestOnTrail, type WalkShape } from "./lowland";
 
 const shapes = Object.values(CLOUD_ZONES).flatMap(zone => zone.walk);
@@ -52,9 +52,12 @@ function coastStrip(x: number, z: number): number {
   const margin = 14 + 5 * Math.sin(x / 11 + z / 17) + 3 * Math.sin(z / 7 - x / 19);
   return margin - distanceToWalk(x, z);
 }
+// The massif and its peak follow the beacon, so moving the summit areas north
+// carries the mountain with them.
+const MASSIF_Z = BEACON.z - 35, PEAK_Z = BEACON.z + 32;
 function massif(x: number, z: number): number {
   const cx = 6 * Math.sin(z / 47), rx = 76 + 7 * Math.sin(z / 31), rz = 175;
-  const nx = (x - cx) / rx, nz = (z - 305) / rz;
+  const nx = (x - cx) / rx, nz = (z - MASSIF_Z) / rz;
   const r = Math.pow(Math.abs(nx) ** 3 + Math.abs(nz) ** 3, 1 / 3);
   return (1 - r) * 80 + 3 * Math.sin(x / 13 + z / 17) + 1.6 * Math.sin(x / 7 - z / 23);
 }
@@ -72,8 +75,8 @@ export function cloudGroundY(x: number, z: number): number {
   const knolls = smooth((shore - 4) / 10) * (2.2 + 1.8 * Math.sin(x / 9 + z / 13) * Math.sin(z / 11 - x / 17));
   // The mountain body: rises with its depth inland and northward to the summit.
   const body = smooth(massif(x, z) / 45);
-  const north = smooth((z - 130) / 230);
-  const summit = 34 * Math.exp(-((x / 40) ** 2 + ((z - 372) / 34) ** 2));
+  const north = smooth((z - 130) / (PEAK_Z - 142));
+  const summit = 34 * Math.exp(-((x / 40) ** 2 + ((z - PEAK_Z) / 34) ** 2));
   const ridges = (3.2 * Math.sin(x / 15 + z / 37) + 1.8 * Math.sin(x / 8 - z / 26)) * north;
   const noise = .5 * Math.sin(x / 5 + z / 11) * Math.sin(z / 8 - x / 13);
   const mountain = body * (6 + north * 24 + summit + ridges);

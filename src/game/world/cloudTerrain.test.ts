@@ -22,7 +22,7 @@ describe("Cloud Isle terrain", () => {
   });
   it("puts the highest region north of the beacon", () => {
     let highest = -Infinity, peakX = 0, peakZ = 0;
-    for (let z = -40; z <= 420; z += 2) for (let x = -110; x <= 110; x += 2) {
+    for (let z = -40; z <= BEACON.z + 90; z += 2) for (let x = -110; x <= 110; x += 2) {
       const y = cloudGroundY(x, z);
       if (y > highest) { highest = y; peakX = x; peakZ = z; }
     }
