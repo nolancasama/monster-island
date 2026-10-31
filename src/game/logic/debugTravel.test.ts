@@ -4,6 +4,7 @@ import { debugDestinationGates, destinationForDebugPoint } from "./debugTravel";
 import { newProgress } from "./progress";
 import { gatesOf, isWalkable, PLAYER_R } from "../world/collision";
 import { SPAWN } from "../world/island";
+import { BEACON } from "../world/cloudisle";
 
 describe("debug teleport story selection", () => {
   it("keeps current progress for ground that is already walkable", () => {
@@ -36,9 +37,9 @@ describe("debug teleport story selection", () => {
 
   it("selects a cloud destination that opens the summit gates", () => {
     const gates = gatesOf(progressForDestination("cloud:cloudDock"));
-    expect(isWalkable(0, 160, gates, PLAYER_R)).toBe(false);
-    expect(destinationForDebugPoint(0, 160, "cloud", gates)?.id).toBe("cloud:stormBeacon");
-    expect(destinationForDebugPoint(0, 160, "home", gates)).toBeUndefined();
+    expect(isWalkable(BEACON.x, BEACON.z, gates, PLAYER_R)).toBe(false);
+    expect(destinationForDebugPoint(BEACON.x, BEACON.z, "cloud", gates)?.id).toBe("cloud:stormBeacon");
+    expect(destinationForDebugPoint(BEACON.x, BEACON.z, "home", gates)).toBeUndefined();
   });
 
   it("returns no story change when no destination makes the point walkable", () => {
