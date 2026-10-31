@@ -15,7 +15,7 @@ import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
 import { debugPaused, useDebug } from "./debugState";
-import { blastKnock, bubbleAir, bubbleProfile, canControl, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, inCone, oldestTrap, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
+import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -86,6 +86,8 @@ export interface EnemyRt {
   burn: Burn | null;
   control: Control | null;
   resistUntil: number;
+  /** Heavy Root Snare slows locomotion without preventing attacks. */
+  slowUntil: number;
   fall: { from: number; t0: number } | null;
   /** One victim ledger survives the swing-to-fling transition. */
   flight: { owner: CompanionId; victims: number[]; x: number; z: number; yaw: number; startX: number; startZ: number; bash?: { x: number; z: number } } | null;
@@ -132,6 +134,22 @@ export interface Drop {
   magnet: boolean;
 }
 
+export interface Cyclone {
+  id: number;
+  x: number; z: number;
+  ux: number; uz: number;
+  age: number;
+  stopped: boolean;
+  bubbles: number[];
+}
+
+export interface BombChain {
+  id: number;
+  x: number; z: number; t0: number;
+  pops: { i: number; depth: number }[];
+  victims: number[];
+}
+
 /** Short-lived attack shapes for the scene (vines, jets, gusts, bursts, hits). */
 export interface Fx {
   id: number;
@@ -170,7 +188,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, air: 0, burn: null, control: null, resistUntil: 0, fall: null, flight: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
   };
 }
 
@@ -185,6 +203,9 @@ export const cb = {
   cloudZones: { current: null, defeated: {}, leftAt: {} } as CloudZoneMemory,
   world: "home" as "home" | "cloud",
   shots: [] as Shot[],
+  cyclone: null as Cyclone | null,
+  inferno: null as null | { age: number; tick: number },
+  bombChain: null as BombChain | null,
   drops: [] as Drop[],
   fx: [] as Fx[],
   stance: { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 } as Stance,
@@ -194,6 +215,8 @@ export const cb = {
   move: null as null | { friend: CompanionId; kind: "basic" | "special"; t0: number; tx: number; tz: number },
   /** Held J (keyboard) or the held touch button: basic attacks repeat. */
   hold: false,
+  /** Keyboard only: touch K always starts a fixed burst. */
+  holdK: false,
   /** The touch attack button is held down. */
   touchHold: false,
   /** The player cannot be hurt again until this rt.time. */
@@ -214,6 +237,7 @@ export const hooks = { knockout: null as null | (() => void), enterZone: null as
 
 /** No per-attempt boss progress is saved; checkpoints and lamps live in act3. */
 export function resetBeaconFight() {
+  clearSpecials();
   cb.beacon = newBeacon();
   cb.enemies = cb.enemies.filter(e => e.i < 10000);
   cb.shots = cb.shots.filter(s => !s.hostile);
@@ -236,6 +260,7 @@ export function resetCombat() {
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
   cb.hold = false;
+  cb.holdK = cb.touchHold = false;
   cb.safeUntil = 0;
   cb.knock = { x: 0, z: 0 };
   cb.knockedOut = false;
@@ -259,13 +284,14 @@ export function travelCombat() {
   worldEnemies[cb.world] = cb.enemies;
   cb.enemies = worldEnemies[next] ?? activeSpawns().map((_, i) => spawnEnemy(i, next === "cloud"));
   cb.world = next;
+  clearSpecials();
   cb.shots = [];
   cb.drops = [];
   cb.fx = [];
   cb.stance = { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 };
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
-  cb.hold = cb.touchHold = false;
+  cb.hold = cb.holdK = cb.touchHold = false;
   cb.knock = { x: 0, z: 0 };
 }
 
@@ -314,7 +340,7 @@ export function playerRadius(): number {
 
 /** Riding is a little quicker than walking. */
 export function speedScale(): number {
-  return steed() ? 1.18 : 1;
+  return (steed() ? 1.18 : 1) * (cb.inferno ? 0.5 : 1);
 }
 
 /** Seats on each rider (in the friend's frame): back = behind its centre, up = above its root. */
@@ -490,6 +516,8 @@ function canFight(): boolean {
   return g.screen === "game" && g.mode === "explore" && !g.journalOpen && !g.settingsOpen && !isRunning() && !cb.knockedOut && act2Live();
 }
 
+const freeBeaconMoves = () => cb.beacon.active && onCloudIsle() && combatZoneAt(rt.player.x, rt.player.z) === "stormBeacon";
+
 const alive = (e: EnemyRt) => e.state !== "ko" && e.state !== "gone";
 const awakeEnemies = (zone: CombatZone) => cb.enemies.filter((e) => e.zone === zone && alive(e) && e.state !== "idle" && e.state !== "return").length;
 export const isRanged = (kind: EnemyKind) => kind === "forestSpitter" || kind === "raiderShooter" || kind === "windSprite";
@@ -617,9 +645,9 @@ export function basicAttack(): boolean {
 /** K: the active friend's special (costs MP; a short cooldown). */
 export function specialAttack(): boolean {
   const f = friendNow();
-  if (!f || !canFight() || rt.time < cb.ready.special) return false;
+  if (!f || !canFight() || rt.time < cb.ready.special || cb.inferno) return false;
   const move = COMBAT[f].special;
-  const spent = spendMp(cb.vitals, f, move.cost);
+  const spent = spendMp(cb.vitals, f, freeBeaconMoves() ? 0 : move.cost);
   if (!spent) {
     if (rt.time - cb.lastMpWarn > 1.5) {
       cb.lastMpWarn = rt.time;
@@ -639,8 +667,6 @@ export function specialAttack(): boolean {
   }
   cb.move = { friend: f, kind: "special", t0: rt.time, tx: aim.x, tz: aim.z };
   const o = originOf(f);
-  // E2 stubs: direct area damage only. Bomb retains its straight projectile
-  // so charging pylons can still be shorted on contact.
   switch (move.shape) {
     case "bomb": {
       const life = move.range / move.speed!;
@@ -650,33 +676,181 @@ export function specialAttack(): boolean {
       break;
     }
     case "inferno":
-      pushFx("breath", o.x, o.y, o.z, ux, uz, yaw, move.range);
-      hitBeaconShape(f, move.range, ux, uz, "cone", 80);
-      for (const e of coneTargets(move.range, 80)) hit(e, move.damage, 0, 0, ux, uz, f);
+      cb.inferno = { age: 0, tick: 0.25 };
+      infernoTick();
       audio.play("burst");
       break;
     case "snare": {
       const centre = moveCircle(p.x, p.z, aim.x, aim.z, 0.08, gatesOf(getGame().progress));
-      specialCircle(f, move, centre.x, centre.z, "snare");
+      pushFx("snare", centre.x, standY(centre.x, centre.z, getGame().progress.solved) + 0.5, centre.z, 0, 0, yaw, move.radius);
+      hitBeaconShape(f, move.radius, 0, 0, "circle", 0, { ...p, ...centre });
+      for (const e of cb.enemies) {
+        if (!alive(e) || e.zone !== currentCombatZone() || Math.hypot(e.x - centre.x, e.z - centre.z) > move.radius) continue;
+        hit(e, move.damage, 0, 0, ux, uz, f);
+        if (!alive(e)) continue;
+        // Even a resisted snare cancels a ranged wind-up.
+        if (isRanged(e.kind) && e.state === "windup") { e.state = "recover"; e.timer = ENEMIES[e.kind].recover; }
+        const weight = ENEMIES[e.kind].weightClass;
+        if (weight === "heavy") {
+          if (e.slowUntil <= rt.time && canControl(weight, "snared", rt.time, e.resistUntil, e.control)) e.slowUntil = rt.time + snareDuration(weight);
+          else pushFx("shrug", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.8, e.z, 0, 0, 0, 1);
+        } else startControl(e, "snared", snareDuration(weight), f);
+      }
       audio.play("vines");
       break;
     }
-    case "cyclone":
-      specialCircle(f, move, p.x + ux * 2, p.z + uz * 2, "cyclone");
+    case "cyclone": {
+      endCyclone();
+      const centre = moveCircle(p.x, p.z, p.x + ux * 2, p.z + uz * 2, 0.08, gatesOf(getGame().progress));
+      cb.cyclone = { id: nextId++, ...centre, ux, uz, age: 0, stopped: Math.hypot(centre.x - p.x - ux * 2, centre.z - p.z - uz * 2) > 0.01, bubbles: [] };
+      pushFx("cyclone", centre.x, standY(centre.x, centre.z, getGame().progress.solved), centre.z, ux, uz, yaw, move.radius);
+      updateCyclone(0);
       audio.play("wind");
       break;
+    }
   }
   learn("special");
   return true;
 }
 
-function specialCircle(friend: CompanionId, move: MoveDef, x: number, z: number, kind: "snare" | "cyclone" | "bomb") {
-  pushFx(kind, x, standY(x, z, getGame().progress.solved) + 0.5, z, 0, 0, rt.player.yaw, move.radius);
-  hitBeaconShape(friend, move.radius, 0, 0, "circle", 0, { ...rt.player, x, z });
-  for (const e of cb.enemies) {
-    if (!alive(e) || e.zone !== currentCombatZone() || Math.hypot(e.x - x, e.z - z) > move.radius) continue;
-    hit(e, move.damage, 0, 0, 0, 0, friend);
+function clearSpecials() {
+  cb.inferno = null;
+  cb.cyclone = null;
+  cb.bombChain = null;
+}
+
+function infernoTick() {
+  const move = COMBAT.ember.special, p = rt.player;
+  const range = move.range * (upgraded("ember") ? COMBAT.ember.upgrade.size : 1);
+  const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw), o = originOf("ember");
+  pushFx("breath", o.x, o.y, o.z, ux, uz, p.yaw, range);
+  hitBeaconShape("ember", range, ux, uz, "cone", 80);
+  for (const e of coneTargets(range, 80)) {
+    hit(e, move.damage, 0, 0, ux, uz, "ember");
+    if (alive(e)) e.burn = ignite(e.burn, rt.time);
   }
+}
+
+function updateInferno(dt: number) {
+  const fire = cb.inferno;
+  if (!fire) return;
+  if (friendNow() !== "ember" || cb.knockedOut) { cb.inferno = null; return; }
+  const step = infernoStep(fire.age, dt, cb.holdK, cb.vitals.mp.ember, freeBeaconMoves());
+  cb.vitals.mp.ember = Math.max(0, cb.vitals.mp.ember - step.drain);
+  fire.age = step.age;
+  while (fire.tick <= fire.age + 1e-9 && fire.tick < 3 && (!step.done || fire.tick < fire.age - 1e-9)) {
+    infernoTick();
+    fire.tick += 0.25;
+  }
+  if (step.done) cb.inferno = null;
+}
+
+function detonateBomb(s: Shot) {
+  const move = COMBAT.bubbo.special;
+  const enemies = cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone());
+  const chain = bubbleChain(enemies.map(e => ({ i: e.i, x: e.x, z: e.z, trapped: e.control?.kind === "trapped" })), s, move.radius);
+  cb.bombChain = { id: nextId++, x: s.x, z: s.z, t0: rt.time, ...chain };
+  pushFx("bomb", s.x, s.y, s.z, 0, 0, 0, move.radius);
+  hitBeaconShape("bubbo", move.radius, 0, 0, "circle", 0, { ...rt.player, x: s.x, z: s.z });
+  // Pop first: fall damage samples current air, before explosion knock can move it.
+  for (const pop of chain.pops) {
+    const e = enemies.find(e => e.i === pop.i)!;
+    pushFx("bomb", e.x, standY(e.x, e.z, getGame().progress.solved) + e.air, e.z, 0, 0, 0, 2);
+    popBubble(e);
+  }
+  for (const e of enemies) {
+    if (Math.hypot(e.x - s.x, e.z - s.z) <= move.radius) {
+      const dx = e.x - s.x, dz = e.z - s.z, d = Math.hypot(dx, dz);
+      const ux = d > 1e-6 ? dx / d : s.vx / (Math.hypot(s.vx, s.vz) || 1);
+      const uz = d > 1e-6 ? dz / d : s.vz / (Math.hypot(s.vx, s.vz) || 1);
+      hit(e, move.damage, 0, 0, ux, uz, "bubbo");
+      if (alive(e) && e.control?.kind !== "snared") { e.kx += ux * move.knock; e.kz += uz * move.knock; }
+    }
+    if (chain.victims.includes(e.i)) hit(e, 8, 0, 0, 0, 0, "bubbo");
+  }
+  audio.play("splash");
+}
+
+function endCyclone() {
+  const c = cb.cyclone;
+  if (!c) return;
+  cb.cyclone = null;
+  for (const e of cb.enemies) {
+    if (!alive(e)) continue;
+    if (c.bubbles.includes(e.i)) popBubble(e);
+    if (e.control?.kind !== "carried" || e.control.source !== c.id) continue;
+    const dx = e.x - c.x, dz = e.z - c.z, d = Math.hypot(dx, dz) || 1;
+    // Continue the carry into a fling; resistance starts when that fling ends.
+    e.control = { ...e.control, kind: "flung", t0: rt.time, until: rt.time + 0.6 };
+    const speed = 4 * 1.5 / (1 - Math.exp(-1.5 * 0.6));
+    e.kx = dx / d * speed; e.kz = dz / d * speed;
+  }
+}
+
+function reflectShot(s: Shot) {
+  const c = cb.cyclone;
+  if (!c || !s.hostile || Math.hypot(s.x - c.x, s.z - c.z) > 1.6) return;
+  s.hostile = false;
+  s.owner = "puff";
+  s.source = undefined;
+  s.basic = false;
+  s.vx = -s.vx; s.vz = -s.vz; s.vy = -(s.vy ?? 0);
+  s.damage = 6;
+}
+
+function updateCyclone(dt: number) {
+  const c = cb.cyclone;
+  if (!c) return;
+  const elapsed = Math.min(dt, Math.max(0, 4 - c.age));
+  c.age += elapsed;
+  const gates = gatesOf(getGame().progress);
+  if (!c.stopped) {
+    const count = Math.max(1, Math.ceil(1.8 * elapsed / 0.1));
+    for (let n = 0; n < count; n++) {
+      const x = c.x + c.ux * 1.8 * elapsed / count, z = c.z + c.uz * 1.8 * elapsed / count;
+      if (!isWalkable(x, z, gates, 0.08)) { c.stopped = true; break; }
+      c.x = x; c.z = z;
+    }
+  }
+  hitBeaconShape("puff", 1.4, 0, 0, "circle", 0, { ...rt.player, x: c.x, z: c.z });
+  const enemies = cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone());
+  let carried = enemies.filter(e => e.control?.kind === "carried" && e.control.source === c.id).length;
+  c.bubbles = c.bubbles.filter(i => enemies.some(e => e.i === i && e.control?.kind === "trapped"));
+  for (const e of enemies) {
+    const dx = e.x - c.x, dz = e.z - c.z, d = Math.hypot(dx, dz);
+    if (e.control?.kind === "trapped" && d <= 1.6 && !c.bubbles.includes(e.i)) c.bubbles.push(e.i);
+    if (c.bubbles.includes(e.i)) continue;
+    if (d > 1.4 || e.control?.kind === "carried") continue;
+    const weight = ENEMIES[e.kind].weightClass;
+    if (weight === "light") {
+      if (carried < 3 && startControl(e, "carried", 4 - c.age, "puff")) {
+        e.control!.source = c.id;
+        e.air = 1.2;
+        carried++;
+      }
+    } else {
+      if (weight === "medium" && elapsed > 0) hit(e, COMBAT.puff.special.damage * elapsed, 0, 0, 0, 0, "puff");
+      if (alive(e) && e.control?.kind !== "snared") {
+        const ux = d > 1e-6 ? dx / d : c.ux, uz = d > 1e-6 ? dz / d : c.uz;
+        displaceEnemy(e, e.x + ux * (weight === "heavy" ? 1 : 4) * elapsed, e.z + uz * (weight === "heavy" ? 1 : 4) * elapsed);
+      }
+    }
+  }
+  let slot = 0;
+  for (const e of enemies) {
+    const bubble = c.bubbles.includes(e.i) && e.control?.kind === "trapped";
+    if (!bubble && !(e.control?.kind === "carried" && e.control.source === c.id)) continue;
+    const angle = c.age * 4 + slot++ * Math.PI * 2 / 3;
+    if (bubble) {
+      // Preserve the trapped bubble and its current air throughout the carry.
+      e.control!.t0 += elapsed; e.control!.until += elapsed;
+      if (c.stopped) { popBubble(e); continue; }
+    }
+    const clear = displaceEnemy(e, c.x + Math.sin(angle) * 0.8, c.z + Math.cos(angle) * 0.8);
+    if (!clear) { if (bubble) popBubble(e); else wallImpact(e, 0); }
+  }
+  for (const s of cb.shots) if (s.life > 0) reflectShot(s);
+  if (c.age >= 4 - 1e-9) endCyclone();
 }
 
 function endControl(e: EnemyRt) {
@@ -698,7 +872,7 @@ function startControl(e: EnemyRt, kind: Control["kind"], duration: number, owner
   e.control = { kind, t0: rt.time, until: rt.time + duration, peak, source: nextId++ };
   e.flight = { owner, victims: [], x: rt.player.x, z: rt.player.z, yaw: rt.player.yaw, startX: e.x, startZ: e.z };
   e.fall = null;
-  if (kind === "trapped" || kind === "grabbed") e.kx = e.kz = 0;
+  if (kind !== "flung") e.kx = e.kz = 0;
   if ((e.state === "idle" || e.state === "return") && !hasAttackSlot(e)) e.waiting = true;
   if (!e.waiting) e.state = "stun";
   e.timer = duration;
@@ -792,12 +966,17 @@ function wallImpact(e: EnemyRt, speed: number) {
 
 /** Returns true while scripted control/falling owns the enemy's turn. */
 function updateElements(e: EnemyRt, dt: number): boolean {
+  if (e.slowUntil > 0 && rt.time >= e.slowUntil) {
+    e.resistUntil = endResistance(ENEMIES[e.kind].weightClass, e.slowUntil);
+    e.slowUntil = 0;
+  }
   const burn = tickBurn(e.burn, rt.time, upgraded("ember") ? 1.5 : 1);
   e.burn = burn.burn;
   if (burn.damage) hit(e, burn.damage, 0, 0, 0, 0, "ember");
   if (!alive(e)) return true;
   const c = e.control, flight = e.flight;
   if (c?.kind === "trapped") {
+    if (cb.cyclone?.bubbles.includes(e.i)) return true;
     e.air = bubbleAir(c, rt.time);
     if (rt.time >= c.until) popBubble(e);
     return true;
@@ -820,6 +999,7 @@ function updateElements(e: EnemyRt, dt: number): boolean {
     return true;
   }
   if (c?.kind === "snared") { e.kx = e.kz = 0; if (rt.time >= c.until) endControl(e); return true; }
+  if (c?.kind === "carried") return true;
   if (Math.abs(e.kx) + Math.abs(e.kz) > 0.05) {
     const speed = Math.hypot(e.kx, e.kz);
     if (!displaceEnemy(e, e.x + e.kx * dt, e.z + e.kz * dt, c?.kind === "flung" ? () => weaponCollisions(e) : undefined)) wallImpact(e, speed);
@@ -827,7 +1007,7 @@ function updateElements(e: EnemyRt, dt: number): boolean {
     e.kz *= Math.exp(-dt * (c?.kind === "flung" ? 1.5 : 6));
   }
   if (!alive(e)) return true;
-  if (c?.kind === "flung" || c?.kind === "carried") {
+  if (c?.kind === "flung") {
     if (rt.time >= c.until) endControl(e);
     return true;
   }
@@ -954,6 +1134,7 @@ function knockOut(e: EnemyRt) {
   e.flight = null;
   e.fall = null;
   e.air = 0;
+  e.slowUntil = 0;
   e.kx = e.kz = 0;
   const before = getGame().progress;
   let next;
@@ -1091,6 +1272,7 @@ export function combatTick(dt: number) {
       respawnZone(next);
     }
     mem.current = next;
+    clearSpecials();
     cb.shots = [];
     cb.fx = [];
     if (next) hooks.cloudEnterZone?.(next);
@@ -1099,6 +1281,7 @@ export function combatTick(dt: number) {
     const { mem, respawn } = changeZone(cb.zones, zone as ZoneId | null, rt.playTime);
     cb.zones = mem;
     if (before) sendHome(before);
+    clearSpecials();
     cb.shots = [];
     cb.fx = [];
     if (respawn) respawnZone(respawn);
@@ -1114,6 +1297,10 @@ export function combatTick(dt: number) {
   if (cb.hold) basicAttack();
   const live = g.mode === "explore" && !isRunning();
   updateBeaconFight(dt, live, zone);
+  if (live && !cb.knockedOut) {
+    updateInferno(dt);
+    updateCyclone(dt);
+  }
   if (live && zone === "thunderGrotto" && CLOUD_ELECTRIC_PANELS.some(panel =>
     Math.abs(p.x - panel.x) < panel.w / 2 && Math.abs(p.z - panel.z) < panel.d / 2 && electricPanelActive(rt.time, panel.phase))) {
     hurtPlayer(5, 0, 0, 0);
@@ -1142,6 +1329,7 @@ function sendHome(zone: CombatZone) {
     e.air = 0;
     e.burn = e.control = e.flight = e.fall = null;
     e.resistUntil = 0;
+    e.slowUntil = 0;
     e.wander = null;
     e.state = "idle";
     e.waiting = false;
@@ -1164,6 +1352,7 @@ function moveEnemy(e: EnemyRt, tx: number, tz: number, speed: number, dt: number
 
 const moveOut = { x: 0, z: 0 };
 function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | null): number {
+  if (e.slowUntil > rt.time) { nx = e.x + (nx - e.x) * 0.4; nz = e.z + (nz - e.z) * 0.4; }
   const q = moveCircle(e.x, e.z, nx, nz, ENEMIES[e.kind].radius, gatesOf(getGame().progress), false, undefined, moveOut);
   if (combatZoneAt(q.x, q.z) !== e.zone) return 0;
   const moved = Math.hypot(q.x - e.x, q.z - e.z);
@@ -1251,6 +1440,7 @@ function pauseElements(e: EnemyRt, dt: number) {
   if (e.control) { e.control.t0 += dt; e.control.until += dt; }
   if (e.fall) e.fall.t0 += dt;
   e.resistUntil += dt;
+  if (e.slowUntil > 0) e.slowUntil += dt;
 }
 
 function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
@@ -1429,8 +1619,9 @@ function updateShots(dt: number) {
       s.x += s.vx * step;
       s.y += (s.vy ?? 0) * step;
       s.z += s.vz * step;
+      reflectShot(s);
       if (!isWalkable(s.x, s.z, gates, 0.12) || (s.hostile && combatZoneAt(s.x, s.z) !== currentCombatZone())) {
-        if (s.shape === "bomb") specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+        if (s.shape === "bomb") detonateBomb(s);
         s.life = 0;
         break;
       }
@@ -1447,7 +1638,7 @@ function updateShots(dt: number) {
       if (cb.beacon.active) {
         const pylon = BEACON_PYLONS.findIndex((p, i) => cb.beacon.pylons[i].phase !== "down" && Math.hypot(p.x - s.x, p.z - s.z) < 1.05 + s.radius);
         if (pylon >= 0) {
-          if (s.shape === "bomb") specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+          if (s.shape === "bomb") detonateBomb(s);
           else strikePylon(pylon, s.owner);
           s.life = 0; continue;
         }
@@ -1460,17 +1651,18 @@ function updateShots(dt: number) {
         if (s.shape === "trap") {
           hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
           trapEnemy(e);
-        } else if (s.shape === "bomb") specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+        } else if (s.shape === "bomb") detonateBomb(s);
+        else hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
         s.life = 0;
         break;
       }
       if (s.y < standY(s.x, s.z, solved) + 0.1) {
-        if (s.shape === "bomb" && s.life > 0) specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+        if (s.shape === "bomb" && s.life > 0) detonateBomb(s);
         s.life = 0;
       }
     }
     if (s.shape === "bomb" && s.life > 0 && s.age >= s.life - 1e-9) {
-      specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+      detonateBomb(s);
       s.life = 0;
     }
   }

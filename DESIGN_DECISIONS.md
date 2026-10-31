@@ -1487,3 +1487,38 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
   enemy's state, air, control kind, burning flag and resistance expiry for
   controller acceptance. Scene edits only retain hostile-shot compatibility
   and ignore the new FX until E3; no new rendering or world objects.
+
+## 2026-11-01 — Slice E2: special moves and shared combinations
+
+- Replaced the four K stubs with Inferno, Bubble Bomb chains, Root Snare
+  and one travelling Cyclone. All damage and defeats retain the shared hit
+  and stage-credit paths. Combinations use the existing control, knock,
+  burn, bubble and flung-weapon rules; there are no friend-pair bonuses.
+- The E2 work order explicitly keeps the Storm Beacon fight free. This
+  supersedes E1's MP-cost decision above: starting K and held Inferno cost
+  zero MP only during the active fight inside the Beacon arena. Elsewhere
+  the frozen costs apply. Ordinary MP regeneration continues in both cases.
+- Inferno ticks immediately, then every quarter second. The initial 15 MP
+  guarantees the 1.2-second tap burst; keyboard-held time additionally costs
+  12 MP/s, including the initial burst, and can extend it to three seconds.
+  Touch K remains a tap. Its movement penalty uses combat's existing speed
+  multiplier; the player movement and collision systems are unchanged.
+- A bomb plans its bubble chain before damage can remove a trapped enemy.
+  The bomb's 22 damage and each popped bubble's current-height fall damage
+  are separate from the once-per-enemy 8-damage bubble burst. Breadth-first
+  propagation stops after three bubble generations, with one pop per bubble.
+- Heavy roots use transient `slowUntil` rather than immobilising `snared`
+  control: movement and lunges run at 40% speed, attacks remain possible,
+  reapplication does not extend the slow, and resistance follows its expiry.
+- A Cyclone keeps its launch direction, stops moving at a solid, and lasts
+  four seconds. Medium outward push is 4 m/s (the brief specifies only its
+  damage rate); heavy push is 1 m/s. Carried bubbles keep their current air
+  and pause their ordinary pop clock; a solid, expiry or replacement pops
+  them. Light passengers orbit at 1.2 m air and continue into a four-metre
+  outward fling on expiry or replacement, with resistance after that fling.
+- Read-only acceptance state is on `window.__mi.state().act2`: `inferno`
+  reports age/next tick/keyboard hold; `cyclone` reports direction, age,
+  stopped state and passenger/bubble ids; `bombChain` reports the latest
+  detonation id, bubble generations and unique burst victims. Projectiles
+  expose shape, allegiance and damage; enemies also expose control expiry
+  and heavy slow expiry. No scene/HUD, save, layout or release changes.

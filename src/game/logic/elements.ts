@@ -11,6 +11,36 @@ export interface Control {
 }
 export interface Point { x: number; z: number }
 
+/** Breadth-first bubble generations; the bomb itself is generation zero.
+ * Plan before applying damage so a KO cannot hide a bubble from the chain. */
+export function bubbleChain<T extends Point & { i: number; trapped: boolean }>(enemies: readonly T[], centre: Point, radius = 3) {
+  const popped = new Set<number>(), victims = new Set<number>();
+  const pops: { i: number; depth: number }[] = [];
+  const queue: { centre: Point; radius: number; depth: number }[] = [{ centre, radius, depth: 0 }];
+  for (let n = 0; n < queue.length; n++) {
+    const q = queue[n];
+    for (const e of enemies) {
+      if (Math.hypot(e.x - q.centre.x, e.z - q.centre.z) > q.radius) continue;
+      if (q.depth > 0) victims.add(e.i);
+      if (!e.trapped || popped.has(e.i) || q.depth >= 3) continue;
+      popped.add(e.i);
+      pops.push({ i: e.i, depth: q.depth + 1 });
+      queue.push({ centre: e, radius: 2, depth: q.depth + 1 });
+    }
+  }
+  return { pops, victims: [...victims] };
+}
+
+/** A tap is prepaid; only keyboard-held time drains the extra MP. */
+export function infernoStep(age: number, dt: number, held: boolean, mp: number, free = false) {
+  const limit = held && (free || mp > 1e-9) ? 3 : 1.2;
+  const paidLimit = held && !free ? Math.max(1.2, age + mp / 12) : limit;
+  const elapsed = Math.max(0, Math.min(dt, limit - age, paidLimit - age));
+  const drain = held && !free ? Math.min(mp, elapsed * 12) : 0;
+  const next = age + elapsed;
+  return { age: next, drain, done: next >= limit - 1e-9 || (next >= 1.2 && held && !free && mp - drain <= 1e-9) };
+}
+
 const inside = (s: WalkShape, x: number, z: number) => s.kind === "disc" ? Math.hypot(x - s.x, z - s.z) <= s.r
   : s.kind === "rect" ? x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 : nearestOnTrail(s.pts, x, z).d <= s.w;
 

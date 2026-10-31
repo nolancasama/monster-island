@@ -87,10 +87,13 @@ export function installE2eHook(seed: number) {
           hp: cb.vitals.hp,
           mp: { ...cb.vitals.mp },
           knockedOut: cb.knockedOut,
-          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, air: e.air, control: e.control?.kind ?? null, burning: e.burn !== null, resistUntil: e.resistUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
+          inferno: cb.inferno ? { ...cb.inferno, held: cb.holdK } : null,
+          cyclone: cb.cyclone ? { ...cb.cyclone, bubbles: [...cb.cyclone.bubbles], carried: cb.enemies.filter(e => e.control?.kind === "carried" && e.control.source === cb.cyclone!.id).map(e => e.i) } : null,
+          bombChain: cb.bombChain ? { ...cb.bombChain, pops: cb.bombChain.pops.map(p => ({ ...p })), victims: [...cb.bombChain.victims] } : null,
+          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
           drops: cb.drops.length,
           shots: cb.shots.length,
-          projectiles: cb.shots.map(s => ({ id: s.id, hostile: Boolean(s.hostile), source: s.source, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, age: s.age, life: s.life, radius: s.radius })),
+          projectiles: cb.shots.map(s => ({ id: s.id, shape: s.shape, damage: s.damage, hostile: Boolean(s.hostile), source: s.source, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, age: s.age, life: s.life, radius: s.radius })),
           ship: { visible: rt.ship.visible, x: rt.ship.x, y: rt.ship.y, z: rt.ship.z, cage: rt.ship.cage.visible },
           cliffRope: rt.cliffRope,
           unlock: { ...rt.act2Unlock },
@@ -201,7 +204,7 @@ export function installE2eHook(seed: number) {
       for (const e of cb.enemies) {
         const f = fixture.enemies.find(f => f.i === e.i);
         e.state = f?.state ?? (f ? "chase" : "gone");
-        e.air = e.resistUntil = 0; e.burn = e.control = e.flight = e.fall = null;
+        e.air = e.resistUntil = e.slowUntil = 0; e.burn = e.control = e.flight = e.fall = null;
         if (!f) continue;
         e.x = e.homeX = f.x; e.z = e.homeZ = f.z;
         e.hp = ENEMIES[e.kind].hp; e.timer = f.timer ?? 0;
@@ -209,6 +212,7 @@ export function installE2eHook(seed: number) {
         e.wander = null; e.struck = false;
       }
       if (fixture.clearShots !== false) cb.shots.length = 0;
+      cb.inferno = cb.cyclone = cb.bombChain = null;
       cb.fx.length = 0;
     },
     /** Act 2: set the live HP (tests of damage, eating and knock-outs). */

@@ -62,6 +62,7 @@ export function tick(dt: number) {
 
   // Act 2's fights (held J repeats the basic attack).
   cb.hold = keys.has("KeyJ") || cb.touchHold;
+  cb.holdK = keys.has("KeyK");
   combatTick(dt);
 
   // Food grows back. It is collectible from the moment it reappears; the

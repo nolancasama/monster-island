@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blastKnock, bubbleAir, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, inCone, oldestTrap, resistance, snareDuration, tickBurn, weaponVictims, type Control } from "./elements";
+import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, resistance, snareDuration, tickBurn, weaponVictims, type Control } from "./elements";
 import { CLOUD_CHASMS } from "../world/cloudisle";
 import { CANOPY_GAPS, ISLET, POND } from "../world/lowland";
 import { HAZARDS } from "../world/hazards";
@@ -51,6 +51,16 @@ describe("burn clock", () => {
 });
 
 describe("bubble curves and pool", () => {
+  it("caps a chain at three bubble generations and one burst hit per enemy", () => {
+    const enemies = [0, 2, 4, 6, 8].map((x, i) => ({ i, x, z: 0, trapped: true }));
+    const chain = bubbleChain(enemies, { x: -2, z: 0 });
+    expect(chain.pops).toEqual([{ i: 0, depth: 1 }, { i: 1, depth: 2 }, { i: 2, depth: 3 }]);
+    expect(chain.victims).toEqual([0, 1, 2, 3]);
+    expect(new Set(chain.pops.map(p => p.i)).size).toBe(chain.pops.length);
+    const overlapping = bubbleChain(enemies.slice(0, 3), { x: 1, z: 0 });
+    expect(overlapping.victims).toEqual([0, 1, 2]);
+    expect(overlapping.pops).toHaveLength(3);
+  });
   it("rises for 1.1 seconds then holds for .8, falling from current air", () => {
     const c = trap(10);
     expect(bubbleAir(c, 10)).toBe(0);
@@ -74,6 +84,20 @@ describe("bubble curves and pool", () => {
     const list = [{ control: trap(12) }, { control: null }, { control: trap(10) }, { control: trap(11) }];
     expect(oldestTrap(list.slice(0, 3))).toBeNull();
     expect(oldestTrap(list)).toBe(list[2]);
+  });
+});
+
+describe("Inferno clock and payment", () => {
+  it("guarantees a 1.2 second tap and charges only held time", () => {
+    expect(infernoStep(0, 2, false, 0)).toEqual({ age: 1.2, drain: 0, done: true });
+    expect(infernoStep(0, 1, true, 100)).toEqual({ age: 1, drain: 12, done: false });
+    expect(infernoStep(1, 1, true, 0)).toEqual({ age: 1.2, drain: 0, done: true });
+  });
+  it("ends at MP exhaustion or three seconds, including a frame crossing the cap", () => {
+    expect(infernoStep(1.5, 1, true, 3)).toEqual({ age: 1.75, drain: 3, done: true });
+    expect(infernoStep(2.9, .2, true, 100).age).toBe(3);
+    expect(infernoStep(2.9, .2, true, 100).drain).toBeCloseTo(1.2);
+    expect(infernoStep(2.9, .2, true, 0, true)).toEqual({ age: 3, drain: 0, done: true });
   });
 });
 
