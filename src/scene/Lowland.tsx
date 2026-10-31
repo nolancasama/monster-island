@@ -20,6 +20,7 @@ import { TUNNEL, groundY, inTunnel } from "../game/world/island";
 import { flatMat, occluderMat, smoothMat } from "./materials";
 import { conformBridge } from "./models/bridge";
 import { Chest } from "./Chest";
+import { Secrets } from "./Secrets";
 import {
   spatialGeometry,
   stageBarrierGeometry,
@@ -307,6 +308,7 @@ export function Lowland() {
       ))}
       <CliffRope />
       <Unlocks />
+      <Secrets />
       {CHESTS.map((c) => (
         <Chest key={c.id} id={c.id} visible={near} />
       ))}
