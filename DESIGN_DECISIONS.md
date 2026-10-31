@@ -85,3 +85,22 @@
   grid is level.
 - **Left for X2b/X3:** the old grotto mouths at the junction (oversized, with
   a black interior) are rebuilt with the grotto.
+
+## 2026-10-31 — Slice X2b-world: Thunder Grotto chambers under the mountain
+
+- Implemented by the controller (Codex was in a usage-limit window).
+- Layout east of the junction: mouth trail (9,279)→(14,284); entry chamber
+  (28,298); passage to an underground lake (x 42–62, z 312–332) with the raft
+  barrier across the water at z 321–323; an optional crystal chamber off the
+  lake's near shore (73,322), reachable before either puzzle; passage to the
+  steam-machinery chamber (40,352) with the boiler gate on its north exit;
+  the electric-panel corridor north to (28,384); the exit climbs into open air
+  at (22,390) and reaches the approach at observatory height. Six enemies
+  (unchanged count) in pairs in the entry, lake and machinery chambers; the
+  crystal chamber and corridor are quiet. Grotto 1,541.5 m²; total 8,837.75 m².
+- **Caves in the terrain.** `CLOUD_CAVES` (every grotto shape but the open-air
+  mouth and exit) are not carved: the mountain stays ≥ 7 m above the cave
+  floor within 4 m of the walls, and land extends 8 m around every cave. The
+  open-air mouths stay carved so the mountain rises behind them.
+  `GROTTO_MOUTHS` give the two openings for the scene.
+- Rejected: carving the grotto like other paths (an open trench, no cave).

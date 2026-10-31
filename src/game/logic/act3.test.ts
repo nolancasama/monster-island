@@ -320,7 +320,7 @@ describe("additive Cloud Isle v4 saves", () => {
       p = collectErrandPickup(p, route === "skyrootCanopy" ? "canopyWood" : "grottoWood");
       p = openCloudChest(p, route === "skyrootCanopy" ? "cloudCanopyChest" : "cloudCrystalChest");
       p = { ...p, act3: { ...p.act3, area: route } };
-      const point = route === "skyrootCanopy" ? { x: -49, z: 377, yaw: 1 } : { x: 20, z: 304, yaw: 1 };
+      const point = route === "skyrootCanopy" ? { x: -49, z: 377, yaw: 1 } : { x: 30, z: 374, yaw: 1 };
       expect(save(p, point).progress).toEqual(p);
       expect(save(p, point).player).toEqual(point);
       const approach = { ...p, act3: { ...p.act3, area: "observatoryApproach" as const } };
@@ -342,7 +342,7 @@ describe("additive Cloud Isle v4 saves", () => {
 
   it("rejects route progress before the tunnel while retaining slice A pickup semantics", () => {
     const base = travelCloud(completeVoyage(harbor()), "cloud");
-    const raw = JSON.parse(encodeSave(base, { x: 20, z: 304, yaw: 1 }, 0));
+    const raw = JSON.parse(encodeSave(base, { x: 30, z: 374, yaw: 1 }, 0));
     Object.assign(raw.progress.act3, { area: "thunderGrotto", cleared: ["skyrootCanopy", "thunderGrotto"],
       puzzles: ["grottoRaft", "grottoBoiler"], chests: ["cloudCrystalChest", "cloudCanopyChest", "bad"],
       errands: { pickups: ["grottoMoss", "canopyMoss", "canopyWood", "grottoWood", "junctionWood1"] } });
@@ -354,7 +354,7 @@ describe("additive Cloud Isle v4 saves", () => {
 
   it("projects saves behind every missing required puzzle back to that route's entrance", () => {
     for (const route of ["skyrootCanopy", "thunderGrotto"] as const) {
-      const point = route === "skyrootCanopy" ? { x: -49, z: 377, yaw: 1 } : { x: 20, z: 304, yaw: 1 };
+      const point = route === "skyrootCanopy" ? { x: -49, z: 377, yaw: 1 } : { x: 30, z: 374, yaw: 1 };
       for (const missing of CLOUD_ROUTE_REQUIRED[route]) {
         let p = hollow();
         for (const id of CLOUD_ROUTE_REQUIRED[route]) if (id !== missing) p = solveCloudPuzzle(p, id);

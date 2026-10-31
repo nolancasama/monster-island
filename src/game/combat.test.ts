@@ -340,7 +340,7 @@ describe("Cloud Isle combat", () => {
 
   it("keeps electric panels safe before their pulse, then deals light damage without knock-back", () => {
     for (const e of cb.enemies) e.state = "gone";
-    Object.assign(rt.player, { x: 17, z: 295 });
+    Object.assign(rt.player, { x: 32.5, z: 370 }); // the first electric panel
     cb.safeUntil = 0;
     rt.time = 4;
     combatTick(.016);
@@ -356,7 +356,7 @@ describe("Cloud Isle combat", () => {
     rt.time = 6.5;
     combatTick(.016);
     expect(cb.vitals.hp).toBe(95);
-    expect(rt.player).toMatchObject({ x: 17, z: 295 });
+    expect(rt.player).toMatchObject({ x: 32.5, z: 370 });
   });
 
   it("damages a fifth sleeping enemy without waking a fifth attacker", () => {

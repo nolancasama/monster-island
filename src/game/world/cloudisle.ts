@@ -29,7 +29,7 @@ export const HOLLOW = {
 export const CLOUD_SPAWNS: Record<CloudArea, Vec2> = {
   cloudDock: CLOUD_DOCK.spawn, stormbreakCoast: { x: 4, z: 26 }, hiddenHollow: { x: -13, z: 195 },
   backTunnel: { x: -29, z: 230 }, windfallJunction: { x: 0, z: 269 },
-  skyrootCanopy: { x: -30, z: 298 }, thunderGrotto: { x: 20, z: 286 }, observatoryApproach: { x: 0, z: 402 },
+  skyrootCanopy: { x: -30, z: 298 }, thunderGrotto: { x: 24, z: 294 }, observatoryApproach: { x: 0, z: 402 },
   ancientObservatory: { x: 0, z: 408 }, stormBeacon: { x: 0, z: 430 },
 };
 export const COAST_TRAIL: Array<[number, number]> = [[0, 12], [6, 28], [-12, 46], [-24, 65], [-16, 82], [10, 96], [28, 113], [20, 132], [2, 146], [0, 158]];
@@ -37,6 +37,20 @@ export const COAST_SEA_BRIDGE = trail([[-38, 65], [-45, 69]], 1.6);
 export const COAST_ROCKS = [[-6, 32], [-14, 52], [-29, 76], [18, 102], [32, 126], [6, 146], [-32, 176], [-24, 188]] as const;
 export const HOLLOW_APPROACH: Array<[number, number]> = [[0, 158], [-12, 169], [-27, 177], [-29, 187], [-19, 185], [-10, 190], [-12, 193]];
 export const BACK_TUNNEL: Array<[number, number]> = [[-15, 202], [-17, 212], [-32, 223], [-29, 237], [-17, 244], [-20, 253], [-7, 261], [0, 265]];
+/** Thunder Grotto. The mouth and exit trails are open air; every other shape
+ * is underground, under the mountain (CLOUD_CAVES). */
+const GROTTO_MOUTH_TRAIL = trail([[9, 279], [14, 284]], 2.7);
+const GROTTO_EXIT_TRAIL = trail([[22, 390], [10, 401], [0, 402]], 2.7);
+const GROTTO_CAVE: WalkShape[] = [
+  trail([[14, 284], [22, 292], [28, 298]], 2.7), disc(28, 298, 10),
+  trail([[28, 298], [40, 306], [48, 312]], 2.6), rect(42, 62, 312, 332),
+  trail([[62, 318], [70, 321]], 2.2), disc(73, 322, 6),
+  trail([[52, 332], [52, 340], [44, 348]], 2.6), disc(40, 352, 10),
+  trail([[40, 352], [36, 364], [30, 374], [28, 384], [22, 390]], 2.8),
+];
+export const CLOUD_CAVES: readonly WalkShape[] = GROTTO_CAVE;
+/** Where the grotto meets the open air (yaw faces out of the cave). */
+export const GROTTO_MOUTHS = [{ x: 14, z: 284, yaw: Math.atan2(-5, -5) }, { x: 22, z: 390, yaw: Math.atan2(-12, 11) }];
 /** The far-west branch walkway to the gust-lane viewpoint: 16 m above the
  * hillside, drawn as a deck on the giant trees rather than carved ground. */
 export const CANOPY_GUST_SPUR: WalkShape[] = [trail([[-50, 332], [-62, 338], [-72, 341]], 2.4), disc(-72, 341, 5)];
@@ -58,7 +72,9 @@ export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile
       ...CANOPY_GUST_SPUR,
       trail([[-49, 377], [-42, 389], [-28, 394], [-20, 400], [0, 402]], 3.2)] },
   thunderGrotto: { id: "thunderGrotto", name: { en: "Thunder Grotto", ja: "雷の洞窟" }, hostile: true,
-    walk: [trail([[9, 279], [20, 286]], 2.7), rect(13, 27, 284, 306), trail([[20, 304], [10, 311], [14, 340], [20, 369], [16, 393], [10, 401], [0, 402]], 2.7), trail([[26, 302], [31, 303]], 2), disc(32, 303, 3)] },
+    // Entry mouth, entry chamber, underground lake (raft), crystal side
+    // chamber, steam machinery (boiler gate), electric corridor, exit climb.
+    walk: [GROTTO_MOUTH_TRAIL, ...GROTTO_CAVE, GROTTO_EXIT_TRAIL] },
   observatoryApproach: { id: "observatoryApproach", name: { en: "Ancient Observatory — Entrance", ja: "古代の天文台・入口" }, hostile: false, walk: [rect(-9, 9, 400, 404)] },
   ancientObservatory: { id: "ancientObservatory", name: { en: "Ancient Observatory", ja: "古代の天文台" }, hostile: true,
     walk: [rect(-2.6, 2.6, 402, 409), rect(-10, 10, 407, 424), rect(-2.6, 2.6, 422, 428)] },
@@ -99,14 +115,14 @@ export const OBSERVATORY = { x: 0, z: 407, y: 22, entrance: { x: 0, z: 402 }, re
 export const BEACON = { x: 0, z: 439, y: 37 };
 export const CLOUD_ROUTE_GATES = [
   { zone: "skyrootCanopy", x: -22, z: 398, half: 15, required: 6 },
-  { zone: "thunderGrotto", x: 12, z: 398, half: 7, required: 6 },
+  { zone: "thunderGrotto", x: 13, z: 398, half: 7, required: 6 },
 ] as const;
 export const CLOUD_ROUTE_REQUIRED = { skyrootCanopy: ["canopyVine", "canopyGlide"], thunderGrotto: ["grottoRaft", "grottoBoiler"] } as const;
 export const CLOUD_PUZZLE_BARRIERS = [
   { puzzle: "canopyVine", x0: -48, x1: -20, z0: 311, z1: 313 },
   { puzzle: "canopyGlide", x0: -50, x1: -26, z0: 355, z1: 357 },
-  { puzzle: "grottoRaft", x0: 12, x1: 40, z0: 289.5, z1: 291.5 },
-  { puzzle: "grottoBoiler", x0: 12, x1: 40, z0: 298.5, z1: 300.5 },
+  { puzzle: "grottoRaft", x0: 42, x1: 62, z0: 321, z1: 323 },
+  { puzzle: "grottoBoiler", x0: 30, x1: 44, z0: 361, z1: 363 },
   { puzzle: "canopyGust", x0: -62, x1: -60, z0: 331, z1: 348 },
 ] as const;
 export const CANOPY_GLIDE = { from: { x: -38, z: 353.9 }, to: { x: -38, z: 358.1 } };
@@ -120,8 +136,8 @@ export const CLOUD_CHASMS = CLOUD_PUZZLE_BARRIERS.filter(b => b.puzzle === "cano
     ? { x0: b.x0, x1: b.x1, z0: CANOPY_GLIDE.from.z + 1.1, z1: CANOPY_GLIDE.to.z - 1.1 }
     : { x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 });
 export const CLOUD_ELECTRIC_PANELS = [
-  { x: 17, z: 295, w: 3, d: 2, phase: 0 },
-  { x: 23, z: 303, w: 3, d: 2, phase: 1.2 },
+  { x: 32.5, z: 370, w: 3, d: 2, phase: 0 },
+  { x: 29, z: 379, w: 3, d: 2, phase: 1.2 },
 ];
 /** First 1.8 seconds are dark/safe, then .6 seconds of visible warning.
  * The entire 2.4 second safe window precedes a light 1.6 second pulse. */
@@ -172,10 +188,10 @@ export function cloudY(x: number, z: number): number {
   // eastbound walkway descends two metres to the shared approach.
   if (x < 0) return 11 + smooth((z - 289) / 12) * 2 + smooth((z - 314) / 22) * 5
     + smooth((z - 340) / 12) * 6 - smooth((z - 380) / 20) * 2;
-  // The rock-cut mouth drops below the plateau, then the old grotto climb
-  // reaches the extended exit trail at observatory height.
-  const grottoRise = smooth((z - 293) / 18);
-  return 11 + grottoRise * 11 - smooth((x - 5) / 8) * smooth((z - 279) / 7) * (1 - grottoRise) * 3;
+  // The grotto floor dips 1.5 m below the plateau through the chambers, then
+  // the exit passage climbs to observatory height.
+  const climb = smooth((z - 384) / 16);
+  return 11 - smooth((z - 279) / 8) * 1.5 * (1 - climb) + climb * 11;
 }
 export const CLOUD_SOLIDS: readonly SolidShape[] = [
   ...COAST_ROCKS.flatMap(([x,z]) => [{ kind: "circle" as const, x, z, r: 2.2 }, { kind: "circle" as const, x: x + 1.8, z: z + .2, r: 1.3 }]),
@@ -191,8 +207,8 @@ export const CLOUD_OBSTACLE_PLACE = {
   canopyVine: { x: -34, z: 309, face: { x: -35, z: 312 } },
   canopyGlide: { ...CANOPY_GLIDE.from, face: { ...CANOPY_GLIDE.to } },
   canopyGust: { x: -58, z: 336, face: { x: -61, z: 337.5 } },
-  grottoRaft: { x: 20, z: 287.5, face: { x: 20, z: 290 } },
-  grottoBoiler: { x: 20, z: 297, face: { x: 20, z: 299 } },
+  grottoRaft: { x: 52, z: 318.5, face: { x: 52, z: 321 } },
+  grottoBoiler: { x: 40, z: 357, face: { x: 37.5, z: 360 } },
   obsLeafy: { x: -5.5, z: 411, face: { x: -6.5, z: 412 } },
   obsBubbo: { x: 5.5, z: 411, face: { x: 6.5, z: 412 } },
   obsPuff: { x: -5.5, z: 419, face: { x: -6.5, z: 420 } },
@@ -224,7 +240,9 @@ export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnem
   ...([-1, 1] as const).flatMap(side => [286, 294, 303].flatMap((z, i) => [
     { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? "windSprite" as const : "stormCrab" as const, x: side * 17, z },
     { zone: side < 0 ? "skyrootCanopy" as const : "thunderGrotto" as const, kind: side < 0 ? (i === 1 ? "raiderShooter" as const : "raiderDrone" as const) : "thunderBeetle" as const, replaces: side < 0 && i === 1 ? "raiderDrone" as const : undefined, x: side * 24, z: z + (i === 2 ? 1 : .5) },
-  ].map((enemy, n) => side < 0 ? { ...enemy, x: [-28, -33, -47, -53, -46, -52][i * 2 + n], z: [296, 300, 330, 334, 375, 379][i * 2 + n] } : enemy))),
+  ].map((enemy, n) => side < 0 ? { ...enemy, x: [-28, -33, -47, -53, -46, -52][i * 2 + n], z: [296, 300, 330, 334, 375, 379][i * 2 + n] }
+    // Grotto pairs: entry chamber, lake (south shore), machinery chamber.
+    : { ...enemy, x: [25, 32, 47, 57, 36, 45][i * 2 + n], z: [296, 301, 315, 317, 349, 354][i * 2 + n] }))),
   { zone: "ancientObservatory", kind: "windSprite", x: -4, z: 409 },
   { zone: "ancientObservatory", kind: "raiderShooter", replaces: "raiderDrone", x: 4, z: 412 },
   { zone: "ancientObservatory", kind: "thunderBeetle", x: -4, z: 418 },
@@ -235,7 +253,7 @@ export const CLOUD_CHESTS = [
   { id: "cloudCoveChest", x: 48, z: 130, yaw: -.5, coins: 20, amber: 1, puzzle: "coastCrate" as const },
   { id: "cloudJunctionChest", x: -23, z: 268, yaw: -.4, coins: 20, amber: 0 },
   { id: "cloudCanopyChest", x: -73, z: 341, yaw: .4, coins: 30, amber: 1, puzzle: "canopyGust" as const },
-  { id: "cloudCrystalChest", x: 32, z: 303, yaw: -.4, coins: 30, amber: 1 },
+  { id: "cloudCrystalChest", x: 75, z: 322, yaw: -1.2, coins: 30, amber: 1 },
 ];
 export const CLOUD_PICKUPS = [
   { id: "kikoBag", kind: "bag" as const, x: -48, z: 70 },
@@ -244,9 +262,9 @@ export const CLOUD_PICKUPS = [
   { id: "junctionWood3", kind: "firewood" as const, x: 6, z: 276 },
   { id: "canopyMouthMoss", kind: "moss" as const, x: -18, z: 285 },
   { id: "canopyMoss", kind: "moss" as const, x: -49, z: 333 },
-  { id: "grottoMoss", kind: "moss" as const, x: 25, z: 296 },
+  { id: "grottoMoss", kind: "moss" as const, x: 45, z: 314 },
   { id: "canopyWood", kind: "firewood" as const, x: -34, z: 299 },
-  { id: "grottoWood", kind: "firewood" as const, x: 24, z: 287 },
+  { id: "grottoWood", kind: "firewood" as const, x: 44, z: 349 },
 ];
 export const CLOUD_GUSTS = [{ x: 6, z: 30, w: 18, d: 3, dx: 1, dz: .2 }, { x: -24, z: 65, w: 18, d: 3, dx: -1, dz: .12 }];
 export function cloudWindAt(x: number, z: number, solved: readonly string[] = []): Vec2 {

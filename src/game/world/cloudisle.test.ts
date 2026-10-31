@@ -3,7 +3,7 @@ import { ENEMIES } from "../data/combat";
 import {
   CLOUD_CHESTS, CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLES, CLOUD_ROUTE_REQUIRED,
   CLOUD_SPAWNS, COAST_GATE, HOLLOW, RAIDER_BARRICADE, ROUTE_MOUTHS, OBSERVATORY, BEACON,
-  CANOPY_GLIDE, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS,
+  CANOPY_GLIDE, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_CAVES, CLOUD_ELECTRIC_PANELS, CLOUD_ZONES, GROTTO_MOUTHS,
   cloudMove, cloudNearestWalkable, cloudWalkable, cloudWindAt, cloudY, cloudZoneAt, electricPanelActive,
   type CloudArea, type CloudGates,
 } from "./cloudisle";
@@ -235,5 +235,29 @@ describe("Ancient Observatory and Storm Beacon ground", () => {
     expect(cloudWalkable(pushed.x, pushed.z, ALL_OPEN, .35)).toBe(true);
     expect(pushed.x).toBeLessThan(12);
     expect(cloudNearestWalkable(BEACON.x, BEACON.z, .35, ALL_OPEN)).toEqual({ x: BEACON.x, z: BEACON.z });
+  });
+});
+
+describe("Thunder Grotto chambers", () => {
+  const entry = CLOUD_SPAWNS.thunderGrotto;
+  const routeOpen: CloudGates = { ...OPEN, cleared: ["stormbreakCoast"], solved: ["coastWindmill", "coastCrate"] };
+  it("keeps the crystal chamber optional: reachable from the lake's near shore before either puzzle", () => {
+    const chest = CLOUD_CHESTS.find(c => c.id === "cloudCrystalChest")!;
+    expect(flood(routeOpen, .35, [], entry)(chest.x, chest.z, 2.5)).toBe(true);
+    // Beyond the raft basin needs Bubbo; beyond the boiler gate needs Ember too.
+    expect(flood(routeOpen, .35, [], entry)(52, 328)).toBe(false);
+    expect(flood({ ...routeOpen, solved: [...routeOpen.solved!, "grottoRaft"] }, .35, [], entry)(52, 328)).toBe(true);
+    expect(flood({ ...routeOpen, solved: [...routeOpen.solved!, "grottoRaft"] }, .35, [], entry)(30, 374)).toBe(false);
+    expect(flood({ ...routeOpen, solved: [...routeOpen.solved!, "grottoRaft", "grottoBoiler"] }, .7, [], entry)(30, 374)).toBe(true);
+  });
+  it("lays every electric panel fully on walkable corridor floor", () => {
+    for (const p of CLOUD_ELECTRIC_PANELS) for (const dx of [-p.w / 2, p.w / 2]) for (const dz of [-p.d / 2, p.d / 2]) {
+      expect(cloudWalkable(p.x + dx, p.z + dz, ALL_OPEN, 0)).toBe(true);
+    }
+  });
+  it("keeps the caves inside the grotto, with an open-air mouth at each end", () => {
+    for (const s of CLOUD_CAVES) expect(CLOUD_ZONES.thunderGrotto.walk).toContain(s);
+    expect(CLOUD_CAVES.length).toBeLessThan(CLOUD_ZONES.thunderGrotto.walk.length);
+    for (const m of GROTTO_MOUTHS) expect(cloudZoneAt(m.x, m.z)).toBe("thunderGrotto");
   });
 });
