@@ -104,3 +104,55 @@
   open-air mouths stay carved so the mountain rises behind them.
   `GROTTO_MOUTHS` give the two openings for the scene.
 - Rejected: carving the grotto like other paths (an open trench, no cave).
+
+## 2026-10-31 — Slice X3-world: observatory complex at scale; nearest-walkable search
+
+- Implemented by the controller (Codex in a usage-limit window).
+- **Observatory.** A forecourt approach (x ±16, z 399–406) where both routes
+  arrive; the central hall and dial; a terrace on each side (overlapping the
+  hall by 2 m so mounted players cross the seam); two broken towers on
+  6.5 m platforms at (±24, 428) reached by walkways. The four mechanisms move
+  apart: Leafy's lever and Bubbo's water wheel on the terraces, Puff's
+  turbine and Ember's valve on the towers. Required clear stays 4; the four
+  enemies spread over hall and terraces. The lift cut and the summit ramp
+  apply only to the lift corridor (|x| < 8 / < 14), so the towers stay at
+  observatory height and never bypass the lamps.
+- **The Storm Beacon arena is unchanged** (the brief keeps it practical); its
+  surroundings grow only visually (X3-scene).
+- **Measured:** 9,523.25 m² walkable — 3.04× the 3,133.5 m² baseline — and
+  dock → beacon 542.5 m via the canopy, 543.1 m via the grotto (2.8×/2.7×).
+  The unit test now asserts ≥ 3× floor and ≥ 2× each route.
+- **`cloudNearestWalkable` searches rings outward** from the point instead of
+  scanning the whole island (the scan took ~1.3 s per call at this size — a
+  visible stall on every off-path dismount, knock-out or save projection).
+  Same lattice and tie-break, identical results on 150 random points, ~37 ms.
+
+## 2026-10-31 — Slice X2b-scene: the grotto interior
+
+- The grotto is entirely cave: its open-air mouth and exit trails belong to
+  the junction and the approach, so "in the grotto zone" means inside, and
+  outdoor scenery is hidden only there.
+- The cave is generated from `CLOUD_CAVES` on a 1 m grid: a stone floor at
+  walking height (water in the raft channel), inward-facing rock walls on
+  every footprint edge and a rough ceiling 6.5 m up. Walls and ceiling use the
+  line-of-sight material and back-face culling, so the follow camera behind a
+  narrow passage still sees the player. Crystal clusters ring the crystal
+  chamber; the boiler, chimneys and pipes stand at the boiler gate; one cool
+  light per chamber. Cave-mouth arches stand at `GROTTO_MOUTHS`.
+- Interior views: 28–51 calls, ~20k triangles. SwiftShader drops to ~9 fps
+  with the chamber lights; real-GPU cost is to be checked on a Chromebook.
+
+## 2026-10-31 — Slice X3-scene: observatory complex, fog, colours
+
+- The forecourt is paved; each side terrace is a stone slab with a broken
+  balustrade and its mechanism on the outer edge; plank walkways lead to the
+  two round tower platforms, each backed by the ruined north wall of its
+  tower (staggered courses, broken top). Views 32–86 calls, ≤ 80k triangles.
+- **Fog back to 260 m** (its pre-X1 value): more of the island and the
+  massif's flank shows from the coast; every gameplay view stays ≤ 107 calls,
+  ≤ 98k triangles.
+- Hollow shell and tunnel walls are lighter rock (no near-black slabs).
+- **Open:** the mountain does not yet read as a landmark from the dock — the
+  massif's southern flank rises gently and the summit is > 400 m away. Options
+  are a steeper massif (deep canyons around the Hollow and junction) or a
+  longer cut-off for the summit alone; left for the user's decision.

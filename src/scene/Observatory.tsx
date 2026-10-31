@@ -39,6 +39,26 @@ function observatoryGeometry() {
     b.box(1.2,1.1,1.1,side*7.4,22,(OBSERVATORY.z + 1),"#766044");
     b.add(new THREE.TorusGeometry(.22,.05,4,12,Math.PI*1.45),"#eadc9c",[side*7.4,22.7,OBSERVATORY.z + .43],[0,0,-.7]);
   }
+  // The forecourt where both routes arrive.
+  b.box(32,.3,7,0,21.85,(OBSERVATORY.entrance.z + .5),"#8f8d7f");
+  for (const side of [-1,1]) {
+    // A side terrace (its mechanism stands on the outer edge) with a broken balustrade.
+    b.box(18,.65,12,side*17,21.35,(OBSERVATORY.z + 8),stone);
+    for (let i=0;i<6;i++) if (i!==2) {
+      const z=(OBSERVATORY.z + 3)+i*2.2, h=.6+(i%3)*.25;
+      b.box(.55,h,1.6,side*25.7,22+h/2-.05,z,stone);
+      b.box(.7,.14,1.8,side*25.7,22+h,z,brass);
+    }
+    // A plank walkway to a broken tower on its round platform.
+    b.boxAt(3.4,.25,6.6,[side*22,21.95,(OBSERVATORY.z + 16.5)],[0,side*-.67,0],"#9d875f");
+    b.cyl(6.5,6.8,.65,side*24,21.35,(OBSERVATORY.z + 21),stone,12);
+    // The tower's surviving north wall: staggered courses, broken at the top.
+    for (let i=0;i<7;i++) {
+      const a=-.2+i*.5, h=5+((i*37)%5)*1.6, x=side*24+Math.sin(a)*side*6, z=(OBSERVATORY.z + 21)+Math.cos(a)*6;
+      b.boxAt(2.4,h,1.1,[x,22+h/2,z],[0,side*a,0],i%2?stone:"#7e8778");
+    }
+    b.box(.6,.2,6,side*24,22.1,(OBSERVATORY.z + 21),brass);
+  }
   b.box(2.3,.15,2.3,OBSERVATORY.rest.x,22,OBSERVATORY.rest.z,"#dac79e");
   b.cyl(.35,.5,1,OBSERVATORY.rest.x+1,22,OBSERVATORY.rest.z,"#7c916b",6);
   return b.build();

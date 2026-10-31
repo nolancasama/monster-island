@@ -8,8 +8,7 @@ import { NPCS } from "../game/data/town";
 import {
   CLOUD_BOUNDS, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
   CLOUD_ZONES, COAST_GATE, HOLLOW_APPROACH, HOLLOW, RAIDER_BARRICADE,
-  cloudY, type CloudGates,
-} from "../game/world/cloudisle";
+  cloudY, cloudZoneAt, type CloudGates } from "../game/world/cloudisle";
 import { nearestOnTrail, PIER2, type WalkShape } from "../game/world/lowland";
 import { cloudGroundY, cloudLandMask } from "../game/world/cloudTerrain";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
@@ -23,7 +22,7 @@ import { Observatory, SummitWeather, SkyFortress, CagedLumo, HollowAftermath } f
 import { cloudTreePlacements, coniferY, landscapeKits, shelterKits } from "./cloudScenery";
 import { StormBeacon } from "./StormBeacon";
 
-export const CLOUD_FOG = { color: "#71818c", near: 40, far: 200 };
+export const CLOUD_FOG = { color: "#71818c", near: 60, far: 260 };
 export const cloudView = { visible: false, fog: CLOUD_FOG, barriers: { coast: 0, tunnel: 0 } };
 const near = (x: number, z: number, radius = 0) => Math.hypot(rt.camera.pos.x - x, rt.camera.pos.z - z) < CLOUD_FOG.far + radius;
 const ground = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
@@ -178,14 +177,14 @@ function hollowShellGeometry() {
   const b = new PartBuilder();
   // The floor runs behind every wall, including the camera-side cutaway.
   b.box(30, .5, 26, -13, 3.5, 56, "#817765");
-  b.box(2.5, 12, 24, -25.5, 3.8, 57, "#555954");
+  b.box(2.5, 12, 24, -25.5, 3.8, 57, "#6e716a");
   b.box(2.5, 12, 24, -.5, 3.8, 57, "#5e6057");
   // The only opening at the rear is the family's existing back tunnel.
-  b.box(9.5, 12, 2, -22.5, 3.8, 66, "#555954");
+  b.box(9.5, 12, 2, -22.5, 3.8, 66, "#6e716a");
   b.box(13, 12, 2, -5.5, 3.8, 66, "#5b5d53");
-  b.box(6, 5, 2, -15, 10.5, 66, "#555954");
+  b.box(6, 5, 2, -15, 10.5, 66, "#6e716a");
   // A high rock ceiling stays above both follow and conversation cameras.
-  b.box(29, 2.5, 22, -13, 14.3, 58, "#484c46");
+  b.box(29, 2.5, 22, -13, 14.3, 58, "#5f635c");
   for (let i = 0; i < 7; i++) {
     const x = -23 + i * 3.3;
     b.cylAt(.42, 17, [x, 14.1 + Math.sin(i) * .3, 57], [Math.PI / 2, 0, -.14 + i * .045], timber, 6);
@@ -201,9 +200,9 @@ function HollowShell() {
   const shell = useMemo(hollowShellGeometry, []), front = useRef<THREE.Mesh>(null);
   const facade = useMemo(() => {
     const b = new PartBuilder();
-    b.box(13, 10.5, 2, -19, 4, 49.3, "#555954");
-    b.box(7, 10.5, 2, -3.5, 4, 49.3, "#555954");
-    b.box(7, 3.5, 2, -10, 11, 49.3, "#555954");
+    b.box(13, 10.5, 2, -19, 4, 49.3, "#6e716a");
+    b.box(7, 10.5, 2, -3.5, 4, 49.3, "#6e716a");
+    b.box(7, 3.5, 2, -10, 11, 49.3, "#6e716a");
     return b.build().translate(0, 0, 140);
   }, []);
   useFrame(() => {
@@ -470,8 +469,8 @@ function PickupsAndChests({ inside }: { inside: boolean }) {
     return { bag: bag.build(), firewood: wood.build(), moss: moss.build() };
   }, []);
   return <>
-    {CLOUD_PICKUPS.filter(p => inside === (p.x > 9 && p.z > 280) && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
-    {CLOUD_CHESTS.filter(c => inside === (c.id === "cloudCrystalChest")).map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
+    {CLOUD_PICKUPS.filter(p => inside === (cloudZoneAt(p.x, p.z) === "thunderGrotto") && !a.errands.pickups.includes(p.id)).map(p => <group key={p.id} position={ground(p.x, p.z, .07)}><mesh geometry={pickupGeo[p.kind]} material={flatMat} /><sprite material={glow} position={[0, .55, 0]} scale={[.65, .65, 1]} /></group>)}
+    {CLOUD_CHESTS.filter(c => inside === (cloudZoneAt(c.x, c.z) === "thunderGrotto")).map(c => <group key={c.id} position={ground(c.x, c.z)} rotation={[0, c.yaw, 0]}><mesh geometry={base} material={flatMat} /><group position={CHEST_HINGE} rotation={[a.chests.includes(c.id) ? CHEST_OPEN_ANGLE : 0, 0, 0]}><mesh geometry={lid} material={flatMat} /></group></group>)}
   </>;
 }
 

@@ -6,7 +6,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  timeout: 180_000,
+  // MI_LONG_TIMEOUT raises every test limit on slow SwiftShader machines.
+  timeout: Number(process.env.MI_LONG_TIMEOUT ?? 180_000),
   reporter: "line",
   use: {
     baseURL: "http://127.0.0.1:4176",

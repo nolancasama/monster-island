@@ -3,9 +3,10 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { useGame } from "../game/store";
-import { CANOPY_GLIDE, CANOPY_GUST_SPUR, CLOUD_CHASMS, CLOUD_DECKS, CLOUD_ELECTRIC_PANELS, CLOUD_PUZZLE_BARRIERS, CLOUD_ROUTE_GATES, CLOUD_ZONES, cloudY, electricPanelPhase } from "../game/world/cloudisle";
+import { CANOPY_GLIDE, CANOPY_GUST_SPUR, CLOUD_CAVES, CLOUD_CHASMS, CLOUD_CHESTS, CLOUD_DECKS, CLOUD_ELECTRIC_PANELS, CLOUD_OBSTACLE_PLACE, CLOUD_PUZZLE_BARRIERS, CLOUD_ROUTE_GATES, CLOUD_ZONES, GROTTO_MOUTHS, cloudY, electricPanelPhase } from "../game/world/cloudisle";
+import { nearestOnTrail, type WalkShape } from "../game/world/lowland";
 import { cloudGroundY } from "../game/world/cloudTerrain";
-import { flatMat, additiveSprite } from "./materials";
+import { flatMat, occluderMat, additiveSprite } from "./materials";
 import { PartBuilder } from "./partBuilder";
 import { addKit, branch, bridge, caveMouth } from "./models/cloudKit";
 import { canopyTreeKits, junctionKits } from "./cloudScenery";
@@ -13,7 +14,7 @@ export { canopyTreeKits } from "./cloudScenery";
 import { audio } from "../audio/audio";
 
 const at = (x: number, z: number, dy = 0): [number, number, number] => [x, cloudY(x, z) + dy, z];
-const bark = "#626652", rock = "#293c50";
+const bark = "#626652";
 const gustTrail = CANOPY_GUST_SPUR.find(s => s.kind === "trail")!;
 const viewpoint = CANOPY_GUST_SPUR.find(s => s.kind === "disc")!;
 
@@ -163,35 +164,93 @@ export function canopyBridgeKit() {
   return bridge({ length, width, deckAt: t => cloudY(x, z + t * length) - cloudY(x, z) });
 }
 function bridgeGeometry() { return canopyBridgeKit().geometry; }
+// ------------------------------------------------------------------ Thunder Grotto
+// The cave is generated from CLOUD_CAVES on a 1 m grid: a floor at walking
+// height, rock walls along every edge of the footprint, and a ceiling 6.5 m up.
+// Walls face inward and walls/ceiling use the line-of-sight material, so a
+// follow camera outside a narrow passage still sees the player.
+const CEILING = 6.5;
+const raftWater = CLOUD_PUZZLE_BARRIERS.find(b => b.puzzle === "grottoRaft")!;
+const boilerGate = CLOUD_PUZZLE_BARRIERS.find(b => b.puzzle === "grottoBoiler")!;
+function caveDistance(x: number, z: number): number {
+  let d = Infinity;
+  for (const s of CLOUD_CAVES as readonly WalkShape[]) {
+    const e = s.kind === "disc" ? Math.hypot(x - s.x, z - s.z) - s.r
+      : s.kind === "trail" ? nearestOnTrail(s.pts, x, z).d - s.w
+      : Math.max(s.x0 - x, x - s.x1, s.z0 - z, z - s.z1);
+    d = Math.min(d, e);
+  }
+  return d;
+}
+const inWater = (x: number, z: number) => x > raftWater.x0 && x < raftWater.x1 && z > raftWater.z0 && z < raftWater.z1;
+function grottoShell(): { floor: THREE.BufferGeometry; shell: THREE.BufferGeometry } {
+  const floor: number[] = [], floorColor: number[] = [], shell: number[] = [], shellColor: number[] = [];
+  const color = new THREE.Color();
+  // Triangles are wound so their normal faces `towards`.
+  const tri = (out: number[], cols: number[], hex: string, towards: THREE.Vector3, ...p: THREE.Vector3[]) => {
+    const n = new THREE.Vector3().subVectors(p[1], p[0]).cross(new THREE.Vector3().subVectors(p[2], p[0]));
+    const [a, b, c] = n.dot(towards) >= 0 ? p : [p[0], p[2], p[1]];
+    out.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    color.set(hex);
+    for (let i = 0; i < 3; i++) cols.push(color.r, color.g, color.b);
+  };
+  const quad = (out: number[], cols: number[], hex: string, towards: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3) => {
+    tri(out, cols, hex, towards, a, b, c); tri(out, cols, hex, towards, a, c, d);
+  };
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const up = v(0, 1, 0), down = v(0, -1, 0);
+  const roof = (x: number, z: number) => cloudY(x, z) + CEILING + .6 * Math.sin(x * .7 + z * .4) * Math.sin(z * .5 - x * .3);
+  const b = { x0: Math.floor(Math.min(...GROTTO_MOUTHS.map(m => m.x))) - 4, x1: 84, z0: 278, z1: 396 };
+  const cave = (x: number, z: number) => caveDistance(x + .5, z + .5) < .9;
+  for (let z = b.z0; z < b.z1; z++) for (let x = b.x0; x < b.x1; x++) {
+    if (!cave(x, z)) continue;
+    const shade = .92 + .08 * Math.sin(x * 1.3 + z * .7);
+    const stone = `#${new THREE.Color("#7c8580").multiplyScalar(shade).getHexString()}`;
+    const water = inWater(x + .5, z + .5);
+    const y = (px: number, pz: number) => cloudY(px, pz) - (water ? .35 : 0);
+    quad(floor, floorColor, water ? "#3f93b4" : stone, up, v(x, y(x, z), z), v(x + 1, y(x + 1, z), z), v(x + 1, y(x + 1, z + 1), z + 1), v(x, y(x, z + 1), z + 1));
+    quad(shell, shellColor, "#46525a", down, v(x, roof(x, z), z), v(x + 1, roof(x + 1, z), z), v(x + 1, roof(x + 1, z + 1), z + 1), v(x, roof(x, z + 1), z + 1));
+    // A wall on every edge whose neighbour is outside the cave, facing inward.
+    for (const [dx, dz, ax, az, bx, bz] of [[-1, 0, x, z, x, z + 1], [1, 0, x + 1, z, x + 1, z + 1], [0, -1, x, z, x + 1, z], [0, 1, x, z + 1, x + 1, z + 1]]) {
+      if (cave(x + dx, z + dz)) continue;
+      const rockHex = (x + z) % 3 ? "#5f6a6e" : "#68737a";
+      quad(shell, shellColor, rockHex, v(-dx, 0, -dz), v(ax, cloudY(ax, az) - .4, az), v(bx, cloudY(bx, bz) - .4, bz), v(bx, roof(bx, bz), bz), v(ax, roof(ax, az), az));
+    }
+  }
+  const build = (pos: number[], col: number[]) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals(); g.computeBoundingSphere();
+    return g;
+  };
+  return { floor: build(floor, floorColor), shell: build(shell, shellColor) };
+}
+const crystalChest = CLOUD_CHESTS.find(c => c.id === "cloudCrystalChest")!;
+/** Crystal clusters: a ring in the crystal chamber, a few in the lake chamber. */
+const GROTTO_CRYSTALS: Array<[number, number]> = [
+  ...Array.from({ length: 7 }, (_, i) => [crystalChest.x - 2 + Math.cos(i * .9 + .3) * 5.2, crystalChest.z + Math.sin(i * .9 + .3) * 5.2] as [number, number]),
+  [44, 314], [60, 330], [44, 330], [30, 291], [46, 355],
+];
 function grottoGeometry() {
   const b = new PartBuilder();
-  // A closed shell, with high ceiling above every gameplay camera. Portals
-  // are at the southwest and northwest corners; exterior draws separately.
-  for (let z = 276; z < 315; z++) {
-    const y = cloudY(20, z);
-    b.box(30, .8, 1.05, 24, y - .82, z + .5, "#344656");
-    for (const x of [9, 39]) b.box(2.5, 42, 1.1, x, 9, z + .5, rock);
-  }
-  b.box(32, 2, 41, 24, 49, 295.5, "#233344");
-  b.box(26, 42, 2, 27, 9, 276, rock);
-  b.box(20, 42, 2, 30, 9, 314.8, rock);
-  for (const [x, z] of [[12, 283], [29, 288], [30, 297], [12, 303], [36, 306], [22, 312]]) {
+  for (const [x, z] of GROTTO_CRYSTALS) {
     const y = cloudY(x, z);
-    b.add(new THREE.DodecahedronGeometry(2.6, 0), "#354b60", [x, y + 2.2, z], [0, z, .2], [1, 1.8, 1]);
-    for (let i = 0; i < 3; i++) b.add(new THREE.ConeGeometry(.35 + i * .06, 1.7 + i * .4, 5), "#69bbc9", [x + (i - 1) * .65, y + 1 + i * .2, z - 1.6], [0, i, -.18 + i * .15]);
+    b.add(new THREE.DodecahedronGeometry(1.1, 0), "#4e6a7e", [x, y + .5, z], [0, x, .2], [1, .9, 1]);
+    for (let i = 0; i < 3; i++) b.add(new THREE.ConeGeometry(.3 + i * .06, 1.5 + i * .45, 5), "#69bbc9", [x + (i - 1) * .55, y + .9 + i * .2, z], [0, i, -.18 + i * .15]);
   }
-  // Underground pool and waterfall share the room; no outdoor sea drawn here.
-  b.box(14, .08, 2.2, 20, cloudY(20, 290.5) + .05, 290.5, "#307a94");
-  b.box(2, 11, .12, 34, cloudY(34, 292) + 1, 292, "#75b9ca");
-  b.cyl(2.6, 3.2, .08, 33, cloudY(33, 292), 292, "#3d8ca5", 12);
-  // Basin, channels, boiler and overhead pipes: old raider machinery.
-  b.cyl(1, 1.2, .8, 23.8, cloudY(23.8, 288), 288, "#6d7b80", 8);
-  for (const z of [288, 297]) {
-    b.cyl(.85, 1, 1.8, 25.8, cloudY(25.8, z), z, "#716d5e", 8);
-    b.cyl(.22, .22, 3, 25.8, cloudY(25.8, z) + 1.7, z, "#8e8972", 6);
-    b.torus(.7, .1, at(25.8, z, 1.2), [Math.PI / 2, 0, 0], "#d0a36a");
+  // Raft basin: a stone lip on the near shore of the underground lake.
+  const raft = CLOUD_OBSTACLE_PLACE.grottoRaft;
+  b.cyl(1, 1.2, .8, raft.x + 3, cloudY(raft.x + 3, raft.z), raft.z, "#6d7b80", 8);
+  // Old raider machinery: boiler, chimneys and overhead pipes by the gate.
+  const boiler = CLOUD_OBSTACLE_PLACE.grottoBoiler;
+  for (const dx of [-3, 0]) {
+    const x = boiler.x + dx, z = boiler.z;
+    b.cyl(.85, 1, 1.8, x, cloudY(x, z), z, "#716d5e", 8);
+    b.cyl(.22, .22, 3, x, cloudY(x, z) + 1.7, z, "#8e8972", 6);
+    b.torus(.7, .1, at(x, z, 1.2), [Math.PI / 2, 0, 0], "#d0a36a");
   }
-  for (let z = 293; z < 305; z += 2) b.box(.22, .22, 2.1, 27.2, cloudY(27.2, z) + 2.4, z, "#ad8e66");
+  for (let x = boilerGate.x0 + 2; x < boilerGate.x1 - 2; x += 2) b.box(2.1, .22, .22, x, cloudY(x, boilerGate.z0) + 3.4, boilerGate.z0 - 1, "#ad8e66");
   for (const p of CLOUD_ELECTRIC_PANELS) {
     b.box(p.w + .3, .12, p.d + .3, p.x, cloudY(p.x, p.z), p.z, "#747e7c");
     for (const dx of [-1, 1]) b.box(.12, .13, p.d, p.x + dx * (p.w / 2 - .2), cloudY(p.x, p.z) + .05, p.z, "#c3b687");
@@ -211,11 +270,8 @@ function mouthsGeometry() {
     b.box(1.35, .55 + i % 3 * .18, .65, x, y, z, "#65706e", yaw);
     b.box(1.45, .16, .78, x, y + .55 + i % 3 * .18, z, "#929381", yaw);
   }
-  for (const [x, z] of [[12, 281], [12, 309]]) {
-    const y = cloudY(x, z);
-    addKit(b, caveMouth(6.4, 8, 3), [x, y - .85, z]);
-    b.box(5, 5.5, .1, x + 1, y + .1, z + 1.5, "#142536");
-  }
+  // The grotto's two openings in the mountainside, framing the dark passage.
+  for (const m of GROTTO_MOUTHS) addKit(b, caveMouth(6.4, 6.5, 3), [m.x, cloudY(m.x, m.z) - .6, m.z], m.yaw + Math.PI / 2);
   return b.build();
 }
 function RouteGate({ x, z, open }: { x: number; z: number; open: boolean }) {
@@ -284,8 +340,9 @@ function Steam({ lit }: { lit: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null), dummy = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
     for (let i = 0; i < 12; i++) {
-      const t = (rt.time * .35 + i / 6) % 1, x = i < 6 ? 14 : 26;
-      dummy.position.set(x + Math.sin(i * 3) * .2, cloudY(x, 297) + t * 3.5, 297);
+      // Two chimneys over the boiler; the second only once Ember lights it.
+      const t = (rt.time * .35 + i / 6) % 1, { x: bx, z } = CLOUD_OBSTACLE_PLACE.grottoBoiler, x = i < 6 ? bx - 3 : bx;
+      dummy.position.set(x + Math.sin(i * 3) * .2, cloudY(x, z) + 3 + t * 3.5, z);
       dummy.scale.setScalar((.15 + t * .35) * (i < 6 || lit ? 1 : 0)); dummy.updateMatrix(); ref.current?.setMatrixAt(i, dummy.matrix);
     }
     if (ref.current) ref.current.instanceMatrix.needsUpdate = true;
@@ -295,9 +352,13 @@ function Steam({ lit }: { lit: boolean }) {
 
 /** Geometry is shared with the real route; inside the cave only this room and
  * its two mouths mount. Outdoor scenery is hidden by CloudIsle's parent. */
+/** Cool light in each chamber; the crystal chamber glows brightest. */
+const GROTTO_LIGHTS: Array<[number, number, string, number]> = [
+  [28, 298, "#67bfe6", 6], [52, 322, "#67bfe6", 7], [crystalChest.x - 2, crystalChest.z, "#7fe0f0", 9], [32, 374, "#9fd0ff", 5],
+];
 export function CloudRoutes({ inside }: { inside: boolean }) {
   const a = useGame(s => s.progress.act3);
-  const canopy = useMemo(canopyGeometry, []), bridge = useMemo(bridgeGeometry, []), grotto = useMemo(grottoGeometry, []), mouths = useMemo(mouthsGeometry, []);
+  const canopy = useMemo(canopyGeometry, []), bridge = useMemo(bridgeGeometry, []), grotto = useMemo(grottoGeometry, []), shell = useMemo(grottoShell, []), mouths = useMemo(mouthsGeometry, []);
   const glow = useMemo(() => additiveSprite("#78d9ff", .6), []), fire = useMemo(() => additiveSprite("#ffac55", .8), []);
   const vine = a.puzzles.includes("canopyVine"), raft = a.puzzles.includes("grottoRaft"), boiler = a.puzzles.includes("grottoBoiler");
   return <>
@@ -306,16 +367,17 @@ export function CloudRoutes({ inside }: { inside: boolean }) {
       <RouteWind stopped={a.puzzles.includes("canopyGust")} />
     </>}
     {inside && <>
+      <mesh geometry={shell.floor} material={flatMat} /><mesh geometry={shell.shell} material={occluderMat} />
       <mesh geometry={grotto} material={flatMat} /><ElectricPanels /><Steam lit={boiler} />
-      <pointLight position={at(20, 295, 5)} color="#67bfe6" intensity={8} distance={29} decay={1} />
-      <pointLight position={at(25, 297, 2)} color="#ffad61" intensity={boiler ? 8 : 2} distance={13} decay={1} />
-      {[[12, 283], [29, 288], [30, 297], [12, 303], [36, 306]].map(([x, z]) => <sprite key={`${x},${z}`} material={glow} position={at(x, z, 1.7)} scale={[3, 3, 1]} />)}
-      <sprite material={fire} position={at(25.8, 297, 1)} scale={boiler ? [2, 2, 1] : [.5, .5, 1]} />
-      <mesh position={at(20, 290.5, raft ? .18 : -1)}><boxGeometry args={[14, .25, 2.4]} /><meshLambertMaterial color="#9a8965" /></mesh>
-      {!boiler && <RouteGate x={20} z={299.5} open={false} />}
+      {GROTTO_LIGHTS.map(([x, z, c, i]) => <pointLight key={`${x},${z}`} position={at(x, z, 4)} color={c} intensity={i} distance={22} decay={1} />)}
+      <pointLight position={at(CLOUD_OBSTACLE_PLACE.grottoBoiler.x, CLOUD_OBSTACLE_PLACE.grottoBoiler.z, 2)} color="#ffad61" intensity={boiler ? 8 : 2} distance={13} decay={1} />
+      {GROTTO_CRYSTALS.map(([x, z]) => <sprite key={`${x},${z}`} material={glow} position={at(x, z, 1.6)} scale={[2.4, 2.4, 1]} />)}
+      <sprite material={fire} position={at(CLOUD_OBSTACLE_PLACE.grottoBoiler.x, CLOUD_OBSTACLE_PLACE.grottoBoiler.z, 1)} scale={boiler ? [2, 2, 1] : [.5, .5, 1]} />
+      <mesh position={at((raftWater.x0 + raftWater.x1) / 2, (raftWater.z0 + raftWater.z1) / 2, raft ? .05 : -1)}><boxGeometry args={[4, .25, raftWater.z1 - raftWater.z0 + 1.6]} /><meshLambertMaterial color="#9a8965" /></mesh>
+      {!boiler && <RouteGate x={(boilerGate.x0 + boilerGate.x1) / 2} z={(boilerGate.z0 + boilerGate.z1) / 2} open={false} />}
     </>}
     {CLOUD_ROUTE_GATES.filter(g => inside === (g.zone === "thunderGrotto")).map(g => <RouteGate key={g.zone} x={g.x} z={g.z} open={a.cleared.includes(g.zone)} />)}
   </>;
 }
 
-export const cloudRouteGeometry = { canopyGeometry, bridgeGeometry, mouthsGeometry };
+export const cloudRouteGeometry = { canopyGeometry, bridgeGeometry, mouthsGeometry, grottoGeometry, grottoShell };
