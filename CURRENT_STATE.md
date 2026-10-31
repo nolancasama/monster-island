@@ -33,32 +33,45 @@ Merging (= deploying) needs the user's approval. Contents:
   - **W — frontier wall** (`3931c2a`): stone wall along the sanctuary
     shelf's cliff lip with a gatehouse at the rope head (shut until
     `act2.started`), low parapet keeps the view. ≤3 calls, ~1k triangles.
-  - Because Cloud Isle is locked, the branch at `db3469f` could be merged
+  - **X1 — coast, Hollow, tunnel at scale on one island** (`0a11f16`,
+    merged `a28b0b4`): dock, Stormbreak Coast, Hidden Hollow and back tunnel
+    re-laid at scale; later areas moved rigidly for X2/X3. Ground is one
+    island heightfield (`src/game/world/cloudTerrain.ts`, spec §2a) with
+    paths carved in, rendered as 7 banded chunks (~42k triangles). Save
+    remap via `act3.cloudLayout: 2`. Top-down map: `node scripts/cloud-map.mjs`.
+  - Because Cloud Isle is locked, the branch could be merged to `main`
     without exposing Act 3 — after a full Playwright run.
 
-Verified at `db3469f`: tsc, 350 unit tests, build; browser specs act3 (6/6),
-act2, debug, polish, camera (the cliff-rope test failed once under CPU load
-and passed alone). The full suite has not been run since `b972592`.
+Verified at `a28b0b4`: tsc, 365 unit tests (`--maxWorkers=4`), build; X1
+views ≤106 calls / ≤83k triangles at 1366×768 and 1280×800; Act 3 full
+chapter 1366×768 passes (56 min). The 1280×800 touch chapter and the
+debug spec have not been rerun to completion on X1 (they time out at their
+default limits on this machine; see Known Issues). Lock/wall specs passed
+before X1.
 
-## In progress: expansion slice X1 (branch `exp/x1`, main checkout)
-Re-laid frame plus dock, Stormbreak Coast, Hidden Hollow and back tunnel at
-scale, `act3.cloudLayout` save remap, derived bounds. Uncommitted; a Codex
-correction run is in flight there (order `.ai/work-order.json`) — do not edit
-that checkout until it reports.
+## Expansion progress
+Measurement: `node scripts/measure-cloud-area.mjs`.
 
-- First attempt met the area targets (dock 359, coast 2,662, hollow 724,
-  tunnel 344 m²; dock→junction 332 m vs 100 m) but was **rejected**: ground
-  was walk cells extruded as stair-stepped slabs on dark water, no landmass
-  or mountain, dock view 146 draw calls, 2 failing unit tests.
-- The correction implements spec §2a (one island heightfield
-  `cloudGroundY` with paths carved in, colour lift, chunk culling, and
-  `scripts/cloud-map.mjs` top-down map).
+| | Baseline (`f108ed9`) | After X1 | Final target |
+| --- | --- | --- | --- |
+| Walkable floor | 3,133.5 m² | 6,002.5 m² | ≥ 9,400 m² |
+| Dock → beacon via canopy | 195.8 m | 424.7 m | ≥ 392 m ✓ |
+| Dock → beacon via grotto | 200.8 m | 430 m | ≥ 402 m ✓ |
 
-Measurement: `node scripts/measure-cloud-area.mjs`. Baseline (`f108ed9`)
-3,133.5 m²; routes dock→beacon 195.8 m (canopy) / 200.8 m (grotto). Final
-targets ≥ 9,400 m² and ≥ 2× each route.
+Remaining ~3,400 m² comes from X2 (junction ~900, canopy ~1,500, grotto
+~1,500 m²) and X3 (approach, observatory ~1,100, beacon summit).
+
+X1 visual items carried into X2/X3: the Hollow shell pillars and back-tunnel
+walls are large flat dark slabs; the mountain is hidden by fog from the dock
+(landmarks are X3); `scripts/cloud-x1-shots.mjs` cannot settle the
+coast-waterfall-view camera at the coast gate.
 
 ## Known Issues
+- **This machine (6-core A18 Pro) is slow for SwiftShader**: since X1 the
+  terrain fills the screen and the full Act 3 browser chapter takes ~56 min
+  (`MI_LONG_TIMEOUT=3600000` raises its limit). Vitest's default
+  parallelism stalls tests for 10+ min here; use `--maxWorkers=4`
+  (whole suite ~15 s). Real-GPU frame time on a Chromebook is unmeasured.
 - Nothing has been tested on a real Chromebook (SwiftShader only): speech,
   TTS voices, audio levels, fight difficulty, GPU frame rate.
 - Lowland-side views are at ~140–141k triangles (over the 140k budget
@@ -77,19 +90,23 @@ targets ≥ 9,400 m² and ≥ 2× each route.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. Review the X1 correction: `.tmp/shots/expansion/x1/map.png`, rendered
-   views (no-port capture), budgets, unit tests, `act3.spec` + `debug.spec`.
-   Accept → commit on `exp/x1`, merge into `feature/act3-cloud-isle`.
-2. X2 (junction, Skyroot Canopy, Thunder Grotto at scale) then X3
-   (observatory, beacon surroundings, landmarks, camera, performance, final
-   ≥3× measurement) — sequential, same files. Reuse the X1 order shape.
-3. Full Playwright suite, final report with area/route numbers, screenshots
-   and performance.
+1. X2: Windfall Junction, Skyroot Canopy, Thunder Grotto at scale on the
+   heightfield (spec §2, §2a). Give the giant canopy trees real terrain
+   beneath; keep the 45-minute Codex limit in mind — split into a world/
+   layout order and a rendering order, as X1's terrain was (T1/T2).
+2. X3: observatory, beacon summit, landmarks (mountain from the dock,
+   observatory from the junction, beacon from the observatory), camera
+   review, Hollow/tunnel slab polish, final ≥ 3× measurement, performance.
+3. Full Playwright suite (with `MI_LONG_TIMEOUT`), final report with
+   screenshots and measurements.
 4. User decision: merge `feature/act3-cloud-isle` into `main` (deploys).
-5. Chromebook play-test with `?debug=1`.
+5. Chromebook play-test with `?debug=1` — including frame rate on Cloud Isle.
 
 ## Codex / Delegated Work
-- **X1 correction** in flight in `~/Projects/monster-island` (`exp/x1`).
-  Never accept its output unreviewed; never overwrite its pending changes.
-- Worktrees: `~/Projects/mi-base` (controller acceptance runs, on this
-  branch), `~/Projects/mi-wall` and `~/Projects/mi-kit` (merged; removable).
+None in flight. Codex's sandbox cannot bind ports or launch Chromium, so
+the controller captures all rendered evidence (`scripts/lib/dist-route.mjs`
+serves `dist` without a port). Codex runs are limited to 45 minutes: keep
+orders narrow and name exactly what to read.
+- Worktrees: `~/Projects/mi-base` (this branch; controller acceptance),
+  `~/Projects/mi-wall`, `~/Projects/mi-kit` (merged; removable). The main
+  checkout `~/Projects/monster-island` is on `exp/x1` (merged).
