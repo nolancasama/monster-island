@@ -1459,3 +1459,31 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
   while it is locked; per-combo damage bonuses.
 - Permanent secret states save in `progress.act2.secrets` (save v4, unknown
   ids dropped on load).
+
+## 2026-11-01 — Slice E1: elemental simulation and free signature attacks
+
+- Implemented the frozen §0–2 move data and four J simulations. K uses the
+  new MP costs and cooldowns everywhere, including the Beacon; its old free
+  boss-special exception is superseded by the frozen table. E1 K behaviour
+  is deliberately direct-damage stubs: Inferno's cone, Root Snare's clamped
+  forward circle, Cyclone's spawn circle, and a straight Bubble Bomb with
+  an impact/range explosion. Sustained fire, roots, cyclone carrying and bomb
+  chains remain E2, as requested for this slice.
+- Hazards use the existing pond/islet, canopy gap cuts, Cloud chasms and the
+  authored Stormbreak Coast sea cut (x −43…−40, z 60…79). The home coast has
+  no separate sea-edge footprint; no new coastline was invented. An islet is
+  safe; the existing narrow canopy decks and windmill bridge are safe only
+  after their existing English unlock. Other unwalkable banks stop a fling
+  as a wall. This changes no layout or unlock.
+- Small timing choices where the spec leaves details open: the short medium
+  trap rises to 0.8 m over its one-second lifetime; scripted falls use 14 m/s²
+  (the existing drop gravity). Grounded heavy flings use the medium two-second
+  resistance, since §2 gives no separate heavy R. Double Grab's bash deals
+  14 total per target, with frontal crab armour retained for this J damage.
+- A grab locks its swing pivot and facing at the press; its victim ledger
+  persists into the fling. Control, burn and falling clocks pause with combat.
+  All such fields reset with encounters and remain absent from saves.
+- The existing `window.__mi.state().act2` snapshot exposes MP plus each
+  enemy's state, air, control kind, burning flag and resistance expiry for
+  controller acceptance. Scene edits only retain hostile-shot compatibility
+  and ignore the new FX until E3; no new rendering or world objects.

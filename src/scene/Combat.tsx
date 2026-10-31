@@ -90,7 +90,7 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     } else if (e.state === "lunge") {
       squash = 1.15;
       lean = 0.45;
-    } else if (e.state === "stun" || e.state === "pulled") {
+    } else if (e.state === "stun") {
       lean = Math.sin(t * 9) * 0.15;
     } else if (e.state === "ko") {
       const k = 1 - Math.max(0, e.timer) / 0.9;
@@ -254,9 +254,9 @@ function Shots() {
     let g = 0;
     let nt = 0;
     for (const s of cb.shots) {
-      const kind = s.shape as keyof typeof count;
-      if (!(kind in count) || count[kind] >= 16) continue;
       const sourceKind = s.hostile && s.source !== undefined ? cb.enemies[s.source]?.kind : null;
+      const kind = (s.hostile ? sourceKind === "windSprite" ? "wind" : sourceKind === "raiderShooter" ? "fireball" : "bubble" : s.shape) as keyof typeof count;
+      if (!(kind in count) || count[kind] >= 16) continue;
       tint.set(sourceKind === "forestSpitter" ? "#b2dc60" : sourceKind === "raiderShooter" ? "#ff4055" : kind === "bubble" ? "#9fe6ff" : kind === "fireball" ? "#ffb03a" : "#f2fbff");
       o.position.set(s.x, s.y, s.z);
       o.rotation.set(kind === "wind" ? Math.PI / 2 : 0, Math.atan2(s.vx, s.vz), rt.time * 12);
@@ -349,6 +349,7 @@ function Effects() {
         (sp.material as THREE.SpriteMaterial).opacity = 1 - k;
         continue;
       }
+      if (!["whip", "pull", "jet", "gust", "burst"].includes(f.kind)) continue;
       const m = meshes.current[mi++];
       if (!m) continue;
       m.visible = true;

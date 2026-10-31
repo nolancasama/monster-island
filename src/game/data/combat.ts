@@ -21,11 +21,12 @@ export const COMPANION_IDS: CompanionId[] = ["leafy", "bubbo", "puff", "ember"];
 export type Stance = "back" | "shoulder" | "ride";
 
 export interface MoveDef {
-  /** The English command shown on the button ("Whip!"). */
+  /** The English command shown on the button. */
   word: string;
   /** What the move is called in the trainer's list. */
   name: Text;
-  shape: "whip" | "bubble" | "wind" | "fireball" | "pull" | "jet" | "gust" | "burst";
+  hint: Text;
+  shape: "breath" | "inferno" | "trap" | "bomb" | "grab" | "snare" | "blast" | "cyclone";
   damage: number;
   /** Seconds before it can be used again. */
   cooldown: number;
@@ -52,32 +53,33 @@ export interface CompanionCombat {
 export const COMBAT: Record<CompanionId, CompanionCombat> = {
   leafy: {
     stance: "back",
-    basic: { word: "Whip!", name: { en: "Vine Whip", ja: "つるの ムチ" }, shape: "whip", damage: 11, cooldown: 0.45, range: 3.1, radius: 1.2, knock: 2.2, stun: 0.3, cost: 0 },
-    special: { word: "Pull!", name: { en: "Vine Pull", ja: "つるで ひっぱる" }, shape: "pull", damage: 22, cooldown: 1.4, range: 8.5, radius: 0.8, knock: 0, stun: 1.6, cost: 25 },
-    upgrade: { name: { en: "Super Whip", ja: "スーパームチ" }, damage: 1.6, size: 1.35 }
+    basic: { word: "Grab!", name: { en: "Vine Grab", ja: "つるで つかむ" }, hint: { en: "Grab, swing and fling an enemy ahead.", ja: "まえの てきを つかんで ふりまわす" }, shape: "grab", damage: 8, cooldown: 0.75, range: 4.5, radius: 2.2, knock: 5, stun: 0, cost: 0 },
+    special: { word: "Stop!", name: { en: "Root Snare", ja: "ねっこの わな" }, hint: { en: "Roots stop enemies ahead.", ja: "まえの てきを ねっこで とめる" }, shape: "snare", damage: 6, cooldown: 2, range: 4, radius: 3.2, knock: 0, stun: 0, cost: 30 },
+    upgrade: { name: { en: "Double Grab", ja: "ダブルグラブ" }, damage: 1, size: 1 }
   },
   bubbo: {
     stance: "ride",
-    basic: { word: "Splash!", name: { en: "Water Bubble", ja: "みずの あわ" }, shape: "bubble", damage: 10, cooldown: 0.45, range: 10, speed: 12, radius: 0.85, knock: 2.5, stun: 0.3, cost: 0 },
-    special: { word: "Push!", name: { en: "Water Jet", ja: "みずの ジェット" }, shape: "jet", damage: 26, cooldown: 1.6, range: 9, radius: 0.9, knock: 7, stun: 0.9, cost: 30 },
-    upgrade: { name: { en: "Big Bubble", ja: "ビッグバブル" }, damage: 1.6, size: 1.7 }
+    basic: { word: "Bubble!", name: { en: "Bubble Trap", ja: "あわの わな" }, hint: { en: "Lift an enemy in a bubble, then pop.", ja: "あわで てきを うかせて わる" }, shape: "trap", damage: 0, cooldown: 0.6, range: 10, speed: 10, radius: 0.8, knock: 0, stun: 0, cost: 0 },
+    special: { word: "Pop!", name: { en: "Bubble Bomb", ja: "あわの ばくだん" }, hint: { en: "A big bubble bursts over an area.", ja: "おおきな あわが はじける" }, shape: "bomb", damage: 22, cooldown: 1.6, range: 11, speed: 9, radius: 3, knock: 4, stun: 0, cost: 30 },
+    upgrade: { name: { en: "Big Bubble", ja: "ビッグバブル" }, damage: 1, size: 1 }
   },
   puff: {
     stance: "shoulder",
-    basic: { word: "Fly!", name: { en: "Wind Shot", ja: "かぜの たま" }, shape: "wind", damage: 9, cooldown: 0.4, range: 11, speed: 14, radius: 0.85, knock: 3, stun: 0.25, cost: 0 },
-    special: { word: "Blow!", name: { en: "Strong Gust", ja: "つよい かぜ" }, shape: "gust", damage: 14, cooldown: 1.5, range: 7, radius: 1.2, knock: 9, stun: 1.3, cost: 25 },
-    upgrade: { name: { en: "Twin Wind", ja: "ダブルウィンド" }, damage: 1, size: 1.15, twin: true }
+    basic: { word: "Blow!", name: { en: "Wind Blast", ja: "かぜの いぶき" }, hint: { en: "Blow enemies and bubbles away.", ja: "かぜで てきや あわを とばす" }, shape: "blast", damage: 5, cooldown: 0.55, range: 5, radius: 0, knock: 9, stun: 0, cost: 0 },
+    special: { word: "Spin!", name: { en: "Cyclone", ja: "サイクロン" }, hint: { en: "A travelling whirlwind carries enemies.", ja: "たつまきが てきを はこぶ" }, shape: "cyclone", damage: 4, cooldown: 2.5, range: 7.2, speed: 1.8, radius: 1.4, knock: 0, stun: 0, cost: 30 },
+    upgrade: { name: { en: "Big Wind", ja: "ビッグウィンド" }, damage: 1, size: 1.3 }
   },
   ember: {
     stance: "ride",
-    basic: { word: "Fire!", name: { en: "Fireball", ja: "ファイアボール" }, shape: "fireball", damage: 12, cooldown: 0.5, range: 10, speed: 11, radius: 0.85, knock: 2.5, stun: 0.3, cost: 0 },
-    special: { word: "Burn!", name: { en: "Flame Burst", ja: "ほのおの バースト" }, shape: "burst", damage: 30, cooldown: 1.6, range: 4.6, radius: 4.6, knock: 4.5, stun: 0.8, cost: 30 },
-    upgrade: { name: { en: "Big Fireball", ja: "ビッグファイア" }, damage: 1.6, size: 1.7 }
+    basic: { word: "Fire!", name: { en: "Fire Breath", ja: "ほのおの いき" }, hint: { en: "Breathe fire ahead and ignite enemies.", ja: "まえに ほのおを はいて てきを もやす" }, shape: "breath", damage: 7, cooldown: 0.55, range: 4.2, radius: 0, knock: 0, stun: 0, cost: 0 },
+    special: { word: "Burn!", name: { en: "Inferno", ja: "インフェルノ" }, hint: { en: "A wide burst of lasting flame.", ja: "ひろい ほのおで もやしつづける" }, shape: "inferno", damage: 6, cooldown: 2.5, range: 6, radius: 0, knock: 0, stun: 0, cost: 15 },
+    upgrade: { name: { en: "Big Flame", ja: "ビッグフレイム" }, damage: 1, size: 1.3 }
   }
 };
 
 export interface EnemyDef {
   name: Text;
+  weightClass: "light" | "medium" | "heavy";
   hp: number;
   /** Damage to the player's HP per landed attack. */
   damage: number;
@@ -103,15 +105,15 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
-  gloomlet: { name: { en: "Gloomlet", ja: "グルームレット" }, hp: 20, damage: 6, speed: 2.2, lunge: 4.2, notice: 7, leash: 13, windupAt: 2, reach: 1.3, windup: 0.75, recover: 1.1, coins: [2, 4], foodChance: 0.08, amberChance: 0.02, radius: 0.42, weight: 1 },
-  snapjaw: { name: { en: "Snapjaw", ja: "スナップジョー" }, hp: 44, damage: 10, speed: 2.7, lunge: 6.5, notice: 8, leash: 14, windupAt: 3, reach: 1.5, windup: 0.85, recover: 1.3, coins: [5, 7], foodChance: 0.12, amberChance: 0.04, radius: 0.55, weight: 0.8 },
-  shellback: { name: { en: "Shellback", ja: "シェルバック" }, hp: 80, damage: 14, speed: 1.5, lunge: 3.5, notice: 7, leash: 12, windupAt: 2.2, reach: 1.8, windup: 1.0, recover: 1.5, coins: [10, 14], foodChance: 0.2, amberChance: 0.15, radius: 0.75, weight: 0.35 },
-  forestSpitter: { name: { en: "Forest Spitter", ja: "もりのスピッター" }, hp: 20, damage: 5, speed: 2, lunge: 0, notice: 10, leash: 16, windupAt: 9, reach: 0.6, windup: 0.8, recover: 2.5, coins: [2, 4], foodChance: 0.08, amberChance: 0.02, radius: 0.42, weight: 1 },
-  raiderShooter: { name: { en: "Raider Shooter", ja: "レイダーシューター" }, hp: 44, damage: 6, speed: 2, lunge: 0, notice: 10, leash: 16, windupAt: 9, reach: 0.6, windup: 0.8, recover: 2.5, coins: [5, 7], foodChance: 0.12, amberChance: 0.04, radius: 0.5, weight: 0.85 },
-  stormCrab: { name: { en: "Storm Crab", ja: "ストームクラブ" }, hp: 48, damage: 10, speed: 2.1, lunge: 7, notice: 8, leash: 15, windupAt: 3.6, reach: 1.5, windup: 0.85, recover: 1.4, coins: [5, 8], foodChance: 0.12, amberChance: 0.04, radius: 0.62, weight: 0.65 },
-  windSprite: { name: { en: "Wind Sprite", ja: "かぜのせい" }, hp: 30, damage: 5, speed: 2, lunge: 0, notice: 10, leash: 15, windupAt: 9, reach: 0.6, windup: 0.8, recover: 2.5, coins: [4, 7], foodChance: 0.12, amberChance: 0.03, radius: 0.42, weight: 1.1 },
-  raiderDrone: { name: { en: "Raider Drone", ja: "レイダードローン" }, hp: 45, damage: 10, speed: 2.5, lunge: 10, notice: 9, leash: 16, windupAt: 5.5, reach: 1.2, windup: 1.05, recover: 1.6, coins: [6, 9], foodChance: 0.08, amberChance: 0.06, radius: 0.5, weight: 0.85 },
-  thunderBeetle: { name: { en: "Thunder Beetle", ja: "サンダービートル" }, hp: 65, damage: 12, speed: 1.6, lunge: 0, notice: 8, leash: 13, windupAt: 3, reach: 2.8, windup: 1.1, recover: 1.8, coins: [8, 12], foodChance: 0.16, amberChance: 0.1, radius: 0.7, weight: 0.45 }
+  gloomlet: { name: { en: "Gloomlet", ja: "グルームレット" }, weightClass: "light", hp: 20, damage: 6, speed: 2.2, lunge: 4.2, notice: 7, leash: 13, windupAt: 2, reach: 1.3, windup: 0.75, recover: 1.1, coins: [2, 4], foodChance: 0.08, amberChance: 0.02, radius: 0.42, weight: 1 },
+  snapjaw: { name: { en: "Snapjaw", ja: "スナップジョー" }, weightClass: "medium", hp: 44, damage: 10, speed: 2.7, lunge: 6.5, notice: 8, leash: 14, windupAt: 3, reach: 1.5, windup: 0.85, recover: 1.3, coins: [5, 7], foodChance: 0.12, amberChance: 0.04, radius: 0.55, weight: 0.8 },
+  shellback: { name: { en: "Shellback", ja: "シェルバック" }, weightClass: "heavy", hp: 80, damage: 14, speed: 1.5, lunge: 3.5, notice: 7, leash: 12, windupAt: 2.2, reach: 1.8, windup: 1.0, recover: 1.5, coins: [10, 14], foodChance: 0.2, amberChance: 0.15, radius: 0.75, weight: 0.35 },
+  forestSpitter: { name: { en: "Forest Spitter", ja: "もりのスピッター" }, weightClass: "light", hp: 20, damage: 5, speed: 2, lunge: 0, notice: 10, leash: 16, windupAt: 9, reach: 0.6, windup: 0.8, recover: 2.5, coins: [2, 4], foodChance: 0.08, amberChance: 0.02, radius: 0.42, weight: 1 },
+  raiderShooter: { name: { en: "Raider Shooter", ja: "レイダーシューター" }, weightClass: "medium", hp: 44, damage: 6, speed: 2, lunge: 0, notice: 10, leash: 16, windupAt: 9, reach: 0.6, windup: 0.8, recover: 2.5, coins: [5, 7], foodChance: 0.12, amberChance: 0.04, radius: 0.5, weight: 0.85 },
+  stormCrab: { name: { en: "Storm Crab", ja: "ストームクラブ" }, weightClass: "medium", hp: 48, damage: 10, speed: 2.1, lunge: 7, notice: 8, leash: 15, windupAt: 3.6, reach: 1.5, windup: 0.85, recover: 1.4, coins: [5, 8], foodChance: 0.12, amberChance: 0.04, radius: 0.62, weight: 0.65 },
+  windSprite: { name: { en: "Wind Sprite", ja: "かぜのせい" }, weightClass: "light", hp: 30, damage: 5, speed: 2, lunge: 0, notice: 10, leash: 15, windupAt: 9, reach: 0.6, windup: 0.8, recover: 2.5, coins: [4, 7], foodChance: 0.12, amberChance: 0.03, radius: 0.42, weight: 1.1 },
+  raiderDrone: { name: { en: "Raider Drone", ja: "レイダードローン" }, weightClass: "medium", hp: 45, damage: 10, speed: 2.5, lunge: 10, notice: 9, leash: 16, windupAt: 5.5, reach: 1.2, windup: 1.05, recover: 1.6, coins: [6, 9], foodChance: 0.08, amberChance: 0.06, radius: 0.5, weight: 0.85 },
+  thunderBeetle: { name: { en: "Thunder Beetle", ja: "サンダービートル" }, weightClass: "heavy", hp: 65, damage: 12, speed: 1.6, lunge: 0, notice: 8, leash: 13, windupAt: 3, reach: 2.8, windup: 1.1, recover: 1.8, coins: [8, 12], foodChance: 0.16, amberChance: 0.1, radius: 0.7, weight: 0.45 }
 };
 
 export const MAX_HP = 100;

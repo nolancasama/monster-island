@@ -9,12 +9,13 @@ import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
-import { PLAYER_R, gatesOf, isWalkable, moveCircle, nearestWalkable, standY } from "./world/collision";
+import { PLAYER_R, blocked, gatesOf, isWalkable, moveCircle, nearestWalkable, standY } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
 import { debugPaused, useDebug } from "./debugState";
+import { blastKnock, bubbleAir, bubbleProfile, canControl, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, inCone, oldestTrap, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -26,7 +27,7 @@ import { debugPaused, useDebug } from "./debugState";
  *   zone only, never on how near an enemy is, so it never flickers.
  * - Attacks happen only when the player presses J (basic) or K (special):
  *   friends never attack by themselves. Projectiles follow the firing facing;
- *   Leafy's melee and pull retain their forgiving target selection.
+ *   Only Vine Grab selects inside its clear forward cone.
  * - Enemies notice, chase, wind up (visibly), lunge, recover, get knocked
  *   back and stunned, and are knocked out with a dizzy spin and a poof,
  *   dropping coins (and sometimes food or amber). They pause whenever a
@@ -34,7 +35,7 @@ import { debugPaused, useDebug } from "./debugState";
  * - One HP pool (the player's, also while riding) and each friend's own MP.
  */
 
-export type EnemyState = "idle" | "alert" | "chase" | "windup" | "lunge" | "recover" | "stun" | "pulled" | "ko" | "gone" | "return";
+export type EnemyState = "idle" | "alert" | "chase" | "windup" | "lunge" | "recover" | "stun" | "ko" | "gone" | "return";
 export type CombatZone = ZoneId | CloudAreaId;
 interface CloudZoneMemory {
   current: CloudAreaId | null;
@@ -81,14 +82,19 @@ export interface EnemyRt {
   /** rt.time of the last hit (the scene flashes it) and of noticing the player ("!"). */
   hitT: number;
   alertT: number;
-  /** A vine pull: where it is dragged from and to. */
-  pull: { fx: number; fz: number; tx: number; tz: number; t: number } | null;
+  air: number;
+  burn: Burn | null;
+  control: Control | null;
+  resistUntil: number;
+  fall: { from: number; t0: number } | null;
+  /** One victim ledger survives the swing-to-fling transition. */
+  flight: { owner: CompanionId; victims: number[]; x: number; z: number; yaw: number; startX: number; startZ: number; bash?: { x: number; z: number } } | null;
   step: number;
 }
 
 export interface Shot {
   id: number;
-  shape: MoveDef["shape"];
+  shape: MoveDef["shape"] | "hostile";
   owner: CompanionId;
   x: number;
   y: number;
@@ -129,7 +135,7 @@ export interface Drop {
 /** Short-lived attack shapes for the scene (vines, jets, gusts, bursts, hits). */
 export interface Fx {
   id: number;
-  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat";
+  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "vine" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo";
   x: number;
   y: number;
   z: number;
@@ -164,7 +170,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, pull: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, control: null, resistUntil: 0, fall: null, flight: null, step: 0
   };
 }
 
@@ -504,26 +510,15 @@ export function crabDamage(kind: EnemyKind, damage: number, basic: boolean, yaw:
   return kind === "stormCrab" && basic && frontal > 0.5 ? damage * 0.5 : damage;
 }
 
-/** Forgiving aim: the nearest enemy roughly in front, or failing that the nearest close by. */
+function coneTargets(range: number, degrees: number): EnemyRt[] {
+  const gates = gatesOf(getGame().progress);
+  return forwardTargets(cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone()), rt.player, rt.player.yaw, range, degrees,
+    (x, z) => isWalkable(x, z, gates, 0.08));
+}
+
+/** Vine Grab alone selects a target, strictly inside its clear forward cone. */
 export function pickTarget(range: number): EnemyRt | null {
-  const p = rt.player;
-  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
-  let best: EnemyRt | null = null;
-  let bestScore = Infinity;
-  for (const e of cb.enemies) {
-    if (!alive(e) || e.zone !== currentCombatZone()) continue;
-    const dx = e.x - p.x, dz = e.z - p.z;
-    const d = Math.hypot(dx, dz);
-    if (d > range) continue;
-    const facing = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
-    if (facing < -0.25 && d > 3.2) continue;
-    const score = d - facing * 2.5;
-    if (score < bestScore) {
-      bestScore = score;
-      best = e;
-    }
-  }
-  return best;
+  return coneTargets(range, 70)[0] ?? null;
 }
 
 function upgraded(f: CompanionId) {
@@ -542,26 +537,8 @@ function originOf(f: CompanionId): { x: number; y: number; z: number } {
   return { x: pose.x + fx * 0.5, y: pose.y + 1.2, z: pose.z + fz * 0.5 };
 }
 
-function aimAt(target: EnemyRt | null, range: number, targeted = true): { x: number; z: number } {
+function aimAt(range: number): { x: number; z: number } {
   const p = rt.player;
-  if (!targeted) return { x: p.x + Math.sin(p.yaw) * range, z: p.z + Math.cos(p.yaw) * range };
-  // The pylon is a world target, using the same forgiving aim as ordinary foes.
-  if (cb.beacon.active && currentCloudZone() === "stormBeacon") {
-    const best = BEACON_PYLONS.map((q, i) => ({ ...q, i, d: Math.hypot(q.x - p.x, q.z - p.z) }))
-      .filter(q => cb.beacon.pylons[q.i].phase !== "down" && q.d <= range + 1 &&
-        ((q.x - p.x) * Math.sin(p.yaw) + (q.z - p.z) * Math.cos(p.yaw) > -q.d * .25 || q.d < 3.2))
-      .sort((a, b) => a.d - b.d)[0];
-    // A pylon right in front of the player wins even when a wind sprite hovers closer.
-    if (best && (!target || best.d < 3.5 || best.d < Math.hypot(target.x - p.x, target.z - p.z))) {
-      if (p.speed < .6) p.yaw = Math.atan2(best.x - p.x, best.z - p.z);
-      return { x: best.x, z: best.z };
-    }
-  }
-  if (target) {
-    // Turn to face it (only when standing; on the move the friend aims for us).
-    if (p.speed < 0.6) p.yaw = Math.atan2(target.x - p.x, target.z - p.z);
-    return { x: target.x, z: target.z };
-  }
   return { x: p.x + Math.sin(p.yaw) * range, z: p.z + Math.cos(p.yaw) * range };
 }
 
@@ -571,45 +548,68 @@ export function basicAttack(): boolean {
   if (!f || !canFight() || rt.time < cb.ready.basic) return false;
   const move = COMBAT[f].basic;
   const up = upgraded(f);
-  const size = up ? COMBAT[f].upgrade.size : 1;
-  const dmg = move.damage * (up ? COMBAT[f].upgrade.damage : 1);
-  const range = move.range * (move.shape === "whip" ? size : 1);
-  const target = move.shape === "whip" ? pickTarget(range + 1.5) : null;
-  const aim = aimAt(target, range, move.shape === "whip");
+  const range = move.range * (up && (f === "ember" || f === "puff") ? COMBAT[f].upgrade.size : 1);
+  const aim = aimAt(range);
   cb.ready.basic = rt.time + move.cooldown;
   cb.move = { friend: f, kind: "basic", t0: rt.time, tx: aim.x, tz: aim.z };
   const o = originOf(f);
-  const dx = aim.x - rt.player.x, dz = aim.z - rt.player.z;
-  const yaw = Math.atan2(dx, dz);
-  if (cb.beacon.active) cancelBeaconGust(cb.beacon, f, { x: dx, z: dz });
-  if (move.shape === "whip") {
-    // A sweeping vine: everything in a wide arc in front, out to its reach.
-    const p = rt.player;
-    pushFx("whip", o.x, o.y, o.z, Math.sin(yaw), Math.cos(yaw), yaw, range);
-    hitBeaconShape(f, range, Math.sin(yaw), Math.cos(yaw), "cone");
-    for (const e of cb.enemies) {
-      if (!alive(e) || e.zone !== currentCombatZone()) continue;
-      const ex = e.x - p.x, ez = e.z - p.z;
-      const d = Math.hypot(ex, ez);
-      if (d > range + ENEMIES[e.kind].radius) continue;
-      const facing = d > 0.01 ? (ex * Math.sin(yaw) + ez * Math.cos(yaw)) / d : 1;
-      if (facing > 0.2 || d < 1) hit(e, dmg, move.knock, move.stun, ex / (d || 1), ez / (d || 1), f, true);
-    }
-    audio.play("whip");
-  } else {
-    const offsets = COMBAT[f].upgrade.twin && up ? [-0.3, 0.3] : [0];
+  const yaw = rt.player.yaw, ux = Math.sin(yaw), uz = Math.cos(yaw);
+  if (cb.beacon.active) cancelBeaconGust(cb.beacon, f, { x: ux, z: uz });
+  if (move.shape === "trap") {
     const life = move.range / move.speed!;
-    // Facing is planar. Lock the launch slope to the ground ahead so a low
-    // mouth-level bubble can travel uphill without aiming at an enemy.
+    // Fixed ground-relative slope, sampled only at launch; never target an enemy.
     const y1 = standY(aim.x, aim.z, getGame().progress.solved) + 0.55;
-    for (const offset of offsets) {
-      cb.shots.push({
-        id: nextId++, shape: move.shape, owner: f, x: o.x + Math.cos(yaw) * offset, y: o.y, z: o.z - Math.sin(yaw) * offset, y1,
-        vx: Math.sin(yaw) * move.speed!, vy: (y1 - o.y) / life, vz: Math.cos(yaw) * move.speed!, life, age: 0,
-        radius: Math.min(1, move.radius * size), damage: dmg, knock: move.knock, stun: move.stun, size, basic: true
-      });
+    cb.shots.push({ id: nextId++, shape: "trap", owner: f, x: o.x, y: o.y, z: o.z, y1,
+      vx: ux * move.speed!, vy: (y1 - o.y) / life, vz: uz * move.speed!, life, age: 0,
+      radius: move.radius, damage: 0, knock: 0, stun: 0, size: 1, basic: true });
+    pushFx("trap", o.x, o.y, o.z, ux, uz, yaw, 0.8);
+    audio.play("bubble");
+  } else if (move.shape === "breath") {
+    pushFx("breath", o.x, o.y, o.z, ux, uz, yaw, range);
+    hitBeaconShape(f, range, ux, uz, "cone", 50);
+    for (const e of coneTargets(range, 50)) {
+      hit(e, move.damage, 0, 0, ux, uz, f, true);
+      if (alive(e)) e.burn = ignite(e.burn, rt.time);
     }
-    audio.play(move.shape === "fireball" ? "fireball" : move.shape === "wind" ? "wind" : "bubble");
+    audio.play("fireball");
+  } else if (move.shape === "grab") {
+    pushFx("vine", o.x, o.y, o.z, ux, uz, yaw, range);
+    hitBeaconShape(f, range, ux, uz, "cone", 70);
+    const targets = coneTargets(range, 70);
+    const pair = up ? targets.filter(e => ENEMIES[e.kind].weightClass !== "heavy").slice(0, 2) : [];
+    if (pair.length === 2) {
+      const centre = { x: (pair[0].x + pair[1].x) / 2, z: (pair[0].z + pair[1].z) / 2 };
+      for (const e of pair) {
+        if (startControl(e, "grabbed", 0.35, f)) e.flight!.bash = centre;
+        else hit(e, move.damage, 0, 0, ux, uz, f, true);
+      }
+    } else {
+      const e = pickTarget(range);
+      if (e) {
+        hit(e, move.damage, 0, 0, ux, uz, f, true);
+        if (ENEMIES[e.kind].weightClass === "heavy") {
+          const dx = rt.player.x - e.x, dz = rt.player.z - e.z, d = Math.hypot(dx, dz) || 1;
+          displaceEnemy(e, e.x + dx / d, e.z + dz / d);
+        }
+        else if (!startControl(e, "grabbed", 0.45, f)) { e.kx += ux * 5; e.kz += uz * 5; }
+      }
+    }
+    audio.play("vines");
+  } else if (move.shape === "blast") {
+    const degrees = up ? 80 : 60;
+    pushFx("blast", o.x, o.y, o.z, ux, uz, yaw, range);
+    hitBeaconShape(f, range, ux, uz, "cone", degrees);
+    for (const e of coneTargets(range, degrees)) {
+      hit(e, move.damage, 0, 0, ux, uz, f, true);
+      if (!alive(e)) continue;
+      if (e.control?.kind === "trapped") pushBubble(e, ux, uz);
+      else {
+        const knock = blastKnock(ENEMIES[e.kind].weightClass);
+        startControl(e, "flung", 0.6, f);
+        if (e.control?.kind !== "snared") { e.kx = ux * knock; e.kz = uz * knock; }
+      }
+    }
+    audio.play("whoosh");
   }
   return true;
 }
@@ -619,7 +619,7 @@ export function specialAttack(): boolean {
   const f = friendNow();
   if (!f || !canFight() || rt.time < cb.ready.special) return false;
   const move = COMBAT[f].special;
-  const spent = onCloudIsle() && currentCloudZone() === "stormBeacon" ? cb.vitals : spendMp(cb.vitals, f, move.cost);
+  const spent = spendMp(cb.vitals, f, move.cost);
   if (!spent) {
     if (rt.time - cb.lastMpWarn > 1.5) {
       cb.lastMpWarn = rt.time;
@@ -631,66 +631,216 @@ export function specialAttack(): boolean {
   cb.vitals = spent;
   cb.ready.special = rt.time + move.cooldown;
   const p = rt.player;
-  const targeted = move.shape === "pull" || move.shape === "burst";
-  const target = targeted ? pickTarget(move.shape === "burst" ? move.range : move.range + 1) : null;
-  const aim = aimAt(target, move.range, targeted);
-  const yaw = Math.atan2(aim.x - p.x, aim.z - p.z);
+  const aim = aimAt(move.range);
+  const yaw = p.yaw;
   const ux = Math.sin(yaw), uz = Math.cos(yaw);
   if (cb.beacon.active) {
     cancelBeaconGust(cb.beacon, f, { x: ux, z: uz });
-    hitBeaconShape(f, move.range, ux, uz, move.shape === "burst" ? "burst" : move.shape === "jet" || move.shape === "pull" ? "beam" : "cone");
   }
   cb.move = { friend: f, kind: "special", t0: rt.time, tx: aim.x, tz: aim.z };
   const o = originOf(f);
-  const inZone = cb.enemies.filter((e) => alive(e) && e.zone === currentCombatZone());
-  if (move.shape === "pull") {
-    // Vine Pull: the vine catches the target and drags it to the player, stunned.
-    if (target) {
-      const tx = p.x + ux * 1.7, tz = p.z + uz * 1.7;
-      target.pull = { fx: target.x, fz: target.z, tx, tz, t: 0 };
-      target.state = "pulled";
-      target.timer = 0.4;
-      pushFx("pull", o.x, o.y, o.z, target.x, target.z, yaw, 1);
-      hit(target, move.damage, 0, move.stun, ux, uz, f);
-    } else pushFx("pull", o.x, o.y, o.z, aim.x, aim.z, yaw, 1);
-    audio.play("vines");
-  } else if (move.shape === "jet") {
-    // Water Jet: a straight beam; everything along it is pushed away.
-    pushFx("jet", o.x, o.y, o.z, ux, uz, yaw, move.range);
-    for (const e of inZone) {
-      const ex = e.x - p.x, ez = e.z - p.z;
-      const along = ex * ux + ez * uz;
-      const across = Math.abs(ex * uz - ez * ux);
-      if (along > -0.3 && along < move.range && across < move.radius + ENEMIES[e.kind].radius) hit(e, move.damage, move.knock, move.stun, ux, uz, f);
+  // E2 stubs: direct area damage only. Bomb retains its straight projectile
+  // so charging pylons can still be shorted on contact.
+  switch (move.shape) {
+    case "bomb": {
+      const life = move.range / move.speed!;
+      cb.shots.push({ id: nextId++, shape: "bomb", owner: f, ...o, y1: o.y, vx: ux * move.speed!, vy: 0, vz: uz * move.speed!,
+        life, age: 0, radius: 0.8, damage: move.damage, knock: 0, stun: 0, size: move.radius });
+      audio.play("splash");
+      break;
     }
-    audio.play("splash");
-  } else if (move.shape === "gust") {
-    // Strong Gust: a wide cone that blows enemies far back and dizzies them.
-    pushFx("gust", o.x, o.y, o.z, ux, uz, yaw, move.range);
-    for (const e of inZone) {
-      const ex = e.x - p.x, ez = e.z - p.z;
-      const d = Math.hypot(ex, ez);
-      if (d > move.range) continue;
-      const facing = d > 0.01 ? (ex * ux + ez * uz) / d : 1;
-      if (facing > 0.55 || d < 1.2) hit(e, move.damage, move.knock, move.stun, ex / (d || 1), ez / (d || 1), f);
+    case "inferno":
+      pushFx("breath", o.x, o.y, o.z, ux, uz, yaw, move.range);
+      hitBeaconShape(f, move.range, ux, uz, "cone", 80);
+      for (const e of coneTargets(move.range, 80)) hit(e, move.damage, 0, 0, ux, uz, f);
+      audio.play("burst");
+      break;
+    case "snare": {
+      const centre = moveCircle(p.x, p.z, aim.x, aim.z, 0.08, gatesOf(getGame().progress));
+      specialCircle(f, move, centre.x, centre.z, "snare");
+      audio.play("vines");
+      break;
     }
-    audio.play("whoosh");
-  } else {
-    // Flame Burst: a ring of fire all round the player.
-    pushFx("burst", p.x, p.y + 0.3, p.z, 0, 0, yaw, move.range);
-    for (const e of inZone) {
-      const ex = e.x - p.x, ez = e.z - p.z;
-      const d = Math.hypot(ex, ez);
-      if (d < move.range + ENEMIES[e.kind].radius) hit(e, move.damage, move.knock, move.stun, ex / (d || 1), ez / (d || 1), f);
-    }
-    audio.play("burst");
+    case "cyclone":
+      specialCircle(f, move, p.x + ux * 2, p.z + uz * 2, "cyclone");
+      audio.play("wind");
+      break;
   }
   learn("special");
   return true;
 }
 
+function specialCircle(friend: CompanionId, move: MoveDef, x: number, z: number, kind: "snare" | "cyclone" | "bomb") {
+  pushFx(kind, x, standY(x, z, getGame().progress.solved) + 0.5, z, 0, 0, rt.player.yaw, move.radius);
+  hitBeaconShape(friend, move.radius, 0, 0, "circle", 0, { ...rt.player, x, z });
+  for (const e of cb.enemies) {
+    if (!alive(e) || e.zone !== currentCombatZone() || Math.hypot(e.x - x, e.z - z) > move.radius) continue;
+    hit(e, move.damage, 0, 0, 0, 0, friend);
+  }
+}
+
+function endControl(e: EnemyRt) {
+  if (!e.control) return;
+  if (e.air > 0) e.fall = { from: e.air, t0: rt.time };
+  e.control = null;
+  e.flight = null;
+  e.kx = e.kz = 0;
+  e.timer = 0;
+  e.resistUntil = endResistance(ENEMIES[e.kind].weightClass, rt.time);
+}
+
+function startControl(e: EnemyRt, kind: Control["kind"], duration: number, owner: CompanionId, peak?: number): boolean {
+  if (!alive(e)) return false;
+  if ((e.control?.kind === "snared" && kind !== "snared") || !canControl(ENEMIES[e.kind].weightClass, kind, rt.time, e.resistUntil, e.control)) {
+    pushFx("shrug", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.8, e.z, 0, 0, 0, 1);
+    return false;
+  }
+  e.control = { kind, t0: rt.time, until: rt.time + duration, peak, source: nextId++ };
+  e.flight = { owner, victims: [], x: rt.player.x, z: rt.player.z, yaw: rt.player.yaw, startX: e.x, startZ: e.z };
+  e.fall = null;
+  if (kind === "trapped" || kind === "grabbed") e.kx = e.kz = 0;
+  if ((e.state === "idle" || e.state === "return") && !hasAttackSlot(e)) e.waiting = true;
+  if (!e.waiting) e.state = "stun";
+  e.timer = duration;
+  e.wander = null;
+  return true;
+}
+
+function trapEnemy(e: EnemyRt) {
+  const profile = bubbleProfile(ENEMIES[e.kind].weightClass, upgraded("bubbo"), e.x, e.z, onCloudIsle());
+  if (!profile) {
+    pushFx("shrug", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.8, e.z, 0, 0, 0, 1);
+    return;
+  }
+  // Check before evicting: a resisted shot must not pop another enemy's trap.
+  if (!canControl(ENEMIES[e.kind].weightClass, "trapped", rt.time, e.resistUntil, e.control)) {
+    startControl(e, "trapped", profile.duration, "bubbo", profile.peak);
+    return;
+  }
+  const oldest = oldestTrap(cb.enemies.filter(alive));
+  if (oldest && oldest !== e) popBubble(oldest);
+  if (e.control?.kind === "trapped") popBubble(e);
+  if (startControl(e, "trapped", profile.duration, "bubbo", profile.peak)) {
+    e.air = 0;
+    pushFx("trap", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.8, e.z, 0, 0, 0, 1);
+  }
+}
+
+function popBubble(e: EnemyRt) {
+  if (e.control?.kind !== "trapped") return;
+  const air = e.air;
+  endControl(e);
+  e.fall = { from: air, t0: rt.time };
+  hit(e, fallDamage(air), 0, 0, 0, 0, "bubbo", true);
+  pushFx("trap", e.x, standY(e.x, e.z, getGame().progress.solved) + air, e.z, 0, 0, 0, 1);
+  audio.play("splash");
+}
+
+/** Forced motion samples centres for hazards, bodies for solids. No sliding
+ * around a wall, and no inference that every unwalkable edge is a hazard. */
+function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: () => boolean | void): boolean {
+  const progress = getGame().progress, gates = gatesOf(progress), radius = ENEMIES[e.kind].radius;
+  const solved = cb.world === "cloud" ? progress.act3.puzzles : progress.solved;
+  const fromX = e.x, fromZ = e.z, count = Math.max(1, Math.ceil(Math.hypot(x - fromX, z - fromZ) / 0.1));
+  for (let i = 1; i <= count && alive(e); i++) {
+    const nx = fromX + (x - fromX) * i / count, nz = fromZ + (z - fromZ) * i / count;
+    const hazard = hazardAt(nx, nz, cb.world, solved);
+    if (blocked(nx, nz, radius, gates) || (!hazard && !isWalkable(nx, nz, gates, 0))) return false;
+    e.x = nx; e.z = nz;
+    if (hazard) {
+      pushFx("splashKo", nx, standY(nx, nz, getGame().progress.solved) + e.air, nz, 0, 0, 0, 1);
+      knockOut(e);
+      return true;
+    }
+    if (collision?.() === false) return true;
+  }
+  return true;
+}
+
+function pushBubble(e: EnemyRt, ux: number, uz: number) {
+  const clear = displaceEnemy(e, e.x + ux * 4, e.z + uz * 4, () => {
+    if (e.control?.kind !== "trapped") return;
+    const other = cb.enemies.find(o => o !== e && alive(o) && o.zone === e.zone && Math.hypot(e.x - o.x, e.z - o.z) < ENEMIES[e.kind].radius + ENEMIES[o.kind].radius);
+    if (other) { hit(other, 8, 0, 0, ux, uz, "puff"); popBubble(e); return false; }
+  });
+  if (!clear) popBubble(e);
+}
+
+function weaponCollisions(e: EnemyRt) {
+  const flight = e.flight;
+  if (!flight || !alive(e)) return;
+  for (const o of cb.enemies) {
+    if (o === e || !alive(o) || o.zone !== e.zone || Math.hypot(e.x - o.x, e.z - o.z) > ENEMIES[e.kind].radius + ENEMIES[o.kind].radius || Math.abs(e.air - o.air) > 1) continue;
+    const victims = weaponVictims(flight.victims, o.i);
+    if (!victims) continue;
+    flight.victims = victims;
+    const dx = o.x - e.x, dz = o.z - e.z, d = Math.hypot(dx, dz) || 1;
+    hit(o, 10, 0, 0, dx / d, dz / d, flight.owner);
+    if (alive(o) && o.control?.kind !== "snared") { o.kx += dx / d * 5; o.kz += dz / d * 5; }
+    hit(e, 6, 0, 0, 0, 0, flight.owner);
+    if (!alive(e)) break;
+  }
+}
+
+function wallImpact(e: EnemyRt, speed: number) {
+  const owner = e.flight?.owner ?? "puff";
+  const swinging = e.control?.kind === "grabbed";
+  endControl(e);
+  e.kx = e.kz = 0;
+  if (swinging || speed > 3) hit(e, 8, 0, swinging ? 0 : 0.6, 0, 0, owner);
+}
+
+/** Returns true while scripted control/falling owns the enemy's turn. */
+function updateElements(e: EnemyRt, dt: number): boolean {
+  const burn = tickBurn(e.burn, rt.time, upgraded("ember") ? 1.5 : 1);
+  e.burn = burn.burn;
+  if (burn.damage) hit(e, burn.damage, 0, 0, 0, 0, "ember");
+  if (!alive(e)) return true;
+  const c = e.control, flight = e.flight;
+  if (c?.kind === "trapped") {
+    e.air = bubbleAir(c, rt.time);
+    if (rt.time >= c.until) popBubble(e);
+    return true;
+  }
+  if (c?.kind === "grabbed" && flight) {
+    const t = Math.min(1, (rt.time - c.t0) / (c.until - c.t0));
+    if (flight.bash) {
+      const x = flight.startX + (flight.bash.x - flight.startX) * t, z = flight.startZ + (flight.bash.z - flight.startZ) * t;
+      if (!displaceEnemy(e, x, z)) { wallImpact(e, 5); return true; }
+      if (t >= 1) { endControl(e); hit(e, 14, 0, 1, Math.sin(flight.yaw), Math.cos(flight.yaw), flight.owner, true); }
+    } else {
+      const angle = flight.yaw - 70 * Math.PI / 180 + t * 140 * Math.PI / 180;
+      const x = flight.x + Math.sin(angle) * 2.2, z = flight.z + Math.cos(angle) * 2.2;
+      if (!displaceEnemy(e, x, z, () => weaponCollisions(e))) { wallImpact(e, 5); return true; }
+      if (alive(e) && t >= 1) {
+        e.control = { ...c, kind: "flung", t0: rt.time, until: rt.time + 0.5 };
+        e.kx = Math.cos(angle) * 5; e.kz = -Math.sin(angle) * 5;
+      }
+    }
+    return true;
+  }
+  if (c?.kind === "snared") { e.kx = e.kz = 0; if (rt.time >= c.until) endControl(e); return true; }
+  if (Math.abs(e.kx) + Math.abs(e.kz) > 0.05) {
+    const speed = Math.hypot(e.kx, e.kz);
+    if (!displaceEnemy(e, e.x + e.kx * dt, e.z + e.kz * dt, c?.kind === "flung" ? () => weaponCollisions(e) : undefined)) wallImpact(e, speed);
+    e.kx *= Math.exp(-dt * (c?.kind === "flung" ? 1.5 : 6));
+    e.kz *= Math.exp(-dt * (c?.kind === "flung" ? 1.5 : 6));
+  }
+  if (!alive(e)) return true;
+  if (c?.kind === "flung" || c?.kind === "carried") {
+    if (rt.time >= c.until) endControl(e);
+    return true;
+  }
+  if (e.fall) {
+    e.air = fallingAir(e.fall.from, rt.time - e.fall.t0);
+    if (e.air <= 0) e.fall = null;
+    return true;
+  }
+  return false;
+}
+
 function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
-  const life = kind === "whip" ? 0.3 : kind === "pull" ? 0.45 : kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+  const life = kind === "breath" || kind === "hit" ? 0.35 : kind === "vine" ? 0.45 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
   cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
   if (cb.fx.length > 24) cb.fx.shift();
 }
@@ -712,15 +862,13 @@ function strikePylon(index: number, friend: CompanionId) {
   }
 }
 
-function hitBeaconShape(friend: CompanionId, range: number, ux: number, uz: number, shape: "beam" | "cone" | "burst") {
+function hitBeaconShape(friend: CompanionId, range: number, ux: number, uz: number, shape: "cone" | "circle", degrees = 70, centre = rt.player) {
   if (!cb.beacon.active) return;
   for (let i = 0; i < BEACON_PYLONS.length; i++) {
     if (cb.beacon.pylons[i].phase === "down") continue;
-    const q = BEACON_PYLONS[i], dx = q.x - rt.player.x, dz = q.z - rt.player.z;
-    const distance = Math.hypot(dx, dz), along = dx * ux + dz * uz;
-    if (distance > range + 1) continue;
-    if (shape === "beam" && (along < -.3 || Math.abs(dx * uz - dz * ux) > 1.9)) continue;
-    if (shape === "cone" && along / (distance || 1) < .2 && distance > 1.5) continue;
+    const q = BEACON_PYLONS[i];
+    if (shape === "circle" ? Math.hypot(q.x - centre.x, q.z - centre.z) > range + 1
+      : !inCone(rt.player, Math.atan2(ux, uz), q, range + 1, degrees)) continue;
     strikePylon(i, friend);
   }
 }
@@ -771,8 +919,10 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
     for (const s of cb.shots) if (s.source === e.i && s.hostile) s.life = 0;
   }
   e.hitT = rt.time;
-  e.kx += ux * knock * def.weight * 2.2;
-  e.kz += uz * knock * def.weight * 2.2;
+  if (e.control?.kind !== "snared") {
+    e.kx += ux * knock * def.weight * 2.2;
+    e.kz += uz * knock * def.weight * 2.2;
+  }
   pushFx("hit", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.6, e.z, 0, 0, 0, 1);
   audio.play("hit");
   learn("attack");
@@ -780,17 +930,16 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
     knockOut(e);
     return;
   }
-  // A hit interrupts a wind-up; specials leave it dizzy for longer.
-  if (e.state !== "pulled") {
+  if (stun > 0 && !e.control) {
     e.state = "stun";
     e.timer = Math.max(stun, 0.25);
   }
-  if ((onCloudIsle() && awakeEnemies(e.zone) > 4) || (isRanged(e.kind) && awakeRanged(e.zone) > 2)) {
+  if ((onCloudIsle() && awakeEnemies(e.zone) > 4) || (isRanged(e.kind) && awakeRanged(e.zone) > 2)
+    || (["idle", "return"].includes(e.state) && !hasAttackSlot(e))) {
     // Damage and KO always count, even when all four attack slots are occupied.
     e.state = "idle";
     e.waiting = true;
     e.timer = Math.max(stun, 0.25);
-    e.pull = null;
     e.wander = null;
   }
 }
@@ -800,6 +949,12 @@ function knockOut(e: EnemyRt) {
   e.state = "ko";
   e.timer = 0.9;
   e.hp = 0;
+  e.control = null;
+  e.burn = null;
+  e.flight = null;
+  e.fall = null;
+  e.air = 0;
+  e.kx = e.kz = 0;
   const before = getGame().progress;
   let next;
   if (onCloudIsle()) {
@@ -950,7 +1105,10 @@ export function combatTick(dt: number) {
     if (zone) hooks.enterZone?.(zone as ZoneId);
   }
   updateStance(paused ? 0 : dt);
-  if (paused) return;
+  if (paused) {
+    for (const e of cb.enemies) pauseElements(e, dt);
+    return;
+  }
   if (!cb.knockedOut) cb.vitals = regenMp(cb.vitals, dt);
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack();
@@ -981,7 +1139,9 @@ function sendHome(zone: CombatZone) {
     e.x = e.homeX;
     e.z = e.homeZ;
     e.kx = e.kz = 0;
-    e.pull = null;
+    e.air = 0;
+    e.burn = e.control = e.flight = e.fall = null;
+    e.resistUntil = 0;
     e.wander = null;
     e.state = "idle";
     e.waiting = false;
@@ -1079,11 +1239,18 @@ function updateRanged(e: EnemyRt, dt: number, distance: number) {
   // Sample the player's position now, after the tell, and never steer again.
   e.dx = dx; e.dz = dz;
   const y = standY(e.x, e.z, getGame().progress.solved) + 0.9;
-  cb.shots.push({ id: nextId++, shape: e.kind === "windSprite" ? "wind" : e.kind === "raiderShooter" ? "fireball" : "bubble", owner: "puff", hostile: true, source: e.i,
+  cb.shots.push({ id: nextId++, shape: "hostile", owner: "puff", hostile: true, source: e.i,
     x: e.x, y, z: e.z, y1: p.y + 0.8, vx: dx * 3.2, vy: (p.y + 0.8 - y) * 3.2 / (distance || 1), vz: dz * 3.2, life: 4, age: 0, radius: 0.42, damage: def.damage, knock: 0, stun: 0, size: 1 });
   e.state = "recover";
   e.timer = def.recover;
   audio.play(e.kind === "windSprite" ? "wind" : e.kind === "raiderShooter" ? "fireball" : "bubble");
+}
+
+function pauseElements(e: EnemyRt, dt: number) {
+  if (e.burn) { e.burn.until += dt; e.burn.tick += dt; }
+  if (e.control) { e.control.t0 += dt; e.control.until += dt; }
+  if (e.fall) e.fall.t0 += dt;
+  e.resistUntil += dt;
 }
 
 function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
@@ -1101,13 +1268,8 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
     }
     return;
   }
-  if (!live) return;
-  // Knock-back slides it along the ground (still blocked by scenery).
-  if (Math.abs(e.kx) + Math.abs(e.kz) > 0.05) {
-    stepTo(e, e.x + e.kx * dt, e.z + e.kz * dt, dt, null);
-    e.kx *= Math.exp(-dt * 6);
-    e.kz *= Math.exp(-dt * 6);
-  }
+  if (!live) { pauseElements(e, dt); return; }
+  if (updateElements(e, dt)) return;
   const here = currentCombatZone() === e.zone && !cb.knockedOut;
   const dPlayer = Math.hypot(p.x - e.x, p.z - e.z);
   const dHome = Math.hypot(e.x - e.homeX, e.z - e.homeZ);
@@ -1188,20 +1350,6 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
     case "stun":
       if (e.timer <= 0) e.state = here ? "chase" : "return";
       return;
-    case "pulled": {
-      const pl = e.pull;
-      if (pl) {
-        pl.t = Math.min(1, pl.t + dt / 0.4);
-        const k = pl.t * pl.t * (3 - 2 * pl.t);
-        stepTo(e, pl.fx + (pl.tx - pl.fx) * k, pl.fz + (pl.tz - pl.fz) * k, dt, null);
-        if (pl.t >= 1) {
-          e.pull = null;
-          e.state = "stun";
-          e.timer = COMBAT.leafy.special.stun;
-        }
-      } else e.state = "stun";
-      return;
-    }
     case "return":
       if (here && dPlayer < def.notice * 0.8 && dHome < def.leash * 0.7 && hasAttackSlot(e) && (!isRanged(e.kind) || rangedClear(e))) {
         e.state = "chase";
@@ -1223,12 +1371,14 @@ function separate() {
   const list = cb.enemies.filter((e) => alive(e) && e.zone === currentCombatZone());
   for (let a = 0; a < list.length; a++) {
     const e = list[a];
+    if (e.control || e.fall) continue;
     const r = ENEMIES[e.kind].radius;
     const dx = e.x - p.x, dz = e.z - p.z;
     const d = Math.hypot(dx, dz);
     if (d < r + pr && d > 1e-4) stepTo(e, p.x + (dx / d) * (r + pr), p.z + (dz / d) * (r + pr), 0.016, null);
     for (let b = a + 1; b < list.length; b++) {
       const o = list[b];
+      if (o.control || o.fall) continue;
       const rr = r + ENEMIES[o.kind].radius;
       const ox = o.x - e.x, oz = o.z - e.z;
       const od = Math.hypot(ox, oz);
@@ -1280,6 +1430,7 @@ function updateShots(dt: number) {
       s.y += (s.vy ?? 0) * step;
       s.z += s.vz * step;
       if (!isWalkable(s.x, s.z, gates, 0.12) || (s.hostile && combatZoneAt(s.x, s.z) !== currentCombatZone())) {
+        if (s.shape === "bomb") specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
         s.life = 0;
         break;
       }
@@ -1295,22 +1446,32 @@ function updateShots(dt: number) {
       }
       if (cb.beacon.active) {
         const pylon = BEACON_PYLONS.findIndex((p, i) => cb.beacon.pylons[i].phase !== "down" && Math.hypot(p.x - s.x, p.z - s.z) < 1.05 + s.radius);
-        if (pylon >= 0) { strikePylon(pylon, s.owner); s.life = 0; continue; }
+        if (pylon >= 0) {
+          if (s.shape === "bomb") specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+          else strikePylon(pylon, s.owner);
+          s.life = 0; continue;
+        }
       }
       for (const e of cb.enemies) {
         if (!alive(e) || e.zone !== currentCombatZone()) continue;
         const r = ENEMIES[e.kind].radius + s.radius;
         if (Math.abs(e.x - s.x) > r || Math.abs(e.z - s.z) > r || Math.hypot(e.x - s.x, e.z - s.z) > r) continue;
         const v = Math.hypot(s.vx, s.vz) || 1;
-        hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
-        // Big bubbles and big fireballs splash the enemies next to the one they hit.
-        if (s.size > 1.3) {
-          for (const o of cb.enemies) if (o !== e && alive(o) && o.zone === e.zone && Math.hypot(o.x - e.x, o.z - e.z) < 1.8) hit(o, s.damage * 0.5, s.knock * 0.6, s.stun, (o.x - e.x) / 1.8, (o.z - e.z) / 1.8, s.owner, s.basic);
-        }
+        if (s.shape === "trap") {
+          hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
+          trapEnemy(e);
+        } else if (s.shape === "bomb") specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
         s.life = 0;
         break;
       }
-      if (s.y < standY(s.x, s.z, solved) + 0.1) s.life = 0;
+      if (s.y < standY(s.x, s.z, solved) + 0.1) {
+        if (s.shape === "bomb" && s.life > 0) specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+        s.life = 0;
+      }
+    }
+    if (s.shape === "bomb" && s.life > 0 && s.age >= s.life - 1e-9) {
+      specialCircle(s.owner, COMBAT[s.owner].special, s.x, s.z, "bomb");
+      s.life = 0;
     }
   }
   cb.shots = cb.shots.filter((s) => s.age < s.life);

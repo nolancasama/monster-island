@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { basicAttack, cb, combatTick, crabDamage, hooks, isRanged, resetBeaconFight, resetCombat, specialAttack, travelCombat, wakeUp, type Shot } from "./combat";
+import { basicAttack, cb, combatTick, crabDamage, hooks, isRanged, pickTarget, resetBeaconFight, resetCombat, specialAttack, travelCombat, wakeUp, type Shot } from "./combat";
 import { newProgress } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
@@ -7,7 +7,7 @@ import { region } from "./world/region";
 import { COMBAT, ENEMIES, type CompanionId, type EnemyKind } from "./data/combat";
 import { BEACON_PYLONS } from "./logic/beacon";
 import { BEACON, CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
-import { ENEMY_SPAWNS } from "./world/lowland";
+import { ENEMY_SPAWNS, POND } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
 import { PLAYER_R, gatesOf, isWalkable, standY } from "./world/collision";
 import { run } from "./flow/script";
@@ -120,35 +120,35 @@ describe("companions leaving combat", () => {
 });
 
 describe("facing-directed player attacks", () => {
-  for (const friend of ["bubbo", "puff", "ember"] as const) {
+  for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
     for (const upgrade of [false, true]) {
-      it(`${friend}${upgrade ? " upgraded" : ""} hits an enemy in its path without changing yaw`, () => {
-        const e = loneEnemy();
+      it(`${friend}${upgrade ? " upgraded" : ""} uses free J along facing without changing yaw`, () => {
+        const e = loneEnemy("snapjaw", 0, 23);
         setGame(g => ({ progress: { ...g.progress, active: friend, act2: { ...g.progress.act2, upgrades: upgrade ? [friend] : [] } } }));
         cb.stance.friend = friend; cb.stance.k = 1;
+        cb.vitals.mp[friend] = 37;
         expect(basicAttack()).toBe(true);
         expect(rt.player.yaw).toBe(0);
-        expect(cb.shots).toHaveLength(friend === "puff" && upgrade ? 2 : 1);
+        expect(cb.vitals.mp[friend]).toBe(37);
+        expect(cb.shots).toHaveLength(friend === "bubbo" ? 1 : 0);
         for (const shot of cb.shots) {
           expect(shot.vx).toBeCloseTo(0);
           expect(shot.vz).toBe(COMBAT[friend].basic.speed);
-          expect(shot.radius).toBeGreaterThanOrEqual(.8);
+          expect(shot.radius).toBe(.8);
         }
-        advanceCombat(.7);
-        expect(e.hp).toBeLessThan(100);
+        advanceCombat(.4);
+        if (friend === "bubbo") expect(e.control?.kind).toBe("trapped");
+        else expect(e.hp).toBeLessThan(100);
       });
 
-      it(`${friend}${upgrade ? " upgraded" : ""} misses an enemy that leaves the path after firing`, () => {
-        const e = loneEnemy();
+      it(`${friend}${upgrade ? " upgraded" : ""} excludes enemies behind the player`, () => {
+        const e = loneEnemy("snapjaw", 0, 18.5);
         setGame(g => ({ progress: { ...g.progress, active: friend, act2: { ...g.progress.act2, upgrades: upgrade ? [friend] : [] } } }));
         cb.stance.friend = friend; cb.stance.k = 1;
         expect(basicAttack()).toBe(true);
-        const shots = [...cb.shots], velocity = shots.map(s => ({ vx: s.vx, vy: s.vy, vz: s.vz }));
-        e.x = e.homeX = 5;
-        rt.player.yaw = Math.PI / 2;
-        advanceCombat(.7);
         expect(e.hp).toBe(100);
-        shots.forEach((shot, i) => expect({ vx: shot.vx, vy: shot.vy, vz: shot.vz }).toEqual(velocity[i]));
+        expect(e.control).toBeNull();
+        expect(rt.player.yaw).toBe(0);
       });
     }
 
@@ -158,26 +158,297 @@ describe("facing-directed player attacks", () => {
       expect(basicAttack()).toBe(true);
       expect(rt.player.yaw).toBe(0);
       expect(cb.move).toMatchObject({ tx: 0, tz: 20 + COMBAT[friend].basic.range });
-      expect(cb.shots[0].vx).toBeCloseTo(0);
+      for (const shot of cb.shots) expect(shot.vx).toBeCloseTo(0);
     });
   }
 
-  for (const friend of ["bubbo", "puff"] as const) {
+  for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
     it(`${friend}'s directional special keeps facing and misses an off-axis enemy`, () => {
       const e = loneEnemy("stormCrab", 4, 20);
       cb.stance.friend = friend; cb.stance.k = 1;
+      const mp = cb.vitals.mp[friend];
       expect(specialAttack()).toBe(true);
       expect(rt.player.yaw).toBe(0);
       expect(e.hp).toBe(100);
       expect(cb.move).toMatchObject({ tx: 0, tz: 20 + COMBAT[friend].special.range });
+      expect(cb.vitals.mp[friend]).toBe(mp - COMBAT[friend].special.cost);
+      expect(cb.ready.special).toBe(rt.time + COMBAT[friend].special.cooldown);
     });
   }
 
-  it("retains Ember's area burst damage around the player", () => {
-    const e = loneEnemy("stormCrab", 3, 20);
+  it("Ember's Inferno stub damages its forward cone, rather than all around", () => {
+    const e = loneEnemy("stormCrab", 0, 23);
     cb.stance.friend = "ember"; cb.stance.k = 1;
     expect(specialAttack()).toBe(true);
-    expect(e.hp).toBe(70);
+    expect(e.hp).toBe(94);
+  });
+
+  it("Bubbo's projectile never follows a moving target or a later player turn", () => {
+    const e = loneEnemy("snapjaw");
+    cb.stance.friend = "bubbo"; cb.stance.k = 1;
+    expect(basicAttack()).toBe(true);
+    const shot = cb.shots[0], velocity = { vx: shot.vx, vy: shot.vy, vz: shot.vz };
+    e.x = e.homeX = 5;
+    rt.player.yaw = Math.PI / 2;
+    advanceCombat(.7);
+    expect(e.control).toBeNull();
+    expect(e.hp).toBe(100);
+    expect({ vx: shot.vx, vy: shot.vy, vz: shot.vz }).toEqual(velocity);
+  });
+});
+
+describe("elemental J simulation", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function friend(id: CompanionId) {
+    setGame(g => ({ progress: { ...g.progress, active: id } }));
+    cb.stance.friend = id; cb.stance.k = 1; cb.ready.basic = 0;
+  }
+  function extra(i: number, kind: EnemyKind, x: number, z: number) {
+    const e = cb.enemies[i];
+    Object.assign(e, { kind, x, z, homeX: x, homeZ: z, zone: "stormbreakCoast", hp: 100, state: "recover", timer: 99 });
+    return e;
+  }
+
+  it("Fire Breath ignites once, refreshes without extra ticks, and upgrades burn/range", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("ember");
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(93);
+    expect(e.burn).not.toBeNull();
+    advanceCombat(.3);
+    expect(e.hp).toBe(93);
+    advanceCombat(.05);
+    expect(e.hp).toBe(91);
+    advanceCombat(.25);
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(84);
+    advanceCombat(.1);
+    expect(e.hp).toBe(82);
+    Object.assign(e, { z: 25, hp: 100, burn: null, state: "recover", timer: 99 });
+    setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: ["ember"] } } }));
+    cb.ready.basic = 0;
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(93);
+    advanceCombat(.35);
+    expect(e.hp).toBe(90);
+  });
+
+  for (const kind of ["shellback", "thunderBeetle"] as const) {
+    it(`${kind} is never lifted by a trap or grab, and a grab tugs it one metre`, () => {
+      const e = loneEnemy(kind, 0, 23);
+      friend("bubbo");
+      expect(basicAttack()).toBe(true);
+      advanceCombat(.4);
+      expect(e.control).toBeNull(); expect(e.air).toBe(0);
+      friend("leafy");
+      const z = e.z;
+      expect(basicAttack()).toBe(true);
+      expect(e.z).toBeCloseTo(z - 1);
+      expect(e.hp).toBe(92);
+      expect(e.control).toBeNull(); expect(e.air).toBe(0);
+    });
+  }
+
+  for (const upgrade of [false, true]) {
+    it(`medium bubble ${upgrade ? "upgraded" : "basic"} has the specified peak and lifetime`, () => {
+      const e = loneEnemy("snapjaw", 0, 23);
+      friend("bubbo");
+      if (upgrade) setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: ["bubbo"] } } }));
+      expect(basicAttack()).toBe(true);
+      advanceCombat(.3);
+      expect(e.control).toMatchObject({ kind: "trapped", peak: upgrade ? 2.4 : .8 });
+      const duration = e.control!.until - e.control!.t0;
+      expect(duration).toBeCloseTo(upgrade ? 1.9 : 1);
+      advanceCombat(upgrade ? 2 : 1.1);
+      expect(e.control).toBeNull();
+      expect(e.hp).toBe(upgrade ? 75 : 88);
+      expect(e.resistUntil).toBeGreaterThan(rt.time);
+    });
+  }
+
+  it("trapping cancels ranged wind-ups and stops enemy actions while rising", () => {
+    const e = loneEnemy("forestSpitter", 0, 23.5);
+    e.state = "windup"; e.timer = .7;
+    friend("bubbo");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.35);
+    expect(e.control?.kind).toBe("trapped");
+    const location = { x: e.x, z: e.z };
+    advanceCombat(.6);
+    expect(e).toMatchObject(location);
+    expect(e.air).toBeGreaterThan(0);
+    expect(cb.shots.some(s => s.hostile)).toBe(false);
+    expect(cb.vitals.hp).toBe(100);
+  });
+
+  it("a fourth actual trap pops the oldest using its current height", () => {
+    const e = loneEnemy("gloomlet", 0, 23);
+    const older = extra(1, "gloomlet", 2, 25), mid = extra(2, "gloomlet", -2, 25), newest = extra(3, "gloomlet", 3, 26);
+    for (const [i, target] of [older, mid, newest].entries()) {
+      target.control = { kind: "trapped", t0: rt.time - .6 + i * .1, until: rt.time + 1.3 + i * .1, peak: 2.4 };
+      target.air = 2.4 * (.6 - i * .1) / 1.1;
+    }
+    friend("bubbo");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.2);
+    expect(e.control?.kind).toBe("trapped");
+    expect(older.control).toBeNull();
+    expect(older.hp).toBeLessThan(100);
+    expect(cb.enemies.filter(e => e.control?.kind === "trapped")).toHaveLength(3);
+  });
+
+  it("a resisted control still takes damage and knock, emits shrug, and keeps acting", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    e.resistUntil = rt.time + 2;
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(95);
+    expect(e.control).toBeNull();
+    expect(e.kz).toBe(6);
+    expect(cb.fx.some(f => f.kind === "shrug")).toBe(true);
+    advanceCombat(.1);
+    expect(e.z).toBeGreaterThan(23);
+  });
+
+  it("burn and control clocks pause with the journal rather than catching up on resume", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("bubbo");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.3);
+    expect(e.control?.kind).toBe("trapped");
+    friend("ember");
+    expect(basicAttack()).toBe(true);
+    const hp = e.hp, air = e.air;
+    setGame({ journalOpen: true });
+    advanceCombat(3);
+    expect(e.hp).toBe(hp); expect(e.air).toBe(air);
+    setGame({ journalOpen: false });
+    advanceCombat(.1);
+    expect(e.hp).toBe(hp);
+    expect(e.control?.kind).toBe("trapped");
+    advanceCombat(.25);
+    expect(e.hp).toBe(hp - 2);
+  });
+
+  for (const [kind, knock] of [["gloomlet", 9], ["snapjaw", 6], ["shellback", 2], ["thunderBeetle", 2]] as const) {
+    it(`Wind Blast gives ${kind} its weight-class knock without lifting it`, () => {
+      const e = loneEnemy(kind, 0, 23);
+      friend("puff");
+      expect(basicAttack()).toBe(true);
+      expect(e.hp).toBe(95); expect(e.kz).toBe(knock);
+      expect(e.control?.kind).toBe("flung"); expect(e.air).toBe(0);
+    });
+  }
+
+  it("Vine Grab excludes behind and through-solid targets", () => {
+    const e = loneEnemy("snapjaw", 0, 19);
+    friend("leafy");
+    expect(pickTarget(4.5)).toBeNull();
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(100);
+    // A coast rock at (-6,32), radius 2.2, blocks this four-metre segment.
+    Object.assign(rt.player, { x: -6, z: 30, yaw: 0 });
+    Object.assign(e, { x: -6, z: 34 });
+    cb.ready.basic = 0;
+    expect(pickTarget(4.5)).toBeNull();
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(100);
+    expect(e.control).toBeNull();
+  });
+
+  it("one Vine Grab press swings then flings along the locked tangent", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("leafy");
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(92); expect(e.control?.kind).toBe("grabbed");
+    rt.player.yaw = Math.PI;
+    advanceCombat(.46);
+    expect(e.control?.kind).toBe("flung");
+    expect(e.kx).toBeGreaterThan(0); expect(e.kz).toBeLessThan(0);
+    advanceCombat(.55);
+    expect(e.control).toBeNull();
+    expect(e.resistUntil).toBeGreaterThan(rt.time);
+  });
+
+  it("Double Grab bashes the nearest two for fourteen and a second of stun", () => {
+    const a = loneEnemy("snapjaw", -.5, 23), b = extra(1, "snapjaw", .5, 23);
+    friend("leafy");
+    setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: ["leafy"] } } }));
+    expect(basicAttack()).toBe(true);
+    expect([a.control?.kind, b.control?.kind]).toEqual(["grabbed", "grabbed"]);
+    advanceCombat(.36);
+    expect([a.hp, b.hp]).toEqual([86, 86]);
+    expect([a.state, b.state]).toEqual(["stun", "stun"]);
+    expect(a.timer).toBeGreaterThan(.95);
+  });
+
+  it("flung weapons hit each victim once and take recoil damage", () => {
+    const weapon = loneEnemy("snapjaw", 0, 22.5), victim = extra(1, "snapjaw", 0, 25.6);
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    expect(weapon.control?.kind).toBe("flung");
+    expect(victim.hp).toBe(100); // outside the five metre blast
+    advanceCombat(.6);
+    expect(weapon.hp).toBe(89);
+    expect(victim.hp).toBe(90);
+  });
+
+  it("fast wall impacts add eight damage and .6 seconds stun", () => {
+    const e = loneEnemy("snapjaw", -6, 28.5);
+    Object.assign(rt.player, { x: -6, z: 25.5, yaw: 0 });
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.4);
+    expect(e.hp).toBe(87);
+    expect(e.control).toBeNull();
+    expect(e.state).toBe("stun");
+    expect(e.timer).toBeGreaterThan(0);
+    expect(e.kx).toBe(0); expect(e.kz).toBe(0);
+  });
+
+  it("Wind Blast pops a pushed bubble on another enemy, using its current air", () => {
+    const e = loneEnemy("snapjaw", 0, 23), other = extra(1, "snapjaw", 0, 25.6);
+    e.control = { kind: "trapped", t0: rt.time - .4, until: rt.time + 1.5, peak: 2.4 }; e.air = .8;
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    expect(e.control).toBeNull();
+    expect(e.hp).toBe(83); // five direct plus round(6+8*.8)
+    expect(e.air).toBe(.8); expect(e.fall).not.toBeNull();
+    expect(other.hp).toBe(92);
+    advanceCombat(.4);
+    expect(e.air).toBe(0);
+  });
+
+  it("Wind Blast pops a pushed bubble on a solid without losing its current height", () => {
+    const e = loneEnemy("snapjaw", -6, 28.5);
+    Object.assign(rt.player, { x: -6, z: 25.5, yaw: 0 });
+    e.control = { kind: "trapped", t0: rt.time - .4, until: rt.time + 1.5, peak: 2.4 }; e.air = .8;
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    expect(e.control).toBeNull(); expect(e.air).toBe(.8); expect(e.hp).toBe(83);
+    expect(e.z).toBeLessThan(29.5);
+  });
+
+  it("hazard KO records the original stage credit and produces ordinary rewards", () => {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(e => e.zone === "grove")!;
+    Object.assign(e, { kind: "snapjaw", x: POND.x + POND.r + .2, z: POND.z, hp: 100, state: "recover", timer: 99 });
+    Object.assign(rt.player, { x: e.x + 2, z: e.z, yaw: -Math.PI / 2 });
+    cb.zones.current = "grove";
+    cb.zones.defeated.grove = cb.enemies.filter(o => o.zone === "grove" && o !== e).map(o => o.i);
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
+    expect(e.state).toBe("ko");
+    expect(cb.zones.defeated.grove).toContain(e.i);
+    expect(getGame().progress.act2.cleared).toContain("grove");
+    expect(cb.drops.some(d => d.kind === "coin")).toBe(true);
+    expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
   });
 });
 
@@ -280,7 +551,7 @@ describe("shared ranged enemy rules", () => {
   }
 
   function hostileShot(x: number, z: number, vx: number, vz: number): Shot {
-    return { id: 9000, shape: "wind", owner: "puff", hostile: true, source: 0, x, y: 10, z, y1: 10,
+    return { id: 9000, shape: "hostile", owner: "puff", hostile: true, source: 0, x, y: 10, z, y1: 10,
       vx, vz, life: 5, age: 0, radius: .42, damage: 5, knock: 0, stun: 0, size: 1 };
   }
 
@@ -335,7 +606,8 @@ describe("Cloud Isle combat", () => {
     cb.stance.k = 1;
     expect(basicAttack()).toBe(true);
     expect(e.state).toBe("stun");
-    expect(e.hp).toBe(42.5);
+    expect(e.hp).toBe(44);
+    expect(e.control?.kind).toBe("grabbed");
   });
 
   it("keeps electric panels safe before their pulse, then deals light damage without knock-back", () => {
@@ -361,10 +633,10 @@ describe("Cloud Isle combat", () => {
 
   it("damages a fifth sleeping enemy without waking a fifth attacker", () => {
     cb.enemies.forEach((e, i) => Object.assign(e, { kind: "stormCrab", x: 0, z: 22, yaw: 0, hp: 100, state: i < 4 ? "windup" : i === 4 ? "idle" : "gone" }));
-    cb.stance.friend = "leafy";
+    cb.stance.friend = "ember";
     cb.stance.k = 1;
     expect(basicAttack()).toBe(true);
-    expect(cb.enemies[4].hp).toBe(89);
+    expect(cb.enemies[4].hp).toBe(93);
     expect(cb.enemies[4].state).toBe("idle");
     expect(cb.enemies[4].waiting).toBe(true);
     expect(cb.enemies.filter(e => !["idle", "return", "ko", "gone"].includes(e.state))).toHaveLength(4);
@@ -482,18 +754,18 @@ describe("Storm Beacon world combat integration", () => {
     enterArena();
     expect(basicAttack()).toBe(true);
     expect(cb.shots).toHaveLength(1);
-    advance(.55);
+    advance(.65);
     expect(cb.beacon.power).toBe(3);
     expect(cb.beacon.pylons[0].phase).toBe("shielded");
     expect(cb.shots).toHaveLength(0);
     cb.beacon.pylons[0].phase = "charging";
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.pylons[0].phase).toBe("charging");
-    advance(.55);
+    advance(.65);
     expect(cb.beacon.pylons[0]).toMatchObject({ phase: "exposed", shorted: true });
     expect(cb.beacon.power).toBe(3);
     expect(basicAttack()).toBe(true);
-    advance(.55);
+    advance(.65);
     expect(cb.beacon.pylons[0].phase).toBe("down");
     expect(cb.beacon.power).toBe(2);
   });
@@ -507,7 +779,7 @@ describe("Storm Beacon world combat integration", () => {
       Object.assign(rt.player, { x: p.x, z: p.z - 4, yaw: 0 });
       cb.beacon.pylons[i].phase = "exposed";
       expect(basicAttack()).toBe(true);
-      advance(.55);
+      advance(.65);
       expect(cb.beacon.power).toBe(2 - i);
       expect(cb.beacon.pylons[i].phase).toBe("down");
       if (i < 2) expect(completed).not.toHaveBeenCalled();
@@ -533,7 +805,7 @@ describe("Storm Beacon world combat integration", () => {
     cb.beacon.attack = "gustTell"; cb.beacon.timer = 1; cb.beacon.gust = { x: 1, z: 0 };
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.gustCancelled).toBe(false);
-    advance(.45);
+    advance(.6);
     rt.player.yaw = Math.PI / 2;
     expect(basicAttack()).toBe(true);
     expect(cb.beacon.gustCancelled).toBe(true);
@@ -543,10 +815,10 @@ describe("Storm Beacon world combat integration", () => {
     expect(rt.player).toMatchObject(position);
   });
 
-  it("uses free boss specials at zero MP while retaining ordinary coast MP costs", () => {
+  it("spends the new special MP cost both at the beacon and on the coast", () => {
     enterArena("leafy");
     Object.assign(rt.player, { x: -7, z: BEACON_PYLONS[0].z - 4 });
-    cb.vitals.mp.leafy = 0; cb.beacon.pylons[0].phase = "exposed";
+    cb.vitals.mp.leafy = 30; cb.beacon.pylons[0].phase = "exposed";
     expect(specialAttack()).toBe(true);
     expect(cb.beacon.power).toBe(2);
     expect(cb.vitals.mp.leafy).toBe(0);
@@ -554,7 +826,7 @@ describe("Storm Beacon world combat integration", () => {
     cb.cloudZones.current = "stormbreakCoast";
     cb.ready.special = 0;
     expect(specialAttack()).toBe(false);
-    cb.vitals.mp.leafy = 25;
+    cb.vitals.mp.leafy = 30;
     expect(specialAttack()).toBe(true);
     expect(cb.vitals.mp.leafy).toBe(0);
   });

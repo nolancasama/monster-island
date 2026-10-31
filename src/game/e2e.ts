@@ -87,7 +87,7 @@ export function installE2eHook(seed: number) {
           hp: cb.vitals.hp,
           mp: { ...cb.vitals.mp },
           knockedOut: cb.knockedOut,
-          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
+          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, air: e.air, control: e.control?.kind ?? null, burning: e.burn !== null, resistUntil: e.resistUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
           drops: cb.drops.length,
           shots: cb.shots.length,
           projectiles: cb.shots.map(s => ({ id: s.id, hostile: Boolean(s.hostile), source: s.source, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, age: s.age, life: s.life, radius: s.radius })),
@@ -201,11 +201,12 @@ export function installE2eHook(seed: number) {
       for (const e of cb.enemies) {
         const f = fixture.enemies.find(f => f.i === e.i);
         e.state = f?.state ?? (f ? "chase" : "gone");
+        e.air = e.resistUntil = 0; e.burn = e.control = e.flight = e.fall = null;
         if (!f) continue;
         e.x = e.homeX = f.x; e.z = e.homeZ = f.z;
         e.hp = ENEMIES[e.kind].hp; e.timer = f.timer ?? 0;
         e.yaw = f.yaw ?? 0; e.kx = e.kz = 0; e.waiting = false;
-        e.wander = null; e.pull = null; e.struck = false;
+        e.wander = null; e.struck = false;
       }
       if (fixture.clearShots !== false) cb.shots.length = 0;
       cb.fx.length = 0;
