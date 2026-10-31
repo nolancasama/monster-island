@@ -75,9 +75,15 @@ export const CLOUD_ZONES: Record<CloudArea, { id: CloudArea; name: Text; hostile
     // Entry mouth, entry chamber, underground lake (raft), crystal side
     // chamber, steam machinery (boiler gate), electric corridor, exit climb.
     walk: [GROTTO_MOUTH_TRAIL, ...GROTTO_CAVE, GROTTO_EXIT_TRAIL] },
-  observatoryApproach: { id: "observatoryApproach", name: { en: "Ancient Observatory — Entrance", ja: "古代の天文台・入口" }, hostile: false, walk: [rect(-9, 9, 400, 404)] },
+  observatoryApproach: { id: "observatoryApproach", name: { en: "Ancient Observatory — Entrance", ja: "古代の天文台・入口" }, hostile: false,
+    // A forecourt where both routes arrive, with the rest point.
+    walk: [rect(-16, 16, 399, 406)] },
   ancientObservatory: { id: "ancientObservatory", name: { en: "Ancient Observatory", ja: "古代の天文台" }, hostile: true,
-    walk: [rect(-2.6, 2.6, 402, 409), rect(-10, 10, 407, 424), rect(-2.6, 2.6, 422, 428)] },
+    // The central hall and dial, a terrace on each side, and two broken towers
+    // reached by walkways; the lift corridor north of the hall rises to the beacon.
+    walk: [rect(-2.6, 2.6, 402, 409), rect(-10, 10, 407, 424), rect(-2.6, 2.6, 422, 428),
+      rect(-26, -8, 409, 421), rect(8, 26, 409, 421),
+      trail([[-20, 421], [-24, 426]], 1.8), disc(-24, 428, 6.5), trail([[20, 421], [24, 426]], 1.8), disc(24, 428, 6.5)] },
   stormBeacon: { id: "stormBeacon", name: { en: "Storm Beacon", ja: "嵐の灯台" }, hostile: true,
     walk: [rect(-2.6, 2.6, 425, 431), disc(0, 439, 12)] },
 };
@@ -150,7 +156,7 @@ export function cloudWalkable(x: number, z: number, g: CloudGates = {}, r = 0): 
   if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
   if (!ORDER.some(id => CLOUD_ZONES[id].walk.some(s => inside(s, x, z, r)))) return false;
   // The four persistent lamps raise the only route onto the summit platform.
-  if (z > OBSERVATORY.lift.z - .5 - r && (!g.cleared?.includes("ancientObservatory")
+  if (z > OBSERVATORY.lift.z - .5 - r && Math.abs(x) < 8 && (!g.cleared?.includes("ancientObservatory")
     || !["leafy", "bubbo", "puff", "ember"].every(id => g.observatoryLamps?.includes(id)))) return false;
   if (!(g.cleared?.includes("stormbreakCoast") || g.cleared?.includes("coast")) && nearCut(x, z, -12, 12, 157.6, 158.4, r)) return false;
   if (!g.tunnelOpen && nearCut(x, z, -23, -7, 204, 205, r)) return false;
@@ -175,8 +181,10 @@ export function cloudWalkable(x: number, z: number, g: CloudGates = {}, r = 0): 
 }
 const smooth = (v: number) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
 export function cloudY(x: number, z: number): number {
-  if (z >= OBSERVATORY.lift.z + 5) return BEACON.y;
-  if (z >= OBSERVATORY.lift.z - 1) return OBSERVATORY.y + smooth((z - (OBSERVATORY.lift.z - 1)) / 6) * 15;
+  // The lift corridor and the beacon summit rise; the towers beside them do not.
+  const summit = Math.abs(x) < 14;
+  if (summit && z >= OBSERVATORY.lift.z + 5) return BEACON.y;
+  if (summit && z >= OBSERVATORY.lift.z - 1) return OBSERVATORY.y + smooth((z - (OBSERVATORY.lift.z - 1)) / 6) * 15;
   if (z < 14) return .8;
   const coast = .8 + smooth((z - 14) / 144) * 3.2
     + smooth(1 - Math.hypot(x + 34, z - 100) / 15) * 5
@@ -209,10 +217,10 @@ export const CLOUD_OBSTACLE_PLACE = {
   canopyGust: { x: -58, z: 336, face: { x: -61, z: 337.5 } },
   grottoRaft: { x: 52, z: 318.5, face: { x: 52, z: 321 } },
   grottoBoiler: { x: 40, z: 357, face: { x: 37.5, z: 360 } },
-  obsLeafy: { x: -5.5, z: 411, face: { x: -6.5, z: 412 } },
-  obsBubbo: { x: 5.5, z: 411, face: { x: 6.5, z: 412 } },
-  obsPuff: { x: -5.5, z: 419, face: { x: -6.5, z: 420 } },
-  obsEmber: { x: 5.5, z: 419, face: { x: 6.5, z: 420 } },
+  obsLeafy: { x: -20, z: 413, face: { x: -23, z: 413 } },
+  obsBubbo: { x: 20, z: 413, face: { x: 23, z: 413 } },
+  obsPuff: { x: -24, z: 427, face: { x: -24, z: 431 } },
+  obsEmber: { x: 24, z: 427, face: { x: 24, z: 431 } },
 };
 export const CLOUD_PUZZLE_RULES: Record<CloudPuzzleId, { friend: CompanionId; need: AbilityId; command: PhraseId; noun: string; result: Text }> = {
   coastWindmill: { friend: "puff", need: "fly", command: "cmdBlow", noun: "the windmill crane", result: { en: "The windmill turns! The crane lowers a plank to the sea cave.", ja: "風車が回って、洞窟への橋が下りた！" } },
@@ -243,10 +251,10 @@ export const CLOUD_ENEMY_SPAWNS: Array<Vec2 & { zone: CloudArea; kind: CloudEnem
   ].map((enemy, n) => side < 0 ? { ...enemy, x: [-28, -33, -47, -53, -46, -52][i * 2 + n], z: [296, 300, 330, 334, 375, 379][i * 2 + n] }
     // Grotto pairs: entry chamber, lake (south shore), machinery chamber.
     : { ...enemy, x: [25, 32, 47, 57, 36, 45][i * 2 + n], z: [296, 301, 315, 317, 349, 354][i * 2 + n] }))),
-  { zone: "ancientObservatory", kind: "windSprite", x: -4, z: 409 },
-  { zone: "ancientObservatory", kind: "raiderShooter", replaces: "raiderDrone", x: 4, z: 412 },
+  { zone: "ancientObservatory", kind: "windSprite", x: -18, z: 417 },
+  { zone: "ancientObservatory", kind: "raiderShooter", replaces: "raiderDrone", x: 18, z: 411 },
   { zone: "ancientObservatory", kind: "thunderBeetle", x: -4, z: 418 },
-  { zone: "ancientObservatory", kind: "windSprite", x: 4, z: 421 },
+  { zone: "ancientObservatory", kind: "windSprite", x: 5, z: 421 },
 ];
 export const CLOUD_CHESTS = [
   { id: "cloudSeaChest", x: -50, z: 71, yaw: .5, coins: 20, amber: 0, puzzle: "coastWindmill" as const },
@@ -277,16 +285,34 @@ export function projectCloudPosition(p: Vec2, g: CloudGates): Vec2 {
   return cloudNearestWalkable(p.x, p.z, .35, g);
 }
 
+/** The nearest walkable point on the island's .5 m lattice. Searches square
+ * rings outward from the point (the island is too large to scan whole on a
+ * dismount or a knock-out) and breaks ties as a full scan would: lower z,
+ * then lower x. */
 export function cloudNearestWalkable(x: number, z: number, r: number, g: CloudGates): Vec2 {
   if (cloudWalkable(x, z, g, r)) return { x, z };
   if (!Number.isFinite(x) || !Number.isFinite(z)) return { ...CLOUD_DOCK.spawn };
-  let best: Vec2 = { ...CLOUD_DOCK.spawn }, distance = Infinity;
-  for (let pz = CLOUD_BOUNDS.z0; pz <= CLOUD_BOUNDS.z1; pz += .5) for (let px = CLOUD_BOUNDS.x0; px <= CLOUD_BOUNDS.x1; px += .5) {
-    if (!cloudWalkable(px, pz, g, r)) continue;
+  const b = CLOUD_BOUNDS, clampTo = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const cx = clampTo(Math.round(x * 2) / 2, b.x0, b.x1), cz = clampTo(Math.round(z * 2) / 2, b.z0, b.z1);
+  const span = Math.ceil(Math.max(b.x1 - b.x0, b.z1 - b.z0) * 2);
+  let best: Vec2 | null = null, distance = Infinity;
+  const consider = (px: number, pz: number) => {
+    if (px < b.x0 || px > b.x1 || pz < b.z0 || pz > b.z1 || !cloudWalkable(px, pz, g, r)) return;
     const d = Math.hypot(px - x, pz - z);
-    if (d < distance) { best = { x: px, z: pz }; distance = d; }
+    if (d < distance - 1e-9 || (Math.abs(d - distance) <= 1e-9 && best && (pz < best.z || (pz === best.z && px < best.x)))) {
+      best = { x: px, z: pz }; distance = d;
+    }
+  };
+  for (let k = 0; k <= span; k++) {
+    // Nothing on this ring can be nearer than k lattice steps minus the offset to the centre.
+    if (k * .5 - .36 > distance) break;
+    if (k === 0) { consider(cx, cz); continue; }
+    for (let i = -k; i <= k; i++) {
+      consider(cx + i * .5, cz - k * .5); consider(cx + i * .5, cz + k * .5);
+      if (i > -k && i < k) { consider(cx - k * .5, cz + i * .5); consider(cx + k * .5, cz + i * .5); }
+    }
   }
-  return best;
+  return best ?? { ...CLOUD_DOCK.spawn };
 }
 
 /** Substeps prevent tunnelling through thin gates; axis sliding matches the

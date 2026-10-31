@@ -104,3 +104,25 @@
   open-air mouths stay carved so the mountain rises behind them.
   `GROTTO_MOUTHS` give the two openings for the scene.
 - Rejected: carving the grotto like other paths (an open trench, no cave).
+
+## 2026-10-31 — Slice X3-world: observatory complex at scale; nearest-walkable search
+
+- Implemented by the controller (Codex in a usage-limit window).
+- **Observatory.** A forecourt approach (x ±16, z 399–406) where both routes
+  arrive; the central hall and dial; a terrace on each side (overlapping the
+  hall by 2 m so mounted players cross the seam); two broken towers on
+  6.5 m platforms at (±24, 428) reached by walkways. The four mechanisms move
+  apart: Leafy's lever and Bubbo's water wheel on the terraces, Puff's
+  turbine and Ember's valve on the towers. Required clear stays 4; the four
+  enemies spread over hall and terraces. The lift cut and the summit ramp
+  apply only to the lift corridor (|x| < 8 / < 14), so the towers stay at
+  observatory height and never bypass the lamps.
+- **The Storm Beacon arena is unchanged** (the brief keeps it practical); its
+  surroundings grow only visually (X3-scene).
+- **Measured:** 9,523.25 m² walkable — 3.04× the 3,133.5 m² baseline — and
+  dock → beacon 542.5 m via the canopy, 543.1 m via the grotto (2.8×/2.7×).
+  The unit test now asserts ≥ 3× floor and ≥ 2× each route.
+- **`cloudNearestWalkable` searches rings outward** from the point instead of
+  scanning the whole island (the scan took ~1.3 s per call at this size — a
+  visible stall on every off-path dismount, knock-out or save projection).
+  Same lattice and tie-break, identical results on 150 random points, ~37 ms.
