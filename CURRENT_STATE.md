@@ -46,10 +46,11 @@ Merging (= deploying) needs the user's approval. Contents:
 The unit test asserts ≥ 3× floor and ≥ 2× each route. Gameplay views
 ≤ 107 calls and ≤ 98k triangles at 1366×768 and 1280×800 (fog 260 m).
 
-Verified at the merge of X3: tsc, 373 unit tests (`--maxWorkers=4`), build.
-Browser: lock/debug/Act 2/wall specs passed before the expansion; the Act 3
-full chapter passed at X1 (56 min). A final Act 3 + debug + Act 2 run on
-the finished island is in progress (`MI_LONG_TIMEOUT=3600000`).
+Verified on the finished island: tsc, 373 unit tests (`--maxWorkers=4`),
+build; browser: Act 3 full chapter at 1366×768 and 1280×800 touch-only,
+the Coming Soon lock and debug-toggle specs, debug menu, Act 2 (15/15 with
+`MI_LONG_TIMEOUT=3600000`). Polish/camera specs passed after the wall, before
+the expansion; the full suite has not been run end to end on this machine.
 
 ## Known Issues
 - **Landmark from the dock:** the mountain does not read as a landmark from
@@ -71,10 +72,9 @@ the finished island is in progress (`MI_LONG_TIMEOUT=3600000`).
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. Read the final browser run (`.tmp/final-e2e.log` in the main checkout);
-   fix anything it finds.
-2. User decisions: the dock landmark (above); merge
+1. User decisions: the dock landmark (Known Issues); merge
    `feature/act3-cloud-isle` into `main` (deploys; Cloud Isle stays locked).
+2. Full Playwright suite once, end to end, with `MI_LONG_TIMEOUT`.
 3. Chromebook play-test with `?debug=1` (Cloud Isle frame rate, grotto
    lights, fights).
 
