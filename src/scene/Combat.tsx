@@ -8,7 +8,8 @@ import { ENEMIES, type CloudEnemyKind, type EnemyKind } from "../game/data/comba
 import { ENEMY_SPAWNS, type EnemyKind as LowlandEnemyKind } from "../game/world/lowland";
 import { CLOUD_ENEMY_SPAWNS } from "../game/world/cloudisle";
 import { standY } from "../game/world/collision";
-import { additiveSprite, flatMat, glowTexture, shadowMaterial } from "./materials";
+import { additiveSprite, flatMat, shadowMaterial } from "./materials";
+import { ElementEffects } from "./ElementEffects";
 import { airshipGeometry, cageGeometry, coinGeometry, enemyGeometry, propellerGeometry } from "./models/lowland";
 import { foodGeometry } from "./models/props";
 import { cloudEnemyGeometry } from "./models/cloudEnemies";
@@ -97,9 +98,12 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
       hop = Math.sin(k * Math.PI) * 0.9;
       scale = 1 - k * 0.6;
     } else if (e.state === "alert") hop = Math.sin(((t - e.alertT) / 0.55) * Math.PI) * 0.35;
-    m.position.set(shake, hop, 0);
+    const trapped = e.control?.kind === "trapped";
+    const carried = e.control?.kind === "carried";
+    if (trapped || carried || e.control?.kind === "grabbed") hop = 0;
+    m.position.set(shake + (trapped ? Math.sin(t * 8 + e.i) * 0.1 : 0), e.air + hop, 0);
     m.scale.set(scale / Math.sqrt(squash), scale * squash, scale / Math.sqrt(squash));
-    m.rotation.x = lean;
+    m.rotation.set(lean, carried ? t * 7 : 0, trapped ? Math.sin(t * 7 + e.i) * 0.12 : carried ? Math.sin(t * 6) * 0.3 : 0);
     // Emissive body colours keep every charge readable without extra draws.
     const flash = Math.max(0, 1 - (t - e.hitT) / 0.18);
     const warn = e.state === "windup" ? 0.35 + Math.sin(t * 22) * 0.25 : 0;
@@ -120,10 +124,11 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     }
     if (alert.current) {
       alert.current.visible = t - e.alertT < 1.1 && e.state !== "ko";
-      alert.current.position.y = 1.5 + (e.kind === "shellback" ? 0.2 : 0);
+      alert.current.position.y = e.air + 1.5 + (e.kind === "shellback" ? 0.2 : 0);
     }
     if (stars.current) {
       stars.current.visible = e.state === "stun" || e.state === "ko";
+      stars.current.position.y = e.air + top;
       stars.current.rotation.y = t * 5;
     }
   });
@@ -225,186 +230,6 @@ function Drops() {
   );
 }
 
-/** Projectiles: bubbles, wind balls and fireballs (one instanced draw each). */
-function Shots() {
-  const mats = useMemo(
-    () => ({
-      bubble: new THREE.MeshLambertMaterial({ color: "#ffffff", transparent: true, opacity: 0.75, emissive: "#1f2f2f" }),
-      wind: new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.7 }),
-      fireball: new THREE.MeshBasicMaterial({ color: "#ffffff" })
-    }),
-    []
-  );
-  const geos = useMemo(() => ({ bubble: new THREE.SphereGeometry(1, 12, 8), wind: new THREE.TorusGeometry(0.8, 0.28, 6, 12), fireball: new THREE.IcosahedronGeometry(1, 1) }), []);
-  const refs = { bubble: useRef<THREE.InstancedMesh>(null), wind: useRef<THREE.InstancedMesh>(null), fireball: useRef<THREE.InstancedMesh>(null) };
-  const trails = useRef<THREE.InstancedMesh>(null);
-  const trailGeo = useMemo(() => {
-    const geo = new THREE.CylinderGeometry(0.35, 0, 1, 6);
-    geo.rotateX(Math.PI / 2);
-    geo.translate(0, 0, -0.5);
-    return geo;
-  }, []);
-  const trailMat = useMemo(() => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6, depthWrite: false }), []);
-  const glowMat = useMemo(() => additiveSprite("#ff8a2a", 0.8), []);
-  const glows = useRef<Array<THREE.Sprite | null>>([]);
-  const o = useMemo(() => new THREE.Object3D(), []);
-  const tint = useMemo(() => new THREE.Color(), []);
-  useFrame(() => {
-    const count = { bubble: 0, wind: 0, fireball: 0 };
-    let g = 0;
-    let nt = 0;
-    for (const s of cb.shots) {
-      const sourceKind = s.hostile && s.source !== undefined ? cb.enemies[s.source]?.kind : null;
-      const kind = (s.hostile ? sourceKind === "windSprite" ? "wind" : sourceKind === "raiderShooter" ? "fireball" : "bubble" : s.shape) as keyof typeof count;
-      if (!(kind in count) || count[kind] >= 16) continue;
-      tint.set(sourceKind === "forestSpitter" ? "#b2dc60" : sourceKind === "raiderShooter" ? "#ff4055" : kind === "bubble" ? "#9fe6ff" : kind === "fireball" ? "#ffb03a" : "#f2fbff");
-      o.position.set(s.x, s.y, s.z);
-      o.rotation.set(kind === "wind" ? Math.PI / 2 : 0, Math.atan2(s.vx, s.vz), rt.time * 12);
-      o.scale.setScalar(s.radius * (kind === "wind" ? 0.8 : 1));
-      o.updateMatrix();
-      const mesh = refs[kind].current;
-      mesh?.setMatrixAt(count[kind], o.matrix);
-      mesh?.setColorAt(count[kind]++, tint);
-      if (trails.current && nt < 48) {
-        const speed = Math.hypot(s.vx, s.vz);
-        o.rotation.set(0, Math.atan2(s.vx, s.vz), 0);
-        o.scale.set(s.radius, s.radius, Math.max(0.01, Math.min(s.age * speed, 0.8 + speed * 0.1)));
-        o.updateMatrix();
-        trails.current.setMatrixAt(nt, o.matrix);
-        trails.current.setColorAt(nt++, tint);
-      }
-      if (kind === "fireball" && !s.hostile && g < 6) {
-        const sp = glows.current[g++];
-        if (sp) {
-          sp.visible = true;
-          sp.position.copy(o.position);
-          sp.scale.setScalar(s.radius * 4);
-        }
-      }
-    }
-    for (const k of Object.keys(count) as Array<keyof typeof count>) {
-      const m = refs[k].current;
-      if (!m) continue;
-      m.count = count[k];
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
-    }
-    if (trails.current) {
-      trails.current.count = nt;
-      trails.current.instanceMatrix.needsUpdate = true;
-      if (trails.current.instanceColor) trails.current.instanceColor.needsUpdate = true;
-    }
-    for (let k = g; k < 6; k++) if (glows.current[k]) glows.current[k]!.visible = false;
-  });
-  return (
-    <>
-      {(Object.keys(geos) as Array<keyof typeof geos>).map((k) => (
-        <instancedMesh key={k} ref={refs[k]} args={[geos[k], mats[k], 16]} frustumCulled={false} />
-      ))}
-      <instancedMesh ref={trails} args={[trailGeo, trailMat, 48]} frustumCulled={false} />
-      {[0, 1, 2, 3, 4, 5].map((k) => (
-        <sprite key={k} ref={(el) => (glows.current[k] = el)} material={glowMat} visible={false} />
-      ))}
-    </>
-  );
-}
-
-/** The specials and the vine whip, as short-lived shapes. */
-function Effects() {
-  const pool = 8;
-  const mats = useMemo(
-    () => ({
-      vine: new THREE.MeshLambertMaterial({ color: "#4fb43f", flatShading: true }),
-      jet: new THREE.MeshBasicMaterial({ color: "#8fe0ff", transparent: true, opacity: 0.65, depthWrite: false }),
-      gust: new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }),
-      burst: new THREE.MeshBasicMaterial({ color: "#ff8a2a", transparent: true, opacity: 0.8, depthWrite: false })
-    }),
-    []
-  );
-  const geos = useMemo(() => {
-    const cyl = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
-    cyl.rotateX(Math.PI / 2);
-    cyl.translate(0, 0, 0.5);
-    const cone = new THREE.ConeGeometry(1, 1, 16, 1, true);
-    cone.rotateX(-Math.PI / 2);
-    cone.translate(0, 0, 0.5);
-    const ring = new THREE.TorusGeometry(1, 0.18, 6, 28);
-    ring.rotateX(Math.PI / 2);
-    return { cyl, cone, ring };
-  }, []);
-  const hit = useMemo(() => new THREE.SpriteMaterial({ map: glowTexture(), color: "#fff6c0", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), []);
-  const meshes = useRef<Array<THREE.Mesh | null>>([]);
-  const sprites = useRef<Array<THREE.Sprite | null>>([]);
-  useFrame(() => {
-    let mi = 0;
-    let si = 0;
-    for (const f of cb.fx) {
-      const k = (rt.time - f.t0) / f.life;
-      if (f.kind === "hit" || f.kind === "eat" || f.kind === "ko") {
-        const sp = sprites.current[si++];
-        if (!sp) continue;
-        sp.visible = true;
-        sp.position.set(f.x, f.y + k * (f.kind === "eat" ? 0.6 : 0.2), f.z);
-        sp.scale.setScalar((f.kind === "eat" ? 1.6 : 1.2) * (1 - k * 0.5));
-        (sp.material as THREE.SpriteMaterial).opacity = 1 - k;
-        continue;
-      }
-      if (!["whip", "pull", "jet", "gust", "burst"].includes(f.kind)) continue;
-      const m = meshes.current[mi++];
-      if (!m) continue;
-      m.visible = true;
-      m.position.set(f.x, f.y, f.z);
-      m.rotation.set(0, 0, 0);
-      if (f.kind === "whip") {
-        // A vine sweeps out in an arc in front of the player and snaps back.
-        m.geometry = geos.cyl;
-        m.material = mats.vine;
-        const reach = f.size * Math.sin(Math.min(1, k * 1.6) * Math.PI);
-        m.rotation.set(-0.1, f.yaw + (k - 0.5) * 1.6, 0);
-        m.scale.set(0.09, 0.09, Math.max(0.05, reach));
-      } else if (f.kind === "pull") {
-        m.geometry = geos.cyl;
-        m.material = mats.vine;
-        const dx = f.ax - f.x, dz = f.az - f.z;
-        const len = Math.hypot(dx, dz);
-        const out = k < 0.45 ? k / 0.45 : 1 - (k - 0.45) / 0.55;
-        m.rotation.set(0.05, Math.atan2(dx, dz), 0);
-        m.scale.set(0.11, 0.11, Math.max(0.05, len * out));
-      } else if (f.kind === "jet") {
-        m.geometry = geos.cyl;
-        m.material = mats.jet;
-        m.rotation.set(0.04, f.yaw, 0);
-        m.scale.set(0.45 * (1 - k * 0.5), 0.45 * (1 - k * 0.5), f.size * Math.min(1, k * 4));
-        mats.jet.opacity = 0.7 * (1 - k);
-      } else if (f.kind === "gust") {
-        m.geometry = geos.cone;
-        m.material = mats.gust;
-        m.rotation.set(0, f.yaw, 0);
-        const r = f.size * 0.75 * Math.min(1, k * 3);
-        m.scale.set(r, r * 0.4, f.size * Math.min(1, k * 3));
-        mats.gust.opacity = 0.4 * (1 - k);
-      } else if (f.kind === "burst") {
-        m.geometry = geos.ring;
-        m.material = mats.burst;
-        const r = 0.5 + f.size * k;
-        m.scale.set(r, 1 + k * 2, r);
-        mats.burst.opacity = 0.85 * (1 - k);
-      }
-    }
-    for (let i = mi; i < pool; i++) if (meshes.current[i]) meshes.current[i]!.visible = false;
-    for (let i = si; i < pool; i++) if (sprites.current[i]) sprites.current[i]!.visible = false;
-  });
-  return (
-    <>
-      {Array.from({ length: pool }, (_, i) => (
-        <mesh key={i} ref={(el) => (meshes.current[i] = el)} visible={false} frustumCulled={false} />
-      ))}
-      {Array.from({ length: pool }, (_, i) => (
-        <sprite key={i} ref={(el) => (sprites.current[i] = el)} material={hit.clone()} visible={false} />
-      ))}
-    </>
-  );
-}
 
 /** The raiders' airship with its spinning propeller and the glowing cage on its chain. */
 function Airship() {
@@ -482,8 +307,7 @@ export function CombatScene() {
     <>
       <Enemies />
       <Drops />
-      <Shots />
-      <Effects />
+      <ElementEffects />
       <Airship />
     </>
   );
