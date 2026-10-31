@@ -39,6 +39,14 @@ Merging (= deploying) needs the user's approval. Contents:
     island heightfield (`src/game/world/cloudTerrain.ts`, spec §2a) with
     paths carved in, rendered as 7 banded chunks (~42k triangles). Save
     remap via `act3.cloudLayout: 2`. Top-down map: `node scripts/cloud-map.mjs`.
+  - **X2 — junction, canopy, grotto** (merged into this branch; `exp/x2`):
+    observatory/beacon moved +90 m north (derived from `OBSERVATORY`/`BEACON`);
+    junction overlook and chest path; canopy forest floor → raised clearings
+    with giant trees, the far-west branch deck, vine bridge and glide gap
+    (X2a, drawn and reviewed); Thunder Grotto chambers under the mountain
+    (X2b-world: gameplay data and terrain only — **the grotto interior is not
+    redrawn yet**, its old geometry still stands at the old position).
+    Terrain now has decks, chasms and caves (`src/game/world/cloudTerrain.ts`).
   - Because Cloud Isle is locked, the branch could be merged to `main`
     without exposing Act 3 — after a full Playwright run.
 
@@ -54,9 +62,9 @@ Measurement: `node scripts/measure-cloud-area.mjs`.
 
 | | Baseline (`f108ed9`) | After X1 | Final target |
 | --- | --- | --- | --- |
-| Walkable floor | 3,133.5 m² | 6,002.5 m² | ≥ 9,400 m² |
-| Dock → beacon via canopy | 195.8 m | 424.7 m | ≥ 392 m ✓ |
-| Dock → beacon via grotto | 200.8 m | 430 m | ≥ 402 m ✓ |
+| Walkable floor | 3,133.5 m² | 6,002.5 m² (X2: 8,837.75 m²) | ≥ 9,400 m² |
+| Dock → beacon via canopy | 195.8 m | 424.7 m (X2: 543.1 m) | ≥ 392 m ✓ |
+| Dock → beacon via grotto | 200.8 m | 430 m (X2: 544.3 m) | ≥ 402 m ✓ |
 
 Remaining ~3,400 m² comes from X2 (junction ~900, canopy ~1,500, grotto
 ~1,500 m²) and X3 (approach, observatory ~1,100, beacon summit).
@@ -90,17 +98,18 @@ coast-waterfall-view camera at the coast gate.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. X2: Windfall Junction, Skyroot Canopy, Thunder Grotto at scale on the
-   heightfield (spec §2, §2a). Give the giant canopy trees real terrain
-   beneath; keep the 45-minute Codex limit in mind — split into a world/
-   layout order and a rendering order, as X1's terrain was (T1/T2).
-2. X3: observatory, beacon summit, landmarks (mountain from the dock,
-   observatory from the junction, beacon from the observatory), camera
-   review, Hollow/tunnel slab polish, final ≥ 3× measurement, performance.
-3. Full Playwright suite (with `MI_LONG_TIMEOUT`), final report with
-   screenshots and measurements.
+1. X2b-scene: draw the grotto interior for the new chambers (floor, walls,
+   ceiling, lake with raft, crystals, boiler machinery, electric corridor,
+   cave mouths at `GROTTO_MOUTHS`); hide outdoor scenery only inside
+   `CLOUD_CAVES`, not on the open-air mouth trails. Remove the old grotto
+   geometry and the oversized cave mouths at the junction.
+2. X3: observatory and beacon summit at scale (~+600 m² to pass 9,400 m²),
+   landmarks (mountain from the dock, observatory from the junction, beacon
+   from the observatory), camera review, Hollow/tunnel slab polish,
+   performance, final measurement.
+3. Full Playwright suite (with `MI_LONG_TIMEOUT`), final report.
 4. User decision: merge `feature/act3-cloud-isle` into `main` (deploys).
-5. Chromebook play-test with `?debug=1` — including frame rate on Cloud Isle.
+5. Chromebook play-test with `?debug=1`, including Cloud Isle frame rate.
 
 ## Codex / Delegated Work
 None in flight. Codex's sandbox cannot bind ports or launch Chromium, so
@@ -109,4 +118,4 @@ serves `dist` without a port). Codex runs are limited to 45 minutes: keep
 orders narrow and name exactly what to read.
 - Worktrees: `~/Projects/mi-base` (this branch; controller acceptance),
   `~/Projects/mi-wall`, `~/Projects/mi-kit` (merged; removable). The main
-  checkout `~/Projects/monster-island` is on `exp/x1` (merged).
+  checkout `~/Projects/monster-island` is on `exp/x2` (merged).
