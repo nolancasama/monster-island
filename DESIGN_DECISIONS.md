@@ -1522,6 +1522,7 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
   detonation id, bubble generations and unique burst victims. Projectiles
   expose shape, allegiance and damage; enemies also expose control expiry
   and heavy slow expiry. No scene/HUD, save, layout or release changes.
+
 ## 2026-11-01 — Slice E3: pooled elemental combat visuals
 
 - Enemy bodies and overhead markers follow the simulation's air offset;
