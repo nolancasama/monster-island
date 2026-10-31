@@ -771,7 +771,6 @@ export function specialAttack(): boolean {
       endCyclone();
       const centre = moveCircle(p.x, p.z, p.x + ux * 2, p.z + uz * 2, 0.08, gatesOf(getGame().progress));
       cb.cyclone = { id: nextId++, ...centre, ux, uz, age: 0, stopped: Math.hypot(centre.x - p.x - ux * 2, centre.z - p.z - uz * 2) > 0.01, bubbles: [] };
-      pushFx("cyclone", centre.x, standY(centre.x, centre.z, getGame().progress.solved), centre.z, ux, uz, yaw, move.radius);
       updateCyclone(0);
       audio.play("wind");
       break;
@@ -790,8 +789,7 @@ function clearSpecials() {
 function infernoTick() {
   const move = COMBAT.ember.special, p = rt.player;
   const range = move.range * (upgraded("ember") ? COMBAT.ember.upgrade.size : 1);
-  const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw), o = originOf("ember");
-  pushFx("breath", o.x, o.y, o.z, ux, uz, p.yaw, range);
+  const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw);
   hitBeaconShape("ember", range, ux, uz, "cone", 80);
   dispatchObjects(move.shape, objectCone(range, 80));
   for (const e of coneTargets(range, 80)) {
@@ -815,6 +813,7 @@ function updateInferno(dt: number) {
 }
 
 function detonateBomb(s: Shot) {
+  s.life = 0;
   const move = COMBAT.bubbo.special;
   const enemies = cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone());
   const chain = bubbleChain(enemies.map(e => ({ i: e.i, x: e.x, z: e.z, trapped: e.control?.kind === "trapped" })), s, move.radius);

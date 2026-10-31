@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { cb, currentCombatZone } from "../game/combat";
-import { ENEMIES } from "../game/data/combat";
+import { cb, currentCombatZone, mountPose } from "../game/combat";
+import { COMBAT, ENEMIES } from "../game/data/combat";
 import { rt } from "../game/runtime";
 import { monsterRootY } from "../game/ride";
 import { getGame } from "../game/store";
@@ -263,26 +263,56 @@ export function ElementEffects() {
           pool.roots.put(o, color.set(i % 2 ? "#658b39" : "#936437"));
         }
       }
+      if (cb.inferno) {
+        const age = cb.inferno.age, yaw = rt.player.yaw;
+        const ux = Math.sin(yaw), uz = Math.cos(yaw), pose = mountPose("ember");
+        const x = pose ? pose.x + ux * .5 : rt.player.x;
+        const y = pose ? pose.y + 1.2 : rt.player.y + 1;
+        const z = pose ? pose.z + uz * .5 : rt.player.z;
+        const range = COMBAT.ember.special.range * (game.progress.act2.upgrades.includes("ember") ? COMBAT.ember.upgrade.size : 1);
+        for (let i = 0; i < 12; i++) {
+          const p = (i / 12 + age * 2.8) % 1;
+          const d = .12 + p * range * Math.min(1, age * 14);
+          const spread = Math.sin(i * 2.4 + t * 12) * d * .55;
+          const size = .25 + p * 1.55;
+          draw.sprite(x + ux * d + uz * spread, y + p * .5, z + uz * d - ux * spread,
+            size, size * 1.7, i % 3 ? "#ff7923" : "#ffb82e", 1 - p * .45, true);
+        }
+      }
+      const cyclone = cb.cyclone;
+      if (cyclone) {
+        const x = cyclone.x, z = cyclone.z, y = standY(x, z, game.progress.solved);
+        const fade = Math.min(1, Math.max(0, (4 - cyclone.age) * 3));
+        for (let i = 0; i < 3; i++) {
+          const a = t * (4 + i) + i * TAU / 3;
+          o.position.set(x + Math.cos(a) * .12, y + .3 + i * .65, z + Math.sin(a) * .12);
+          o.rotation.set(Math.PI, a, Math.sin(a) * .08);
+          o.scale.set(.45 + i * .35, 1.25, .45 + i * .35);
+          pool.shells.put(o, color.set("#d3f4ff"), fade);
+          o.position.y += .25; o.rotation.set(Math.PI / 2, a, a); o.scale.setScalar(.45 + i * .35);
+          pool.streaks.put(o, color.set("#ffffff"), fade);
+        }
+        draw.ring(x, y + .045, z, 1.25 + Math.sin(t * 15) * .08, "#d6c9a2", fade * .6);
+        for (let i = 0; i < 8; i++) {
+          const a = t * 5 + i * TAU / 8;
+          draw.sprite(x + Math.cos(a) * 1.15, y - .25, z + Math.sin(a) * 1.15, .45, .22, "#d6c9a2", fade * .4);
+        }
+      }
       for (const f of cb.fx) {
         const age = t - f.t0, k = age / f.life;
         if (k < 0 || k >= 1 || Math.hypot(f.x - rt.player.x, f.z - rt.player.z) > 48) continue;
         const fade = Math.min(1, (1 - k) * 3);
         if (f.kind === "breath") {
-          const inferno = cb.move?.friend === "ember" && cb.move.kind === "special" && f.t0 >= cb.move.t0;
-          const ember = rt.monsters.ember;
-          const mounted = cb.stance.friend === "ember" && cb.stance.k > 0;
-          const yaw = inferno ? rt.player.yaw : f.yaw;
+          const yaw = f.yaw;
           const ux = Math.sin(yaw), uz = Math.cos(yaw);
-          const x = inferno && mounted ? ember.x + ux * .5 : f.x;
-          const y = inferno && mounted ? monsterRootY(ember, game.progress.solved, t) + 1.2 : f.y;
-          const z = inferno && mounted ? ember.z + uz * .5 : f.z;
+          const x = f.x, y = f.y, z = f.z;
           for (let i = 0; i < 12; i++) {
             const p = (i / 12 + age * 2.8) % 1;
             const d = .12 + p * f.size * Math.min(1, age * 14);
-            const spread = Math.sin(i * 2.4 + t * 12) * d * (inferno ? .55 : .32);
-            const size = .25 + p * (inferno ? 1.55 : .9);
-            draw.sprite(x + ux * d + uz * spread, y + p * (inferno ? .5 : .15), z + uz * d - ux * spread,
-              size, size * (inferno ? 1.7 : 1.3), i % 3 ? "#ff7923" : "#ffb82e", fade * (1 - p * .45), true);
+            const spread = Math.sin(i * 2.4 + t * 12) * d * .32;
+            const size = .25 + p * .9;
+            draw.sprite(x + ux * d + uz * spread, y + p * .15, z + uz * d - ux * spread,
+              size, size * 1.3, i % 3 ? "#ff7923" : "#ffb82e", fade * (1 - p * .45), true);
           }
         } else if (f.kind === "blast" || f.kind === "gust") {
           // The existing gust's open cone, with travelling curved wind streaks.
@@ -297,22 +327,6 @@ export function ElementEffects() {
             o.position.set(f.x + Math.sin(f.yaw) * d, f.y, f.z + Math.cos(f.yaw) * d);
             o.rotation.set(0, f.yaw, t * 9 + i); o.scale.set(.15 + d * .42, .1 + d * .18, 1);
             pool.streaks.put(o, color.set("#e4faff"), fade);
-          }
-        } else if (f.kind === "cyclone") {
-          // f.x/z are authoritative, including a cyclone stopped against a solid.
-          for (let i = 0; i < 3; i++) {
-            const a = t * (4 + i) + i * TAU / 3;
-            o.position.set(f.x + Math.cos(a) * .12, f.y + .3 + i * .65, f.z + Math.sin(a) * .12);
-            o.rotation.set(Math.PI, a, Math.sin(a) * .08);
-            o.scale.set(.45 + i * .35, 1.25, .45 + i * .35);
-            pool.shells.put(o, color.set("#d3f4ff"), fade);
-            o.position.y += .25; o.rotation.set(Math.PI / 2, a, a); o.scale.setScalar(.45 + i * .35);
-            pool.streaks.put(o, color.set("#ffffff"), fade);
-          }
-          draw.ring(f.x, standY(f.x, f.z, game.progress.solved) + .045, f.z, 1.25 + Math.sin(t * 15) * .08, "#d6c9a2", fade * .6);
-          for (let i = 0; i < 8; i++) {
-            const a = t * 5 + i * TAU / 8;
-            draw.sprite(f.x + Math.cos(a) * 1.15, f.y - .25, f.z + Math.sin(a) * 1.15, .45, .22, "#d6c9a2", fade * .4);
           }
         } else if (f.kind === "bomb" || f.kind === "trap" || f.kind === "splashKo") {
           if (f.kind === "bomb") draw.ring(f.x, f.y, f.z, .3 + f.size * k, "#9eeaff", 1 - k);

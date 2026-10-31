@@ -1578,6 +1578,7 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
 - The intact thicket's circular target footprint is also solid. Object cone
   visibility tests stop at the target's near rim so its own solid does not
   occlude a fire hit; intervening scenery still blocks the query.
+
 ## 2026-11-01 — Slice E5: elemental move words, HUD and acceptance spec
 
 - Trainer rows show both COMBAT move names, Japanese MoveDef.hint lines,

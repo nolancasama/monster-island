@@ -812,6 +812,23 @@ describe("elemental K simulation and shared combinations", () => {
     expect(Math.hypot(victim.kx, victim.kz)).toBeCloseTo(4);
   });
 
+  it("ends a bomb after its first detonation under trapped bubbles", () => {
+    const a = loneEnemy("gloomlet", 0, 24), b = extra(1, "gloomlet", 1, 24);
+    bubble(a, .8); bubble(b, .8);
+    friend("bubbo");
+    expect(specialAttack()).toBe(true);
+    const shot = cb.shots.find(s => s.shape === "bomb")!;
+    Object.assign(shot, { x: 0, z: 24, vx: 0, vz: 0 });
+    combatTick(.01);
+    const id = cb.bombChain?.id;
+    expect(id).toBeDefined();
+    expect(cb.bombChain?.pops).toHaveLength(2);
+    expect(cb.shots).not.toContain(shot);
+    advanceCombat(1);
+    expect(cb.bombChain?.id).toBe(id);
+    expect(cb.shots).not.toContain(shot);
+  });
+
   it("Bubble Bomb propagates beyond the bomb radius through three generations", () => {
     const a = loneEnemy("snapjaw", 0, 24), b = extra(1, "snapjaw", 0, 26), c = extra(2, "snapjaw", 0, 28);
     for (const e of [a, b, c]) bubble(e, .8);
