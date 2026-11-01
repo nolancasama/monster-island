@@ -71,7 +71,7 @@ export const COMBAT: Record<CompanionId, CompanionCombat> = {
   },
   ember: {
     stance: "ride",
-    basic: { word: "Fire!", name: { en: "Fire Breath", ja: "ほのおの いき" }, hint: { en: "Breathe fire ahead and ignite enemies.", ja: "まえに ほのおを はいて てきを もやす" }, shape: "breath", damage: 7, cooldown: 0.55, range: 4.2, radius: 0, knock: 0, stun: 0, cost: 0 },
+    basic: { word: "Fire!", name: { en: "Fire Breath", ja: "ほのおの いき" }, hint: { en: "Hold to breathe fire ahead and ignite enemies.", ja: "おしつづけて ほのおを はいて てきを もやす" }, shape: "breath", damage: 3, cooldown: 0.25, range: 4.2, radius: 0, knock: 0, stun: 0, cost: 0 },
     special: { word: "Burn!", name: { en: "Inferno", ja: "インフェルノ" }, hint: { en: "A wide burst of lasting flame.", ja: "ひろい ほのおで もやしつづける" }, shape: "inferno", damage: 6, cooldown: 2.5, range: 6, radius: 0, knock: 0, stun: 0, cost: 15 },
     upgrade: { name: { en: "Big Flame", ja: "ビッグフレイム" }, damage: 1, size: 1.3 }
   }

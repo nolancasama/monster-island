@@ -12,6 +12,7 @@ import type { MonsterId } from "../game/types";
 import { cb, companionVisible, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
+import { anchors, EMBER_MOUTH } from "./anchors";
 
 const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
@@ -110,11 +111,13 @@ function MonsterBody({ id }: { id: MonsterId }) {
   const shadowRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const named = useRef<Record<string, THREE.Group | null>>({});
+  const mouth = useRef<THREE.Object3D>(null);
 
   useFrame(() => {
     const m = rt.monsters[id];
     const g = root.current;
     const r = rig.current;
+    if (id === "ember") anchors.emberMouthValid = false;
     if (!g || !r) return;
     g.visible = companionVisible(id);
     if (!g.visible) return;
@@ -241,11 +244,16 @@ function MonsterBody({ id }: { id: MonsterId }) {
       if (n.footR) n.footR.rotation.x = -dangle - swing * 0.5;
       if (n.tuft) n.tuft.rotation.z = Math.sin(t * 2.2) * 0.2 + (flying ? Math.sin(t * rate) * 0.08 : 0);
     }
+    if (id === "ember" && mouth.current && g.visible) {
+      mouth.current.getWorldPosition(anchors.emberMouth);
+      anchors.emberMouthValid = true;
+    }
   });
 
   return (
     <group ref={root}>
       <group ref={rig}>
+        {id === "ember" && <object3D ref={mouth} position={EMBER_MOUTH} />}
         {id === "lumo" && (
           <mesh ref={glowRef} position={[0, 1.03, -0.05]}>
             <sphereGeometry args={[0.86, 16, 10]} />

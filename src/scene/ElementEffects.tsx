@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { cb, currentCombatZone, mountPose } from "../game/combat";
+import { cb, currentCombatZone } from "../game/combat";
 import { COMBAT, ENEMIES } from "../game/data/combat";
 import { rt } from "../game/runtime";
 import { monsterRootY } from "../game/ride";
@@ -9,8 +9,10 @@ import { getGame } from "../game/store";
 import { standY } from "../game/world/collision";
 import { ELEMENT_OBJECTS } from "../game/world/elementObjects";
 import { splashParticle } from "./splashParticle";
+import { anchors, fireStreamBase } from "./anchors";
+import { emptyBodyPose, enemyBodyPose, PANIC_LIMBS } from "./panicPose";
 
-// At most seven draws; empty batches submit none.
+// Existing seven batches plus panic limbs and speech; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
 const CAP = 768;
 const TAU = Math.PI * 2;
@@ -34,9 +36,12 @@ class Batch {
     this.mesh.visible = false;
   }
   put(o: THREE.Object3D, color: THREE.Color, alpha = 1, style = 0) {
-    if (this.n === CAP) return;
     o.updateMatrix();
-    this.mesh.setMatrixAt(this.n, o.matrix);
+    this.putMatrix(o.matrix, color, alpha, style);
+  }
+  putMatrix(matrix: THREE.Matrix4, color: THREE.Color, alpha = 1, style = 0) {
+    if (this.n === CAP) return;
+    this.mesh.setMatrixAt(this.n, matrix);
     this.mesh.setColorAt(this.n, color);
     this.alpha.setX(this.n, alpha);
     this.style.setX(this.n++, style);
@@ -51,6 +56,8 @@ class Batch {
   }
   dispose() {
     this.mesh.geometry.dispose();
+    const material = this.mesh.material;
+    if (material instanceof THREE.MeshBasicMaterial) material.map?.dispose();
     (this.mesh.material as THREE.Material).dispose();
     this.mesh.dispose();
   }
@@ -135,6 +142,26 @@ function bubbleMaterial() {
   });
 }
 
+function panicSpeechMaterial() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512; canvas.height = 192;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fffbea"; ctx.strokeStyle = "#45344d"; ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.roundRect(8, 8, 496, 142, 40);
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(110, 146); ctx.lineTo(88, 184); ctx.lineTo(160, 149); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.font = "bold 72px 'Comic Sans MS', 'Chalkboard SE', sans-serif"; ctx.fillStyle = "#c2360f";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("I'm on fire!", 256, 80);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = fadedMaterial("#ffffff", 1);
+  material.map = texture;
+  return material;
+}
+
 function makePool() {
   const tube = new THREE.CylinderGeometry(1, 1, 1, 7, 1);
   tube.rotateX(Math.PI / 2);
@@ -148,7 +175,9 @@ function makePool() {
     roots: new Batch(new THREE.ConeGeometry(1, 1, 6), new THREE.MeshLambertMaterial({ color: "#9d713b", flatShading: true })),
     shells: new Batch(shell, fadedMaterial("#e4faff", .22)),
     rings: new Batch(ring, fadedMaterial("#ffffff", .8)),
-    streaks: new Batch(new THREE.TorusGeometry(1, .035, 4, 18, Math.PI * 1.35), fadedMaterial("#e5faff", .6))
+    streaks: new Batch(new THREE.TorusGeometry(1, .035, 4, 18, Math.PI * 1.35), fadedMaterial("#e5faff", .6)),
+    limbs: new Batch(new THREE.CapsuleGeometry(1, 1, 1, 3), new THREE.MeshLambertMaterial({ color: "#ffffff", flatShading: true })),
+    speech: new Batch(new THREE.PlaneGeometry(1, 1), panicSpeechMaterial())
   };
 }
 
@@ -161,6 +190,14 @@ export function ElementEffects() {
   const droplet = useMemo(() => new THREE.Vector3(), []);
   const forward = useMemo(() => new THREE.Vector3(0, 0, 1), []);
   const up = useMemo(() => new THREE.Vector3(0, 1, 0), []);
+  const bodyPose = useMemo(emptyBodyPose, []);
+  const bodyRoot = useMemo(() => new THREE.Object3D(), []);
+  const bodyFrame = useMemo(() => {
+    const frame = new THREE.Object3D(); bodyRoot.add(frame); return frame;
+  }, [bodyRoot]);
+  const point = useMemo(() => new THREE.Vector3(), []);
+  const streamBase = useMemo(() => new THREE.Vector3(), []);
+  const stream = useMemo(() => ({ active: false, age: 0, stoppedAt: -Infinity, inferno: false }), []);
   const roots = useMemo(() => Array.from({ length: CAP }, () => ({ x: 0, z: 0, y: 0, t: -1, end: -1, zone: "" })), []);
   const { camera } = useThree();
   useEffect(() => () => { for (const b of batches) b.dispose(); }, [batches]);
@@ -178,6 +215,15 @@ export function ElementEffects() {
     bubble(x: number, y: number, z: number, radius: number) {
       o.position.set(x, y, z); o.rotation.set(0, 0, 0); o.scale.setScalar(radius);
       pool.bubbles.put(o, color.set("#9eeaff"));
+    },
+    limb(x: number, y: number, z: number, rx: number, rz: number, length: number, width: number, tint: string) {
+      o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.scale.set(width, length / 3, width);
+      o.updateMatrix(); o.matrix.premultiply(bodyFrame.matrixWorld);
+      pool.limbs.putMatrix(o.matrix, color.set(tint));
+    },
+    speech(x: number, y: number, z: number, alpha: number) {
+      o.position.set(x, y, z); o.quaternion.copy(camera.quaternion); o.scale.set(2.6, .975, 1);
+      pool.speech.put(o, color.set("#ffffff"), alpha);
     },
     vine(x: number, y: number, z: number, tx: number, ty: number, tz: number) {
       const dx = tx - x, dy = ty - y, dz = tz - z;
@@ -199,7 +245,7 @@ export function ElementEffects() {
         draw.sprite(droplet.x, droplet.y, droplet.z, fall ? .5 : .24, fall ? .5 : .34, "#e8fbff", alpha);
       }
     }
-  }), [camera, color, direction, droplet, forward, o, pool]);
+  }), [bodyFrame, camera, color, direction, droplet, forward, o, pool]);
 
   useFrame(() => {
     const t = rt.time, game = getGame(), zone = currentCombatZone();
@@ -239,19 +285,53 @@ export function ElementEffects() {
           draw.bubble(s.x, s.y, s.z, s.shape === "bomb" ? Math.max(.65, s.radius) : Math.max(.24, s.radius));
         }
       }
+      let panicCount = 0, speechCount = 0;
       for (let enemyIndex = 0; enemyIndex < cb.enemies.length; enemyIndex++) {
         const e = cb.enemies[enemyIndex];
         if (e.zone !== zone || e.state === "gone" || Math.hypot(e.x - rt.player.x, e.z - rt.player.z) > 48) continue;
         const ground = standY(e.x, e.z, game.progress.solved);
         const y = ground + e.air, radius = ENEMIES[e.kind].radius;
+        enemyBodyPose(e, t, bodyPose);
+        bodyRoot.position.set(e.x, ground, e.z); bodyRoot.rotation.set(0, e.yaw, 0);
+        bodyFrame.position.set(bodyPose.shake, e.air + bodyPose.hop, 0);
+        bodyFrame.rotation.set(bodyPose.lean, bodyPose.spin, bodyPose.roll);
+        bodyFrame.scale.set(bodyPose.scale / Math.sqrt(bodyPose.squash), bodyPose.scale * bodyPose.squash, bodyPose.scale / Math.sqrt(bodyPose.squash));
+        bodyRoot.updateMatrixWorld(true);
+        const panicking = e.panic !== null && e.panic.until > t && e.state !== "ko";
+        const fullPanic = panicking && panicCount++ < 8;
         if (e.control?.kind === "trapped") {
           draw.bubble(e.x + Math.sin(t * 8 + e.i) * .05, y + .65, e.z, Math.max(.85, radius * 1.5));
         }
         if (e.burn && e.burn.until > t) {
-          for (let i = 0; i < 2; i++) {
-            const a = t * 2 + i * Math.PI;
-            draw.sprite(e.x + Math.cos(a) * radius * .6, y + .65 + i * .25, e.z + Math.sin(a) * radius * .6,
-              .38, .65 + Math.sin(t * 22 + i) * .12, "#ff7724", .95, true);
+          // Cloaks the body: sized from its radius, and nudged toward the camera so
+          // the mesh does not swallow them.
+          const flames = fullPanic ? 6 : 3, big = fullPanic ? 1 : .75;
+          for (let i = 0; i < flames; i++) {
+            const a = t * 2 + i * TAU / flames;
+            point.set(Math.cos(a) * radius * 1.15, .25 + (i % 3) * .3, Math.sin(a) * radius * 1.15).applyMatrix4(bodyFrame.matrixWorld);
+            direction.subVectors(camera.position, point).normalize().multiplyScalar(radius * .35);
+            draw.sprite(point.x + direction.x, point.y + direction.y, point.z + direction.z,
+              (.42 + radius * .6) * big, (.85 + radius * .9 + Math.sin(t * 22 + i) * .18) * big, i % 2 ? "#f2611a" : "#ffb22e", .62, true);
+          }
+        }
+        if (panicking) {
+          const age = t - e.panic!.t0, limb = PANIC_LIMBS[e.kind];
+          if (age < 1.6 && speechCount < 3) {
+            speechCount++;
+            point.set(0, 1.85, 0).applyMatrix4(bodyFrame.matrixWorld);
+            draw.speech(point.x, point.y, point.z, Math.min(1, (1.6 - age) / .15));
+          }
+          if (fullPanic) for (let i = 0; i < limb.count; i++) {
+            const side = i % 2 ? 1 : -1, wave = Math.sin(age * 24 + i * 2 + e.i);
+            const x = side * radius * .85, z = limb.count === 4 ? (i < 2 ? .3 : -.3) : .1;
+            const rx = limb.style === "paddle" ? wave * .9 : limb.style === "legs" ? wave * .7 : .1;
+            const rz = limb.style === "wings" ? side * (1.1 + wave * .65) : limb.style === "legs" ? side * (1 + wave * .4) : side * (.25 + wave * .45);
+            draw.limb(x, limb.height + (limb.style === "arms" || limb.style === "pincers" ? limb.length * .3 : 0), z, rx, rz, limb.length, limb.width, limb.color);
+            if (limb.style === "pincers") {
+              const snap = .2 + (wave + 1) * .2;
+              draw.limb(x + side * .06, limb.height + .4, z, 0, side * snap, .17, .06, limb.color);
+              draw.limb(x - side * .06, limb.height + .4, z, 0, -side * snap, .17, .06, limb.color);
+            }
           }
         }
         if (e.control?.kind === "grabbed") {
@@ -289,20 +369,26 @@ export function ElementEffects() {
           pool.roots.put(o, color.set(i % 2 ? "#658b39" : "#936437"));
         }
       }
-      if (cb.inferno) {
-        const age = cb.inferno.age, yaw = rt.player.yaw;
-        const ux = Math.sin(yaw), uz = Math.cos(yaw), pose = mountPose("ember");
-        const x = pose ? pose.x + ux * .5 : rt.player.x;
-        const y = pose ? pose.y + 1.2 : rt.player.y + 1;
-        const z = pose ? pose.z + uz * .5 : rt.player.z;
-        const range = COMBAT.ember.special.range * (game.progress.act2.upgrades.includes("ember") ? COMBAT.ember.upgrade.size : 1);
-        for (let i = 0; i < 12; i++) {
-          const p = (i / 12 + age * 2.8) % 1;
-          const d = .12 + p * range * Math.min(1, age * 14);
-          const spread = Math.sin(i * 2.4 + t * 12) * d * .55;
-          const size = .25 + p * 1.55;
-          draw.sprite(x + ux * d + uz * spread, y + p * .5, z + uz * d - ux * spread,
-            size, size * 1.7, i % 3 ? "#ff7923" : "#ffb82e", 1 - p * .45, true);
+      const fire = cb.inferno ?? cb.breath;
+      if (fire) {
+        stream.active = true; stream.age = fire.age; stream.inferno = cb.inferno !== null;
+      } else if (stream.active) { stream.active = false; stream.stoppedAt = t; }
+      const streamFade = fire ? 1 : Math.max(0, 1 - (t - stream.stoppedAt) / .12);
+      if (streamFade > 0 && anchors.emberMouthValid) {
+        fireStreamBase(streamBase);
+        const age = stream.age, yaw = rt.player.yaw, ux = Math.sin(yaw), uz = Math.cos(yaw);
+        const range = (stream.inferno ? COMBAT.ember.special.range : COMBAT.ember.basic.range) * (game.progress.act2.upgrades.includes("ember") ? COMBAT.ember.upgrade.size : 1);
+        for (let i = 0; i < 24; i++) {
+          const p = i === 0 ? 0 : ((i - 1 + age * 24) % 23) / 23;
+          const d = p * range, flutter = Math.sin(i * 2.4 + t * 19);
+          // Fills the real cone (tan of the half-angle) so what looks hit is hit.
+          const side = (i * .618) % 1 * 2 - 1;
+          const spread = (side + flutter * .18) * d * (stream.inferno ? .72 : .36);
+          const size = (stream.inferno ? .5 : .36) + p * (stream.inferno ? 1.5 : 1);
+          // Additive overlap near the mouth blows out to white: start faint, hold the colour.
+          const alpha = .34 + Math.min(1, p * 2.5) * .3 - p * p * .2;
+          draw.sprite(streamBase.x + ux * d + uz * spread, streamBase.y + p * (stream.inferno ? .4 : .12) - p * .35, streamBase.z + uz * d - ux * spread,
+            size, size * (stream.inferno ? 1.6 : 1.3) * (1 + flutter * .08), i % 3 ? "#f2611a" : "#ffb22e", streamFade * alpha, true);
         }
       }
       const cyclone = cb.cyclone;
@@ -328,19 +414,7 @@ export function ElementEffects() {
         const age = t - f.t0, k = age / f.life;
         if (k < 0 || k >= 1 || Math.hypot(f.x - rt.player.x, f.z - rt.player.z) > 48) continue;
         const fade = Math.min(1, (1 - k) * 3);
-        if (f.kind === "breath") {
-          const yaw = f.yaw;
-          const ux = Math.sin(yaw), uz = Math.cos(yaw);
-          const x = f.x, y = f.y, z = f.z;
-          for (let i = 0; i < 12; i++) {
-            const p = (i / 12 + age * 2.8) % 1;
-            const d = .12 + p * f.size * Math.min(1, age * 14);
-            const spread = Math.sin(i * 2.4 + t * 12) * d * .32;
-            const size = .25 + p * .9;
-            draw.sprite(x + ux * d + uz * spread, y + p * .15, z + uz * d - ux * spread,
-              size, size * 1.3, i % 3 ? "#ff7923" : "#ffb82e", fade * (1 - p * .45), true);
-          }
-        } else if (f.kind === "blast" || f.kind === "gust") {
+        if (f.kind === "blast" || f.kind === "gust") {
           // The existing gust's open cone, with travelling curved wind streaks.
           o.position.set(f.x, f.y, f.z);
           direction.set(-Math.sin(f.yaw), 0, -Math.cos(f.yaw));

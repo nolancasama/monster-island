@@ -3,6 +3,10 @@ import * as THREE from "three";
 import { HIP_Y, SEATED, squatAmount, squatPose } from "./poses";
 import { KNEE_Y } from "./models/people";
 import { BUBBO_SEAT } from "../game/ride";
+import { anchors, EMBER_MOUTH, fireStreamBase } from "./anchors";
+import { emptyBodyPose, enemyBodyPose, PANIC_LIMBS, panicPose } from "./panicPose";
+import type { EnemyRt } from "../game/combat";
+import type { EnemyKind } from "../game/data/combat";
 
 const SOLE = HIP_Y - 0.02;
 
@@ -68,5 +72,44 @@ describe("riding Bubbo", () => {
     const top = 0.42 + 0.377 * Math.sqrt(1 - (BUBBO_SEAT.back / 0.529) ** 2);
     expect(BUBBO_SEAT.up).toBeGreaterThanOrEqual(top);
     expect(BUBBO_SEAT.up - top).toBeLessThan(0.06);
+  });
+});
+
+describe("fire and panic attachment poses", () => {
+  it("starts both streams exactly at the mouth after live rig transforms", () => {
+    const root = new THREE.Object3D(), rig = new THREE.Object3D(), mouth = new THREE.Object3D();
+    root.add(rig); rig.add(mouth); mouth.position.set(...EMBER_MOUTH);
+    const base = new THREE.Vector3();
+    for (const yaw of [0, .4, 1.8, 3.1]) {
+      root.position.set(yaw * 2, 2 + yaw, -yaw); root.rotation.y = yaw; root.scale.setScalar(.8);
+      rig.position.y = Math.sin(yaw) * .13; rig.rotation.set(.12, 0, -.08); rig.scale.set(1.02, .96, 1.02);
+      mouth.getWorldPosition(anchors.emberMouth);
+      expect(fireStreamBase(base)).toBe(base);
+      expect(base.distanceTo(mouth.getWorldPosition(new THREE.Vector3()))).toBe(0);
+    }
+  });
+
+  it("reuses the caller's pose for each kind and gives every kind temporary limbs", () => {
+    const out = emptyBodyPose();
+    for (const kind of Object.keys(PANIC_LIMBS) as EnemyKind[]) {
+      expect(panicPose(kind, 2, .7, .4, out)).toBe(out);
+      expect(Object.values(out).every(Number.isFinite)).toBe(true);
+      expect(PANIC_LIMBS[kind].count).toBe(kind === "shellback" || kind === "thunderBeetle" ? 4 : 2);
+    }
+    expect(panicPose("snapjaw", 2, .7, .4).hop).toBeGreaterThan(panicPose("shellback", 2, .7, .4).hop);
+    expect(panicPose("snapjaw", 2, .7, .4).lean).toBeLessThan(0);
+    expect(panicPose("raiderDrone", 2, .7, .4).lean).toBeGreaterThan(0);
+  });
+
+  it("uses the same body lift for ordinary burn attachments and panic attachments", () => {
+    const e = { kind: "gloomlet", i: 1, step: .5, state: "chase", control: null, panic: null } as EnemyRt;
+    const body = emptyBodyPose(), attached = emptyBodyPose();
+    enemyBodyPose(e, 3, body); enemyBodyPose(e, 3, attached);
+    expect(body.hop).toBeGreaterThan(0);
+    expect(attached).toEqual(body);
+    e.panic = { t0: 2, until: 4.5, turnAt: 3.3, hx: 1, hz: 0, blocked: 0 };
+    enemyBodyPose(e, 3, body); enemyBodyPose(e, 3, attached);
+    expect(attached).toEqual(body);
+    expect(body.hop).toBe(panicPose(e.kind, e.i, 1, e.step).hop);
   });
 });

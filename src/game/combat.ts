@@ -15,10 +15,12 @@ import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
 import { debugPaused, useDebug } from "./debugState";
-import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
+import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, weaponVictims, type Burn, type Control } from "./logic/elements";
 import { objectState, secretEvent, tickSecrets, type ElementState, type SecretProgress } from "./logic/secrets";
 import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementObject } from "./world/elementObjects";
 import { releaseAllAttacks } from "../input/attackInput";
+import { fireDamage } from "./logic/elements";
+import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -87,6 +89,10 @@ export interface EnemyRt {
   alertT: number;
   air: number;
   burn: Burn | null;
+  panic: Panic | null;
+  panicResistUntil: number;
+  fireTicks: number;
+  lastFireT: number;
   control: Control | null;
   resistUntil: number;
   /** Heavy Root Snare slows locomotion without preventing attacks. */
@@ -191,7 +197,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, air: 0, burn: null, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
   };
 }
 
@@ -208,6 +214,7 @@ export const cb = {
   shots: [] as Shot[],
   cyclone: null as Cyclone | null,
   inferno: null as null | { age: number; tick: number },
+  breath: null as null | { age: number; tick: number },
   bombChain: null as BombChain | null,
   /** Partial environmental steps never enter the save. */
   elementObjects: {} as Record<string, ElementState>,
@@ -524,9 +531,17 @@ export function canFight(): boolean {
 const freeBeaconMoves = () => cb.beacon.active && onCloudIsle() && combatZoneAt(rt.player.x, rt.player.z) === "stormBeacon";
 
 const alive = (e: EnemyRt) => e.state !== "ko" && e.state !== "gone";
-const awakeEnemies = (zone: CombatZone) => cb.enemies.filter((e) => e.zone === zone && alive(e) && e.state !== "idle" && e.state !== "return").length;
+const awakeEnemies = (zone: CombatZone) => {
+  let count = 0;
+  for (const e of cb.enemies) if (e.zone === zone && alive(e) && e.state !== "idle" && e.state !== "return") count++;
+  return count;
+};
 export const isRanged = (kind: EnemyKind) => kind === "forestSpitter" || kind === "raiderShooter" || kind === "windSprite";
-const awakeRanged = (zone: CombatZone) => cb.enemies.filter(e => e.zone === zone && isRanged(e.kind) && alive(e) && e.state !== "idle" && e.state !== "return").length;
+const awakeRanged = (zone: CombatZone) => {
+  let count = 0;
+  for (const e of cb.enemies) if (e.zone === zone && isRanged(e.kind) && alive(e) && e.state !== "idle" && e.state !== "return") count++;
+  return count;
+};
 const hasAttackSlot = (e: EnemyRt) => (!onCloudIsle() || awakeEnemies(e.zone) < 4) && (!isRanged(e.kind) || awakeRanged(e.zone) < 2);
 /** Replacement spawns retain the original HP, drops and rewards. */
 function spawnDef(e: EnemyRt) {
@@ -585,6 +600,20 @@ const OBJECT_EVENT: Partial<Record<MoveDef["shape"], ElementEvent>> = {
 function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) => boolean, nearest = Infinity): ElementObject | null {
   const event = OBJECT_EVENT[shape];
   if (!event) return null;
+  if (shape === "breath" || shape === "inferno") {
+    // Fire does not select one object. Skip unchanged responses before doing
+    // geometry or constructing reducer state, keeping sustained ticks allocation-free.
+    let selected: ElementObject | null = null;
+    for (const o of ELEMENT_OBJECTS) {
+      const response = o.on?.burn;
+      if (o.world !== cb.world || !response || !o.tags.includes(EVENT_TAG.burn)
+        || getGame().progress.act2.secrets.includes(secretOf(o))
+        || cb.elementObjects[o.id]?.state === response.becomes || !contains(o)) continue;
+      const before = secretProgress(), next = secretEvent(o.id, "burn", before);
+      if (next !== before) { applySecretProgress(next); selected = o; }
+    }
+    return selected;
+  }
   const p = rt.player, progress = secretProgress();
   const objects = ELEMENT_OBJECTS.filter(o => o.world === cb.world && !progress.secrets.includes(secretOf(o)) && o.tags.includes(EVENT_TAG[event]) && o.on?.[event] && contains(o))
     .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
@@ -638,6 +667,8 @@ function aimAt(range: number): { x: number; z: number } {
 /** J: the active friend's basic attack (free; repeats while held). */
 export function basicAttack(options: { repeat?: boolean } = {}): boolean {
   const f = friendNow();
+  if (f === "ember" && cb.inferno) return false;
+  if (f === "ember" && cb.breath && canFight()) return true;
   if (!f || !canFight() || rt.time < cb.ready.basic) return false;
   const move = COMBAT[f].basic;
   const up = upgraded(f);
@@ -664,14 +695,10 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
     pushFx("trap", o.x, o.y, o.z, ux, uz, yaw, 0.8);
     audio.play("bubble");
   } else if (move.shape === "breath") {
-    pushFx("breath", o.x, o.y, o.z, ux, uz, yaw, range);
-    hitBeaconShape(f, range, ux, uz, "cone", 50);
-    dispatchObjects(move.shape, objectCone(range, 50));
-    for (const e of coneTargets(range, 50)) {
-      hit(e, move.damage, 0, 0, ux, uz, f, true);
-      if (alive(e)) e.burn = ignite(e.burn, rt.time);
-    }
-    audio.play("fireball");
+    cb.breath = { age: 0, tick: move.cooldown };
+    fireTick(false, rt.time);
+    audio.startFlame?.();
+    learn("attack");
   } else if (move.shape === "grab") {
     pushFx("vine", o.x, o.y, o.z, ux, uz, yaw, range);
     hitBeaconShape(f, range, ux, uz, "cone", 70);
@@ -753,8 +780,10 @@ export function specialAttack(): boolean {
       break;
     }
     case "inferno":
+      stopBreath();
       cb.inferno = { age: 0, tick: 0.25 };
       infernoTick();
+      audio.startFlame?.();
       audio.play("burst");
       break;
     case "snare": {
@@ -791,35 +820,103 @@ export function specialAttack(): boolean {
 }
 
 function clearSpecials() {
+  stopBreath();
+  audio.stopFlame?.();
   cb.inferno = null;
   cb.cyclone = null;
   cb.bombChain = null;
 }
 
 function infernoTick() {
-  const move = COMBAT.ember.special, p = rt.player;
+  fireTick(true, rt.time);
+}
+
+let fireRange = 0, fireDegrees = 0;
+/** Stable fire-object predicate: no closures or temporary line endpoints per tick. */
+function fireObjectCone(o: ElementObject): boolean {
+  const p = rt.player;
+  if (!inCone(p, p.yaw, o, fireRange, fireDegrees)) return false;
+  const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
+  const length = Math.max(0, d - o.r - .1), count = Math.max(1, Math.ceil(length / .12));
+  const gates = gatesOf(getGame().progress);
+  for (let i = 1; i <= count; i++) {
+    const k = d > 0 ? length / d * i / count : 0;
+    if (!isWalkable(p.x + dx * k, p.z + dz * k, gates, .08)) return false;
+  }
+  return true;
+}
+
+function igniteEnemy(e: EnemyRt, now: number) {
+  if (e.burn) {
+    if (e.burn.until < now) e.burn.tick = now + 1 / 3;
+    e.burn.until = now + 2.5;
+  }
+  else e.burn = ignite(null, now);
+  if (!canStartPanic(now, e.panicResistUntil, e.panic, alive(e), !!e.control)) return;
+  e.panic = startPanic(ENEMIES[e.kind].weightClass, now);
+  e.state = "chase";
+  e.timer = 0;
+  e.waiting = false;
+  e.kx = e.kz = 0;
+  if (isRanged(e.kind)) for (const s of cb.shots) if (s.source === e.i && s.hostile) s.life = 0;
+  audio.panic?.(rt.time);
+}
+
+function fireTick(inferno: boolean, now: number) {
+  const move = inferno ? COMBAT.ember.special : COMBAT.ember.basic, p = rt.player;
+  if (!inferno) cb.ready.basic = now + move.cooldown;
   const range = move.range * (upgraded("ember") ? COMBAT.ember.upgrade.size : 1);
   const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw);
-  hitBeaconShape("ember", range, ux, uz, "cone", 80);
-  dispatchObjects(move.shape, objectCone(range, 80));
-  for (const e of coneTargets(range, 80)) {
-    hit(e, move.damage, 0, 0, ux, uz, "ember");
-    if (alive(e)) e.burn = ignite(e.burn, rt.time);
+  const degrees = inferno ? 80 : 50;
+  hitBeaconShape("ember", range, ux, uz, "cone", degrees);
+  fireRange = range; fireDegrees = degrees;
+  dispatchObjects(move.shape, fireObjectCone);
+  for (const e of coneTargets(range, degrees)) {
+    if (now - e.lastFireT > 1 + 1e-9) e.fireTicks = 0;
+    e.fireTicks++;
+    e.lastFireT = now;
+    // Start panic before this tick's damage so ignition itself respects the floor.
+    if (inferno || e.fireTicks >= 3) igniteEnemy(e, now);
+    fireHit(e, move.damage, ux, uz, !inferno, now);
+  }
+}
+
+/** Input release calls this synchronously; the renderer may fade its old tongues. */
+export function stopBreath() {
+  cb.breath = null;
+  if (!cb.inferno) audio.stopFlame?.();
+}
+
+/** Interruptions discard the prepaid burst as well as the held stream. */
+export function stopFire() {
+  cb.inferno = null;
+  stopBreath();
+}
+
+function updateBreath(dt: number) {
+  const fire = cb.breath;
+  if (!fire) return;
+  if (!cb.hold || friendNow() !== "ember" || !canFight() || cb.inferno) { stopBreath(); return; }
+  fire.age += dt;
+  while (fire.tick <= fire.age + 1e-9) {
+    fireTick(false, rt.time - (fire.age - fire.tick));
+    fire.tick += COMBAT.ember.basic.cooldown;
   }
 }
 
 function updateInferno(dt: number) {
   const fire = cb.inferno;
   if (!fire) return;
-  if (friendNow() !== "ember" || cb.knockedOut) { cb.inferno = null; return; }
+  if (friendNow() !== "ember" || !canFight()) { cb.inferno = null; audio.stopFlame?.(); return; }
+  const previousAge = fire.age;
   const step = infernoStep(fire.age, dt, cb.holdK, cb.vitals.mp.ember, freeBeaconMoves());
   cb.vitals.mp.ember = Math.max(0, cb.vitals.mp.ember - step.drain);
   fire.age = step.age;
   while (fire.tick <= fire.age + 1e-9 && (!step.done || fire.tick < fire.age - 1e-9)) {
-    infernoTick();
+    fireTick(true, rt.time - dt + fire.tick - previousAge);
     fire.tick += 0.25;
   }
-  if (step.done) cb.inferno = null;
+  if (step.done) { cb.inferno = null; audio.stopFlame?.(); }
 }
 
 function detonateBomb(s: Shot) {
@@ -1050,9 +1147,16 @@ function updateElements(e: EnemyRt, dt: number): boolean {
     e.resistUntil = endResistance(ENEMIES[e.kind].weightClass, e.slowUntil);
     e.slowUntil = 0;
   }
-  const burn = tickBurn(e.burn, rt.time, upgraded("ember") ? 1.5 : 1);
-  e.burn = burn.burn;
-  if (burn.damage) hit(e, burn.damage, 0, 0, 0, 0, "ember");
+  // Individual scheduled ticks preserve the floor even across a long frame.
+  const burn = e.burn;
+  if (burn) {
+    while (burn.tick <= Math.min(rt.time, burn.until) + 1e-9 && alive(e)) {
+      fireHit(e, upgraded("ember") ? 3 : 2, 0, 0, false, burn.tick);
+      burn.tick += 1 / 3;
+    }
+    if (rt.time >= burn.until) e.burn = null;
+  }
+  if (rt.time - e.lastFireT > 1 + 1e-9) e.fireTicks = 0;
   if (!alive(e)) return true;
   const c = e.control, flight = e.flight;
   if (c?.kind === "trapped") {
@@ -1182,22 +1286,29 @@ function updateBeaconFight(dt: number, live: boolean, zone: CombatZone | null) {
   }
 }
 
-function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number, uz: number, _by: CompanionId, basic = false) {
+function fireHit(e: EnemyRt, damage: number, ux: number, uz: number, basic: boolean, now: number) {
+  const armoured = crabDamage(e.kind, damage, basic, e.yaw, ux, uz);
+  hit(e, fireDamage(e.hp, armoured, e.panic, now), 0, 0, ux, uz, "ember", false, true);
+}
+
+function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number, uz: number, _by: CompanionId, basic = false, quiet = false) {
   if (!alive(e)) return;
   const def = ENEMIES[e.kind];
   e.hp -= crabDamage(e.kind, damage, basic, e.yaw, ux, uz);
   // Interrupting a ranged enemy also disperses its in-flight shot.
-  if (isRanged(e.kind)) {
+  if (!quiet && isRanged(e.kind)) {
     for (const s of cb.shots) if (s.source === e.i && s.hostile) s.life = 0;
   }
-  e.hitT = rt.time;
+  if (!quiet || rt.time - e.hitT >= 0.8 - 1e-9) e.hitT = rt.time;
   if (e.control?.kind !== "snared") {
     e.kx += ux * knock * def.weight * 2.2;
     e.kz += uz * knock * def.weight * 2.2;
   }
-  pushFx("hit", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.6, e.z, 0, 0, 0, 1);
-  audio.play("hit");
-  learn("attack");
+  if (!quiet) {
+    pushFx("hit", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.6, e.z, 0, 0, 0, 1);
+    audio.play("hit");
+    learn("attack");
+  }
   if (e.hp <= 0) {
     knockOut(e);
     return;
@@ -1207,7 +1318,7 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
     e.timer = Math.max(stun, 0.25);
   }
   if ((onCloudIsle() && awakeEnemies(e.zone) > 4) || (isRanged(e.kind) && awakeRanged(e.zone) > 2)
-    || (["idle", "return"].includes(e.state) && !hasAttackSlot(e))) {
+    || ((e.state === "idle" || e.state === "return") && !hasAttackSlot(e))) {
     // Damage and KO always count, even when all four attack slots are occupied.
     e.state = "idle";
     e.waiting = true;
@@ -1223,6 +1334,9 @@ function knockOut(e: EnemyRt) {
   e.hp = 0;
   e.control = null;
   e.burn = null;
+  e.panic = null;
+  e.panicResistUntil = e.fireTicks = 0;
+  e.lastFireT = -10;
   e.flight = null;
   e.fall = null;
   e.air = 0;
@@ -1343,7 +1457,13 @@ export function learn(step: TutorialStep) {
 // ------------------------------------------------------------ the frame
 
 export function combatTick(dt: number) {
-  if (!canFight()) releaseAllAttacks();
+  if (!canFight()) {
+    releaseAllAttacks();
+    stopBreath();
+    cb.inferno = null;
+    audio.stopFlame?.();
+  }
+  if (cb.breath && (!cb.hold || friendNow() !== "ember")) stopBreath();
   if (debugPaused()) return;
   const g = getGame();
   if (g.screen !== "game" || !act2Live()) return;
@@ -1388,11 +1508,12 @@ export function combatTick(dt: number) {
   if (!cb.knockedOut) cb.vitals = regenMp(cb.vitals, dt);
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack({ repeat: true });
-  const live = g.mode === "explore" && !isRunning();
+  const live = canFight();
   updateBeaconFight(dt, live, zone);
   if (canFight()) {
     if (world === "home") applySecretProgress(tickSecrets(secretProgress(), dt, p));
     updateInferno(dt);
+    updateBreath(dt);
     updateCyclone(dt);
   }
   if (live && zone === "thunderGrotto" && CLOUD_ELECTRIC_PANELS.some(panel =>
@@ -1422,6 +1543,9 @@ function sendHome(zone: CombatZone) {
     e.kx = e.kz = 0;
     e.air = 0;
     e.burn = e.control = e.flight = e.fall = null;
+    e.panic = null;
+    e.panicResistUntil = e.fireTicks = 0;
+    e.lastFireT = -10;
     e.resistUntil = 0;
     e.slowUntil = 0;
     e.wander = null;
@@ -1449,6 +1573,7 @@ function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | n
   if (e.slowUntil > rt.time) { nx = e.x + (nx - e.x) * 0.4; nz = e.z + (nz - e.z) * 0.4; }
   const q = moveCircle(e.x, e.z, nx, nz, ENEMIES[e.kind].radius, gatesOf(getGame().progress), false, undefined, moveOut);
   if (combatZoneAt(q.x, q.z) !== e.zone) return 0;
+  if (e.panic && hazardAt(q.x, q.z, cb.world, cb.world === "cloud" ? getGame().progress.act3.puzzles : getGame().progress.solved)) return 0;
   const moved = Math.hypot(q.x - e.x, q.z - e.z);
   e.x = q.x;
   e.z = q.z;
@@ -1530,6 +1655,9 @@ function updateRanged(e: EnemyRt, dt: number, distance: number) {
 }
 
 function pauseElements(e: EnemyRt, dt: number) {
+  if (e.panic) { e.panic.t0 += dt; e.panic.until += dt; e.panic.turnAt += dt; }
+  if (e.panicResistUntil > 0) e.panicResistUntil += dt;
+  e.lastFireT += dt;
   if (e.burn) { e.burn.until += dt; e.burn.tick += dt; }
   if (e.control) { e.control.t0 += dt; e.control.until += dt; }
   if (e.fall) e.fall.t0 += dt;
@@ -1553,7 +1681,24 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
     return;
   }
   if (!live) { pauseElements(e, dt); return; }
-  if (updateElements(e, dt)) return;
+  const controlled = updateElements(e, dt);
+  if (e.panic && rt.time >= e.panic.until - 1e-9) {
+    e.panic = null;
+    e.panicResistUntil = rt.time + 4;
+    e.state = currentCombatZone() === e.zone ? "chase" : "return";
+    e.timer = 0;
+  }
+  if (controlled) return;
+  if (e.panic) {
+    const panic = e.panic;
+    updatePanicHeading(panic, e.kind, e.i, rt.time, e.x, e.z, e.homeX, e.homeZ, p.x, p.z, def.leash);
+    const expected = def.speed * panicSpeedScale(def.weightClass) * dt;
+    const nx = e.x + panic.hx * expected, nz = e.z + panic.hz * expected;
+    const moved = hazardAt(nx, nz, cb.world, cb.world === "cloud" ? getGame().progress.act3.puzzles : getGame().progress.solved) ? 0
+      : stepTo(e, nx, nz, dt, Math.atan2(panic.hx, panic.hz) + (e.kind === "stormCrab" ? Math.PI / 2 : 0));
+    recordPanicStep(panic, moved, expected, rt.time);
+    return;
+  }
   const here = currentCombatZone() === e.zone && !cb.knockedOut;
   const dPlayer = Math.hypot(p.x - e.x, p.z - e.z);
   const dHome = Math.hypot(e.x - e.homeX, e.z - e.homeZ);
@@ -1687,6 +1832,7 @@ function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
   if (cb.vitals.hp <= 0) {
     cb.knockedOut = true;
     releaseAllAttacks();
+    clearSpecials();
     if (onCloudIsle() && cb.beacon.active) resetBeaconFight();
     hooks.knockout?.();
   }

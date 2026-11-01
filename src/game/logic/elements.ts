@@ -5,6 +5,10 @@ import { nearestOnTrail, type WalkShape } from "../world/lowland";
 
 export type WeightClass = EnemyDef["weightClass"];
 export interface Burn { until: number; tick: number }
+/** Fire alone preserves the visible opening of panic; all other damage is normal. */
+export function fireDamage(hp: number, damage: number, panic: { t0: number } | null, now: number): number {
+  return panic && now < panic.t0 + 1.2 ? Math.min(damage, Math.max(0, hp - 1)) : damage;
+}
 export interface Control {
   kind: "trapped" | "grabbed" | "snared" | "carried" | "flung";
   t0: number; until: number; peak?: number; source?: number;

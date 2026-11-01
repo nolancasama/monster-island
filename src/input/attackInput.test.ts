@@ -8,6 +8,8 @@ import {
 
 vi.mock("../game/combat", () => ({
   basicAttack: vi.fn(), specialAttack: vi.fn(), canFight: vi.fn(() => true),
+  stopBreath: vi.fn(),
+  stopFire: vi.fn(),
   cb: { hold: false, holdK: false },
 }));
 

@@ -9,7 +9,7 @@ import { ENEMY_SPAWNS, type EnemyKind as LowlandEnemyKind } from "../game/world/
 import { CLOUD_ENEMY_SPAWNS } from "../game/world/cloudisle";
 import { standY } from "../game/world/collision";
 import { additiveSprite, flatMat, shadowMaterial } from "./materials";
-import { ElementEffects } from "./ElementEffects";
+import { emptyBodyPose, enemyBodyPose } from "./panicPose";
 import { airshipGeometry, cageGeometry, coinGeometry, enemyGeometry, propellerGeometry } from "./models/lowland";
 import { foodGeometry } from "./models/props";
 import { cloudEnemyGeometry } from "./models/cloudEnemies";
@@ -53,10 +53,9 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
   const alert = useRef<THREE.Sprite>(null);
   const stars = useRef<THREE.Group>(null);
   const tell = useRef<THREE.Mesh>(null);
+  const pose = useMemo(emptyBodyPose, []);
   const def = ENEMIES[kind];
   const ring = kind === "thunderBeetle";
-  const hovering = kind === "windSprite" || kind === "raiderDrone" || kind === "raiderShooter";
-  const ranged = kind === "windSprite" || kind === "forestSpitter" || kind === "raiderShooter";
   const tellGeo = useMemo(() => {
     const g = ring ? new THREE.RingGeometry(0.9, 1, 32) : new THREE.PlaneGeometry(1, 1);
     g.rotateX(-Math.PI / 2);
@@ -75,42 +74,18 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     const y = standY(e.x, e.z, getGame().progress.solved);
     g.position.set(e.x, y, e.z);
     g.rotation.y = e.yaw;
-    let squash = 1 + Math.sin(t * 3 + e.i) * 0.04;
-    let hop = Math.abs(Math.sin(e.step * Math.PI)) * 0.12;
-    let lean = 0;
-    let scale = 1;
-    let shake = 0;
-    if (hovering) hop = Math.sin(t * 4 + e.i) * 0.13;
-    if (e.state === "windup") {
-      // Ranged foes swell as they charge; melee foes crouch before lunging.
-      const k = 1 - e.timer / def.windup;
-      squash = ranged ? 1 + 0.12 * k : 1 - 0.22 * Math.min(1, k * 1.6);
-      if (ranged) scale = 1 + 0.22 * k;
-      shake = Math.sin(t * 40) * 0.05 * k;
-      lean = ranged ? -0.06 * k : -0.25 * k;
-    } else if (e.state === "lunge") {
-      squash = 1.15;
-      lean = 0.45;
-    } else if (e.state === "stun") {
-      lean = Math.sin(t * 9) * 0.15;
-    } else if (e.state === "ko") {
-      const k = 1 - Math.max(0, e.timer) / 0.9;
-      hop = Math.sin(k * Math.PI) * 0.9;
-      scale = 1 - k * 0.6;
-    } else if (e.state === "alert") hop = Math.sin(((t - e.alertT) / 0.55) * Math.PI) * 0.35;
-    const trapped = e.control?.kind === "trapped";
-    const carried = e.control?.kind === "carried";
-    if (trapped || carried || e.control?.kind === "grabbed") hop = 0;
-    m.position.set(shake + (trapped ? Math.sin(t * 8 + e.i) * 0.1 : 0), e.air + hop, 0);
-    m.scale.set(scale / Math.sqrt(squash), scale * squash, scale / Math.sqrt(squash));
-    m.rotation.set(lean, carried ? t * 7 : 0, trapped ? Math.sin(t * 7 + e.i) * 0.12 : carried ? Math.sin(t * 6) * 0.3 : 0);
+    enemyBodyPose(e, t, pose);
+    m.position.set(pose.shake, e.air + pose.hop, 0);
+    m.scale.set(pose.scale / Math.sqrt(pose.squash), pose.scale * pose.squash, pose.scale / Math.sqrt(pose.squash));
+    m.rotation.set(pose.lean, pose.spin, pose.roll);
     // Emissive body colours keep every charge readable without extra draws.
     const flash = Math.max(0, 1 - (t - e.hitT) / 0.18);
     const warn = e.state === "windup" ? 0.35 + Math.sin(t * 22) * 0.25 : 0;
     const seed = kind === "forestSpitter", wind = kind === "windSprite";
-    mat.emissive.setRGB(flash + warn * (seed ? 0.55 : wind ? 0.35 : 1), flash * 0.9 + warn * (seed ? 1 : wind || ring ? 0.8 : 0), flash * 0.9 + warn * (wind ? 1 : ring ? 0.6 : 0));
+    const singe = e.burn ? 0.22 : 0;
+    mat.emissive.setRGB(flash + singe + warn * (seed ? 0.55 : wind ? 0.35 : 1), flash * 0.9 + singe * 0.35 + warn * (seed ? 1 : wind || ring ? 0.8 : 0), flash * 0.9 + warn * (wind ? 1 : ring ? 0.6 : 0));
     if (tell.current) {
-      tell.current.visible = e.state === "windup" || (ring && e.state === "lunge");
+      tell.current.visible = !e.panic && (e.state === "windup" || (ring && e.state === "lunge"));
       if (ring) {
         tell.current.scale.setScalar(def.reach);
         (tell.current.material as THREE.MeshBasicMaterial).opacity = e.state === "lunge" ? 0.85 : 0.2 + Math.max(0, 1 - e.timer / def.windup) * 0.4;
@@ -307,7 +282,6 @@ export function CombatScene() {
     <>
       <Enemies />
       <Drops />
-      <ElementEffects />
       <Airship />
     </>
   );

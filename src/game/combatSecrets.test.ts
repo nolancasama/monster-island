@@ -51,7 +51,11 @@ describe("shared move/object dispatch", () => {
     approach("emberThicket", "ember");
     expect(basicAttack()).toBe(true);
     expect(state("emberThicket").state).toBe("burning");
+    expect(cb.breath).toMatchObject({ age: 0, tick: .25 });
+    // A tap releases before the next simulation frame; object ignition already landed.
+    cb.hold = false;
     advance(1.5);
+    expect(cb.breath).toBeNull();
     expect(getGame().progress.act2.secrets).toContain("emberThicket");
 
     approach("bubboLedgeKey", "bubbo");

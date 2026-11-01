@@ -611,7 +611,7 @@ function trainer(): Promise<void> {
     faceKeeper("trainer");
     await say("trainer", "Hi! I'm Coach Rex. I know every monster move!", "やあ! コーチの レックスだ。モンスターの わざは なんでも しってるぞ!");
     await say("trainer", "Face an enemy! J is free. K uses MP.", "てきの ほうを むこう! J は MPなし。K は MPを つかうよ。");
-    await say("trainer", "Press J: Ember breathes fire. Bubbo traps an enemy in a bubble!", "J: エンバーは ほのおを はく。バボは あわで てきを うかせるよ!");
+    await say("trainer", "Hold J or left click: Ember keeps breathing fire! Bubbo traps an enemy in a bubble!", "J か ひだりクリックを おしつづけて エンバーの ほのお! バボは あわで てきを うかせるよ!");
     await say("trainer", "Leafy grabs and throws. Puff blows enemies away!", "リーフィは つかんで なげる。パフは かぜで てきを とばすよ!");
     await say("trainer", "Press K: Burn! makes wide fire. Pop! bursts a big bubble.", "K: Burn! は ひろい ほのお。Pop! は おおきな あわの ばくだん。");
     await say("trainer", "Stop! roots enemies. Spin! makes a cyclone that carries them!", "Stop! は ねっこで とめる。Spin! は たつまきで はこぶよ!");

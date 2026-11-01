@@ -22,8 +22,8 @@ export const UI = {
   moveTouch: { en: "Move with the stick.", ja: "スティックで いどう。" },
   switch: { en: "Open the journal (M) and choose a friend!", ja: "ずかん(M)で ともだちを えらぼう!" },
   // Act 2's tutorial (each shows until it is understood).
-  attack: { en: "Face an enemy! J: Ember burns, Bubbo traps, Leafy throws, Puff blows! Hold J to repeat. No MP!", ja: "てきの ほうへ J! ほのお・あわ・つる・かぜの わざ。MPなし! おしつづけると れんぞく!" },
-  attackTouch: { en: "Face an enemy! Tap: Ember burns, Bubbo traps, Leafy throws, Puff blows! Hold to repeat. No MP!", ja: "てきの ほうへ タップ! ほのお・あわ・つる・かぜの わざ。MPなし! おしつづけると れんぞく!" },
+  attack: { en: "Face an enemy! Hold J / left click for Ember's fire. Bubbo traps, Leafy throws, Puff blows! Hold to repeat. No MP!", ja: "てきの ほうへ! J / ひだりクリックを おしつづけて ほのお! あわ・つる・かぜも ながおしで れんぞく。MPなし!" },
+  attackTouch: { en: "Face an enemy! Hold for Ember's fire. Bubbo traps, Leafy throws, Puff blows! Hold to repeat. No MP!", ja: "てきの ほうへ! ボタンを おしつづけて ほのお! あわ・つる・かぜも ながおしで れんぞく。MPなし!" },
   coins: { en: "Coins! Walk near them to pick them up.", ja: "コインだ! ちかくを あるくと ひろえるよ" },
   special: { en: "K uses MP: Inferno burns, Bubble Bomb pops, Root Snare stops, Cyclone carries! Hold K for longer Inferno.", ja: "K は MPを つかうよ。ひろい ほのお・あわの ばくだん・ねっこの わな・たつまき! ほのおは ながおしで ながく!" },
   specialTouch: { en: "Tap the special button! MP powers Inferno, Bubble Bomb, Root Snare or Cyclone. One tap gives a full fire burst!", ja: "MPで ひろい ほのお・あわの ばくだん・ねっこの わな・たつまき! ほのおも いちど タップで OK!" },

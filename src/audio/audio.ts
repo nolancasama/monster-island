@@ -7,6 +7,9 @@
  */
 
 import type { MonsterId } from "../game/types";
+import { getGame } from "../game/store";
+import { barkReady, yelpReady } from "../game/logic/panicAudio";
+import { tts } from "./tts";
 
 type Wave = OscillatorType;
 export type Tune = "island" | "celebrate" | "forest" | "port" | "danger";
@@ -69,6 +72,11 @@ class AudioEngine {
   private ambDuck!: GainNode;
   private sfxBus!: GainNode;
   private noise!: AudioBuffer;
+  private flame: AudioBufferSourceNode | null = null;
+  private flameGain: GainNode | null = null;
+  private flameFilter: BiquadFilterNode | null = null;
+  private lastYelp = -Infinity;
+  private lastBark = -Infinity;
   private musicVolume = 0.35;
   private sfxVolume = 0.75;
   private speaking = false;
@@ -103,9 +111,13 @@ class AudioEngine {
       this.applyVolumes();
       document.addEventListener("visibilitychange", () => {
         if (!this.ctx) return;
-        if (document.hidden) void this.ctx.suspend();
+        if (document.hidden) {
+          this.stopFlame();
+          void this.ctx.suspend();
+        }
         else void this.ctx.resume();
       });
+      window.addEventListener("blur", () => this.stopFlame());
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
@@ -155,7 +167,54 @@ class AudioEngine {
   /** Microphone open: silence the background. */
   setListening(on: boolean) {
     this.listening = on;
+    if (on) {
+      this.stopFlame();
+      tts.cancelBark();
+    }
     this.applyDuck();
+  }
+
+  /** One filtered noise source for a continuous stream; repeated starts are free. */
+  startFlame() {
+    if (this.flame || !this.ready() || this.listening || document.hidden) return;
+    const ctx = this.ctx!;
+    const source = ctx.createBufferSource();
+    source.buffer = this.noise;
+    source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 1150;
+    filter.Q.value = .65;
+    const gain = ctx.createGain();
+    gain.gain.value = .18;
+    source.connect(filter).connect(gain).connect(this.sfxBus);
+    this.flame = source;
+    this.flameGain = gain;
+    this.flameFilter = filter;
+    source.start();
+  }
+
+  stopFlame() {
+    if (!this.flame) return;
+    this.flame.stop();
+    this.flame.disconnect();
+    this.flameFilter?.disconnect();
+    this.flameGain?.disconnect();
+    this.flame = this.flameFilter = this.flameGain = null;
+  }
+
+  /** Fire-and-forget: comic words never enter the dialogue promise chain. */
+  panic(now: number) {
+    if (this.ready() && !this.listening && yelpReady(now, this.lastYelp)) {
+      this.lastYelp = now;
+      const t = this.now;
+      this.tone(300, t, { to: 620, peak: .055, attack: .035, decay: .08, type: "triangle" });
+      this.tone(580, t + .11, { to: 1050, peak: .065, attack: .035, decay: .18, type: "triangle" });
+    }
+    const g = getGame();
+    if (!barkReady(now, this.lastBark, tts.isSpeaking(), g.mode === "explore", Boolean(g.line), this.listening || g.prompt?.status === "listening", tts.available)) return;
+    this.lastBark = now;
+    void tts.speak("I'm on fire!", { pitch: 1.7, rate: 1.25, transient: true });
   }
 
   // ------------------------------------------------------------------ helpers

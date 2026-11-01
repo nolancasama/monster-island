@@ -51,13 +51,14 @@ async function faceEnemy(page: Page, friend: CompanionId) {
 }
 
 // Browser acceptance and the intentional wrong-target self-check are controller-owned.
-// Negative control: temporarily expect Ember J to snare rather than burn; run
+// Negative control: temporarily expect held Ember J to snare rather than burn; run
 // that case and require failure, then restore the burning assertion below.
 for (const friend of ["ember", "bubbo", "leafy", "puff"] as const) {
   test(`${friend}: free J and MP special in the first forest`, async ({ page }) => {
     const errors = await enterForest(page, friend);
     await faceEnemy(page, friend);
-    await page.keyboard.press("KeyJ");
+    if (friend === "ember") await page.keyboard.down("KeyJ");
+    else await page.keyboard.press("KeyJ");
     await hook(page, "timeScale", .2);
     const basic = await waitFor(page, s => {
       const e = s.act2.enemies.find(e => e.i === 1)!;
@@ -65,6 +66,11 @@ for (const friend of ["ember", "bubbo", "leafy", "puff"] as const) {
         : friend === "leafy" ? e.control === "grabbed" || e.control === "flung" : e.control === "flung";
     }, 10_000, `${friend} J enemy effect`);
     expect(basic.act2.mp[friend]).toBe(100);
+    if (friend === "ember") {
+      expect(basic.act2.enemies[1].panic).not.toBeNull();
+      await page.keyboard.up("KeyJ");
+      await waitFor(page, s => s.act2.breath === null, 2000, "release stops fire");
+    }
 
     await faceEnemy(page, friend);
     await page.keyboard.press("KeyK");

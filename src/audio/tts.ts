@@ -15,6 +15,8 @@ let rateScale = 1;
 let speaking = 0;
 const listeners = new Set<Listener>();
 const live = new Set<SpeechSynthesisUtterance>(); // keep references: Chrome drops events of GC'd utterances
+const pending = new Set<() => void>();
+let finishBark: (() => void) | null = null;
 let cancelGeneration = 0;
 
 const PREFERRED = [/Google US English/i, /Samantha/i, /Microsoft (Aria|Jenny|Ana|Zira)/i, /en[-_]US/i];
@@ -63,20 +65,30 @@ export const tts = {
     rateScale = scale;
   },
 
-  speak(text: string, opts: { pitch?: number; rate?: number } = {}): Promise<void> {
+  speak(text: string, opts: { pitch?: number; rate?: number; transient?: boolean } = {}): Promise<void> {
+    // Dialogue always takes precedence over an incidental combat bark.
+    if (!opts.transient) this.cancelBark();
     const generation = cancelGeneration;
     const estimate = 900 + text.length * 75 / rateScale;
     return new Promise((resolve) => {
       let done = false;
+      let timer = 0;
+      let utterance: SpeechSynthesisUtterance | null = null;
       setSpeaking(+1);
       const finish = () => {
         if (done) return;
         done = true;
+        window.clearTimeout(timer);
+        if (utterance) live.delete(utterance);
+        pending.delete(finish);
+        if (finishBark === finish) finishBark = null;
         setSpeaking(-1);
         resolve();
       };
+      pending.add(finish);
+      if (opts.transient) finishBark = finish;
       if (!synth) {
-        window.setTimeout(finish, estimate);
+        timer = window.setTimeout(finish, opts.transient ? 0 : estimate);
         return;
       }
       if (!voice) chooseVoice();
@@ -85,26 +97,39 @@ export const tts = {
       if (voice) u.voice = voice;
       u.rate = (opts.rate ?? 0.92) * rateScale;
       u.pitch = opts.pitch ?? 1.15;
-      u.volume = 1;
+      u.volume = opts.transient ? .65 : 1;
+      utterance = u;
       live.add(u);
-      const end = () => {
-        live.delete(u);
-        finish();
-      };
-      u.onend = end;
-      u.onerror = end;
+      u.onend = finish;
+      u.onerror = finish;
       // Watchdog: some Chromebooks never fire onend.
-      window.setTimeout(end, estimate * 2.2 + 1500);
+      // A bark gets a short deadline, including browser startup latency.
+      timer = window.setTimeout(() => {
+        if (opts.transient) this.cancelBark();
+        else finish();
+      }, opts.transient ? 1800 : estimate * 2.2 + 1500);
       if (generation !== cancelGeneration) {
-        end();
+        finish();
         return;
       }
       try {
         synth.speak(u);
       } catch {
-        end();
+        finish();
       }
     });
+  },
+
+  /** Cancels only incidental speech, so a microphone need never wait for it. */
+  cancelBark() {
+    if (!finishBark) return;
+    const finish = finishBark;
+    try {
+      synth?.cancel();
+    } catch {
+      /* unsupported or unavailable speech */
+    }
+    finish();
   },
 
   cancel() {
@@ -114,5 +139,7 @@ export const tts = {
     } catch {
       /* ignore */
     }
+    // Browser cancel does not reliably report onend. Release duck/mic state now.
+    pending.forEach((finish) => finish());
   }
 };

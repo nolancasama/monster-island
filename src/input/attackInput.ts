@@ -1,4 +1,4 @@
-import { basicAttack, canFight, cb, specialAttack } from "../game/combat";
+import { basicAttack, canFight, cb, specialAttack, stopBreath, stopFire } from "../game/combat";
 import { getGame, useGame } from "../game/store";
 
 export type AttackSlot = "basic" | "special";
@@ -19,18 +19,21 @@ export function pressAttack(slot: AttackSlot, source: AttackSource): void {
 export function releaseAttack(slot: AttackSlot, source: AttackSource): void {
   down[slot].delete(source);
   held[slot].delete(source);
+  if (slot === "basic" && !held.basic.size) { cb.hold = false; stopBreath(); }
 }
 
 export function releaseAllAttacks(): void {
   held.basic.clear();
   held.special.clear();
   cb.hold = cb.holdK = false;
+  stopFire();
 }
 
 export const isAttackHeld = (slot: AttackSlot): boolean => held[slot].size > 0;
 
 // Observe transitions immediately, including panels opened and closed between frames.
-useGame.subscribe(g => {
+useGame.subscribe((g, before) => {
+  if (g.progress.active !== before.progress.active) stopFire();
   if (g.screen !== "game" || g.mode !== "explore" || g.journalOpen || g.settingsOpen || g.panel || g.line) releaseAllAttacks();
 });
 

@@ -13,6 +13,7 @@ import { Lowland } from "./Lowland";
 import { CombatScene } from "./Combat";
 import { Maple, Player } from "./Characters";
 import { Monsters } from "./Monsters";
+import { ElementEffects } from "./ElementEffects";
 import { Effects } from "./Effects";
 import { CameraRig } from "./CameraRig";
 import { CollisionOverlay } from "./CollisionOverlay";
@@ -122,6 +123,7 @@ export function GameScene() {
       <CombatScene />
       <Player />
       <Monsters />
+      <ElementEffects />
       <Effects />
       <CameraRig />
       {collisionDebugAllowed && !cloud ? <CollisionOverlay /> : null}

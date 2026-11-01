@@ -1743,3 +1743,19 @@ Spec frozen in `docs/COMBAT_FEEL.md` (§0 lists every change).
 - Leafy's held repeat uses the existing cone target rules, including heavy tugs and
   resisted grabs. Object eligibility requires a reachable grab response that changes
   its state, so an already moved object cannot spend another empty repeat cooldown.
+
+## 2026-11-02 — F2 held fire and comic panic implementation
+
+- Fire Breath owns one held clock, ticks immediately and catches up every elapsed
+  quarter second. Release and combat interruptions discard its state; interruptions
+  also discard Inferno's prepaid burst, so dialogue cannot leave fire frozen.
+- Ignition starts panic before applying the ignition tick's damage. Individual burn
+  ticks use their scheduled time for the 1.2-second fire floor, including long frames.
+  Panic remains separate from AI state, expires under control, and uses safe stepTo
+  movement with deterministic per-kind headings and four-second resistance.
+- One shared body-pose calculation attaches burns, temporary limbs and comic bubbles
+  to the same transformed body. Two pooled batches add limbs and at most three speech
+  billboards; Ember's child mouth anchor is sampled after the rig poses each frame.
+- Incidental combat speech is preempted synchronously by dialogue or the microphone,
+  with a 1.8-second stalled-browser cutoff. Cancellation releases music ducking even
+  when speech synthesis omits its end event. The filtered flame loop is idempotent.

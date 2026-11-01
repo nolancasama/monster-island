@@ -3,6 +3,17 @@ import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLin
 import { CLOUD_CHASMS } from "../world/cloudisle";
 import { CANOPY_GAPS, ISLET, POND } from "../world/lowland";
 import { HAZARDS } from "../world/hazards";
+import { fireDamage } from "./elements";
+
+describe("panic fire floor", () => {
+  it("protects only the first 1.2 seconds, never heals, and leaves normal fire unchanged", () => {
+    expect(fireDamage(8, 20, { t0: 10 }, 11.19)).toBe(7);
+    expect(fireDamage(1, 3, { t0: 10 }, 11)).toBe(0);
+    expect(fireDamage(.5, 3, { t0: 10 }, 11)).toBe(0);
+    expect(fireDamage(8, 20, { t0: 10 }, 11.2)).toBe(20);
+    expect(fireDamage(8, 20, null, 10)).toBe(20);
+  });
+});
 
 const trap = (t0: number, peak = 2.4): Control => ({ kind: "trapped", t0, until: t0 + 1.9, peak });
 

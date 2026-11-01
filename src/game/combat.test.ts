@@ -11,6 +11,8 @@ import { ENEMY_SPAWNS, POND } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/collision";
 import { run } from "./flow/script";
+import { audio } from "../audio/audio";
+import { pressAttack, releaseAttack } from "../input/attackInput";
 
 vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn() } }));
 
@@ -30,6 +32,141 @@ beforeEach(() => {
 });
 
 afterEach(() => { region.world = "home"; cb.onScreen = null; });
+
+describe("held Fire Breath and burning panic", () => {
+  function setup(controlled = false) {
+    const e = loneEnemy("snapjaw", 0, 23);
+    e.hp = 1000;
+    e.burn = e.panic = e.control = null;
+    e.fireTicks = e.panicResistUntil = 0; e.lastFireT = -10;
+    if (controlled) e.control = { kind: "snared", t0: rt.time, until: rt.time + 20 };
+    setGame(g => ({ progress: { ...g.progress, active: "ember" } }));
+    cb.stance.friend = "ember"; cb.stance.k = 1;
+    return e;
+  }
+
+  it("deals identical held-second damage at 30 fps, 8 fps and frames crossing multiple ticks", () => {
+    const damages: number[] = [];
+    for (const frames of [Array(30).fill(1 / 30), Array(8).fill(1 / 8), [.6, .4]]) {
+      rt.time = 10;
+      cb.breath = null; cb.ready.basic = 0;
+      const e = setup(true);
+      cb.hold = true;
+      expect(basicAttack()).toBe(true);
+      for (const dt of frames) { rt.time += dt; combatTick(dt); }
+      damages.push(1000 - e.hp);
+      expect(e.fireTicks).toBe(5);
+    }
+    expect(damages).toEqual([17, 17, 17]);
+  });
+
+  it("a native tap ticks once and releases synchronously without hit sounds or hit FX", () => {
+    const e = setup();
+    vi.mocked(audio.play).mockClear();
+    pressAttack("basic", "key");
+    expect(e.hp).toBe(997);
+    releaseAttack("basic", "key");
+    expect(cb.breath).toBeNull();
+    advanceCombat(.4);
+    expect(e.hp).toBe(997);
+    expect(e.burn).toBeNull();
+    expect(cb.fx.some(f => f.kind === "hit" || f.kind === "breath")).toBe(false);
+    expect(vi.mocked(audio.play).mock.calls.some(([s]) => s === "hit")).toBe(false);
+  });
+
+  it("requires three exposures, resets after a second away, and never extends panic", () => {
+    const e = setup();
+    cb.hold = true;
+    basicAttack();
+    advanceCombat(.25);
+    expect(e.fireTicks).toBe(2); expect(e.burn).toBeNull();
+    rt.player.yaw = Math.PI;
+    advanceCombat(1.05);
+    expect(e.fireTicks).toBe(0);
+    rt.player.yaw = 0;
+    advanceCombat(.5);
+    expect(e.burn).toBeNull();
+    advanceCombat(.25);
+    expect(e.panic).not.toBeNull();
+    const until = e.panic!.until;
+    // Repeated Inferno ignition refreshes burn but cannot restart or extend panic.
+    cb.ready.special = 0;
+    specialAttack();
+    expect(e.panic!.until).toBe(until);
+  });
+
+  it("Inferno ignites immediately, cancels a ranged tell and disperses its shot", () => {
+    const e = setup();
+    e.kind = "forestSpitter"; e.state = "windup"; e.timer = .7;
+    cb.shots.push({ id: 999, shape: "hostile", owner: "puff", hostile: true, source: e.i,
+      x: 0, y: 1, z: 24, y1: 1, vx: 0, vz: -3, life: 4, age: 0, radius: .4, damage: 5, knock: 0, stun: 0, size: 1 });
+    specialAttack();
+    expect(e.panic).not.toBeNull(); expect(e.burn).not.toBeNull();
+    expect(e.state).toBe("chase"); expect(e.timer).toBe(0);
+    expect(cb.shots[0].life).toBe(0);
+  });
+
+  it("pauses panic/exposure, expires under control and grants four-second resistance", () => {
+    const e = setup();
+    specialAttack();
+    const until = e.panic!.until;
+    setGame({ journalOpen: true });
+    advanceCombat(2);
+    expect(e.panic!.until).toBeCloseTo(until + 2);
+    expect(cb.inferno).toBeNull();
+    setGame({ journalOpen: false });
+    e.control = { kind: "snared", t0: rt.time, until: rt.time + 10 };
+    advanceCombat(2.55);
+    expect(e.panic).toBeNull();
+    expect(e.panicResistUntil - rt.time).toBeCloseTo(4, 0);
+    e.control = null;
+    cb.ready.special = 0;
+    specialAttack();
+    expect(e.burn).not.toBeNull(); expect(e.panic).toBeNull();
+  });
+
+  it("controlled ranged enemies burn without panic or losing their released shots", () => {
+    const e = setup(true); e.kind = "forestSpitter";
+    const shot: Shot = { id: 998, shape: "hostile", owner: "puff", hostile: true, source: e.i,
+      x: 0, y: 4, z: 26, y1: 4, vx: 1, vz: 0, life: 4, age: 0, radius: .4, damage: 5, knock: 0, stun: 0, size: 1 };
+    cb.shots.push(shot);
+    specialAttack();
+    expect(e.panic).toBeNull(); expect(e.burn).not.toBeNull();
+    advanceCombat(.4);
+    expect(e.hp).toBeLessThan(994);
+    expect(shot.life).toBe(4);
+  });
+
+  it.each(["release", "friend", "zone", "dialogue", "knockout"])("stops breath on %s and stops a blocked Inferno permanently", reason => {
+    setup(); cb.hold = true; basicAttack();
+    if (reason === "release") cb.hold = false;
+    if (reason === "friend") setGame(g => ({ progress: { ...g.progress, active: "puff" } }));
+    if (reason === "zone") rt.player.z = 5;
+    if (reason === "dialogue") setGame({ line: { by: "Maple", en: "Wait!", ja: "まって!" } } as never);
+    if (reason === "knockout") cb.knockedOut = true;
+    combatTick(.01);
+    expect(cb.breath).toBeNull();
+    setGame({ line: null }); cb.knockedOut = false;
+  });
+
+  it("a fire KO still records defeat and drops normal rewards", () => {
+    const e = setup(); e.hp = 3;
+    basicAttack();
+    expect(e.state).toBe("ko"); expect(e.panic).toBeNull();
+    expect(cb.cloudZones.defeated.stormbreakCoast).toContain(e.i);
+    expect(cb.drops.some(d => d.kind === "coin")).toBe(true);
+  });
+
+  it("discards an Inferno burst as soon as dialogue opens, without resuming it", () => {
+    setup(); specialAttack();
+    expect(cb.inferno).not.toBeNull();
+    setGame({ line: { id: 1, by: "maple", en: "Wait!" } });
+    expect(cb.inferno).toBeNull();
+    setGame({ line: null });
+    advanceCombat(.5);
+    expect(cb.inferno).toBeNull();
+  });
+});
 
 function changeWorld(world: "home" | "cloud") {
   setGame(g => ({ progress: { ...g.progress, act3: { ...g.progress.act3, world } } }));
@@ -323,28 +460,31 @@ describe("elemental J simulation", () => {
     expect(cb.shots).toHaveLength(0);
   });
 
-  it("Fire Breath ignites once, refreshes without extra ticks, and upgrades burn/range", () => {
+  it("Fire Breath taps once, ignites on third exposure, and upgrades burn/range", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("ember");
     expect(basicAttack()).toBe(true);
-    expect(e.hp).toBe(93);
-    expect(e.burn).not.toBeNull();
+    expect(e.hp).toBe(97);
+    expect(e.burn).toBeNull();
     advanceCombat(.3);
-    expect(e.hp).toBe(93);
-    advanceCombat(.05);
-    expect(e.hp).toBe(91);
+    expect(e.hp).toBe(97);
+    expect(cb.breath).toBeNull();
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(94);
     advanceCombat(.25);
     expect(basicAttack()).toBe(true);
-    expect(e.hp).toBe(84);
-    advanceCombat(.1);
-    expect(e.hp).toBe(82);
-    Object.assign(e, { z: 25, hp: 100, burn: null, state: "recover", timer: 99 });
+    expect(e.hp).toBe(91);
+    expect(e.burn).not.toBeNull();
+    expect(e.panic).not.toBeNull();
+    releaseAttack("basic", "key");
+    // Resist panic here so range and upgraded burn can be measured in place.
+    Object.assign(e, { z: 25, hp: 100, burn: null, panic: null, panicResistUntil: Infinity, fireTicks: 2, state: "recover", timer: 99 });
     setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: ["ember"] } } }));
     cb.ready.basic = 0;
     expect(basicAttack()).toBe(true);
-    expect(e.hp).toBe(93);
+    expect(e.hp).toBe(97);
     advanceCombat(.35);
-    expect(e.hp).toBe(90);
+    expect(e.hp).toBe(94);
   });
 
   for (const kind of ["shellback", "thunderBeetle"] as const) {
@@ -431,7 +571,7 @@ describe("elemental J simulation", () => {
     advanceCombat(.3);
     expect(e.control?.kind).toBe("trapped");
     friend("ember");
-    expect(basicAttack()).toBe(true);
+    expect(specialAttack()).toBe(true);
     const hp = e.hp, air = e.air;
     setGame({ journalOpen: true });
     advanceCombat(3);
@@ -780,7 +920,7 @@ describe("Cloud Isle combat", () => {
     cb.stance.friend = "ember";
     cb.stance.k = 1;
     expect(basicAttack()).toBe(true);
-    expect(cb.enemies[4].hp).toBe(93);
+    expect(cb.enemies[4].hp).toBe(97);
     expect(cb.enemies[4].state).toBe("idle");
     expect(cb.enemies[4].waiting).toBe(true);
     expect(cb.enemies.filter(e => !["idle", "return", "ko", "gone"].includes(e.state))).toHaveLength(4);
@@ -894,6 +1034,7 @@ describe("elemental K simulation and shared combinations", () => {
 
   it("Inferno tap lasts 1.2 seconds, ticks every quarter second and halves walking speed", () => {
     const e = loneEnemy("snapjaw", 0, 23);
+    e.panicResistUntil = Infinity;
     friend("ember");
     const speed = speedScale();
     expect(specialAttack()).toBe(true);
@@ -915,6 +1056,7 @@ describe("elemental K simulation and shared combinations", () => {
   it("held Inferno follows current facing, drains MP beyond three seconds and stops on release", () => {
     const a = loneEnemy("snapjaw", 0, 23), b = extra(1, "snapjaw", 3, 20);
     a.hp = b.hp = 1000;
+    a.panicResistUntil = b.panicResistUntil = Infinity;
     friend("ember"); cb.holdK = true;
     expect(specialAttack()).toBe(true);
     advanceCombat(.5);
