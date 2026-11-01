@@ -189,6 +189,82 @@ function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
   return e;
 }
 
+describe("Leafy's snap-timed whip", () => {
+  function leafy() {
+    cb.stance.friend = "leafy"; cb.stance.k = 1;
+    vi.mocked(audio.play).mockClear();
+  }
+
+  for (const fps of [60, 8]) {
+    it(`strikes once on the first frame crossing .15 seconds at ${fps} fps`, () => {
+      const e = loneEnemy("snapjaw", 0, 23);
+      leafy();
+      const start = rt.time;
+      expect(basicAttack()).toBe(true);
+      expect(e.hp).toBe(100);
+      expect(cb.whip?.struck).toBe(false);
+      expect(vi.mocked(audio.play).mock.calls.some(([sound]) => sound === "whip")).toBe(false);
+      const step = 1 / fps;
+      while (rt.time - start + step < .15 - 1e-9) {
+        rt.time += step; combatTick(step);
+        expect(e.hp).toBe(100);
+      }
+      rt.time += step; combatTick(step);
+      expect(e.hp).toBe(92);
+      expect(cb.whip?.struck).toBe(true);
+      expect(e.control?.t0).toBeCloseTo(start + .15);
+      expect(cb.ready.basic).toBeCloseTo(start + .75);
+      rt.time += step; combatTick(step);
+      expect(e.hp).toBe(92);
+      expect(vi.mocked(audio.play).mock.calls.filter(([sound]) => sound === "whip")).toHaveLength(1);
+    });
+  }
+
+  it("samples live position and facing at snap without steering the player", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    leafy(); basicAttack();
+    Object.assign(rt.player, { x: 1, z: 20, yaw: Math.PI / 2 });
+    Object.assign(e, { x: 4, z: 20, homeX: 4, homeZ: 20 });
+    advanceCombat(.1);
+    expect(e.hp).toBe(100);
+    expect(cb.whip?.strands[0].enemy).toBe(e.i);
+    advanceCombat(.05);
+    expect(e.hp).toBe(92);
+    expect(e.flight).toMatchObject({ x: 1, z: 20, yaw: Math.PI / 2 });
+    expect(rt.player.yaw).toBe(Math.PI / 2);
+  });
+
+  for (const reason of ["switch", "stop"] as const) {
+    it(`cancels before snap on ${reason}, spends cooldown and retracts in .1 seconds`, () => {
+      const e = loneEnemy("snapjaw", 0, 23);
+      leafy(); basicAttack();
+      const ready = cb.ready.basic;
+      advanceCombat(.05);
+      if (reason === "switch") setGame(g => ({ progress: { ...g.progress, active: "puff" } }));
+      else setGame({ journalOpen: true });
+      combatTick(0);
+      expect(cb.whip?.cancelAt).toBe(rt.time);
+      advanceCombat(.1);
+      expect(cb.whip).toBeNull();
+      expect(e.hp).toBe(100); expect(e.control).toBeNull();
+      expect(cb.ready.basic).toBe(ready);
+      expect(vi.mocked(audio.play).mock.calls.some(([sound]) => sound === "whip")).toBe(false);
+    });
+  }
+
+  it("a friend switch retracts the strand while the existing swing still flings", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    leafy(); basicAttack(); advanceCombat(.15);
+    expect(e.control?.kind).toBe("grabbed");
+    setGame(g => ({ progress: { ...g.progress, active: "puff" } }));
+    advanceCombat(.12);
+    expect(cb.whip).toBeNull();
+    expect(e.control?.kind).toBe("grabbed");
+    advanceCombat(.35);
+    expect(e.control?.kind).toBe("flung");
+  });
+});
+
 describe("companions leaving combat", () => {
   const destinations = [
     { name: "Fern Crossing", world: "home", hostile: [76, -183], safe: [76, -188] },
@@ -389,6 +465,9 @@ describe("elemental J simulation", () => {
       const e = cb.enemies[scenario.i];
       for (const other of cb.enemies) if (other !== e) other.state = "gone";
       Object.assign(e, { x: scenario.x, z: scenario.z, state: "recover", timer: 99, resistUntil: rt.time + 20, yaw: scenario.side * Math.PI / 2 });
+      // Keep this ray/rim assertion separate from resisted-knock wall damage,
+      // which now runs in the same simulation frame as the scheduled snap.
+      e.control = { kind: "snared", t0: rt.time, until: rt.time + 20 };
       Object.assign(rt.player, { x: e.x + scenario.side * scenario.distance, z: e.z, yaw: -scenario.side * Math.PI / 2 });
       combatTick(0);
       friend("leafy");
@@ -397,6 +476,7 @@ describe("elemental J simulation", () => {
       expect(isWalkable(e.x, e.z, gates, 0)).toBe(true);
       expect(isWalkable(e.x, e.z, gates, .08)).toBe(false);
       expect(basicAttack()).toBe(true);
+      advanceCombat(.15);
       expect(e.hp).toBe(hp - scenario.damage);
     });
 
@@ -441,6 +521,7 @@ describe("elemental J simulation", () => {
     expect(isWalkable(rt.player.x, rt.player.z, gates, PLAYER_R)).toBe(true);
     expect(isWalkable(e.x, e.z, gates, ENEMIES[e.kind].radius)).toBe(true);
     expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
     expect(e.hp).toBe(100);
     expect(e.control).toBeNull();
   });
@@ -497,6 +578,7 @@ describe("elemental J simulation", () => {
       friend("leafy");
       const z = e.z;
       expect(basicAttack()).toBe(true);
+      advanceCombat(.15);
       expect(e.z).toBeCloseTo(z - 1);
       expect(e.hp).toBe(80); // six bubble contact + fourteen heavy vine tug
       expect(e.control).toBeNull(); expect(e.air).toBe(0);
@@ -599,6 +681,7 @@ describe("elemental J simulation", () => {
     friend("leafy");
     expect(pickTarget(4.5)).toBeNull();
     expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
     expect(e.hp).toBe(100);
     // A coast rock at (-6,32), radius 2.2, blocks this four-metre segment.
     Object.assign(rt.player, { x: -6, z: 30, yaw: 0 });
@@ -606,6 +689,7 @@ describe("elemental J simulation", () => {
     cb.ready.basic = 0;
     expect(pickTarget(4.5)).toBeNull();
     expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
     expect(e.hp).toBe(100);
     expect(e.control).toBeNull();
   });
@@ -614,6 +698,7 @@ describe("elemental J simulation", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("leafy");
     expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
     expect(e.hp).toBe(92); expect(e.control?.kind).toBe("grabbed");
     rt.player.yaw = Math.PI;
     advanceCombat(.46);
@@ -639,7 +724,7 @@ describe("elemental J simulation", () => {
       expect(cb.fx).toHaveLength(fx);
       expect(basicAttack()).toBe(true);
       expect(cb.ready.basic).toBeGreaterThan(ready);
-      expect(cb.fx.length).toBeGreaterThan(fx);
+      expect(cb.whip).not.toBeNull();
     });
   }
 
@@ -647,12 +732,15 @@ describe("elemental J simulation", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("leafy");
     expect(basicAttack({ repeat: true })).toBe(true);
+    advanceCombat(.15);
     expect(e.hp).toBe(92);
     changeWorld("home");
     for (const enemy of cb.enemies) enemy.state = "gone";
     Object.assign(rt.player, { x: 66, z: -249.5, yaw: Math.PI });
+    combatTick(0); // Enter causeway before scheduling a strike; entry cancels pending moves.
     friend("leafy");
     expect(basicAttack({ repeat: true })).toBe(true);
+    advanceCombat(.15);
     expect(cb.elementObjects.leafyStatues?.state).toBe("pulled");
     cb.ready.basic = 0;
     expect(basicAttack({ repeat: true })).toBe(false);
@@ -663,11 +751,17 @@ describe("elemental J simulation", () => {
     friend("leafy");
     setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: ["leafy"] } } }));
     expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
     expect([a.control?.kind, b.control?.kind]).toEqual(["grabbed", "grabbed"]);
+    expect(cb.whip?.strands).toEqual([
+      { hand: "R", enemy: b.i, object: null },
+      { hand: "L", enemy: a.i, object: null }
+    ]);
     advanceCombat(.36);
     expect([a.hp, b.hp]).toEqual([86, 86]);
     expect([a.state, b.state]).toEqual(["stun", "stun"]);
     expect(a.timer).toBeGreaterThan(.95);
+    expect(cb.fx.some(f => f.kind === "hit" && Math.abs(f.x) < 1e-9 && Math.abs(f.z - 23) < 1e-9)).toBe(true);
   });
 
   it("flung weapons hit each victim once and take recoil damage", () => {
@@ -889,6 +983,7 @@ describe("Cloud Isle combat", () => {
     cb.stance.friend = "leafy";
     cb.stance.k = 1;
     expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
     expect(e.state).toBe("stun");
     expect(e.hp).toBe(44);
     expect(e.control?.kind).toBe("grabbed");
@@ -1235,7 +1330,7 @@ describe("elemental K simulation and shared combinations", () => {
   it("Wind Blast can redirect Vine Grab's fling, but cannot extend it during resistance", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("leafy"); expect(basicAttack()).toBe(true);
-    advanceCombat(.46);
+    advanceCombat(.61);
     expect(e.control?.kind).toBe("flung");
     Object.assign(rt.player, { x: e.x, z: e.z - 3, yaw: 0 });
     friend("puff"); expect(basicAttack()).toBe(true);
@@ -1352,6 +1447,7 @@ describe("Storm Beacon world combat integration", () => {
     Object.assign(rt.player, { x: -7, z: BEACON_PYLONS[0].z - 2.5 });
     cb.beacon.pylons[0].phase = "exposed";
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(cb.beacon.power).toBe(2);
     expect(cb.shots).toHaveLength(0);
   });
@@ -1362,6 +1458,7 @@ describe("Storm Beacon world combat integration", () => {
     Object.assign(rt.player, { x: -4.88, z: BEACON_PYLONS[0].z - 2.3, yaw: 0 });
     cb.beacon.pylons[0].phase = "exposed";
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(cb.beacon.pylons[0].phase).toBe("down");
   });
 

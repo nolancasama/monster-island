@@ -19,6 +19,7 @@ import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_ELECTRIC_PANELS, electricPanelActive, e
 import { newAct3, type Act3 } from "./logic/act3";
 import { decodeSave, encodeSave } from "./logic/save";
 import { cloudView } from "../scene/CloudIsle";
+import { whipFrame } from "../scene/ElementEffects";
 
 /**
  * Test hook (only with ?e2e=1): read game state and put the player next to
@@ -92,6 +93,8 @@ export function installE2eHook(seed: number) {
           knockedOut: cb.knockedOut,
           inferno: cb.inferno ? { ...cb.inferno, held: cb.holdK } : null,
           breath: cb.breath ? { ...cb.breath, held: cb.hold } : null,
+          whip: cb.whip ? { ...cb.whip, strands: cb.whip.strands.map(strand => ({ ...strand })) } : null,
+          whipFrame: { ...whipFrame, base: { ...whipFrame.base }, handR: { ...whipFrame.handR } },
           cyclone: cb.cyclone ? { ...cb.cyclone, bubbles: [...cb.cyclone.bubbles], carried: cb.enemies.filter(e => e.control?.kind === "carried" && e.control.source === cb.cyclone!.id).map(e => e.i) } : null,
           bombChain: cb.bombChain ? { ...cb.bombChain, pops: cb.bombChain.pops.map(p => ({ ...p })), victims: [...cb.bombChain.victims] } : null,
           enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, burn: e.burn ? { ...e.burn } : null, panic: e.panic ? { ...e.panic } : null, panicResistUntil: e.panicResistUntil, fireTicks: e.fireTicks, lastFireT: e.lastFireT, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
@@ -227,6 +230,7 @@ export function installE2eHook(seed: number) {
       if (fixture.clearShots !== false) cb.shots.length = 0;
       cb.inferno = cb.cyclone = cb.bombChain = null;
       cb.breath = null;
+      cb.whip = null;
       cb.fx.length = 0;
     },
     /** Act 2: set the live HP (tests of damage, eating and knock-outs). */

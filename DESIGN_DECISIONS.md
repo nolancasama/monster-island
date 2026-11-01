@@ -1759,3 +1759,27 @@ Spec frozen in `docs/COMBAT_FEEL.md` (§0 lists every change).
 - Incidental combat speech is preempted synchronously by dialogue or the microphone,
   with a 1.8-second stalled-browser cutoff. Cancellation releases music ducking even
   when speech synthesis omits its end event. The filtered flame loop is idempotent.
+
+## 2026-11-02 — F3 live vine whip and twisting roots
+
+- Vine Grab spends its existing cooldown on press and resolves its ordinary live
+  forward cone at the .15-second snap, including objects and beacon interactions.
+  Visual aim stores identities only; it never steers or saves a press position.
+  Grab clocks start at the scheduled snap, including frames that cross it late.
+- The .24–.5-second follow-through/retraction applies to misses, objects and heavy
+  tugs. A strand attached to a swinging enemy stays until control releases, then
+  recoils over .26 seconds. Switching or stopping cancels the strand over .1 seconds
+  without interrupting an enemy's existing control. Retraction uses the last drawn
+  hand-relative endpoint, keeping a switched companion's strand local.
+- Both Leafy hands are child rig anchors sampled after the arm pose. Eighteen
+  tapered segments and three small leaf segments use the existing vines batch;
+  a short local rise clears the player's head even under tension while the long
+  span's wave and bow diminish. Double Grab assigns hands along the facing's right
+  axis and draws both strands through the midpoint impact and recoil.
+- Snare roots capture ground positions independently of Leafy. Six helical roots
+  grow toward .8 of each model's body height; seven segments reduce to six and
+  then fewer whole roots per enemy when needed to stay inside the roots batch cap.
+- The e2e state exposes `act2.whip` and `act2.whipFrame`; ElementEffects writes the
+  frame counter, time, drawn flag, actual curve base and right-hand world position
+  together after Monsters poses the rig. Browser visual judgment remains with the
+  controller.

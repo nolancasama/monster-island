@@ -4,18 +4,28 @@ import * as THREE from "three";
 import { cb, currentCombatZone } from "../game/combat";
 import { COMBAT, ENEMIES } from "../game/data/combat";
 import { rt } from "../game/runtime";
-import { monsterRootY } from "../game/ride";
 import { getGame } from "../game/store";
 import { standY } from "../game/world/collision";
 import { ELEMENT_OBJECTS } from "../game/world/elementObjects";
 import { splashParticle } from "./splashParticle";
 import { anchors, fireStreamBase } from "./anchors";
 import { emptyBodyPose, enemyBodyPose, PANIC_LIMBS } from "./panicPose";
+import { whipPoints } from "../game/logic/whip";
 
 // Existing seven batches plus panic limbs and speech; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
 const CAP = 768;
 const TAU = Math.PI * 2;
+const WHIP_POINTS = 19;
+// Model body heights, before enemyBodyPose's squash, scale and lift.
+const BODY_HEIGHT = { gloomlet: .82, snapjaw: 1.06, shellback: 1.07, forestSpitter: .92,
+  stormCrab: 1.01, thunderBeetle: .93, windSprite: 1.37, raiderDrone: 1.24, raiderShooter: 1.35 };
+
+/** Written together after rig sampling; e2e reads one completed rendered frame. */
+export const whipFrame = {
+  frame: 0, time: 0, drawn: false,
+  base: { x: 0, y: 0, z: 0 }, handR: { x: 0, y: 0, z: 0 }
+};
 
 class Batch {
   mesh: THREE.InstancedMesh;
@@ -163,7 +173,7 @@ function panicSpeechMaterial() {
 }
 
 function makePool() {
-  const tube = new THREE.CylinderGeometry(1, 1, 1, 7, 1);
+  const tube = new THREE.CylinderGeometry(.9, 1, 1, 7, 1);
   tube.rotateX(Math.PI / 2);
   const shell = new THREE.ConeGeometry(1, 1, 24, 1, true);
   const ring = new THREE.RingGeometry(.88, 1, 40);
@@ -171,8 +181,8 @@ function makePool() {
   return {
     sprites: new Batch(new THREE.PlaneGeometry(1, 1), spriteMaterial()),
     bubbles: new Batch(new THREE.SphereGeometry(1, 20, 12), bubbleMaterial()),
-    vines: new Batch(tube, new THREE.MeshLambertMaterial({ color: "#65bb47", flatShading: true })),
-    roots: new Batch(new THREE.ConeGeometry(1, 1, 6), new THREE.MeshLambertMaterial({ color: "#9d713b", flatShading: true })),
+    vines: new Batch(tube, new THREE.MeshLambertMaterial({ color: "#ffffff", flatShading: true })),
+    roots: new Batch(tube.clone(), new THREE.MeshLambertMaterial({ color: "#ffffff", flatShading: true })),
     shells: new Batch(shell, fadedMaterial("#e4faff", .22)),
     rings: new Batch(ring, fadedMaterial("#ffffff", .8)),
     streaks: new Batch(new THREE.TorusGeometry(1, .035, 4, 18, Math.PI * 1.35), fadedMaterial("#e5faff", .6)),
@@ -198,7 +208,14 @@ export function ElementEffects() {
   const point = useMemo(() => new THREE.Vector3(), []);
   const streamBase = useMemo(() => new THREE.Vector3(), []);
   const stream = useMemo(() => ({ active: false, age: 0, stoppedAt: -Infinity, inferno: false }), []);
-  const roots = useMemo(() => Array.from({ length: CAP }, () => ({ x: 0, z: 0, y: 0, t: -1, end: -1, zone: "" })), []);
+  const roots = useMemo(() => Array.from({ length: CAP }, () => ({ x: 0, z: 0, y: 0, t: -1, end: -1, zone: "", height: 1, radius: .5 })), []);
+  const curve = useMemo(() => new Float32Array(WHIP_POINTS * 3), []);
+  const rootCurve = useMemo(() => new Float32Array(8 * 3), []);
+  const whipTip = useMemo(() => new THREE.Vector3(), []);
+  const whipFacing = useMemo(() => ({ x: 0, z: 1 }), []);
+  const whipVisual = useMemo(() => Array.from({ length: 2 }, () => ({
+    t0: -1, retract: -1, cancel: -1, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0
+  })), []);
   const { camera } = useThree();
   useEffect(() => () => { for (const b of batches) b.dispose(); }, [batches]);
 
@@ -225,17 +242,34 @@ export function ElementEffects() {
       o.position.set(x, y, z); o.quaternion.copy(camera.quaternion); o.scale.set(2.6, .975, 1);
       pool.speech.put(o, color.set("#ffffff"), alpha);
     },
-    vine(x: number, y: number, z: number, tx: number, ty: number, tz: number) {
-      const dx = tx - x, dy = ty - y, dz = tz - z;
-      const len = Math.hypot(dx, dy, dz);
-      direction.set(dx, dy, dz).normalize();
-      o.quaternion.setFromUnitVectors(forward, direction);
-      // Rigid short segments give the vine knuckles without a soft-body solver.
-      for (let i = 0; i < 9; i++) {
-        const k = (i + .5) / 9;
-        o.position.set(x + dx * k, y + dy * k, z + dz * k);
-        o.scale.set(i % 2 ? .065 : .085, i % 2 ? .065 : .085, len / 9 * 1.04);
-        pool.vines.put(o, color.set(i % 2 ? "#67b849" : "#387d35"));
+    curve(points: Float32Array, n: number, batch: Batch, baseRadius: number, tipRadius: number, root?: THREE.Vector3) {
+      for (let i = 0; i < n - 1 && batch.n < CAP; i++) {
+        const j = i * 3, k = i / (n - 2);
+        // The live hand stays in double precision even though the reusable curve is float32.
+        const x = i === 0 && root ? root.x : points[j];
+        const y = i === 0 && root ? root.y : points[j + 1];
+        const z = i === 0 && root ? root.z : points[j + 2];
+        const dx = points[j + 3] - x, dy = points[j + 4] - y, dz = points[j + 5] - z;
+        const length = Math.hypot(dx, dy, dz);
+        if (length < .00001) continue;
+        direction.set(dx / length, dy / length, dz / length);
+        o.quaternion.setFromUnitVectors(forward, direction);
+        o.position.set(x + dx * .5, y + dy * .5, z + dz * .5);
+        const radius = baseRadius + (tipRadius - baseRadius) * k;
+        o.scale.set(radius, radius, length * 1.035);
+        if (batch === pool.vines) color.setRGB(.07 + k * .16, .24 + k * .3, .035 + k * .07);
+        else color.setRGB(.22 + k * .12, .11 + k * .14, .035 + k * .025);
+        batch.put(o, color);
+      }
+    },
+    leaves(points: Float32Array, n: number) {
+      for (let i = 0; i < 3; i++) {
+        const j = (4 + i * 5) * 3, side = i % 2 ? 1 : -1;
+        direction.set(side * .7, .35, .5).normalize();
+        o.quaternion.setFromUnitVectors(forward, direction);
+        o.position.set(points[j] + side * .06, points[j + 1] + .025, points[j + 2]);
+        o.scale.set(.095, .025, .24 * (1 - i / n));
+        pool.vines.put(o, color.set("#91d45c"));
       }
     },
     splash(x: number, y: number, z: number, id: number, age: number, alpha: number, fall = false) {
@@ -250,6 +284,10 @@ export function ElementEffects() {
   useFrame(() => {
     const t = rt.time, game = getGame(), zone = currentCombatZone();
     const active = game.progress.act2.started;
+    whipFrame.frame++; whipFrame.time = t; whipFrame.drawn = false;
+    whipFrame.handR.x = anchors.leafyHandR.x;
+    whipFrame.handR.y = anchors.leafyHandR.y;
+    whipFrame.handR.z = anchors.leafyHandR.z;
     if (active) {
       // Environmental fire uses the same instanced flame sprites as Ember.
       // Read the backing runtime records to avoid allocating semantic snapshots per frame.
@@ -334,39 +372,107 @@ export function ElementEffects() {
             }
           }
         }
-        if (e.control?.kind === "grabbed") {
-          const m = rt.monsters.leafy;
-          let x = m.x, z = m.z, sy = monsterRootY(m, game.progress.solved, t);
-          if (cb.stance.friend === "leafy" && cb.stance.k > 0) {
-            const blend = cb.stance.k * cb.stance.k * (3 - 2 * cb.stance.k);
-            const p = rt.player;
-            x = cb.stance.fromX + (p.x - Math.sin(p.yaw) * .43 - cb.stance.fromX) * blend;
-            z = cb.stance.fromZ + (p.z - Math.cos(p.yaw) * .43 - cb.stance.fromZ) * blend;
-            const ground = standY(cb.stance.fromX, cb.stance.fromZ, game.progress.solved);
-            sy = ground + (p.y + .74 - ground) * blend + Math.sin(blend * Math.PI) * .6;
-          }
-          draw.vine(x, sy + .45, z, e.x, y + .6, e.z);
-        }
         if (e.control?.kind === "snared") {
           const r = roots[enemyIndex];
           if (r) {
-            r.x = e.x; r.y = ground; r.z = e.z; r.t = e.control.t0; r.end = e.control.until; r.zone = e.zone;
+            if (r.t !== e.control.t0 || r.zone !== e.zone) {
+              r.x = e.x; r.y = ground; r.z = e.z; r.t = e.control.t0; r.zone = e.zone;
+              r.height = BODY_HEIGHT[e.kind] * .8; r.radius = radius;
+            }
+            r.end = e.control.until;
           }
         } else {
           const r = roots[enemyIndex];
           if (r && r.end > t) r.end = t;
         }
       }
+      let rootCount = 0;
+      for (const r of roots) if (r.zone === zone && r.t >= 0 && t <= r.end + .22) rootCount++;
+      // Whole roots get a fair share of the existing instance budget, even in a crowd.
+      const rootSegments = rootCount * 42 <= CAP ? 7 : 6;
+      const rootLimit = Math.min(6, Math.floor(CAP / Math.max(1, rootCount) / rootSegments));
       for (const r of roots) {
         if (r.zone !== zone || r.t < 0 || t > r.end + .22) continue;
         const rise = Math.min(1, (t - r.t) / .18), retract = Math.min(1, Math.max(0, (r.end + .22 - t) / .22));
         const k = Math.max(0, rise * retract);
         draw.ring(r.x, r.y + .035, r.z, .95, "#87b94b", k * .65);
-        for (let i = 0; i < 6; i++) {
-          const a = i / 6 * TAU, h = (.65 + (i % 3) * .14) * k;
-          o.position.set(r.x + Math.cos(a) * .8, r.y + h * .4 - .08, r.z + Math.sin(a) * .8);
-          o.rotation.set(Math.sin(a) * .3, a, -Math.cos(a) * .3); o.scale.set(.16, h, .16);
-          pool.roots.put(o, color.set(i % 2 ? "#658b39" : "#936437"));
+        for (let i = 0; i < rootLimit; i++) {
+          const a = i / rootLimit * TAU;
+          for (let j = 0; j <= rootSegments; j++) {
+            // Reveal along a helix: the foot never leaves its ground ring.
+            const u = j / rootSegments * k, angle = a + u * Math.PI * 1.35;
+            const radius = r.radius + .42 * (1 - u) * (1 - u);
+            rootCurve[j * 3] = r.x + Math.cos(angle) * radius;
+            rootCurve[j * 3 + 1] = r.y + r.height * u;
+            rootCurve[j * 3 + 2] = r.z + Math.sin(angle) * radius;
+          }
+          draw.curve(rootCurve, rootSegments + 1, pool.roots, .12 * Math.min(1, k * 4), .018);
+        }
+      }
+      const whip = cb.whip;
+      if (whip) {
+        const age = Math.max(0, t - whip.t0), p = rt.player;
+        const yaw = whip.struck ? whip.yaw : p.yaw;
+        whipFacing.x = Math.sin(yaw); whipFacing.z = Math.cos(yaw);
+        for (let i = 0; i < whip.strands.length; i++) {
+          const strand = whip.strands[i], visual = whipVisual[i];
+          const root = strand.hand === "R" ? anchors.leafyHandR : anchors.leafyHandL;
+          if (strand.hand === "R" ? !anchors.leafyHandRValid : !anchors.leafyHandLValid) continue;
+          if (visual.t0 !== whip.t0) {
+            visual.t0 = whip.t0; visual.retract = visual.cancel = -1;
+            visual.x = visual.z = 0; visual.y = .15;
+          }
+          const cancelled = whip.cancelAt !== null;
+          const retracting = whip.retractAt !== null && t >= whip.retractAt;
+          let tension = 0;
+          if (cancelled || retracting) {
+            const start = cancelled ? whip.cancelAt! : whip.retractAt!;
+            if ((cancelled ? visual.cancel : visual.retract) !== start) {
+              visual.rx = visual.x; visual.ry = visual.y; visual.rz = visual.z;
+              if (cancelled) visual.cancel = start; else visual.retract = start;
+            }
+            const k = Math.max(0, 1 - (t - start) / (cancelled ? .1 : .26));
+            whipTip.set(root.x + visual.rx * k, root.y + visual.ry * k + Math.sin(k * Math.PI) * .28, root.z + visual.rz * k);
+          } else {
+            let enemy = null;
+            if (strand.enemy !== null) for (const candidate of cb.enemies) if (candidate.i === strand.enemy) { enemy = candidate; break; }
+            let object = null;
+            if (strand.object !== null) for (const candidate of ELEMENT_OBJECTS) if (candidate.id === strand.object) { object = candidate; break; }
+            if (enemy && enemy.zone === zone) {
+              const ground = standY(enemy.x, enemy.z, game.progress.solved);
+              enemyBodyPose(enemy, t, bodyPose);
+              bodyRoot.position.set(enemy.x, ground, enemy.z); bodyRoot.rotation.set(0, enemy.yaw, 0);
+              bodyFrame.position.set(bodyPose.shake, enemy.air + bodyPose.hop, 0);
+              bodyFrame.rotation.set(bodyPose.lean, bodyPose.spin, bodyPose.roll);
+              bodyFrame.scale.set(bodyPose.scale / Math.sqrt(bodyPose.squash), bodyPose.scale * bodyPose.squash, bodyPose.scale / Math.sqrt(bodyPose.squash));
+              bodyRoot.updateMatrixWorld(true);
+              whipTip.set(0, BODY_HEIGHT[enemy.kind] * .55, 0).applyMatrix4(bodyFrame.matrixWorld);
+              const c = enemy.control;
+              if (whip.struck && c?.kind === "grabbed") tension = .4 + .55 * Math.min(1, (t - c.t0) / (c.until - c.t0));
+            } else if (object) {
+              whipTip.set(object.x, standY(object.x, object.z, game.progress.solved) + .6, object.z);
+            } else {
+              whipTip.set(p.x + whipFacing.x * COMBAT.leafy.basic.range, p.y + .9, p.z + whipFacing.z * COMBAT.leafy.basic.range);
+            }
+            if (age < .15) {
+              const extension = Math.max(0, Math.min(1, (age - .07) / .08));
+              const k = extension * extension * (3 - 2 * extension);
+              const back = .25 + Math.sin(Math.min(1, age / .07) * Math.PI) * .45;
+              const x = root.x - whipFacing.x * back, y = root.y + .5, z = root.z - whipFacing.z * back;
+              whipTip.set(x + (whipTip.x - x) * k, y + (whipTip.y - y) * k, z + (whipTip.z - z) * k);
+            } else if (tension === 0) {
+              const follow = Math.sin(Math.min(1, (age - .15) / .09) * Math.PI) * .23;
+              whipTip.x += whipFacing.x * follow; whipTip.z += whipFacing.z * follow;
+            }
+          }
+          whipPoints(curve, WHIP_POINTS, root, whipTip, whipFacing, age, tension);
+          draw.curve(curve, WHIP_POINTS, pool.vines, .058, .016, root);
+          draw.leaves(curve, WHIP_POINTS);
+          visual.x = whipTip.x - root.x; visual.y = whipTip.y - root.y; visual.z = whipTip.z - root.z;
+          if (strand.hand === "R") {
+            whipFrame.drawn = true;
+            whipFrame.base.x = root.x; whipFrame.base.y = root.y; whipFrame.base.z = root.z;
+          }
         }
       }
       const fire = cb.inferno ?? cb.breath;
@@ -437,14 +543,6 @@ export function ElementEffects() {
           if (age < .22) draw.ring(f.x, f.y, f.z, .4 + age * 3, "#ffffff", 1 - age / .22, true);
         } else if (f.kind === "hit" || f.kind === "ko" || f.kind === "eat") {
           draw.sprite(f.x, f.y + k * .3, f.z, 1.2 * (1 - k * .5), 1.2 * (1 - k * .5), "#fff6c0", 1 - k);
-        } else if (f.kind === "vine") {
-          // A missed grab still briefly extends in its authored facing.
-          let grabbed = false;
-          for (const e of cb.enemies) if (e.control?.kind === "grabbed" && e.control.t0 >= f.t0) grabbed = true;
-          if (!grabbed) {
-            const length = f.size * Math.sin(k * Math.PI);
-            draw.vine(f.x, f.y, f.z, f.x + Math.sin(f.yaw) * length, f.y, f.z + Math.cos(f.yaw) * length);
-          }
         }
       }
     }

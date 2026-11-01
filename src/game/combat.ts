@@ -9,7 +9,7 @@ import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
-import { PLAYER_R, blocked, gatesOf, isWalkable, moveCircle, nearestWalkable, standY } from "./world/collision";
+import { PLAYER_R, blocked, gatesOf, isWalkable, moveCircle, nearestWalkable, standY, type Gates } from "./world/collision";
 import { monsterRootY } from "./ride";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
@@ -159,10 +159,34 @@ export interface BombChain {
   victims: number[];
 }
 
+export interface WhipStrand {
+  hand: "L" | "R";
+  enemy: number | null;
+  object: string | null;
+}
+
+export interface Whip {
+  t0: number;
+  yaw: number;
+  struck: boolean;
+  cancelAt: number | null;
+  /** Null while a grabbed enemy is still swinging; otherwise the retraction start. */
+  retractAt: number | null;
+  strands: WhipStrand[];
+}
+
+const whipRight: WhipStrand = { hand: "R", enemy: null, object: null };
+const whipLeft: WhipStrand = { hand: "L", enemy: null, object: null };
+const whipState: Whip = { t0: 0, yaw: 0, struck: false, cancelAt: null, retractAt: null, strands: [whipRight, whipLeft] };
+const whipCentre = { x: 0, z: 0 };
+const whipHeading = { x: 0, z: 0 };
+const whipGates: Gates = { solved: [] };
+const whipCloudGates: NonNullable<Gates["cloud"]> = { cleared: [], solved: [], tunnelOpen: false };
+
 /** Short-lived attack shapes for the scene (vines, jets, gusts, bursts, hits). */
 export interface Fx {
   id: number;
-  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "vine" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo";
+  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo";
   x: number;
   y: number;
   z: number;
@@ -215,6 +239,7 @@ export const cb = {
   cyclone: null as Cyclone | null,
   inferno: null as null | { age: number; tick: number },
   breath: null as null | { age: number; tick: number },
+  whip: null as Whip | null,
   bombChain: null as BombChain | null,
   /** Partial environmental steps never enter the save. */
   elementObjects: {} as Record<string, ElementState>,
@@ -270,6 +295,7 @@ export function resetCombat() {
   cb.stance = { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 };
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
+  cb.whip = null;
   cb.hold = false;
   cb.holdK = false;
   releaseAllAttacks();
@@ -684,7 +710,7 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
   cb.move = { friend: f, kind: "basic", t0: rt.time, tx: aim.x, tz: aim.z };
   const o = originOf(f);
   const yaw = rt.player.yaw, ux = Math.sin(yaw), uz = Math.cos(yaw);
-  if (cb.beacon.active) cancelBeaconGust(cb.beacon, f, { x: ux, z: uz });
+  if (cb.beacon.active && move.shape !== "grab") cancelBeaconGust(cb.beacon, f, { x: ux, z: uz });
   if (move.shape === "trap") {
     const life = move.range / move.speed!;
     // Fixed ground-relative slope, sampled only at launch; never target an enemy.
@@ -700,32 +726,12 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
     audio.startFlame?.();
     learn("attack");
   } else if (move.shape === "grab") {
-    pushFx("vine", o.x, o.y, o.z, ux, uz, yaw, range);
-    hitBeaconShape(f, range, ux, uz, "cone", 70);
-    const targets = coneTargets(range, 70);
-    const enemy = targets[0];
-    const grabbedObject = dispatchObjects(move.shape, objectCone(range, 70), enemy ? Math.hypot(enemy.x - rt.player.x, enemy.z - rt.player.z) : Infinity);
-    const pair = up && !grabbedObject ? targets.filter(e => ENEMIES[e.kind].weightClass !== "heavy").slice(0, 2) : [];
-    if (pair.length === 2) {
-      const centre = { x: (pair[0].x + pair[1].x) / 2, z: (pair[0].z + pair[1].z) / 2 };
-      for (const e of pair) {
-        if (startControl(e, "grabbed", 0.35, f)) e.flight!.bash = centre;
-        else hit(e, move.damage, 0, 0, ux, uz, f, true);
-      }
-    } else {
-      const e = grabbedObject ? null : enemy;
-      if (e) {
-        // Heavy enemies cannot be swung, so the tug itself hits harder (spec section 2).
-        const heavy = ENEMIES[e.kind].weightClass === "heavy";
-        hit(e, heavy ? HEAVY_TUG_DAMAGE : move.damage, 0, 0, ux, uz, f, true);
-        if (heavy) {
-          const dx = rt.player.x - e.x, dz = rt.player.z - e.z, d = Math.hypot(dx, dz) || 1;
-          displaceEnemy(e, e.x + dx / d, e.z + dz / d);
-        }
-        else if (!startControl(e, "grabbed", 0.45, f)) { e.kx += ux * 5; e.kz += uz * 5; }
-      }
-    }
-    audio.play("whip");
+    whipState.t0 = rt.time;
+    whipState.yaw = yaw;
+    whipState.struck = false;
+    whipState.cancelAt = whipState.retractAt = null;
+    cb.whip = whipState;
+    sampleWhipAim();
   } else if (move.shape === "blast") {
     const degrees = up ? 80 : 60;
     pushFx("blast", o.x, o.y, o.z, ux, uz, yaw, range);
@@ -820,11 +826,160 @@ export function specialAttack(): boolean {
 }
 
 function clearSpecials() {
+  cancelWhip();
   stopBreath();
   audio.stopFlame?.();
   cb.inferno = null;
   cb.cyclone = null;
   cb.bombChain = null;
+}
+
+/** Read-only object pick for the extending tip, using the ordinary grab cone. */
+function whipObjectContains(o: ElementObject): boolean {
+  const p = rt.player;
+  if (!inCone(p, p.yaw, o, COMBAT.leafy.basic.range, 70)) return false;
+  const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
+  const length = Math.max(0, d - o.r - .1), count = Math.max(1, Math.ceil(length / .12));
+  // gatesOf builds a fresh cloud record; visual aim instead reuses its snapshot.
+  const progress = getGame().progress, gates = whipGates;
+  gates.solved = progress.solved;
+  if (progress.act3.world === "cloud") {
+    gates.act2 = true; gates.cloud = whipCloudGates;
+    whipCloudGates.cleared = progress.act3.cleared;
+    whipCloudGates.solved = progress.act3.puzzles;
+    whipCloudGates.tunnelOpen = progress.act3.family.tunnelOpen;
+    whipCloudGates.observatoryLamps = progress.act3.observatoryLamps;
+  } else {
+    gates.cloud = undefined; gates.act2 = progress.act2.started;
+    gates.forest = progress.endings >= 1; gates.volcano = progress.endings >= 2;
+    gates.cleared = progress.act2.cleared; gates.secrets = progress.act2.secrets;
+  }
+  for (let i = 1; i <= count; i++) {
+    const k = d > 0 ? length / d * i / count : 0;
+    if (!isWalkable(p.x + dx * k, p.z + dz * k, gates, .08)) return false;
+  }
+  return true;
+}
+
+function sampleWhipAim() {
+  const w = cb.whip;
+  if (!w) return;
+  const p = rt.player, targets = coneTargets(COMBAT.leafy.basic.range, 70);
+  w.yaw = p.yaw;
+  whipRight.enemy = whipLeft.enemy = null;
+  whipRight.object = whipLeft.object = null;
+  w.strands.length = 1;
+  w.strands[0] = whipRight;
+  let nearest = targets[0] ? Math.hypot(targets[0].x - p.x, targets[0].z - p.z) : Infinity;
+  let object: ElementObject | null = null;
+  for (const o of ELEMENT_OBJECTS) {
+    const response = o.on?.grab;
+    if (o.world !== cb.world || !response || !o.tags.includes(EVENT_TAG.grab)
+      || getGame().progress.act2.secrets.includes(secretOf(o))
+      || (cb.elementObjects[o.id]?.state ?? "intact") === response.becomes
+      || (o.id === "comboCrateLift" && (cb.elementObjects[o.id]?.state ?? "intact") !== "intact")) continue;
+    const distance = Math.hypot(o.x - p.x, o.z - p.z);
+    if (distance >= nearest || !whipObjectContains(o)) continue;
+    object = o;
+    nearest = distance;
+  }
+  if (object) { whipRight.object = object.id; return; }
+  if (upgraded("leafy")) {
+    let a: EnemyRt | null = null, b: EnemyRt | null = null;
+    for (const e of targets) {
+      if (ENEMIES[e.kind].weightClass === "heavy") continue;
+      if (!a) a = e;
+      else { b = e; break; }
+    }
+    if (a && b) {
+      // Local right is (cos(yaw), -sin(yaw)); sort relative to that axis.
+      const rightX = Math.cos(p.yaw), rightZ = -Math.sin(p.yaw);
+      const aRight = (a.x - p.x) * rightX + (a.z - p.z) * rightZ;
+      const bRight = (b.x - p.x) * rightX + (b.z - p.z) * rightZ;
+      whipRight.enemy = aRight >= bRight ? a.i : b.i;
+      whipLeft.enemy = aRight >= bRight ? b.i : a.i;
+      w.strands[1] = whipLeft;
+      return;
+    }
+  }
+  whipRight.enemy = targets[0]?.i ?? null;
+}
+
+function cancelWhip() {
+  if (cb.whip && cb.whip.cancelAt === null) cb.whip.cancelAt = rt.time;
+}
+
+function whipEnemy(id: number | null): EnemyRt | null {
+  if (id === null) return null;
+  for (const e of cb.enemies) if (e.i === id) return e;
+  return null;
+}
+
+function strikeWhip() {
+  const w = cb.whip!;
+  sampleWhipAim();
+  w.struck = true;
+  const move = COMBAT.leafy.basic, p = rt.player;
+  const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw);
+  whipHeading.x = ux; whipHeading.z = uz;
+  if (cb.beacon.active) cancelBeaconGust(cb.beacon, "leafy", whipHeading);
+  hitBeaconShape("leafy", move.range, ux, uz, "cone", 70);
+  const object = whipRight.object;
+  if (object) dispatchObjects("grab", whipObjectContains);
+  else if (w.strands.length === 2) {
+    const a = whipEnemy(whipRight.enemy)!;
+    const b = whipEnemy(whipLeft.enemy)!;
+    whipCentre.x = (a.x + b.x) / 2;
+    whipCentre.z = (a.z + b.z) / 2;
+    for (const strand of w.strands) {
+      const e = whipEnemy(strand.enemy)!;
+      if (startControl(e, "grabbed", .35, "leafy")) {
+        e.flight!.bash = whipCentre;
+        e.control!.t0 = w.t0 + .15;
+        e.control!.until = e.control!.t0 + .35;
+      } else hit(e, move.damage, 0, 0, ux, uz, "leafy", true);
+    }
+  } else if (whipRight.enemy !== null) {
+    const e = whipEnemy(whipRight.enemy)!;
+    const heavy = ENEMIES[e.kind].weightClass === "heavy";
+    hit(e, heavy ? HEAVY_TUG_DAMAGE : move.damage, 0, 0, ux, uz, "leafy", true);
+    if (heavy) {
+      const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz) || 1;
+      displaceEnemy(e, e.x + dx / d, e.z + dz / d);
+    } else if (startControl(e, "grabbed", .45, "leafy")) {
+      e.control!.t0 = w.t0 + .15;
+      e.control!.until = e.control!.t0 + .45;
+    } else { e.kx += ux * 5; e.kz += uz * 5; }
+  }
+  w.retractAt = w.t0 + .24;
+  for (const strand of w.strands) {
+    const e = whipEnemy(strand.enemy);
+    if (e?.control?.kind === "grabbed") { w.retractAt = null; break; }
+  }
+  audio.play("whip");
+}
+
+function updateWhip(afterEnemies = false) {
+  const w = cb.whip;
+  if (!w) return;
+  if (!canFight() || getGame().progress.active !== "leafy" || friendNow() !== "leafy") cancelWhip();
+  if (w.cancelAt !== null) {
+    if (rt.time - w.cancelAt >= .1 - 1e-9) cb.whip = null;
+    return;
+  }
+  if (!w.struck && !afterEnemies) {
+    if (rt.time - w.t0 >= .15 - 1e-9) strikeWhip();
+    else if (rt.time - w.t0 >= .07) sampleWhipAim();
+  }
+  if (afterEnemies && w.struck && w.retractAt === null) {
+    let held = false;
+    for (const strand of w.strands) {
+      const e = whipEnemy(strand.enemy);
+      if (e?.control?.kind === "grabbed") { held = true; break; }
+    }
+    if (!held) w.retractAt = rt.time;
+  }
+  if (w.retractAt !== null && rt.time - w.retractAt >= .26 - 1e-9) cb.whip = null;
 }
 
 function infernoTick() {
@@ -1170,7 +1325,12 @@ function updateElements(e: EnemyRt, dt: number): boolean {
     if (flight.bash) {
       const x = flight.startX + (flight.bash.x - flight.startX) * t, z = flight.startZ + (flight.bash.z - flight.startZ) * t;
       if (!displaceEnemy(e, x, z)) { wallImpact(e, 5); return true; }
-      if (t >= 1) { endControl(e); hit(e, 14, 0, 1, Math.sin(flight.yaw), Math.cos(flight.yaw), flight.owner, true); }
+      if (t >= 1) {
+        const bx = flight.bash.x, bz = flight.bash.z;
+        endControl(e);
+        hit(e, 14, 0, 1, Math.sin(flight.yaw), Math.cos(flight.yaw), flight.owner, true);
+        pushFx("hit", bx, standY(bx, bz, getGame().progress.solved) + .6, bz, 0, 0, 0, 1.1);
+      }
     } else {
       const angle = flight.yaw - 70 * Math.PI / 180 + t * 140 * Math.PI / 180;
       const x = flight.x + Math.sin(angle) * 2.2, z = flight.z + Math.cos(angle) * 2.2;
@@ -1206,7 +1366,7 @@ function updateElements(e: EnemyRt, dt: number): boolean {
 const HEAVY_TUG_DAMAGE = 14;
 
 function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
-  const life = kind === "breath" || kind === "hit" ? 0.35 : kind === "vine" ? 0.45 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+  const life = kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
   cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
   if (cb.fx.length > 24) cb.fx.shift();
 }
@@ -1458,6 +1618,8 @@ export function learn(step: TutorialStep) {
 
 export function combatTick(dt: number) {
   if (!canFight()) {
+    cancelWhip();
+    updateWhip();
     releaseAllAttacks();
     stopBreath();
     cb.inferno = null;
@@ -1501,6 +1663,7 @@ export function combatTick(dt: number) {
     if (zone) hooks.enterZone?.(zone as ZoneId);
   }
   updateStance(paused ? 0 : dt);
+  updateWhip();
   if (paused) {
     for (const e of cb.enemies) pauseElements(e, dt);
     return;
@@ -1521,6 +1684,7 @@ export function combatTick(dt: number) {
     hurtPlayer(5, 0, 0, 0);
   }
   for (const e of cb.enemies) if (e.zone === zone) updateEnemy(e, dt, live);
+  updateWhip(true);
   if (live && zone && inHostileZone()) {
     const fighting = cb.enemies.some((e) => e.zone === zone && alive(e) && ["alert", "chase", "windup", "lunge"].includes(e.state));
     audio.startMusic(fighting ? "forest" : "danger");

@@ -12,7 +12,7 @@ import type { MonsterId } from "../game/types";
 import { cb, companionVisible, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
-import { anchors, EMBER_MOUTH } from "./anchors";
+import { anchors, EMBER_MOUTH, LEAFY_HAND } from "./anchors";
 
 const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
@@ -112,12 +112,15 @@ function MonsterBody({ id }: { id: MonsterId }) {
   const glowRef = useRef<THREE.Mesh>(null);
   const named = useRef<Record<string, THREE.Group | null>>({});
   const mouth = useRef<THREE.Object3D>(null);
+  const handL = useRef<THREE.Object3D>(null);
+  const handR = useRef<THREE.Object3D>(null);
 
   useFrame(() => {
     const m = rt.monsters[id];
     const g = root.current;
     const r = rig.current;
     if (id === "ember") anchors.emberMouthValid = false;
+    if (id === "leafy") anchors.leafyHandLValid = anchors.leafyHandRValid = false;
     if (!g || !r) return;
     g.visible = companionVisible(id);
     if (!g.visible) return;
@@ -168,7 +171,15 @@ function MonsterBody({ id }: { id: MonsterId }) {
       if (n.footL) n.footL.rotation.x = swing * 0.7;
       if (n.footR) n.footR.rotation.x = -swing * 0.7;
       const armBase = 0.25 + Math.sin(t * 2.4) * 0.05;
-      const up = pose.armsUp;
+      const whip = cb.whip;
+      let whipLift = 0;
+      if (whip) {
+        const liftAt = whip.cancelAt === null ? t : whip.cancelAt;
+        whipLift = sm((liftAt - whip.t0) / .07);
+        if (whip.cancelAt !== null) whipLift *= 1 - sm((t - whip.cancelAt) / .1);
+        else if (whip.retractAt !== null) whipLift *= 1 - sm((t - whip.retractAt) / .26);
+      }
+      const up = Math.max(pose.armsUp, whipLift * .78);
       const shakeArms = up > 0.5 && m.anim?.kind === "power" ? Math.sin(t * 24) * 0.3 : 0;
       if (n.armL) {
         n.armL.rotation.z = -armBase - up * 2.3 - shakeArms + pose.cover * 0.6;
@@ -248,6 +259,16 @@ function MonsterBody({ id }: { id: MonsterId }) {
       mouth.current.getWorldPosition(anchors.emberMouth);
       anchors.emberMouthValid = true;
     }
+    if (id === "leafy" && g.visible) {
+      if (handL.current) {
+        handL.current.getWorldPosition(anchors.leafyHandL);
+        anchors.leafyHandLValid = true;
+      }
+      if (handR.current) {
+        handR.current.getWorldPosition(anchors.leafyHandR);
+        anchors.leafyHandRValid = true;
+      }
+    }
   });
 
   return (
@@ -273,6 +294,8 @@ function MonsterBody({ id }: { id: MonsterId }) {
             }}
           >
             <mesh geometry={p.geo} material={smoothMat} />
+            {id === "leafy" && p.name === "armL" && <object3D ref={handL} position={LEAFY_HAND} />}
+            {id === "leafy" && p.name === "armR" && <object3D ref={handR} position={LEAFY_HAND} />}
           </group>
         ))}
       </group>

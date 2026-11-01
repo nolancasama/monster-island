@@ -5,19 +5,19 @@ import type { CompanionId } from "../../src/game/data/combat";
 
 const SHOTS = ".tmp/shots/feel";
 
-function forestSave(friend: CompanionId) {
+function forestSave(friend: CompanionId, upgrades: CompanionId[] = []) {
   const p = newProgress();
   for (const id of ["leafy", "bubbo", "puff", "ember", "lumo"] as const)
     p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true };
   p.active = friend; p.metMaple = true; p.endings = 3;
   p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
   p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true,
-    zone: "forest1", checkpoint: "camp", tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
+    zone: "forest1", checkpoint: "camp", upgrades, tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   return JSON.stringify({ v: 4, progress: p, player: { x: 75, z: -171, yaw: Math.PI }, seconds: 3000 });
 }
 
-async function enterForest(page: Page, friend: CompanionId) {
-  await page.addInitScript(save => localStorage.setItem("mi.save.v4", save), forestSave(friend));
+async function enterForest(page: Page, friend: CompanionId, upgrades: CompanionId[] = []) {
+  await page.addInitScript(save => localStorage.setItem("mi.save.v4", save), forestSave(friend, upgrades));
   const errors = await boot(page);
   await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
@@ -155,4 +155,75 @@ test.describe("touch", () => {
     await b.dispatchEvent("pointerup", { pointerId: 1, pointerType: "touch", button: 0, buttons: 0 });
     await waitFor(page, s => s.act2.breath === null, 3000, "touch release stops");
   });
+});
+
+/** The state hook gains these for Leafy's whip; the helper type stays general. */
+type WhipState = { act2: { whip: null | { t0: number; struck: boolean }; whipFrame: { frame: number; drawn: boolean; base: { x: number; y: number; z: number }; handR: { x: number; y: number; z: number } } } };
+
+test("whip phases, swing and Root Snare render", async ({ page }) => {
+  const errors = await enterForest(page, "leafy");
+  await faceEnemy(page, "leafy");
+  await hook(page, "timeScale", .05);
+  await page.keyboard.press("KeyJ");
+  const t0 = (await waitFor(page, s => (s as unknown as WhipState).act2.whip !== null, 10_000, "whip starts")).time;
+  for (const [name, at] of [["03-whip-windup", .05], ["04-whip-extend", .12], ["05-whip-snap", .17]] as const) {
+    await hook(page, "timeScale", .05);
+    await waitFor(page, s => s.time >= t0 + at, 60_000, name);
+    await hook(page, "timeScale", 0);
+    await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  }
+  await hook(page, "timeScale", .05);
+  await waitFor(page, s => s.act2.enemies[1].control === "grabbed" && s.time >= t0 + .35, 60_000, "swinging");
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/06-whip-swing.png` });
+  await faceEnemy(page, "leafy");
+  await page.keyboard.press("KeyK");
+  await hook(page, "timeScale", .05);
+  await waitFor(page, s => s.act2.enemies[1].control === "snared", 30_000, "snared");
+  const snared = (await state(page)).time;
+  await waitFor(page, s => s.time >= snared + .4, 60_000, "roots grown");
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/07-root-snare.png` });
+  expect(errors).toEqual([]);
+});
+
+test("Double Grab draws two strands", async ({ page }) => {
+  await enterForest(page, "leafy", ["leafy"]);
+  await hook(page, "timeScale", 0);
+  await hook(page, "combatFixture", { enemies: [{ i: 1, x: 73.6, z: -174, state: "recover", timer: 10 }, { i: 0, x: 76.4, z: -174, state: "recover", timer: 10 }] });
+  await hook(page, "teleport", 75, -171, Math.PI);
+  await waitFor(page, s => s.act2.enemies[1].hp === 20 && s.act2.enemies[0].hp === 20, 30_000, "two fresh enemies");
+  await hook(page, "timeScale", .05);
+  await page.keyboard.press("KeyJ");
+  await waitFor(page, s => s.act2.enemies[0].control === "grabbed" && s.act2.enemies[1].control === "grabbed", 60_000, "both grabbed");
+  const grabbed = (await state(page)).time;
+  await waitFor(page, s => s.time >= grabbed + .1, 60_000, "mid pull");
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/08-double-grab.png` });
+});
+
+test("the vine base stays on Leafy's hand on every sampled frame while moving", async ({ page }) => {
+  await enterForest(page, "leafy");
+  await faceEnemy(page, "leafy");
+  await hook(page, "timeScale", .5);
+  let samples = 0, worst = 0;
+  const seen = new Set<number>();
+  for (const key of ["KeyW", "KeyS", "KeyA", "KeyD"]) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(150);
+    await page.keyboard.press("KeyJ");
+    const end = Date.now() + 1800;
+    while (Date.now() < end) {
+      const f = ((await state(page)) as unknown as WhipState).act2.whipFrame;
+      if (f.drawn && !seen.has(f.frame)) {
+        seen.add(f.frame);
+        samples++;
+        worst = Math.max(worst, Math.hypot(f.base.x - f.handR.x, f.base.y - f.handR.y, f.base.z - f.handR.z));
+      }
+    }
+    await page.keyboard.up(key);
+  }
+  console.log(`vine base samples ${samples}, worst base-to-hand ${worst.toFixed(4)} m`);
+  expect(samples).toBeGreaterThan(4);
+  expect(worst).toBeLessThan(.01);
 });

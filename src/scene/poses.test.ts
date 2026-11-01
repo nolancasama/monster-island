@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { HIP_Y, SEATED, squatAmount, squatPose } from "./poses";
 import { KNEE_Y } from "./models/people";
 import { BUBBO_SEAT } from "../game/ride";
-import { anchors, EMBER_MOUTH, fireStreamBase } from "./anchors";
+import { anchors, EMBER_MOUTH, LEAFY_HAND, fireStreamBase } from "./anchors";
 import { emptyBodyPose, enemyBodyPose, PANIC_LIMBS, panicPose } from "./panicPose";
 import type { EnemyRt } from "../game/combat";
 import type { EnemyKind } from "../game/data/combat";
@@ -86,6 +86,26 @@ describe("fire and panic attachment poses", () => {
       mouth.getWorldPosition(anchors.emberMouth);
       expect(fireStreamBase(base)).toBe(base);
       expect(base.distanceTo(mouth.getWorldPosition(new THREE.Vector3()))).toBe(0);
+    }
+  });
+
+  it("updates both hand anchors through moving perch, body and arm transforms", () => {
+    const root = new THREE.Object3D(), rig = new THREE.Object3D();
+    const armL = new THREE.Object3D(), armR = new THREE.Object3D();
+    const handL = new THREE.Object3D(), handR = new THREE.Object3D();
+    root.add(rig); rig.add(armL, armR); armL.add(handL); armR.add(handR);
+    armL.position.set(-.36, .62, 0); armR.position.set(.36, .62, 0);
+    handL.position.set(...LEAFY_HAND); handR.position.set(...LEAFY_HAND);
+    const expected = new THREE.Vector3();
+    for (const yaw of [0, .4, 1.8, 3.1]) {
+      root.position.set(yaw * 2, .74 + yaw, -.43 - yaw); root.rotation.y = yaw; root.scale.setScalar(.5);
+      rig.position.y = Math.sin(yaw) * .1; rig.rotation.z = .08;
+      armL.rotation.set(-.2, 0, -1.7 - yaw * .1);
+      armR.rotation.set(.2, 0, 1.7 + yaw * .1);
+      handL.getWorldPosition(anchors.leafyHandL); handR.getWorldPosition(anchors.leafyHandR);
+      expect(anchors.leafyHandL.distanceTo(handL.getWorldPosition(expected))).toBe(0);
+      expect(anchors.leafyHandR.distanceTo(handR.getWorldPosition(expected))).toBe(0);
+      expect(anchors.leafyHandL.distanceTo(anchors.leafyHandR)).toBeGreaterThan(.2);
     }
   });
 

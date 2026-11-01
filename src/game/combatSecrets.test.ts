@@ -65,9 +65,11 @@ describe("shared move/object dispatch", () => {
 
     approach("leafyStatues", "leafy");
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(state("leafyStatues").state).toBe("pulled");
     approach("leafyStatuesEast", "leafy");
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(getGame().progress.act2.secrets).toContain("leafyStatues");
 
     approach("puffLeaves", "puff");
@@ -79,6 +81,7 @@ describe("shared move/object dispatch", () => {
 
     approach("comboCrateLift", "leafy");
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(state("comboCrateLift").state).toBe("onPad");
     approach("comboCrateLift", "bubbo");
     expect(basicAttack()).toBe(true);
@@ -107,12 +110,14 @@ describe("shared move/object dispatch", () => {
     const e = cb.enemies[9];
     Object.assign(e, { state: "chase", zone: "grove", x: 43, z: -227, hp: 100 });
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(state("comboCrateLift").state).toBe("onPad");
     expect(e.hp).toBe(100);
     cb.elementObjects = {};
     rt.time += 1;
     e.x = 43; e.z = -230;
     expect(basicAttack()).toBe(true);
+    advance(.15);
     expect(state("comboCrateLift").state).toBe("intact");
     expect(e.hp).toBeLessThan(100);
   });
