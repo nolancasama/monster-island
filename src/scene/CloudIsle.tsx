@@ -130,7 +130,8 @@ function terrainTiles(): THREE.BufferGeometry[] {
     const g = mergeGeometries(parts)!;
     parts.forEach(p => p.dispose());
     g.computeBoundingSphere();
-    g.userData.terrainChunk = { z: band * size * 2, depth: size * 2 };
+    g.computeBoundingBox();
+    g.userData.terrainChunk = { z: band * size * 2, depth: size * 2, top: g.boundingBox!.max.y };
     return g;
   });
 }
@@ -152,14 +153,32 @@ function landscapeGeometry() {
 
   return b.build();
 }
-function SpatialMesh({ geometry, material = flatMat }: { geometry: THREE.BufferGeometry; material?: THREE.Material }) {
+/** The storm fog lies low: it thins with height, so the upper mountain stands
+ * above it as the island's landmark from anywhere on the coast. */
+const FOG_THIN = { y0: 22, y1: 52, least: .35 };
+const terrainMat = flatMat.clone();
+terrainMat.onBeforeCompile = shader => {
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", "#include <common>\nvarying float vFogHeight;")
+    .replace("#include <fog_vertex>", "#include <fog_vertex>\nvFogHeight = (modelMatrix * vec4(transformed, 1.)).y;");
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", "#include <common>\nvarying float vFogHeight;")
+    .replace("#include <fog_fragment>", `#ifdef USE_FOG
+      float fogAmount = smoothstep(fogNear, fogFar, vFogDepth) * mix(1., ${FOG_THIN.least.toFixed(2)}, smoothstep(${FOG_THIN.y0.toFixed(1)}, ${FOG_THIN.y1.toFixed(1)}, vFogHeight));
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogAmount);
+    #endif`);
+};
+terrainMat.customProgramCacheKey = () => "cloud-terrain-fog";
+
+function SpatialMesh({ geometry, material = terrainMat }: { geometry: THREE.BufferGeometry; material?: THREE.Material }) {
   const ref = useRef<THREE.Mesh>(null);
   useFrame(() => {
     // Terrain bands span the island's width: cull on their z extent alone.
-    const band = geometry.userData.terrainChunk as { z: number; depth: number } | undefined;
+    // Bands reaching above the fog stay drawn; below it they would be fog-coloured.
+    const band = geometry.userData.terrainChunk as { z: number; depth: number; top: number } | undefined;
     if (ref.current && band) {
       const dz = Math.max(band.z - rt.camera.pos.z, 0, rt.camera.pos.z - band.z - band.depth);
-      ref.current.visible = dz < CLOUD_FOG.far;
+      ref.current.visible = dz < CLOUD_FOG.far || band.top > FOG_THIN.y0;
     }
   });
   return <mesh ref={ref} geometry={geometry} material={material} />;

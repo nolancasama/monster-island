@@ -1,9 +1,9 @@
 # Current State
 
 ## Live
-`main` deployed 2026-10-31 (Act 3 branch fast-forwarded at `f108ed9`, then
-the debug live-shortcut/teleport branch merged on top).
-https://nolancasama.github.io/monster-island/
+`main` = `a278ef2`, deployed by Pages run 41311704457 (2026-11-01).
+https://nolancasama.github.io/monster-island/ — includes elemental combat, the
+six lowland secrets and the debug shortcut. Cloud Isle stays locked.
 
 Live: the prologue, Act 2 "The Hunt for Lumo", the forest expansion, the
 continuity polish, Act 3 Cloud Isle, gameplay polish Parts 1–2 and the debug
@@ -102,10 +102,9 @@ the expansion; the full suite has not been run end to end on this machine.
   deploy; `testTimeout` is now 30 s and the CI unit job passes.
 - **Run `npm run e2e`, or build first:** plain `npx playwright test` serves
   whatever is in `dist`, so it silently tests a stale build.
-- **Landmark from the dock:** the mountain does not read as a landmark from
-  the dock — the massif's south flank rises gently and the summit is
-  > 400 m away. Options: steeper massif (deep canyons by the Hollow and
-  junction) or a longer cut-off for the summit alone. User decision.
+- **Landmark from the dock:** now reads: a rock horn (~85 m) north of the
+  beacon, with fog that thins with height. Its shape is smooth and rounded at
+  distance; not yet reviewed by the user or on a real GPU.
 - **Frame time:** SwiftShader is fill-rate bound now that terrain fills the
   screen (Act 3 chapter ~56 min; grotto ~9 fps with chamber lights). Real
   Chromebook GPU frame time is unmeasured.
@@ -121,10 +120,8 @@ the expansion; the full suite has not been run end to end on this machine.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. User decisions: the dock landmark (Known Issues); merge
-   `feature/elemental-combat` (contains `feature/act3-cloud-isle`) into
-   `main` (deploys; Cloud Isle stays locked). Optional polish pass on the
-   secret pockets.
+1. Commits after `a278ef2` on `feature/elemental-combat` are not live. Optional
+   polish pass on the secret pockets.
 2. Chromebook play-test with `?debug=1` (Cloud Isle frame rate, grotto
    lights, fights).
 

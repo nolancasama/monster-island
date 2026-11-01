@@ -1718,3 +1718,19 @@ the facing (Vine Grab's half-cone is 35°), so every press missed. With
 auto-turn gone, cones now hit a pylon when they touch its 1.2 m body rather
 than only its centre. A pylon behind the player is still missed (unit test).
 Rejected: restoring auto-turn toward pylons (the brief forbids it).
+
+## 2026-11-01 — Dock landmark: a rock horn above low fog
+
+- The user approved the recommended "longer cut-off for the summit alone".
+  Rendering showed that was not enough: the massif tops out at 37 m, about 4°
+  above the horizon from the dock, and the shared fog hid it completely.
+- **Fog thins with height** on terrain only (22–52 m, down to 35% of its
+  strength), in the terrain material's shader. Bands reaching above 22 m are
+  never culled; lower ground is unchanged, so nothing pops.
+- **A rock horn on the unwalkable land north of the beacon** (72 m added,
+  ~85 m high). No walk shape, route or area measurement changes, and it stays
+  clear of the beacon arena's camera.
+- Rejected: a steeper massif, which needs deep canyons by the Hollow and
+  junction; a background replica, which the expansion spec rules out.
+- Measured: dock 110 calls, ~114k triangles; every view checked stays within
+  120 calls and 140k triangles.

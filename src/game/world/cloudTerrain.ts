@@ -58,7 +58,7 @@ function coastStrip(x: number, z: number): number {
 // carries the mountain with them.
 // Its south edge stays just past the Hollow (z 150) so the junction and both
 // routes stand on the mountain, never on a coastal strip.
-const PEAK_Z = BEACON.z + 32, MASSIF_S = 150, MASSIF_N = PEAK_Z + 60;
+const PEAK_Z = BEACON.z + 32, HORN_Z = BEACON.z + 49, MASSIF_S = 150, MASSIF_N = PEAK_Z + 60;
 const MASSIF_Z = (MASSIF_S + MASSIF_N) / 2;
 function massif(x: number, z: number): number {
   const cx = 6 * Math.sin(z / 47), rx = 76 + 7 * Math.sin(z / 31), rz = (MASSIF_N - MASSIF_S) / 2;
@@ -85,7 +85,10 @@ export function cloudGroundY(x: number, z: number): number {
   const summit = 34 * Math.exp(-((x / 40) ** 2 + ((z - PEAK_Z) / 34) ** 2));
   const ridges = (3.2 * Math.sin(x / 15 + z / 37) + 1.8 * Math.sin(x / 8 - z / 26)) * north;
   const noise = .5 * Math.sin(x / 5 + z / 11) * Math.sin(z / 8 - x / 13);
-  const mountain = body * (6 + north * 24 + summit + ridges);
+  // The island's landmark: a rock horn on the unwalkable land north of the
+  // beacon, tall enough to read from the dock and clear of the arena camera.
+  const horn = 72 * Math.exp(-((x / 36) ** 2 + ((z - HORN_Z) / 16) ** 2)) * smooth(massif(x, z) / 12);
+  const mountain = body * (6 + north * 24 + summit + ridges) + horn;
   const natural = shore <= 0 ? beach : Math.max(beach, Math.min(beach + 1.5, .3 + knolls) + noise * smooth(shore / 6), mountain);
   // A 3 m level shoulder (beyond a 2 m grid triangle's 2.83 m diagonal) keeps
   // the drawn surface exactly at walking height wherever the player can stand.

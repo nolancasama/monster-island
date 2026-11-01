@@ -64,12 +64,15 @@ async function defeat(page: Page, i: number) {
   for (let n = 0; n < 20; n++) {
     const e = (await state(page)).act2.enemies[i];
     if (["ko", "gone"].includes(e.state)) return;
+    // A solid between player and enemy blocks the attack: approach from a new side each try.
+    if (n > 0) await hook(page, "teleport", e.x + 3 * Math.sin(n * 2.4), e.z + 3 * Math.cos(n * 2.4));
     await hook(page, "nearEnemy", i, 1.5);
     await hook(page, "setHp", 100);
     await page.keyboard.press("KeyJ");
     await page.waitForTimeout(480);
   }
-  throw new Error(`required enemy ${i} could not be defeated`);
+  const s = await state(page);
+  throw new Error(`required enemy ${i} could not be defeated; ${JSON.stringify({ enemy: s.act2.enemies[i], player: s.player, stance: s.act2.stance, mode: s.mode, perf: s.perf, time: s.time })}`);
 }
 async function clear(page: Page, zone: string) {
   const enemies = (await state(page)).act2.enemies.filter((e) => e.zone === zone);
