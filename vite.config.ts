@@ -12,6 +12,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"]
+    include: ["src/**/*.test.ts"],
+    // The Cloud Isle flood-fill tests take ~5 s on this machine and more on CI runners.
+    testTimeout: 30_000
   }
 });

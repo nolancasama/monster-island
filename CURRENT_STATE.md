@@ -96,6 +96,11 @@ the expansion; the full suite has not been run end to end on this machine.
 - Pre-existing spec debt from the Cloud Isle expansion: camera
   `cloud-back-tunnel`, companions-polish and combat-polish Cloud Isle steps
   use pre-expansion coordinates (fail on `17dfce5` too).
+- **CI browser job cannot finish:** `test.yml` limits Playwright to 60 minutes
+  (run 41266499516 was cancelled there); the full suite took 2.8 h on this
+  machine under load. Deploys run only unit tests and the build. Unit tests
+  timed out intermittently on CI at Vitest's default 5 s (Cloud Isle flood
+  fills), which would also have blocked a deploy; `testTimeout` is now 30 s.
 - **Landmark from the dock:** the mountain does not read as a landmark from
   the dock — the massif's south flank rises gently and the summit is
   > 400 m away. Options: steeper massif (deep canyons by the Hollow and
