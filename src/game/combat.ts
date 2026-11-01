@@ -543,15 +543,15 @@ export function crabDamage(kind: EnemyKind, damage: number, basic: boolean, yaw:
   return kind === "stormCrab" && basic && frontal > 0.5 ? damage * 0.5 : damage;
 }
 
-function coneTargets(range: number, degrees: number): EnemyRt[] {
+function coneTargets(range: number, degrees: number, lineRadius = 0.08): EnemyRt[] {
   const gates = gatesOf(getGame().progress);
   return forwardTargets(cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone()), rt.player, rt.player.yaw, range, degrees,
-    (x, z) => isWalkable(x, z, gates, 0.08));
+    (x, z) => isWalkable(x, z, gates, lineRadius));
 }
 
 /** Vine Grab alone selects a target, strictly inside its clear forward cone. */
 export function pickTarget(range: number): EnemyRt | null {
-  return coneTargets(range, 70)[0] ?? null;
+  return coneTargets(range, 70, 0)[0] ?? null;
 }
 
 function upgraded(f: CompanionId) {
@@ -652,7 +652,7 @@ export function basicAttack(): boolean {
     const y1 = standY(aim.x, aim.z, getGame().progress.solved) + 0.55;
     cb.shots.push({ id: nextId++, shape: "trap", owner: f, x: o.x, y: o.y, z: o.z, y1,
       vx: ux * move.speed!, vy: (y1 - o.y) / life, vz: uz * move.speed!, life, age: 0,
-      radius: move.radius, damage: 0, knock: 0, stun: 0, size: 1, basic: true });
+      radius: move.radius, damage: move.damage, knock: 0, stun: 0, size: 1 });
     pushFx("trap", o.x, o.y, o.z, ux, uz, yaw, 0.8);
     audio.play("bubble");
   } else if (move.shape === "breath") {
@@ -667,7 +667,10 @@ export function basicAttack(): boolean {
   } else if (move.shape === "grab") {
     pushFx("vine", o.x, o.y, o.z, ux, uz, yaw, range);
     hitBeaconShape(f, range, ux, uz, "cone", 70);
-    const targets = coneTargets(range, 70);
+    // Forced motion admits enemy centres right up to the land rim. Test a
+    // line, not an .08 m body, so those enemies remain hittable; solids and
+    // gaps along the segment still block the grab.
+    const targets = coneTargets(range, 70, 0);
     const enemy = targets[0];
     const grabbedObject = dispatchObjects(move.shape, objectCone(range, 70), enemy ? Math.hypot(enemy.x - rt.player.x, enemy.z - rt.player.z) : Infinity);
     const pair = up && !grabbedObject ? targets.filter(e => ENEMIES[e.kind].weightClass !== "heavy").slice(0, 2) : [];
@@ -1726,7 +1729,7 @@ function updateShots(dt: number) {
         const v = Math.hypot(s.vx, s.vz) || 1;
         if (s.shape === "trap") {
           hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
-          trapEnemy(e);
+          if (alive(e)) trapEnemy(e);
         } else if (s.shape === "bomb") detonateBomb(s);
         else hit(e, s.damage, s.knock, s.stun, s.vx / v, s.vz / v, s.owner, s.basic);
         s.life = 0;

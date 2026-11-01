@@ -103,27 +103,31 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     await hook(page, "timeScale", .5); await pauseAt(page, { absent: bolt.id });
     expect((await state(page)).act2.hp).toBe(100); await capture("hostile-bolt-blocked-by-solid");
 
-    // Every player's basic keeps its facing even while an actual chasing
+    // Bubbo's J and K projectiles keep their facing while an actual chasing
     // enemy moves sideways out of the ray after release.
-    for (const [key, friend] of [[2, "bubbo"], [3, "puff"], [4, "ember"]] as const) {
+    for (const attack of ["KeyJ", "KeyK"] as const) {
       await hook(page, "timeScale", 1); await hook(page, "teleport", 76, -170, Math.PI);
-      await page.keyboard.press(`Digit${key}`);
-      await waitFor(page, s => s.act2.zone === "forest1" && s.act2.stance.friend === friend && s.act2.stance.k > .99);
+      await page.keyboard.press("Digit2");
+      await waitFor(page, s => s.act2.zone === "forest1" && s.act2.stance.friend === "bubbo" && s.act2.stance.k > .99 && s.act2.mp.bubbo >= 30,
+        10_000, "HARNESS_PRECONDITION_FAILED: Bubbo ready to fire");
       const enemy = (await state(page)).act2.enemies.find(e => e.zone === "forest1" && e.kind === "snapjaw")!;
-      // Puff fires from the left side of this facing. Start its target inside
-      // that muzzle's hit corridor with enough room to visibly leave it.
-      const enemyX = friend === "puff" ? 74.5 : 75.2;
+      expect(enemy, "HARNESS_PRECONDITION_FAILED: forest snapjaw exists").toBeTruthy();
+      const enemyX = 75.2;
       await hook(page, "timeScale", 0); await fixture(enemy.i, enemyX, -178, "chase");
       await hook(page, "teleport", 76, -170, Math.PI);
-      const before = await state(page); await page.keyboard.press("KeyJ");
+      const before = await waitFor(page, s => s.act2.enemies.some(e => e.i === enemy.i && e.hp > 0 && e.state === "chase" && e.x === enemyX && e.z === -178) && s.act2.projectiles.length === 0,
+        5_000, "HARNESS_PRECONDITION_FAILED: isolated chasing target and empty projectile pool");
+      await page.keyboard.press(attack);
       const fired = await state(page), shot = fired.act2.projectiles.find(p => !p.hostile)!;
-      expect(shot, `${friend} fires through the real key`).toBeTruthy();
+      expect(shot, `Bubbo fires through ${attack}`).toBeTruthy();
       expect(fired.player.yaw).toBeCloseTo(before.player.yaw);
       await hook(page, "teleport", 70, -170, Math.PI);
       await hook(page, "timeScale", .5); await pauseAt(page, { shot: shot.id, age: .45 });
       const moving = await state(page), now = moving.act2.enemies.find(e => e.i === enemy.i)!;
+      const flying = moving.act2.projectiles.find(p => p.id === shot.id)!;
+      expect(flying.vx).toBeCloseTo(shot.vx); expect(flying.vz).toBeCloseTo(shot.vz);
       expect(now.x).toBeLessThan(enemyX);
-      await capture(`${friend}-projectile-misses-moving-enemy`);
+      await capture(`bubbo-${attack}-projectile-misses-moving-enemy`);
       await hook(page, "timeScale", 1); await pauseAt(page, { absent: shot.id });
       expect((await state(page)).act2.enemies.find(e => e.i === enemy.i)!.hp).toBe(before.act2.enemies.find(e => e.i === enemy.i)!.hp);
     }

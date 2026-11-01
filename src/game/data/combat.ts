@@ -59,7 +59,7 @@ export const COMBAT: Record<CompanionId, CompanionCombat> = {
   },
   bubbo: {
     stance: "ride",
-    basic: { word: "Bubble!", name: { en: "Bubble Trap", ja: "あわの わな" }, hint: { en: "Lift an enemy in a bubble, then pop.", ja: "あわで てきを うかせて わる" }, shape: "trap", damage: 0, cooldown: 0.6, range: 10, speed: 10, radius: 0.8, knock: 0, stun: 0, cost: 0 },
+    basic: { word: "Bubble!", name: { en: "Bubble Trap", ja: "あわの わな" }, hint: { en: "Lift an enemy in a bubble, then pop.", ja: "あわで てきを うかせて わる" }, shape: "trap", damage: 6, cooldown: 0.6, range: 10, speed: 10, radius: 0.8, knock: 0, stun: 0, cost: 0 },
     special: { word: "Pop!", name: { en: "Bubble Bomb", ja: "あわの ばくだん" }, hint: { en: "A big bubble bursts over an area.", ja: "おおきな あわが はじける" }, shape: "bomb", damage: 22, cooldown: 1.6, range: 11, speed: 9, radius: 3, knock: 4, stun: 0, cost: 30 },
     upgrade: { name: { en: "Big Bubble", ja: "ビッグバブル" }, damage: 1, size: 1 }
   },

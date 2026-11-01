@@ -10,7 +10,7 @@ import { standY } from "../game/world/collision";
 import { ELEMENT_OBJECTS } from "../game/world/elementObjects";
 import { splashParticle } from "./splashParticle";
 
-// Seven draws total, independent of the number of enemies or overlapping FX.
+// At most seven draws; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
 const CAP = 768;
 const TAU = Math.PI * 2;
@@ -31,6 +31,7 @@ class Batch {
     this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
+    this.mesh.visible = false;
   }
   put(o: THREE.Object3D, color: THREE.Color, alpha = 1, style = 0) {
     if (this.n === CAP) return;

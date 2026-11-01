@@ -152,19 +152,22 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   expect(s.act2.projectiles.filter(shot => !shot.hostile)).toHaveLength(0);
   expect(s.act2.enemies[0].state).not.toBe("idle");
 
-  // J: the vine whip knocks it out; its coins come to the player.
+  // J: Vine Grab knocks it out; its coins come to the player.
   await defeat(page, 0);
   s = await waitFor(page, (x) => x.progress.act2.coins > 0, 10_000, "coins collected");
   expect(s.progress.act2.tutorial).toEqual(expect.arrayContaining(["attack", "coins"]));
   expect(s.act2.mp.leafy).toBe(100);
 
-  // K: the special uses MP (25 for Vine Pull) and hurts the enemy it catches.
+  // K: Root Snare spends 30 MP and hurts the enemy it catches.
   await hook(page, "nearEnemy", 3, 4);
+  await waitFor(page, (x) => x.act2.stance.friend === "leafy" && x.act2.stance.k > .99 && x.act2.mp.leafy === 100 && x.act2.enemies[3].hp === 44,
+    5_000, "HARNESS_PRECONDITION_FAILED: Leafy ready with full MP and live snare target");
+  await hook(page, "timeScale", 0);
   await page.keyboard.press("KeyK");
   s = await waitFor(page, (x) => x.act2.mp.leafy < 100, 3_000, "MP spent");
-  expect(s.act2.mp.leafy).toBeGreaterThanOrEqual(75);
-  expect(s.act2.mp.leafy).toBeLessThan(80);
+  expect(s.act2.mp.leafy).toBe(70);
   expect(s.act2.enemies[3].hp).toBeLessThan(44);
+  await hook(page, "timeScale", 1);
   // Each friend keeps its own MP.
   expect(s.act2.mp.bubbo).toBe(100);
 
@@ -327,13 +330,15 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   expect(s.act2.banner).toBe("Cloud Isle — Coming Soon!");
   await expect(page.getByTestId("objective")).toContainText("Cloud Isle — Coming Soon!");
 
-  // The upgrade is visible in a fight: Super Whip knocks a gloomlet out with one hit less.
+  // Upgraded Leafy still deals Vine Grab's contact damage with a manual J.
   await hook(page, "teleport", 70, -272, Math.PI);
   await waitFor(page, (x) => x.act2.zone === "coast" && x.act2.stance.friend === "leafy" && x.act2.stance.k > 0.99, 10_000, "Leafy in position on the coast");
   await hook(page, "nearEnemy", 24, 1.8);
+  const target = await waitFor(page, (x) => x.act2.enemies[24].hp > 0 && x.progress.act2.upgrades.includes("leafy") && x.act2.stance.friend === "leafy" && x.act2.stance.k > .99,
+    5_000, "HARNESS_PRECONDITION_FAILED: upgraded Leafy ready with a live target");
   await page.keyboard.press("KeyJ");
-  s = await waitFor(page, (x) => x.act2.enemies[24].hp < 20, 5_000, "hit");
-  expect(20 - s.act2.enemies[24].hp).toBeGreaterThan(15);
+  s = await waitFor(page, (x) => x.act2.enemies[24].hp < target.act2.enemies[24].hp, 5_000, "hit");
+  expect(target.act2.enemies[24].hp - s.act2.enemies[24].hp).toBeGreaterThanOrEqual(8);
   expect(errors).toEqual([]);
 });
 
@@ -370,8 +375,8 @@ test("touch: big attack buttons fight, the special button spends MP, the eat but
   await hook(page, "teleport", 76, -166, Math.PI);
   await waitFor(page, (x) => x.act2.zone === "forest1" && x.act2.stance.k > 0.99, 10_000, "in the forest, Leafy ready");
   await expect(page.getByTestId("btn-basic")).toBeVisible();
-  await expect(page.getByTestId("btn-basic")).toContainText("Whip!");
-  await expect(page.getByTestId("btn-special")).toContainText("Pull!");
+  await expect(page.getByTestId("btn-basic")).toContainText("Grab!");
+  await expect(page.getByTestId("btn-special")).toContainText("Stop!");
   const box = await page.getByTestId("btn-basic").boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(100);
   await hook(page, "nearEnemy", 1, 1.8);

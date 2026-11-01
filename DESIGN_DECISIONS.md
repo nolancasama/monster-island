@@ -1653,3 +1653,28 @@ nothing, and held J mostly landed during resistance. Every basic attack must
 deal damage on every hit, whatever the control outcome: Bubble Trap now deals
 6 on contact (plus fall damage when it lifts). Rejected: shorter resistance
 (it would bring back infinite control).
+
+## 2026-11-01 — C2: elemental combat regression corrections
+
+- Vine Grab's clear-line query now uses zero radius, matching forced motion's
+  walkable-centre check. A tug or fling can leave a centre inside the land
+  boundary's last eight centimetres; the previous .08 m clearance rejected
+  that target forever. Solids and gaps still block the line. Contact remains
+  eight damage (four against a crab's front), including during resistance;
+  heavy tug, cooldowns, control durations and held-J timing are unchanged.
+  Unit reproductions cover causeway shellback 18 at 1.5 m and Stormbreak
+  crab/sprite at 1.4 m on that rim, plus repeated native-spawn fights.
+- Bubble Trap's data and projectile now carry six contact damage. That hit
+  bypasses crab frontal armour so every first contact takes all six, including
+  heavy/resistant enemies. Eligible survivors still lift and take the existing
+  additional fall damage; a contact KO does not start another trap.
+- Empty elemental/scenery batches start hidden and remain hidden when empty.
+  Secret geometry is submitted only on the home world within 45 m of the
+  player, replacing the 65 m camera-distance check. Browser render budgets
+  and final before/after measurements belong to the controller.
+- Browser checks use Root Snare's 30 MP, Grab!/Stop!, Vine Grab's eight
+  contact damage, and Bubbo's J/K straight projectiles. The existing read-only
+  window.__mi.state().act2 enemies, projectiles, stance, MP, elementObjects
+  and secrets expose the tested semantics; no state machine was added.
+  Known stale Cloud Isle steps remain unchanged. Playwright acceptance is
+  reserved for the controller.

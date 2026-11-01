@@ -9,7 +9,7 @@ import { BEACON_PYLONS } from "./logic/beacon";
 import { BEACON, CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
 import { ENEMY_SPAWNS, POND } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
-import { PLAYER_R, gatesOf, isWalkable, standY } from "./world/collision";
+import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/collision";
 import { run } from "./flow/script";
 
 vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn() } }));
@@ -213,6 +213,99 @@ describe("elemental J simulation", () => {
     return e;
   }
 
+  for (const scenario of [
+    { world: "home", i: 18, distance: 1.5, attempts: 20, interval: .48 },
+    { world: "cloud", i: 0, distance: 1.4, attempts: 30, interval: .65 },
+    { world: "cloud", i: 1, distance: 1.4, attempts: 30, interval: .65 },
+  ] as const) for (const approach of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    it(`Leafy defeats ${scenario.world} enemy ${scenario.i} from ${scenario.distance} m, approach ${approach}`, () => {
+      changeWorld(scenario.world);
+      setGame(g => ({ progress: { ...g.progress, solved: [...g.progress.solved, "canopyVines", "canopyRope"] } }));
+      const e = cb.enemies[scenario.i];
+      for (const other of cb.enemies) if (other !== e) other.state = "gone";
+      Object.assign(rt.player, { x: e.x + Math.sin(approach) * scenario.distance, z: e.z + Math.cos(approach) * scenario.distance, yaw: approach + Math.PI });
+      combatTick(0);
+      friend("leafy");
+      expect(e.hp).toBeGreaterThan(0);
+      for (let n = 0; n < scenario.attempts && e.hp > 0; n++) {
+        // Same approach as nearEnemy: retain the direction from the enemy.
+        const a = Math.atan2(rt.player.x - e.x, rt.player.z - e.z);
+        const p = nearestWalkable(e.x + Math.sin(a) * scenario.distance, e.z + Math.cos(a) * scenario.distance, PLAYER_R, gatesOf(getGame().progress));
+        Object.assign(rt.player, { ...p, yaw: Math.atan2(e.x - p.x, e.z - p.z) });
+        cb.vitals.hp = 100;
+        if (scenario.world === "cloud") cb.hold = true;
+        else basicAttack();
+        advanceCombat(scenario.interval);
+        cb.hold = false;
+      }
+      expect(e.hp).toBeLessThanOrEqual(0);
+    });
+  }
+
+  for (const scenario of [
+    { world: "home", i: 18, x: 50.03, z: -258.4, distance: 1.5, side: 1, damage: 8 },
+    { world: "cloud", i: 0, x: 10.97, z: 25, distance: 1.4, side: -1, damage: 4 },
+    { world: "cloud", i: 1, x: 10.97, z: 25, distance: 1.4, side: -1, damage: 8 },
+  ] as const) {
+    it(`Vine Grab hits ${scenario.world} enemy ${scenario.i} at the walkable rim after forced motion`, () => {
+      changeWorld(scenario.world);
+      const e = cb.enemies[scenario.i];
+      for (const other of cb.enemies) if (other !== e) other.state = "gone";
+      Object.assign(e, { x: scenario.x, z: scenario.z, state: "recover", timer: 99, resistUntil: rt.time + 20, yaw: scenario.side * Math.PI / 2 });
+      Object.assign(rt.player, { x: e.x + scenario.side * scenario.distance, z: e.z, yaw: -scenario.side * Math.PI / 2 });
+      combatTick(0);
+      friend("leafy");
+      const gates = gatesOf(getGame().progress), hp = e.hp;
+      expect(isWalkable(rt.player.x, rt.player.z, gates, PLAYER_R)).toBe(true);
+      expect(isWalkable(e.x, e.z, gates, 0)).toBe(true);
+      expect(isWalkable(e.x, e.z, gates, .08)).toBe(false);
+      expect(basicAttack()).toBe(true);
+      expect(e.hp).toBe(hp - scenario.damage);
+    });
+  }
+
+  for (const kind of ["shellback", "snapjaw", "stormCrab"] as const) {
+    it(`Bubble Trap deals six contact damage on every resisted ${kind} hit`, () => {
+      const e = loneEnemy(kind, 0, 23);
+      e.yaw = Math.PI; // Include the crab's armoured front.
+      e.resistUntil = rt.time + 20;
+      friend("bubbo");
+      for (let n = 1; n <= 2; n++) {
+        expect(basicAttack()).toBe(true);
+        advanceCombat(.65);
+        expect(e.hp).toBe(100 - 6 * n);
+        expect(e.control).toBeNull();
+      }
+    });
+  }
+
+  it("Vine Grab still rejects a target behind a real coast rock", () => {
+    const e = loneEnemy("stormCrab", -3, 34.3);
+    Object.assign(rt.player, { x: -3, z: 30.3, yaw: 0 });
+    friend("leafy");
+    const gates = gatesOf(getGame().progress);
+    expect(isWalkable(rt.player.x, rt.player.z, gates, PLAYER_R)).toBe(true);
+    expect(isWalkable(e.x, e.z, gates, ENEMIES[e.kind].radius)).toBe(true);
+    expect(basicAttack()).toBe(true);
+    expect(e.hp).toBe(100);
+    expect(e.control).toBeNull();
+  });
+
+  it("Bubble Trap damages only the first enemy touched and a contact KO does not lift it", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    const behind = extra(1, "snapjaw", 0, 25);
+    e.hp = 6;
+    friend("bubbo");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.4);
+    expect(e.hp).toBe(0);
+    expect(e.state).toBe("ko");
+    expect(e.control).toBeNull();
+    expect(behind.hp).toBe(100);
+    expect(behind.control).toBeNull();
+    expect(cb.shots).toHaveLength(0);
+  });
+
   it("Fire Breath ignites once, refreshes without extra ticks, and upgrades burn/range", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("ember");
@@ -248,7 +341,7 @@ describe("elemental J simulation", () => {
       const z = e.z;
       expect(basicAttack()).toBe(true);
       expect(e.z).toBeCloseTo(z - 1);
-      expect(e.hp).toBe(92);
+      expect(e.hp).toBe(86); // six bubble contact + eight vine contact
       expect(e.control).toBeNull(); expect(e.air).toBe(0);
     });
   }
@@ -265,7 +358,7 @@ describe("elemental J simulation", () => {
       expect(duration).toBeCloseTo(upgrade ? 1.9 : 1);
       advanceCombat(upgrade ? 2 : 1.1);
       expect(e.control).toBeNull();
-      expect(e.hp).toBe(upgrade ? 75 : 88);
+      expect(e.hp).toBe(upgrade ? 69 : 82); // six contact plus fall damage
       expect(e.resistUntil).toBeGreaterThan(rt.time);
     });
   }

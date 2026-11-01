@@ -19,6 +19,7 @@ function makeBatch(geometry: THREE.BufferGeometry, material: THREE.Material) {
   mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
   mesh.frustumCulled = false;
   mesh.count = 0;
+  mesh.visible = false;
   return { mesh, n: 0 };
 }
 
@@ -126,7 +127,7 @@ export function Secrets() {
       s.first = false;
       const b = s.site.blocker;
       if (b.kind !== "box") continue;
-      if (Math.hypot(rt.camera.pos.x - b.x, rt.camera.pos.z - b.z) > 65) continue;
+      if (cb.world !== "home" || Math.hypot(rt.player.x - b.x, rt.player.z - b.z) > 45) continue;
       const x = b.x, z = b.z, hx = b.hx, hz = b.hz, y = groundY(x, z);
       const ox = s.object.x, oz = s.object.z, oy = groundY(ox, oz);
       const k = s.open, shut = 1 - k;
