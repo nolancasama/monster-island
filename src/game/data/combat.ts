@@ -65,7 +65,7 @@ export const COMBAT: Record<CompanionId, CompanionCombat> = {
   },
   puff: {
     stance: "shoulder",
-    basic: { word: "Blow!", name: { en: "Wind Blast", ja: "かぜの いぶき" }, hint: { en: "Blow enemies and bubbles away.", ja: "かぜで てきや あわを とばす" }, shape: "blast", damage: 5, cooldown: 0.55, range: 5, radius: 0, knock: 9, stun: 0, cost: 0 },
+    basic: { word: "Blow!", name: { en: "Wind Blast", ja: "かぜの いぶき" }, hint: { en: "Blow enemies and bubbles away.", ja: "かぜで てきや あわを とばす" }, shape: "blast", damage: 8, cooldown: 0.55, range: 5, radius: 0, knock: 9, stun: 0, cost: 0 },
     special: { word: "Spin!", name: { en: "Cyclone", ja: "サイクロン" }, hint: { en: "A travelling whirlwind carries enemies.", ja: "たつまきが てきを はこぶ" }, shape: "cyclone", damage: 4, cooldown: 2.5, range: 7.2, speed: 1.8, radius: 1.4, knock: 0, stun: 0, cost: 30 },
     upgrade: { name: { en: "Big Wind", ja: "ビッグウィンド" }, damage: 1, size: 1.3 }
   },

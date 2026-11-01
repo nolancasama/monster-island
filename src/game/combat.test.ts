@@ -243,7 +243,7 @@ describe("elemental J simulation", () => {
   }
 
   for (const scenario of [
-    { world: "home", i: 18, x: 50.03, z: -258.4, distance: 1.5, side: 1, damage: 8 },
+    { world: "home", i: 18, x: 50.03, z: -258.4, distance: 1.5, side: 1, damage: 14 },
     { world: "cloud", i: 0, x: 10.97, z: 25, distance: 1.4, side: -1, damage: 4 },
     { world: "cloud", i: 1, x: 10.97, z: 25, distance: 1.4, side: -1, damage: 8 },
   ] as const) {
@@ -341,7 +341,7 @@ describe("elemental J simulation", () => {
       const z = e.z;
       expect(basicAttack()).toBe(true);
       expect(e.z).toBeCloseTo(z - 1);
-      expect(e.hp).toBe(86); // six bubble contact + eight vine contact
+      expect(e.hp).toBe(80); // six bubble contact + fourteen heavy vine tug
       expect(e.control).toBeNull(); expect(e.air).toBe(0);
     });
   }
@@ -399,7 +399,7 @@ describe("elemental J simulation", () => {
     e.resistUntil = rt.time + 2;
     friend("puff");
     expect(basicAttack()).toBe(true);
-    expect(e.hp).toBe(95);
+    expect(e.hp).toBe(92);
     expect(e.control).toBeNull();
     expect(e.kz).toBe(6);
     expect(cb.fx.some(f => f.kind === "shrug")).toBe(true);
@@ -432,7 +432,7 @@ describe("elemental J simulation", () => {
       const e = loneEnemy(kind, 0, 23);
       friend("puff");
       expect(basicAttack()).toBe(true);
-      expect(e.hp).toBe(95); expect(e.kz).toBe(knock);
+      expect(e.hp).toBe(92); expect(e.kz).toBe(knock);
       expect(e.control?.kind).toBe("flung"); expect(e.air).toBe(0);
     });
   }
@@ -486,7 +486,7 @@ describe("elemental J simulation", () => {
     expect(weapon.control?.kind).toBe("flung");
     expect(victim.hp).toBe(100); // outside the five metre blast
     advanceCombat(.6);
-    expect(weapon.hp).toBe(89);
+    expect(weapon.hp).toBe(86);
     expect(victim.hp).toBe(90);
   });
 
@@ -496,7 +496,7 @@ describe("elemental J simulation", () => {
     friend("puff");
     expect(basicAttack()).toBe(true);
     advanceCombat(.4);
-    expect(e.hp).toBe(87);
+    expect(e.hp).toBe(84);
     expect(e.control).toBeNull();
     expect(e.state).toBe("stun");
     expect(e.timer).toBeGreaterThan(0);
@@ -509,7 +509,7 @@ describe("elemental J simulation", () => {
     friend("puff");
     expect(basicAttack()).toBe(true);
     expect(e.control).toBeNull();
-    expect(e.hp).toBe(83); // five direct plus round(6+8*.8)
+    expect(e.hp).toBe(80); // eight direct plus round(6+8*.8)
     expect(e.air).toBe(.8); expect(e.fall).not.toBeNull();
     expect(other.hp).toBe(92);
     advanceCombat(.4);
@@ -522,7 +522,7 @@ describe("elemental J simulation", () => {
     e.control = { kind: "trapped", t0: rt.time - .4, until: rt.time + 1.5, peak: 2.4 }; e.air = .8;
     friend("puff");
     expect(basicAttack()).toBe(true);
-    expect(e.control).toBeNull(); expect(e.air).toBe(.8); expect(e.hp).toBe(83);
+    expect(e.control).toBeNull(); expect(e.air).toBe(.8); expect(e.hp).toBe(80);
     expect(e.z).toBeLessThan(29.5);
   });
 
@@ -1036,7 +1036,7 @@ describe("elemental K simulation and shared combinations", () => {
     rt.player.yaw = .1;
     expect(basicAttack()).toBe(true);
     expect(e.control?.until).toBe(until);
-    expect(e.hp).toBe(82);
+    expect(e.hp).toBe(76);
   });
 
   it("Cyclone carries a trapped bubble past its ordinary expiry and pops on replacement", () => {

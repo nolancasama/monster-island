@@ -683,8 +683,10 @@ export function basicAttack(): boolean {
     } else {
       const e = grabbedObject ? null : enemy;
       if (e) {
-        hit(e, move.damage, 0, 0, ux, uz, f, true);
-        if (ENEMIES[e.kind].weightClass === "heavy") {
+        // Heavy enemies cannot be swung, so the tug itself hits harder (spec section 2).
+        const heavy = ENEMIES[e.kind].weightClass === "heavy";
+        hit(e, heavy ? HEAVY_TUG_DAMAGE : move.damage, 0, 0, ux, uz, f, true);
+        if (heavy) {
           const dx = rt.player.x - e.x, dz = rt.player.z - e.z, d = Math.hypot(dx, dz) || 1;
           displaceEnemy(e, e.x + dx / d, e.z + dz / d);
         }
@@ -1091,6 +1093,8 @@ function updateElements(e: EnemyRt, dt: number): boolean {
   }
   return false;
 }
+
+const HEAVY_TUG_DAMAGE = 14;
 
 function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
   const life = kind === "breath" || kind === "hit" ? 0.35 : kind === "vine" ? 0.45 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;

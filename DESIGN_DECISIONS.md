@@ -1678,3 +1678,17 @@ deal damage on every hit, whatever the control outcome: Bubble Trap now deals
   and secrets expose the tested semantics; no state machine was added.
   Known stale Cloud Isle steps remain unchanged. Playwright acceptance is
   reserved for the controller.
+
+## 2026-11-01 — Balance and budget fixes from browser reproduction
+
+- Reproduced the suite's stalled fights in the browser: Puff's Wind Blast
+  could not finish a storm crab in 30 attempts (5 damage, halved by the
+  crab's frontal armour, and the blast pushes it out of reach); Leafy's
+  heavy tug took ~20 presses for a shellback. Wind Blast now deals 8 (the
+  old Wind Shot dealt 9); Vine Grab on a heavy enemy deals 14. The crab's
+  frontal armour stays (earlier decision). Bubbo, Ember and Leafy finish a
+  storm crab in 4–9 attempts.
+- The +17 draw calls in sanctuary views were the six secret chests drawn at
+  fog distance from the shelf above the lowland, not the effect pools (0
+  added calls when idle, measured). Secret chests now draw only within 28 m
+  of the player: sanctuary courtyard 137 → 120 calls.

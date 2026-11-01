@@ -67,7 +67,7 @@ Old shapes are removed. Numbers below are starting values (tune in data).
 | Bubbo | K | Pop! | Bubble Bomb / あわの ばくだん | bomb | 22 r=3 m | 1.6 | 11 m @ 9 m/s | 30 |
 | Leafy | J | Grab! | Vine Grab / つるで つかむ | grab | 8 + impacts | 0.75 | 4.5 m, 70° | 0 |
 | Leafy | K | Stop! | Root Snare / ねっこの わな | snare | 6 | 2.0 | r=3.2 m centred 4 m ahead | 30 |
-| Puff | J | Blow! | Wind Blast / かぜの いぶき | blast | 5 + impacts | 0.55 | 5 m, 60° | 0 |
+| Puff | J | Blow! | Wind Blast / かぜの いぶき | blast | 8 + impacts | 0.55 | 5 m, 60° | 0 |
 | Puff | K | Spin! | Cyclone / サイクロン | cyclone | 4/s | 2.5 | 1.8 m/s for 4 s | 30 |
 
 Upgrades (treats; `act2.upgrades` unchanged): Ember **Big Flame** cone
@@ -125,7 +125,7 @@ Rules (pure, unit-tested in `logic/elements.ts`):
   swing tangent (`flung`, 0.5 s). While swinging or flung, the enemy is a
   **weapon**: any other enemy it overlaps takes 10 and knock (once per swing
   per victim), and the weapon takes 6; hitting a solid/edge: weapon takes 8
-  and stops. Heavy: 8 damage, 1 m tug, no swing. Upgrade with ≥2 targets in
+  and stops. Heavy: 14 damage, 1 m tug, no swing. Upgrade with ≥2 targets in
   the cone: the two nearest are pulled together over 0.35 s, both take 14
   and 1 s stun. Single press — no second input.
 - **Root Snare.** Centre 4 m ahead of the facing (clamped to walkable).

@@ -138,6 +138,8 @@ function Tile({ geometry, spots, material, far }: { geometry: THREE.BufferGeomet
 /** Even small landmarks share the landscape's fog-matched distance rule. */
 const near = (x: number, z: number) =>
   Math.hypot(rt.camera.pos.x - x, rt.camera.pos.y - groundY(x, z), rt.camera.pos.z - z) < FOG_FAR + 6;
+/** Secret chests sit inside closed pockets: drawn only near the player (each chest is several calls). */
+const nearSecretChest = (x: number, z: number) => Math.hypot(rt.player.x - x, rt.player.z - z) < 28;
 
 function Keeper({ service }: { service: ServiceId }) {
   const def = NPCS[NPC_OF[service]];
@@ -310,7 +312,7 @@ export function Lowland() {
       <Unlocks />
       <Secrets />
       {CHESTS.map((c) => (
-        <Chest key={c.id} id={c.id} visible={near} />
+        <Chest key={c.id} id={c.id} visible={c.secret ? nearSecretChest : near} />
       ))}
       {(Object.keys(SERVICES) as ServiceId[]).map((s) => (
         <Keeper key={s} service={s} />
