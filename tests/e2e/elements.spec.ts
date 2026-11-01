@@ -96,14 +96,27 @@ test.describe("touch", () => {
   expect(end.time - start.time).toBeGreaterThanOrEqual(1.2);
   expect(end.time - start.time).toBeLessThan(1.5);
   });
+
+  test("Inferno touch hold sustains beyond three seconds until release", async ({ page }) => {
+    await enterForest(page, "ember");
+    await hook(page, "set", { touch: true });
+    await faceEnemy(page, "ember");
+    await page.getByTestId("btn-special").dispatchEvent("pointerdown", { pointerId: 1, pointerType: "touch", button: 0, buttons: 1 });
+    expect((await state(page)).act2.mp.ember).toBe(85);
+    await hook(page, "timeScale", .5);
+    await waitFor(page, s => Boolean(s.act2.inferno && s.act2.inferno.age > 3.2 && s.act2.inferno.held), 15_000, "touch hold extends fire beyond three seconds");
+    await page.getByTestId("btn-special").dispatchEvent("pointerup", { pointerId: 1, pointerType: "touch", button: 0, buttons: 0 });
+    await waitFor(page, s => s.act2.inferno === null, 10_000, "touch release ends extended fire");
+    expect((await state(page)).act2.mp.ember).toBeLessThan(85);
+  });
 });
 
 test("keyboard hold extends Inferno until K is released", async ({ page }) => {
   await enterForest(page, "ember");
   await faceEnemy(page, "ember");
   await page.keyboard.down("KeyK");
-  await hook(page, "timeScale", .2);
-  await waitFor(page, s => Boolean(s.act2.inferno && s.act2.inferno.age > 1.4 && s.act2.inferno.held), 15_000, "keyboard hold extends fire");
+  await hook(page, "timeScale", .5);
+  await waitFor(page, s => Boolean(s.act2.inferno && s.act2.inferno.age > 3.2 && s.act2.inferno.held), 15_000, "keyboard hold extends fire beyond three seconds");
   await page.keyboard.up("KeyK");
   await waitFor(page, s => s.act2.inferno === null, 10_000, "key-up ends extended fire");
   expect((await state(page)).act2.mp.ember).toBeLessThan(85);

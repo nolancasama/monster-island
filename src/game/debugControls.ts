@@ -2,7 +2,7 @@ import { debugEnabled } from "./debugAccess";
 import { useDebug } from "./debugState";
 import { keys } from "../input/keyboard";
 import { rt } from "./runtime";
-import { cb } from "./combat";
+import { releaseAllAttacks } from "../input/attackInput";
 import { suspendDebugSpeech } from "./flow/ask";
 
 export function installDebugControls() {
@@ -30,7 +30,7 @@ export function installDebugControls() {
     keys.clear();
     rt.joy.x = rt.joy.y = 0;
     rt.player.vx = rt.player.vz = 0;
-    cb.touchHold = cb.hold = false;
+    releaseAllAttacks();
     const next = toggle ? !open : false;
     useDebug.setState({ open: next });
     if (next) suspendDebugSpeech();

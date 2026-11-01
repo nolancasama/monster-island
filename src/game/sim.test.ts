@@ -9,14 +9,100 @@ import { PLAYER_R, gatesOf, isWalkable, moveCircle } from "./world/collision";
 import { CLIFF_TOP_SPOT, LAVA } from "./world/island";
 import { region } from "./world/region";
 import { cb, resetCombat } from "./combat";
+import { isAttackHeld, pressAttack, releaseAttack, releaseAllAttacks } from "../input/attackInput";
+import type { CompanionId } from "./data/combat";
 
 vi.mock("../audio/audio", () => ({ audio: { setNearness: vi.fn(), voice: vi.fn(), play: vi.fn(), startMusic: vi.fn(), setScene: vi.fn() } }));
 
 afterEach(() => {
+  for (const slot of ["basic", "special"] as const) for (const source of ["key", "mouse", "touch"] as const) releaseAttack(slot, source);
+  releaseAllAttacks();
   vi.unstubAllGlobals();
   region.world = "home";
   resetRuntime();
   setGame({ screen: "title", progress: newProgress() });
+});
+
+function inputFight(friend: CompanionId = "ember") {
+  vi.stubGlobal("window", { setTimeout: () => 0, clearTimeout: () => undefined });
+  resetRuntime();
+  const progress = newProgress();
+  progress.active = friend;
+  progress.act2.started = progress.act2.descended = progress.act2.harbor = progress.act2.lumoTaken = true;
+  progress.act2.tutorial = ["attack", "coins", "special", "eat", "rest", "switch"];
+  progress.act3.world = "cloud";
+  progress.act3.hollowFound = true;
+  for (const id of ["leafy", "bubbo", "puff", "ember"] as const) progress.monsters[id].friend = true;
+  setGame({ screen: "game", mode: "explore", panel: null, line: null, settingsOpen: false, journalOpen: false, progress });
+  region.world = "cloud";
+  rt.act2Scene = rt.act3Scene = "done";
+  Object.assign(rt.player, { x: 0, z: 20, yaw: 0, climbY: null });
+  resetCombat();
+  cb.cloudZones.current = "stormbreakCoast";
+  for (const e of cb.enemies) e.state = "gone";
+  Object.assign(cb.stance, { friend, k: 1 });
+}
+
+it("routes touch special hold into Inferno past three seconds, then stops on release", () => {
+  inputFight();
+  pressAttack("special", "touch");
+  for (let i = 0; i < 32; i++) { rt.time += .1; tick(.1); }
+  expect(cb.holdK).toBe(true);
+  expect(cb.inferno?.age).toBeCloseTo(3.2);
+  expect(cb.vitals.mp.ember).toBeLessThan(85);
+  releaseAttack("special", "touch");
+  tick(.1);
+  expect(cb.holdK).toBe(false);
+  expect(cb.inferno).toBeNull();
+});
+
+it("does not repeat a held one-press special after its cooldown", () => {
+  inputFight("bubbo");
+  pressAttack("special", "mouse");
+  const ready = cb.ready.special;
+  for (let i = 0; i < 60; i++) { rt.time += .1; tick(.1); }
+  expect(cb.holdK).toBe(true);
+  expect(cb.ready.special).toBe(ready);
+});
+
+for (const interruption of ["journal", "settings", "panel", "line", "mode", "screen", "knockout"] as const) {
+  it(`latches held input across ${interruption} until a fresh press`, () => {
+    inputFight();
+    pressAttack("basic", "key");
+    if (interruption === "journal") setGame({ journalOpen: true });
+    if (interruption === "settings") setGame({ settingsOpen: true });
+    if (interruption === "panel") setGame({ panel: "trainer" });
+    if (interruption === "line") setGame({ line: { id: 1, by: "maple", en: "Hello" } });
+    if (interruption === "mode") setGame({ mode: "busy" });
+    if (interruption === "screen") setGame({ screen: "title" });
+    if (interruption === "knockout") cb.knockedOut = true;
+    tick(.01);
+    expect(isAttackHeld("basic")).toBe(false);
+    setGame({ screen: "game", mode: "explore", journalOpen: false, settingsOpen: false, panel: null, line: null });
+    cb.knockedOut = false;
+    pressAttack("basic", "key");
+    tick(.01);
+    expect(cb.hold).toBe(false);
+    releaseAttack("basic", "key");
+    pressAttack("basic", "key");
+    tick(.01);
+    expect(cb.hold).toBe(true);
+  });
+}
+
+it("keeps basic held through a friend hop without firing the new friend's special", () => {
+  inputFight();
+  pressAttack("basic", "key");
+  pressAttack("special", "key");
+  setGame(g => ({ progress: { ...g.progress, active: "bubbo" } }));
+  for (let i = 0; i < 20; i++) { rt.time += .1; tick(.1); }
+  expect(cb.hold).toBe(true);
+  expect(cb.holdK).toBe(true);
+  expect(cb.stance.friend).toBe("bubbo");
+  expect(cb.move).toMatchObject({ friend: "bubbo", kind: "basic" });
+  expect(cb.shots.some(s => s.shape === "bomb")).toBe(false);
+  expect(cb.inferno).toBeNull();
+  expect(cb.vitals.mp.bubbo).toBe(100);
 });
 
 for (const world of ["home", "cloud"] as const) {

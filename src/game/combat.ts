@@ -18,6 +18,7 @@ import { debugPaused, useDebug } from "./debugState";
 import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, tickBurn, weaponVictims, type Burn, type Control } from "./logic/elements";
 import { objectState, secretEvent, tickSecrets, type ElementState, type SecretProgress } from "./logic/secrets";
 import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementObject } from "./world/elementObjects";
+import { releaseAllAttacks } from "../input/attackInput";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -217,12 +218,10 @@ export const cb = {
   ready: { basic: 0, special: 0 },
   /** The friend's last move (the scene animates it). */
   move: null as null | { friend: CompanionId; kind: "basic" | "special"; t0: number; tx: number; tz: number },
-  /** Held J (keyboard) or the held touch button: basic attacks repeat. */
+  /** Held basic input from any source: basic attacks repeat. */
   hold: false,
-  /** Keyboard only: touch K always starts a fixed burst. */
+  /** Held special input from any source: sustains Inferno only. */
   holdK: false,
-  /** The touch attack button is held down. */
-  touchHold: false,
   /** The player cannot be hurt again until this rt.time. */
   safeUntil: 0,
   hurtT: -10,
@@ -265,7 +264,8 @@ export function resetCombat() {
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
   cb.hold = false;
-  cb.holdK = cb.touchHold = false;
+  cb.holdK = false;
+  releaseAllAttacks();
   cb.safeUntil = 0;
   cb.knock = { x: 0, z: 0 };
   cb.knockedOut = false;
@@ -296,7 +296,7 @@ export function travelCombat() {
   cb.stance = { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 };
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
-  cb.hold = cb.holdK = cb.touchHold = false;
+  releaseAllAttacks();
   cb.knock = { x: 0, z: 0 };
 }
 
@@ -516,9 +516,9 @@ function friendNow(): CompanionId | null {
   return s.friend && s.k >= 0.95 ? s.friend : null;
 }
 
-function canFight(): boolean {
+export function canFight(): boolean {
   const g = getGame();
-  return g.screen === "game" && g.mode === "explore" && !g.journalOpen && !g.settingsOpen && !isRunning() && !cb.knockedOut && act2Live();
+  return g.screen === "game" && g.mode === "explore" && !g.journalOpen && !g.settingsOpen && !g.panel && !g.line && !isRunning() && !cb.knockedOut && act2Live();
 }
 
 const freeBeaconMoves = () => cb.beacon.active && onCloudIsle() && combatZoneAt(rt.player.x, rt.player.z) === "stormBeacon";
@@ -636,12 +636,18 @@ function aimAt(range: number): { x: number; z: number } {
 }
 
 /** J: the active friend's basic attack (free; repeats while held). */
-export function basicAttack(): boolean {
+export function basicAttack(options: { repeat?: boolean } = {}): boolean {
   const f = friendNow();
   if (!f || !canFight() || rt.time < cb.ready.basic) return false;
   const move = COMBAT[f].basic;
   const up = upgraded(f);
   const range = move.range * (up && (f === "ember" || f === "puff") ? COMBAT[f].upgrade.size : 1);
+  if (options.repeat && move.shape === "grab" && !coneTargets(range, 70).length) {
+    const contains = objectCone(range, 70), progress = secretProgress();
+    const reachable = ELEMENT_OBJECTS.some(o => o.world === cb.world && !progress.secrets.includes(secretOf(o))
+      && o.tags.includes(EVENT_TAG.grab) && o.on?.grab && contains(o) && secretEvent(o.id, "grab", progress) !== progress);
+    if (!reachable) return false;
+  }
   const aim = aimAt(range);
   cb.ready.basic = rt.time + move.cooldown;
   cb.move = { friend: f, kind: "basic", t0: rt.time, tx: aim.x, tz: aim.z };
@@ -809,7 +815,7 @@ function updateInferno(dt: number) {
   const step = infernoStep(fire.age, dt, cb.holdK, cb.vitals.mp.ember, freeBeaconMoves());
   cb.vitals.mp.ember = Math.max(0, cb.vitals.mp.ember - step.drain);
   fire.age = step.age;
-  while (fire.tick <= fire.age + 1e-9 && fire.tick < 3 && (!step.done || fire.tick < fire.age - 1e-9)) {
+  while (fire.tick <= fire.age + 1e-9 && (!step.done || fire.tick < fire.age - 1e-9)) {
     infernoTick();
     fire.tick += 0.25;
   }
@@ -1337,6 +1343,7 @@ export function learn(step: TutorialStep) {
 // ------------------------------------------------------------ the frame
 
 export function combatTick(dt: number) {
+  if (!canFight()) releaseAllAttacks();
   if (debugPaused()) return;
   const g = getGame();
   if (g.screen !== "game" || !act2Live()) return;
@@ -1380,10 +1387,10 @@ export function combatTick(dt: number) {
   }
   if (!cb.knockedOut) cb.vitals = regenMp(cb.vitals, dt);
   // Held J repeats the basic attack.
-  if (cb.hold) basicAttack();
+  if (cb.hold) basicAttack({ repeat: true });
   const live = g.mode === "explore" && !isRunning();
   updateBeaconFight(dt, live, zone);
-  if (live && !cb.knockedOut) {
+  if (canFight()) {
     if (world === "home") applySecretProgress(tickSecrets(secretProgress(), dt, p));
     updateInferno(dt);
     updateCyclone(dt);
@@ -1679,6 +1686,7 @@ function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
   audio.play("hurt");
   if (cb.vitals.hp <= 0) {
     cb.knockedOut = true;
+    releaseAllAttacks();
     if (onCloudIsle() && cb.beacon.active) resetBeaconFight();
     hooks.knockout?.();
   }

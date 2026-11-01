@@ -2,7 +2,8 @@ import { getGame, setGame } from "../store";
 import { cancelAsk, chooseIndex, hasLine, micPress, nextLine } from "./ask";
 import { interact, switchByIndex } from "./actions";
 import { audio } from "../../audio/audio";
-import { basicAttack, eat, specialAttack } from "../combat";
+import { eat } from "../combat";
+import { pressAttack } from "../../input/attackInput";
 import { debugEnabled } from "../debugAccess";
 import { debugPaused, useDebug } from "../debugState";
 
@@ -48,8 +49,8 @@ export function onKey(code: string) {
         return;
       }
       // Act 2's fights: J attacks (held J repeats, see sim.ts), K is the special, F eats.
-      if (code === "KeyJ") basicAttack();
-      else if (code === "KeyK") specialAttack();
+      if (code === "KeyJ") pressAttack("basic", "key");
+      else if (code === "KeyK") pressAttack("special", "key");
       else if (code === "KeyF") eat();
       else if (code === "KeyE" || code === "Enter") interact();
       else if (code === "KeyM") openJournal(true);

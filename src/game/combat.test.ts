@@ -484,6 +484,40 @@ describe("elemental J simulation", () => {
     expect(e.resistUntil).toBeGreaterThan(rt.time);
   });
 
+  for (const target of ["none", "behind", "occluded"] as const) {
+    it(`held Vine Grab skips a ${target} target without consuming cooldown; a fresh press still whips`, () => {
+      const e = loneEnemy("snapjaw", 0, 19);
+      friend("leafy");
+      if (target === "none") e.state = "gone";
+      if (target === "occluded") {
+        Object.assign(rt.player, { x: -6, z: 30, yaw: 0 });
+        Object.assign(e, { x: -6, z: 34 });
+      }
+      const ready = cb.ready.basic, fx = cb.fx.length;
+      expect(basicAttack({ repeat: true })).toBe(false);
+      expect(cb.ready.basic).toBe(ready);
+      expect(cb.fx).toHaveLength(fx);
+      expect(basicAttack()).toBe(true);
+      expect(cb.ready.basic).toBeGreaterThan(ready);
+      expect(cb.fx.length).toBeGreaterThan(fx);
+    });
+  }
+
+  it("held Vine Grab attacks an eligible enemy and a reachable grabbable object", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("leafy");
+    expect(basicAttack({ repeat: true })).toBe(true);
+    expect(e.hp).toBe(92);
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    Object.assign(rt.player, { x: 66, z: -249.5, yaw: Math.PI });
+    friend("leafy");
+    expect(basicAttack({ repeat: true })).toBe(true);
+    expect(cb.elementObjects.leafyStatues?.state).toBe("pulled");
+    cb.ready.basic = 0;
+    expect(basicAttack({ repeat: true })).toBe(false);
+  });
+
   it("Double Grab bashes the nearest two for fourteen and a second of stun", () => {
     const a = loneEnemy("snapjaw", -.5, 23), b = extra(1, "snapjaw", .5, 23);
     friend("leafy");
@@ -878,7 +912,7 @@ describe("elemental K simulation and shared combinations", () => {
     expect(speedScale()).toBe(speed);
   });
 
-  it("held Inferno follows current facing, drains MP and ends at three seconds", () => {
+  it("held Inferno follows current facing, drains MP beyond three seconds and stops on release", () => {
     const a = loneEnemy("snapjaw", 0, 23), b = extra(1, "snapjaw", 3, 20);
     a.hp = b.hp = 1000;
     friend("ember"); cb.holdK = true;
@@ -889,9 +923,15 @@ describe("elemental K simulation and shared combinations", () => {
     advanceCombat(.25);
     expect(b.hp).toBe(994);
     expect(a.hp).toBe(hp - 2); // burn continues outside the cone
-    advanceCombat(2.25);
+    advanceCombat(3.25);
+    expect(cb.inferno?.age).toBeCloseTo(4);
+    expect(cb.vitals.mp.ember).toBeCloseTo(100 - 15 - 48 + MP_REGEN * 4);
+    const heldHp = b.hp;
+    advanceCombat(.25);
+    expect(b.hp).toBeLessThan(heldHp); // flame ticks continue after the old cap
+    cb.holdK = false;
+    advanceCombat(1 / 60);
     expect(cb.inferno).toBeNull();
-    expect(cb.vitals.mp.ember).toBeCloseTo(100 - 15 - 36 + MP_REGEN * 3);
     const remaining = b.hp;
     b.burn = null;
     advanceCombat(.3);
@@ -906,6 +946,18 @@ describe("elemental K simulation and shared combinations", () => {
     advanceCombat(.22);
     expect(cb.inferno).toBeNull();
     expect(cb.vitals.mp.ember).toBeLessThan(.2);
+  });
+
+  it("held Inferno ends when MP runs out after the prepaid minimum", () => {
+    loneEnemy(); friend("ember"); cb.holdK = true; cb.vitals.mp.ember = 36;
+    expect(specialAttack()).toBe(true);
+    advanceCombat(1.5);
+    expect(cb.inferno).not.toBeNull();
+    advanceCombat(.75);
+    expect(cb.inferno).toBeNull();
+    expect(cb.vitals.mp.ember).toBeLessThan(1);
+    advanceCombat(.5);
+    expect(cb.inferno).toBeNull(); // a held special never restarts itself
   });
 
   it("Bubble Bomb pops each overlapping bubble once and applies only one burst hit per chain", () => {
@@ -1234,6 +1286,9 @@ describe("Storm Beacon world combat integration", () => {
     advance(2);
     expect(cb.inferno?.age).toBeCloseTo(2);
     expect(cb.vitals.mp.ember).toBeCloseTo(MP_REGEN * 2);
+    advance(1.05);
+    expect(cb.inferno).toBeNull();
+    expect(cb.vitals.mp.ember).toBeCloseTo(MP_REGEN * 3.05);
   });
 
   it("keeps beacon specials free while spending MP on the coast", () => {

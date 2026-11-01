@@ -3,6 +3,7 @@ import { companions, gateOpen, objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { PICK_TIME, animate, rt, type MonsterRt } from "./runtime";
 import { keyboardMove, keys } from "../input/keyboard";
+import { isAttackHeld, releaseAllAttacks } from "../input/attackInput";
 import { gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
 import { CAVE, LAVA, MONSTER_STONE, RIVER, shoreZ } from "./world/island";
 import { findFocus } from "./flow/focus";
@@ -12,7 +13,7 @@ import { isRunning } from "./flow/script";
 import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
-import { companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
+import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
 import { lumoHidden, startAct2Scene } from "./flow/act2";
 import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
@@ -32,6 +33,7 @@ let followStuck = 0;
 
 export function tick(dt: number) {
   const g = getGame();
+  if (!canFight()) releaseAllAttacks();
   if (g.screen === "title") {
     for (const id of LIVE_MONSTERS) homeLife(rt.monsters[id], dt);
     return;
@@ -61,8 +63,8 @@ export function tick(dt: number) {
   }
 
   // Act 2's fights (held J repeats the basic attack).
-  cb.hold = keys.has("KeyJ") || cb.touchHold;
-  cb.holdK = keys.has("KeyK");
+  cb.hold = isAttackHeld("basic");
+  cb.holdK = isAttackHeld("special");
   combatTick(dt);
 
   // Food grows back. It is collectible from the moment it reappears; the

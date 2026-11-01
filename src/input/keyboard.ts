@@ -1,4 +1,5 @@
 import { debugPaused } from "../game/debugState";
+import { installAttackLifecycle, releaseAttack } from "./attackInput";
 
 /** Held keys (by physical code, so WASD works on JIS keyboards and with the IME on). */
 export const keys = new Set<string>();
@@ -26,16 +27,25 @@ export function installKeyboard(onPress: (code: string, e: KeyboardEvent) => voi
     const fresh = !keys.has(e.code) && !e.repeat;
     keys.add(e.code);
     if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
-    if (fresh) onPress(e.code, e);
+    if (fresh) {
+      // A non-repeating keydown proves a new physical press even if blur lost keyup.
+      if (e.code === "KeyJ") releaseAttack("basic", "key");
+      if (e.code === "KeyK") releaseAttack("special", "key");
+      onPress(e.code, e);
+    }
   };
   const up = (e: KeyboardEvent) => {
     keys.delete(e.code);
+    if (e.code === "KeyJ") releaseAttack("basic", "key");
+    if (e.code === "KeyK") releaseAttack("special", "key");
   };
   const blur = () => keys.clear();
   window.addEventListener("keydown", down);
   window.addEventListener("keyup", up);
   window.addEventListener("blur", blur);
+  const cleanupAttacks = installAttackLifecycle();
   return () => {
+    cleanupAttacks();
     window.removeEventListener("keydown", down);
     window.removeEventListener("keyup", up);
     window.removeEventListener("blur", blur);

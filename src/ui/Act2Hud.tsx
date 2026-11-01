@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { setGame, useGame } from "../game/store";
-import { stageStatus, cloudStageStatus, cb, basicAttack, eat, inHostileZone, specialAttack } from "../game/combat";
+import { stageStatus, cloudStageStatus, cb, eat, inHostileZone } from "../game/combat";
+import { pressAttack, releaseAttack, type AttackSlot } from "../input/attackInput";
 import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
 import { FOODS } from "../game/data/foods";
 import { favouriteFood } from "../game/logic/act2";
@@ -97,8 +98,13 @@ function Moves() {
     return () => window.clearInterval(t);
   }, []);
   const active = progress.active as CompanionId | null;
-  useEffect(() => () => { cb.touchHold = false; }, [active, touch, mode]);
-  if (!active || mode !== "explore" || !inHostileZone()) return null;
+  // The buttons unmount on leaving a hostile zone, and their pointerup never arrives.
+  const shown = Boolean(active) && mode === "explore" && inHostileZone();
+  useEffect(() => () => {
+    releaseAttack("basic", "touch");
+    releaseAttack("special", "touch");
+  }, [touch, shown]);
+  if (!active || !shown) return null;
   const c = COMBAT[active];
   const food = favouriteFood(active);
   if (!food) return null;
@@ -126,10 +132,10 @@ function Moves() {
     </button>
   );
   if (touch) {
-    const hold = (on: boolean) => (e: React.PointerEvent) => {
+    const hold = (slot: AttackSlot, on: boolean) => (e: React.PointerEvent) => {
       e.preventDefault();
-      cb.touchHold = on;
-      if (on) basicAttack();
+      if (on) pressAttack(slot, "touch");
+      else releaseAttack(slot, "touch");
       // Capture keeps the hold when a finger slides off; it must never block the attack.
       if (on) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
     };
@@ -138,10 +144,10 @@ function Moves() {
         <div className="eat-effect">{effect}</div>
         <button
           className="move-btn special"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            specialAttack();
-          }}
+          onPointerDown={hold("special", true)}
+          onPointerUp={hold("special", false)}
+          onPointerCancel={hold("special", false)}
+          onPointerLeave={hold("special", false)}
           data-testid="btn-special"
           aria-label={c.special.word}
         >
@@ -150,10 +156,10 @@ function Moves() {
         </button>
         <button
           className="move-btn basic"
-          onPointerDown={hold(true)}
-          onPointerUp={hold(false)}
-          onPointerCancel={hold(false)}
-          onPointerLeave={hold(false)}
+          onPointerDown={hold("basic", true)}
+          onPointerUp={hold("basic", false)}
+          onPointerCancel={hold("basic", false)}
+          onPointerLeave={hold("basic", false)}
           data-testid="btn-basic"
           aria-label={c.basic.word}
         >
@@ -167,10 +173,10 @@ function Moves() {
     <div className="moves-legend ui" data-testid="moves">
       <div className="eat-effect">{effect}</div>
       <span>
-        <kbd>J</kbd> {c.basic.word}
+        <kbd>J</kbd> / left click {c.basic.word}
       </span>
       <span>
-        <kbd>K</kbd> {c.special.word} <small>{beacon ? "0 MP" : `${c.special.cost} MP`}</small>
+        <kbd>K</kbd> / right click {c.special.word} <small>{beacon ? "0 MP" : `${c.special.cost} MP`}</small>
       </span>
       {eatButton}
     </div>

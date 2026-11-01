@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { rt } from "../game/runtime";
@@ -19,11 +19,18 @@ import { CollisionOverlay } from "./CollisionOverlay";
 import { useGame } from "../game/store";
 import { CloudIsle } from "./CloudIsle";
 import { VoyageBoat } from "./VoyageBoat";
+import { installMouseAttacks } from "../input/attackInput";
 
 const collisionDebugAllowed = debugEnabled || new URLSearchParams(window.location.search).get("e2e") === "1";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
+
+function MouseAttacks() {
+  const canvas = useThree(s => s.gl.domElement);
+  useEffect(() => installMouseAttacks(canvas), [canvas]);
+  return null;
+}
 
 function Clock() {
   const frames = useRef({ n: 0, t: 0 });
@@ -93,6 +100,7 @@ export function GameScene() {
       flat
     >
       <Clock />
+      <MouseAttacks />
       <AdaptiveDpr />
       {cloud ? <CloudIsle /> : <>
       <SkyAndLights />

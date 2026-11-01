@@ -2,6 +2,7 @@ import { CLOUD_BOUNDS } from "./world/cloudisle";
 import { getGame, setGame } from "./store";
 import { rt, resetRuntime } from "./runtime";
 import { resetCombat, travelCombat, cb } from "./combat";
+import { releaseAllAttacks } from "../input/attackInput";
 import { applyWorld } from "./flow/story";
 import { debugEnabled } from "./debugAccess";
 import { cancelDebugScripts } from "./debugLifecycle";
@@ -18,7 +19,8 @@ function clearInteraction() {
   rt.player.climbY = null;
   rt.player.action = null;
   rt.joy.x = rt.joy.y = 0;
-  cb.move = null; cb.hold = cb.touchHold = false;
+  cb.move = null;
+  releaseAllAttacks();
   setGame({ screen: "game", mode: "explore", focus: null, prompt: null, line: null, panel: null, drawing: false, discovering: null, friendCard: null, banner: null, journalOpen: false, settingsOpen: false, fade: 0, hint: null });
   rt.camera.mode = "follow";
   rt.camera.shot = null;

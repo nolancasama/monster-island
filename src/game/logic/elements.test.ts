@@ -93,11 +93,18 @@ describe("Inferno clock and payment", () => {
     expect(infernoStep(0, 1, true, 100)).toEqual({ age: 1, drain: 12, done: false });
     expect(infernoStep(1, 1, true, 0)).toEqual({ age: 1.2, drain: 0, done: true });
   });
-  it("ends at MP exhaustion or three seconds, including a frame crossing the cap", () => {
+  it("sustains beyond three seconds until MP exhaustion, including a crossing frame", () => {
     expect(infernoStep(1.5, 1, true, 3)).toEqual({ age: 1.75, drain: 3, done: true });
-    expect(infernoStep(2.9, .2, true, 100).age).toBe(3);
-    expect(infernoStep(2.9, .2, true, 100).drain).toBeCloseTo(1.2);
+    const crossing = infernoStep(2.9, .2, true, 100);
+    expect(crossing.age).toBeCloseTo(3.1);
+    expect(crossing.drain).toBeCloseTo(2.4);
+    expect(crossing.done).toBe(false);
+    expect(infernoStep(8, 1, true, 6)).toEqual({ age: 8.5, drain: 6, done: true });
+    expect(infernoStep(8, .2, false, 100)).toEqual({ age: 8, drain: 0, done: true });
+  });
+  it("keeps the free beacon's three second cap without draining MP", () => {
     expect(infernoStep(2.9, .2, true, 0, true)).toEqual({ age: 3, drain: 0, done: true });
+    expect(infernoStep(0, 1, true, 100, true)).toEqual({ age: 1, drain: 0, done: false });
   });
 });
 

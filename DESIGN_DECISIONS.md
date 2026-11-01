@@ -1734,3 +1734,12 @@ Spec frozen in `docs/COMBAT_FEEL.md` (§0 lists every change).
   agree. Rejected: instant hit with a visual that arrives late.
 - One attack input module for keys, mouse and touch; mouse reads `e.buttons` because
   chorded buttons do not fire a second `pointerdown`.
+
+## 2026-11-02 — F1 input latch implementation
+
+- Release-all clears accepted holds while retaining source-down state until release,
+  so repeated mouse button snapshots cannot rearm an interrupted hold. Store changes
+  clear holds immediately; simulation also checks cutscenes and knockout.
+- Leafy's held repeat uses the existing cone target rules, including heavy tugs and
+  resisted grabs. Object eligibility requires a reachable grab response that changes
+  its state, so an already moved object cannot spend another empty repeat cooldown.

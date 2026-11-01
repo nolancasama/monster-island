@@ -31,9 +31,9 @@ export function bubbleChain<T extends Point & { i: number; trapped: boolean }>(e
   return { pops, victims: [...victims] };
 }
 
-/** A tap is prepaid; only keyboard-held time drains the extra MP. */
+/** A tap is prepaid; held time drains extra MP, except at the free beacon. */
 export function infernoStep(age: number, dt: number, held: boolean, mp: number, free = false) {
-  const limit = held && (free || mp > 1e-9) ? 3 : 1.2;
+  const limit = held && (free || mp > 1e-9) ? (free ? 3 : Infinity) : 1.2;
   const paidLimit = held && !free ? Math.max(1.2, age + mp / 12) : limit;
   const elapsed = Math.max(0, Math.min(dt, limit - age, paidLimit - age));
   const drain = held && !free ? Math.min(mp, elapsed * 12) : 0;
