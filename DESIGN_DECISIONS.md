@@ -1700,3 +1700,12 @@ no further blast could hit it (Puff never finished it in 30 attempts). All
 cone moves now test a plain line to the enemy centre, as Vine Grab already
 did; solids and gaps along the line still block. Every friend now finishes
 storm crab, raider shooter and wind sprite in 1–10 held-J attempts.
+
+## 2026-11-01 — Beacon reinforcements follow the moved arena
+
+The Storm Beacon's two reinforcement wind sprites spawned at a hard-coded
+z = 174 (5 m behind the beacon's original z = 169); the expansion moved the
+beacon to z = 439, so they appeared ~265 m away and never joined the fight.
+They now spawn relative to `BEACON_ARENA`. Found while reproducing the Act 3
+spec; pre-dates the elemental work. The Act 3 spec now faces each pylon after
+placement, since attacks no longer turn the player toward targets.

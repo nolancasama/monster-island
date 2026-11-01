@@ -294,6 +294,8 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
       if((await cloudState(page)).progress.active!=="leafy") await page.getByTestId("team-leafy").click();
       const p=BEACON_PYLONS[i];
       await hook(page,"teleport",p.x,p.z-2.3,0);
+      // Placement can shift off the solid arena props; attacks follow the facing, so face the pylon.
+      {const at=(await state(page)).player; await hook(page,"teleport",at.x,at.z,Math.atan2(p.x-at.x,p.z-at.z));}
       await pauseAt(page,{pylon:{i,phase:"exposed"}});
       try {await shot(`${name}-exposed`);} finally {await hook(page,"timeScale",1);}
       for(let attempt=0;attempt<6;attempt++) {
@@ -341,6 +343,7 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     // Bubbo's actual Splash rewards the charge telegraph before normal exposure.
     await page.getByTestId("team-bubbo").click();
     await hook(page,"teleport",BEACON_PYLONS[0].x,BEACON_PYLONS[0].z-3,0);
+    {const at=(await state(page)).player, q=BEACON_PYLONS[0]; await hook(page,"teleport",at.x,at.z,Math.atan2(q.x-at.x,q.z-at.z));}
     await pauseAt(page,{pylon:{i:0,phase:"charging"}});
     try {await shot("beacon-pylon-charge");} finally {await hook(page,"timeScale",1);}
     await attack(page,touch);

@@ -1158,7 +1158,7 @@ function updateBeaconFight(dt: number, live: boolean, zone: CombatZone | null) {
     const source = CLOUD_ENEMY_SPAWNS.findIndex(s => s.kind === "windSprite");
     for (let i = 0; i < 2; i++) {
       const sprite = spawnEnemy(source, true);
-      const x = i === 0 ? -5 : 5, z = 174;
+      const x = BEACON_ARENA.x + (i === 0 ? -5 : 5), z = BEACON_ARENA.z + 5;
       Object.assign(sprite, { i: 10000 + i, zone: "stormBeacon", x, z, homeX: x, homeZ: z, state: "alert", timer: 1.2, alertT: rt.time });
       cb.enemies.push(sprite);
     }
