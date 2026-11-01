@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { newAct3 } from "../../src/game/logic/act3";
+import { RAIDER_BARRICADE as WALL } from "../../src/game/world/cloudisle";
 
 // These frame captures already retain screenshots and state. Large trace streams
 // can stall Windows/SwiftShader context teardown while transferring image data.
@@ -155,7 +156,7 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
 
     // The real raider barricade is a wall in hostile ground. A player's
     // straight bolt must stop on it even though open coast continues beyond.
-    await hook(page, "timeScale", 1); await hook(page, "teleport", 5, 50, 0);
+    await hook(page, "timeScale", 1); await hook(page, "teleport", WALL.x, WALL.z - 2.5, 0);
     // The active friend's own number opens a conversation, so switch only when needed.
     if ((await state(page)).act2.stance.friend !== "bubbo") await page.keyboard.press("Digit2");
     await waitFor(page, s => s.act2.stance.friend === "bubbo" && s.act2.stance.k > .99);
@@ -163,7 +164,7 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     await page.keyboard.press("KeyJ");
     const wallShot = (await state(page)).act2.projectiles.find(p => !p.hostile)!;
     expect(wallShot).toBeTruthy();
-    await hook(page, "timeScale", .25); await pauseAt(page, { shot: wallShot.id, zAbove: 54 });
+    await hook(page, "timeScale", .25); await pauseAt(page, { shot: wallShot.id, zAbove: WALL.z - 1.5 });
     await capture("projectile-approaching-barricade-wall");
     await hook(page, "timeScale", .25); await pauseAt(page, { absent: wallShot.id });
     await capture("projectile-blocked-by-barricade-wall");
@@ -187,15 +188,15 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     await hook(page, "setAct3", { ...newAct3(), voyageDone: true, world: "cloud" });
     await hook(page, "cloudArea", "stormbreakCoast");
     await hook(page, "timeScale", 0);
-    await hook(page, "teleport", 5, 54, 0);
+    await hook(page, "teleport", WALL.x, WALL.z - 3, 0);
     const shooter = (await state(page)).act2.enemies.find(e => e.kind === "raiderShooter" && e.zone === "stormbreakCoast")!;
-    await hook(page, "combatFixture", { enemies: [{ i: shooter.i, x: 5, z: 46.5, state: "chase" }] });
+    await hook(page, "combatFixture", { enemies: [{ i: shooter.i, x: WALL.x, z: WALL.z - 10.5, state: "chase" }] });
     await hook(page, "setHp", 100);
     const ground = (await state(page)).player.ground;
     // The wall is north of the player, so a northbound enemy bolt originates
     // behind the native lens. This explicit evidence-only side view keeps the
     // shooter, dodge and real wall visible to both the camera and ranged AI.
-    await hook(page, "look", [18, ground + 11, 48], [5, ground + 1, 52]);
+    await hook(page, "look", [WALL.x + 13, ground + 11, WALL.z - 9], [WALL.x, ground + 1, WALL.z - 5]);
     await hook(page, "renderFrames", 3);
     const views: Array<{ name: string; calls: number; triangles: number; fps: number; captureCamera: string; player: MiState["player"]; projectiles: Projectile[] }> = [];
     const capture = async (name: string) => {
@@ -215,9 +216,9 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     await pauseAt(page, { source: shooter.i, age: .6 });
     const launched = await state(page);
     const bolt = launched.act2.projectiles.find(p => p.hostile && p.source === shooter.i)!;
-    await hook(page, "teleport", 6.5, 54, 0, false);
+    await hook(page, "teleport", WALL.x + 1.5, WALL.z - 3, 0, false);
     await hook(page, "timeScale", .5);
-    await pauseAt(page, { shot: bolt.id, zAbove: 55.5 });
+    await pauseAt(page, { shot: bolt.id, zAbove: WALL.z - 1.5 });
     const approaching = (await state(page)).act2.projectiles.find(p => p.id === bolt.id)!;
     expect(approaching.vx).toBeCloseTo(bolt.vx); expect(approaching.vz).toBeCloseTo(bolt.vz);
     await capture("cloud-hostile-bolt-approaching-wall");
@@ -226,7 +227,7 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     const blocked = await state(page);
     expect(blocked.act2.hp).toBe(100);
     // It stops at the wall before either its four-second lifetime or the
-    // coast's z=60 boundary can remove it.
+    // end of the raider road behind the wall can remove it.
     expect(blocked.time - launched.time + bolt.age).toBeLessThan(bolt.life - .25);
     await capture("cloud-hostile-bolt-blocked-by-wall");
     expect(errors).toEqual([]);

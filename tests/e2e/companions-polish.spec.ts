@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
+import { COAST_GATE, HOLLOW_APPROACH } from "../../src/game/world/cloudisle";
 
 const friends = ["leafy", "bubbo", "puff", "ember"] as const;
 const folder = ".tmp/shots/polish2/companions";
@@ -10,7 +11,7 @@ type CompanionState = MiState & { act3: { zone: string } };
 const destinations = [
   { name: "fern-crossing", zone: "camp", hostile: "forest1", cloud: false, start: [76, -183] as Point, entrance: [76, -188] as Point, onward: [76, -195] as Point },
   { name: "port-town", zone: "port", hostile: "coast", cloud: false, start: [76, -287] as Point, entrance: [76, -293] as Point, onward: [76, -300] as Point },
-  { name: "hidden-hollow", zone: "hiddenHollow", hostile: "stormbreakCoast", cloud: true, start: [-5, 47] as Point, entrance: [-10, 50] as Point, onward: [-12, 56] as Point }
+  { name: "hidden-hollow", zone: "hiddenHollow", hostile: "stormbreakCoast", cloud: true, start: [COAST_GATE.x, COAST_GATE.z - 5] as Point, entrance: [-6, COAST_GATE.z + 5.5] as Point, onward: HOLLOW_APPROACH[1] as Point }
 ] as const;
 
 function progressedSave(friend: typeof friends[number], destination: typeof destinations[number]) {

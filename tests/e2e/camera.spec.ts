@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
-import { CLOUD_PUZZLES, CLOUD_STAGES } from "../../src/game/world/cloudisle";
+import { BACK_TUNNEL, BEACON, CLOUD_CHESTS, CLOUD_PUZZLES, CLOUD_SPAWNS, CLOUD_STAGES } from "../../src/game/world/cloudisle";
 import { CAMERA_PROFILES } from "../../src/scene/cameraProfiles";
 import { BEACON_ARENA } from "../../src/game/logic/beacon";
 import { GATE_PILLARS, groundY } from "../../src/game/world/island";
@@ -41,8 +41,12 @@ const HOME: Sample[] = [
 ];
 const CLOUD: Sample[] = [
   { profile: "cloud", x: 0, z: 1 },
-  { profile: "cloud-back-tunnel", x: -17, z: 71 },
-  { profile: "beacon-arena", x: 6, z: 169 }
+  { profile: "cloud-sea-cave", x: CLOUD_CHESTS[0].x, z: CLOUD_CHESTS[0].z - 2.5 },
+  { profile: "cloud-overlook", x: -34, z: 100 },
+  { profile: "cloud-hollow", ...CLOUD_SPAWNS.hiddenHollow },
+  { profile: "cloud-back-tunnel", x: BACK_TUNNEL[1][0], z: BACK_TUNNEL[1][1] },
+  { profile: "cloud-grotto", ...CLOUD_SPAWNS.thunderGrotto },
+  { profile: "beacon-arena", x: BEACON.x + 6, z: BEACON.z }
 ];
 
 function fixture() {

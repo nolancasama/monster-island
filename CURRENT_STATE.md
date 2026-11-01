@@ -35,11 +35,12 @@ Built on `feature/act3-cloud-isle` + `main`'s debug teleport. Frozen spec
   Browser (`MI_LONG_TIMEOUT=3600000`): Act 3 full chapter both sizes 6/6,
   Act 2, elements 7/7 (fails when an expectation is broken), expansion,
   continuity, polish, camera budgets (sanctuary 116 calls = base; volcano
-  tunnel 59/59). Still failing, identically on the base branch `17dfce5`
-  (stale Cloud Isle coordinates from the expansion, not this work): camera
-  `cloud-back-tunnel` ×2, companions-polish ×4, combat-polish Cloud Isle
-  steps ×4. A full run under machine load (2.8 h) adds timeouts that pass
-  when rerun.
+  tunnel 59/59).
+- **Full Playwright suite, end to end: 62/62 in 42.9 min** (2026-11-01,
+  `MI_LONG_TIMEOUT=3600000`, fresh build), after updating the camera,
+  companions-polish and combat-polish Cloud Isle steps to the expanded island
+  (coordinates now come from the world constants; camera covers every cloud
+  profile).
 - Controller evidence: screenshots of all eight moves, the bubble chain,
   two combos and every secret before/after (six secrets persist across
   reload) — `.tmp/shots/elements/`, `.tmp/shots/secrets/` in this worktree.
@@ -93,14 +94,14 @@ the expansion; the full suite has not been run end to end on this machine.
   Ember's opened nook is a flat dark patch. Functional and readable, not
   yet attractive. Combat balance (e.g. a full-height Bubble Trap knocks out
   a 20 HP gloomlet) is untested with children.
-- Pre-existing spec debt from the Cloud Isle expansion: camera
-  `cloud-back-tunnel`, companions-polish and combat-polish Cloud Isle steps
-  use pre-expansion coordinates (fail on `17dfce5` too).
-- **CI browser job cannot finish:** `test.yml` limits Playwright to 60 minutes
-  (run 41266499516 was cancelled there); the full suite took 2.8 h on this
-  machine under load. Deploys run only unit tests and the build. Unit tests
-  timed out intermittently on CI at Vitest's default 5 s (Cloud Isle flood
-  fills), which would also have blocked a deploy; `testTimeout` is now 30 s.
+- **CI browser job does not finish:** `test.yml` limits Playwright to 60
+  minutes and runs 41266499516 and 41302604485 ended cancelled; the full suite
+  takes 43 min on this machine with nothing else running. Deploys run only unit
+  tests and the build. Unit tests timed out intermittently on CI at Vitest's
+  default 5 s (Cloud Isle flood fills), which would also have blocked a
+  deploy; `testTimeout` is now 30 s and the CI unit job passes.
+- **Run `npm run e2e`, or build first:** plain `npx playwright test` serves
+  whatever is in `dist`, so it silently tests a stale build.
 - **Landmark from the dock:** the mountain does not read as a landmark from
   the dock — the massif's south flank rises gently and the summit is
   > 400 m away. Options: steeper massif (deep canyons by the Hollow and
@@ -124,8 +125,7 @@ the expansion; the full suite has not been run end to end on this machine.
    `feature/elemental-combat` (contains `feature/act3-cloud-isle`) into
    `main` (deploys; Cloud Isle stays locked). Optional polish pass on the
    secret pockets.
-2. Full Playwright suite once, end to end, with `MI_LONG_TIMEOUT`.
-3. Chromebook play-test with `?debug=1` (Cloud Isle frame rate, grotto
+2. Chromebook play-test with `?debug=1` (Cloud Isle frame rate, grotto
    lights, fights).
 
 ## Codex / Delegated Work
