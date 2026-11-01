@@ -262,6 +262,23 @@ describe("elemental J simulation", () => {
       expect(basicAttack()).toBe(true);
       expect(e.hp).toBe(hp - scenario.damage);
     });
+
+    // Every cone shares the rim rule: a pushed enemy must stay hittable by the push itself.
+    for (const by of ["puff", "ember"] as const) {
+      it(`${by === "puff" ? "Wind Blast" : "Fire Breath"} hits ${scenario.world} enemy ${scenario.i} at the walkable rim`, () => {
+        changeWorld(scenario.world);
+        const e = cb.enemies[scenario.i];
+        for (const other of cb.enemies) if (other !== e) other.state = "gone";
+        Object.assign(e, { x: scenario.x, z: scenario.z, state: "recover", timer: 99, resistUntil: rt.time + 20, yaw: scenario.side * Math.PI / 2 });
+        Object.assign(rt.player, { x: e.x + scenario.side * scenario.distance, z: e.z, yaw: -scenario.side * Math.PI / 2 });
+        combatTick(0);
+        friend(by);
+        const hp = e.hp;
+        expect(isWalkable(e.x, e.z, gatesOf(getGame().progress), .08)).toBe(false);
+        expect(basicAttack()).toBe(true);
+        expect(e.hp).toBeLessThan(hp);
+      });
+    }
   }
 
   for (const kind of ["shellback", "snapjaw", "stormCrab"] as const) {

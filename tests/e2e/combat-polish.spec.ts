@@ -156,7 +156,8 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
     // The real raider barricade is a wall in hostile ground. A player's
     // straight bolt must stop on it even though open coast continues beyond.
     await hook(page, "timeScale", 1); await hook(page, "teleport", 5, 50, 0);
-    await page.keyboard.press("Digit2");
+    // The active friend's own number opens a conversation, so switch only when needed.
+    if ((await state(page)).act2.stance.friend !== "bubbo") await page.keyboard.press("Digit2");
     await waitFor(page, s => s.act2.stance.friend === "bubbo" && s.act2.stance.k > .99);
     await hook(page, "timeScale", 0); await hook(page, "combatFixture", { enemies: [] });
     await page.keyboard.press("KeyJ");

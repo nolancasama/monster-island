@@ -543,15 +543,17 @@ export function crabDamage(kind: EnemyKind, damage: number, basic: boolean, yaw:
   return kind === "stormCrab" && basic && frontal > 0.5 ? damage * 0.5 : damage;
 }
 
-function coneTargets(range: number, degrees: number, lineRadius = 0.08): EnemyRt[] {
+/** Forced motion leaves enemy centres right on the land rim: test a line, not a body,
+ * so pushed enemies stay hittable; solids and gaps along the segment still block. */
+function coneTargets(range: number, degrees: number): EnemyRt[] {
   const gates = gatesOf(getGame().progress);
   return forwardTargets(cb.enemies.filter(e => alive(e) && e.zone === currentCombatZone()), rt.player, rt.player.yaw, range, degrees,
-    (x, z) => isWalkable(x, z, gates, lineRadius));
+    (x, z) => isWalkable(x, z, gates, 0));
 }
 
 /** Vine Grab alone selects a target, strictly inside its clear forward cone. */
 export function pickTarget(range: number): EnemyRt | null {
-  return coneTargets(range, 70, 0)[0] ?? null;
+  return coneTargets(range, 70)[0] ?? null;
 }
 
 function upgraded(f: CompanionId) {
@@ -667,10 +669,7 @@ export function basicAttack(): boolean {
   } else if (move.shape === "grab") {
     pushFx("vine", o.x, o.y, o.z, ux, uz, yaw, range);
     hitBeaconShape(f, range, ux, uz, "cone", 70);
-    // Forced motion admits enemy centres right up to the land rim. Test a
-    // line, not an .08 m body, so those enemies remain hittable; solids and
-    // gaps along the segment still block the grab.
-    const targets = coneTargets(range, 70, 0);
+    const targets = coneTargets(range, 70);
     const enemy = targets[0];
     const grabbedObject = dispatchObjects(move.shape, objectCone(range, 70), enemy ? Math.hypot(enemy.x - rt.player.x, enemy.z - rt.player.z) : Infinity);
     const pair = up && !grabbedObject ? targets.filter(e => ENEMIES[e.kind].weightClass !== "heavy").slice(0, 2) : [];

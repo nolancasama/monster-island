@@ -1692,3 +1692,11 @@ deal damage on every hit, whatever the control outcome: Bubble Trap now deals
   fog distance from the shelf above the lowland, not the effect pools (0
   added calls when idle, measured). Secret chests now draw only within 28 m
   of the player: sanctuary courtyard 137 → 120 calls.
+
+## 2026-11-01 — Every cone tests a line to its target
+
+Browser reproduction: after Wind Blast pushed a storm crab to the land rim,
+no further blast could hit it (Puff never finished it in 30 attempts). All
+cone moves now test a plain line to the enemy centre, as Vine Grab already
+did; solids and gaps along the line still block. Every friend now finishes
+storm crab, raider shooter and wind sprite in 1–10 held-J attempts.
