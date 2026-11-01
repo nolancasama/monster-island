@@ -1718,3 +1718,19 @@ the facing (Vine Grab's half-cone is 35°), so every press missed. With
 auto-turn gone, cones now hit a pylon when they touch its 1.2 m body rather
 than only its centre. A pylon behind the player is still missed (unit test).
 Rejected: restoring auto-turn toward pylons (the brief forbids it).
+
+## 2026-11-02 — Combat feel briefs (held fire, panic, mouse, whip): accepted, with changes
+
+Spec frozen in `docs/COMBAT_FEEL.md` (§0 lists every change).
+- Fire is a held stream ticking 3 damage every 0.25 s, the old DPS, so fights keep
+  their length. Rejected: higher free DPS that would make held J dominate.
+- Fire cannot take a panicking enemy below 1 HP for 1.2 s, or weak enemies die before
+  the "I'm on fire!" gag plays. Other moves still KO.
+- Enemies are single merged meshes: panic limbs are one temporary instanced batch.
+  Rejected: rigging nine enemy models.
+- Voice is an instant synthesised yelp plus rate-limited browser TTS that never delays
+  dialogue or the microphone. Rejected: recorded assets.
+- Vine hits land at the snap, 0.15 s after the press, so the animation and collision
+  agree. Rejected: instant hit with a visual that arrives late.
+- One attack input module for keys, mouse and touch; mouse reads `e.buttons` because
+  chorded buttons do not fire a second `pointerdown`.
