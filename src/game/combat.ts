@@ -1118,13 +1118,23 @@ function strikePylon(index: number, friend: CompanionId) {
   }
 }
 
+/** Pylons are big, still targets: a cone hits when it touches the pylon's body, not only its centre. */
+const PYLON_BODY_R = 1.2;
+function coneTouchesPylon(q: { x: number; z: number }, yaw: number, range: number, degrees: number): boolean {
+  const dx = q.x - rt.player.x, dz = q.z - rt.player.z, d = Math.hypot(dx, dz);
+  if (d > range) return false;
+  if (d <= PYLON_BODY_R) return true;
+  const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - yaw), Math.cos(Math.atan2(dx, dz) - yaw)));
+  return off <= degrees * Math.PI / 360 + Math.asin(PYLON_BODY_R / d);
+}
+
 function hitBeaconShape(friend: CompanionId, range: number, ux: number, uz: number, shape: "cone" | "circle", degrees = 70, centre = rt.player) {
   if (!cb.beacon.active) return;
   for (let i = 0; i < BEACON_PYLONS.length; i++) {
     if (cb.beacon.pylons[i].phase === "down") continue;
     const q = BEACON_PYLONS[i];
     if (shape === "circle" ? Math.hypot(q.x - centre.x, q.z - centre.z) > range + 1
-      : !inCone(rt.player, Math.atan2(ux, uz), q, range + 1, degrees)) continue;
+      : !coneTouchesPylon(q, Math.atan2(ux, uz), range + 1, degrees)) continue;
     strikePylon(i, friend);
   }
 }

@@ -1162,6 +1162,23 @@ describe("Storm Beacon world combat integration", () => {
     expect(cb.shots).toHaveLength(0);
   });
 
+  it("a cone that touches a pylon's body hits it, even after the gust pushed the player aside", () => {
+    enterArena("leafy");
+    // Logged from the Act 3 spec: the gust moved the player 2.1 m right of a pylon it still faces past.
+    Object.assign(rt.player, { x: -4.88, z: BEACON_PYLONS[0].z - 2.3, yaw: 0 });
+    cb.beacon.pylons[0].phase = "exposed";
+    expect(basicAttack()).toBe(true);
+    expect(cb.beacon.pylons[0].phase).toBe("down");
+  });
+
+  it("a pylon behind the player is still missed", () => {
+    enterArena("leafy");
+    Object.assign(rt.player, { x: -7, z: BEACON_PYLONS[0].z + 2.5, yaw: 0 });
+    cb.beacon.pylons[0].phase = "exposed";
+    expect(basicAttack()).toBe(true);
+    expect(cb.beacon.pylons[0].phase).toBe("exposed");
+  });
+
   it("Puff's attack must point along the gust to cancel its real push", () => {
     enterArena("puff");
     // Far enough from pylons to preserve the intended attack direction.

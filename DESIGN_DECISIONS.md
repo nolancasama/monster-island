@@ -1709,3 +1709,12 @@ beacon to z = 439, so they appeared ~265 m away and never joined the fight.
 They now spawn relative to `BEACON_ARENA`. Found while reproducing the Act 3
 spec; pre-dates the elemental work. The Act 3 spec now faces each pylon after
 placement, since attacks no longer turn the player toward targets.
+
+## 2026-11-01 — Pylons use a forgiving body hitbox
+
+Logged from the Act 3 spec: the boss's gust pushed the player 2 m aside
+while waiting for a pylon to open, leaving the large glowing pylon 42° off
+the facing (Vine Grab's half-cone is 35°), so every press missed. With
+auto-turn gone, cones now hit a pylon when they touch its 1.2 m body rather
+than only its centre. A pylon behind the player is still missed (unit test).
+Rejected: restoring auto-turn toward pylons (the brief forbids it).
