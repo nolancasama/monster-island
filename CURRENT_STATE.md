@@ -31,10 +31,21 @@ Built on `feature/act3-cloud-isle` + `main`'s debug teleport. Frozen spec
   `logic/secrets.ts`, `scene/Secrets.tsx`): thicket (Ember), shell key
   (Bubbo), statues (Leafy), leaves + trapdoor (Puff), crate lift (Leafy +
   Bubbo), furnace (Ember + Puff). Saved in `act2.secrets` (v4).
-- Verified at `73c3321`: tsc, 470 unit tests, build; `elements.spec.ts`
-  7/7 (and fails when an expectation is broken); controller screenshots of
-  all eight moves, two combos and every secret before/after with all six
-  persisting across reload; fights ≤ 93 draw calls / ≤ 97k triangles.
+- Verified at `415ff75`: tsc, 498 unit tests (`--maxWorkers=4`), build.
+  Browser (`MI_LONG_TIMEOUT=3600000`): Act 3 full chapter both sizes 6/6,
+  Act 2, elements 7/7 (fails when an expectation is broken), expansion,
+  continuity, polish, camera budgets (sanctuary 116 calls = base; volcano
+  tunnel 59/59). Still failing, identically on the base branch `17dfce5`
+  (stale Cloud Isle coordinates from the expansion, not this work): camera
+  `cloud-back-tunnel` ×2, companions-polish ×4, combat-polish Cloud Isle
+  steps ×4. A full run under machine load (2.8 h) adds timeouts that pass
+  when rerun.
+- Controller evidence: screenshots of all eight moves, the bubble chain,
+  two combos and every secret before/after (six secrets persist across
+  reload) — `.tmp/shots/elements/`, `.tmp/shots/secrets/` in this worktree.
+  Fights ≤ 93 draw calls / ≤ 97k triangles.
+- Fixed on the way: `DESIGN_DECISIONS.md` truncation from slice X1 restored;
+  Beacon reinforcement sprites spawned 265 m from the moved arena.
 
 ## Branch `feature/act3-cloud-isle` (pushed, not merged to `main`)
 Merging (= deploying) needs the user's approval. Contents:
@@ -82,6 +93,9 @@ the expansion; the full suite has not been run end to end on this machine.
   Ember's opened nook is a flat dark patch. Functional and readable, not
   yet attractive. Combat balance (e.g. a full-height Bubble Trap knocks out
   a 20 HP gloomlet) is untested with children.
+- Pre-existing spec debt from the Cloud Isle expansion: camera
+  `cloud-back-tunnel`, companions-polish and combat-polish Cloud Isle steps
+  use pre-expansion coordinates (fail on `17dfce5` too).
 - **Landmark from the dock:** the mountain does not read as a landmark from
   the dock — the massif's south flank rises gently and the summit is
   > 400 m away. Options: steeper massif (deep canyons by the Hollow and
