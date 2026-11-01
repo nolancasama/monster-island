@@ -110,6 +110,11 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
       await page.keyboard.press("Digit2");
       await waitFor(page, s => s.act2.zone === "forest1" && s.act2.stance.friend === "bubbo" && s.act2.stance.k > .99 && s.act2.mp.bubbo >= 30,
         10_000, "HARNESS_PRECONDITION_FAILED: Bubbo ready to fire");
+      // Specials share one cooldown across friends: let any earlier one expire in game time.
+      if (attack === "KeyK") {
+        const t0 = (await state(page)).time;
+        await waitFor(page, s => s.time > t0 + 2.6, 20_000, "HARNESS_PRECONDITION_FAILED: special cooldown expired");
+      }
       const enemy = (await state(page)).act2.enemies.find(e => e.zone === "forest1" && e.kind === "snapjaw")!;
       expect(enemy, "HARNESS_PRECONDITION_FAILED: forest snapjaw exists").toBeTruthy();
       const enemyX = 75.2;

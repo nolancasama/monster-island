@@ -128,9 +128,10 @@ function Moves() {
   if (touch) {
     const hold = (on: boolean) => (e: React.PointerEvent) => {
       e.preventDefault();
-      if (on) e.currentTarget.setPointerCapture(e.pointerId);
       cb.touchHold = on;
       if (on) basicAttack();
+      // Capture keeps the hold when a finger slides off; it must never block the attack.
+      if (on) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
     };
     return (
       <div className="touch-moves ui">
