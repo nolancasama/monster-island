@@ -104,7 +104,9 @@ Rules (pure, unit-tested in `logic/elements.ts`):
 - **Burn.** 3 ticks/s, 2 dmg per tick, 2.5 s; re-ignite refreshes (no
   stacking). Burn never kills faster than its tick rate.
 - **Bubble Trap.** Projectile travels straight on the facing at mouth height;
-  first enemy touched (radius 0.8) is trapped: rise over 1.1 s to
+  the first enemy touched (radius 0.8) always takes 6 contact damage (also
+  heavy or control-resistant enemies, which are simply not lifted), and an
+  eligible one is trapped: rise over 1.1 s to
   min(2.4 m, ceiling) (`peak`), wobble 0.8 s, pop, fall under gravity.
   Fall damage `round(6 + 8 * air)` at the moment of the pop (so an early pop
   at 0.8 m deals ~12, a full one ~25). Max 3 trapped at once — a 4th shot

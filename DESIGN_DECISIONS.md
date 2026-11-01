@@ -1644,3 +1644,12 @@ Spec frozen in `docs/ELEMENTAL_COMBAT.md` (§0 lists every change).
   read-only window.__mi.state().act2.elementObjects and .act2.secrets
   remain the semantic inspection surfaces. Controller screenshots own
   before / after visual acceptance; no browser acceptance was run here.
+
+## 2026-11-01 — Regression review: every J press deals damage
+
+The full browser suite showed fights that could not finish: Bubble Trap's
+only damage was its fall, so a heavy enemy or one in control resistance took
+nothing, and held J mostly landed during resistance. Every basic attack must
+deal damage on every hit, whatever the control outcome: Bubble Trap now deals
+6 on contact (plus fall damage when it lifts). Rejected: shorter resistance
+(it would bring back infinite control).

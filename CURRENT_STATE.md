@@ -13,6 +13,29 @@ menu. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
 (an older Act 2 build; microphone blocked inside it). Use the live site for
 Chromebook testing.
 
+## Branch `feature/elemental-combat` (pushed, not merged)
+Built on `feature/act3-cloud-isle` + `main`'s debug teleport. Frozen spec
+`docs/ELEMENTAL_COMBAT.md`; decisions dated 2026-11-01 in
+`DESIGN_DECISIONS.md`. Merging this branch also brings everything below.
+
+- **J (free) = signature power:** Ember Fire Breath (cone + burn), Bubbo
+  Bubble Trap (lift, pop, fall damage; ≤3), Leafy Vine Grab (swing/fling as a
+  weapon; upgrade double grab), Puff Wind Blast (knock-back, wall impact,
+  hazard knock-outs). **K (MP):** Inferno (tap 1.2 s, keyboard hold ≤3 s),
+  Bubble Bomb (chains through trapped bubbles, capped), Root Snare, Cyclone
+  (carries light enemies/bubbles, reflects shots). No auto-turn or homing.
+  Storm Beacon specials stay free.
+- Rules in `src/game/logic/elements.ts`, hazards in
+  `src/game/world/hazards.ts`, visuals in `src/scene/ElementEffects.tsx`.
+- **Six optional lowland secrets** (`src/game/world/elementObjects.ts`,
+  `logic/secrets.ts`, `scene/Secrets.tsx`): thicket (Ember), shell key
+  (Bubbo), statues (Leafy), leaves + trapdoor (Puff), crate lift (Leafy +
+  Bubbo), furnace (Ember + Puff). Saved in `act2.secrets` (v4).
+- Verified at `73c3321`: tsc, 470 unit tests, build; `elements.spec.ts`
+  7/7 (and fails when an expectation is broken); controller screenshots of
+  all eight moves, two combos and every secret before/after with all six
+  persisting across reload; fights ≤ 93 draw calls / ≤ 97k triangles.
+
 ## Branch `feature/act3-cloud-isle` (pushed, not merged to `main`)
 Merging (= deploying) needs the user's approval. Contents:
 
@@ -54,6 +77,11 @@ the Coming Soon lock and debug-toggle specs, debug menu, Act 2 (15/15 with
 the expansion; the full suite has not been run end to end on this machine.
 
 ## Known Issues
+- **Secret pockets look plain:** the closed reward pockets for Puff's
+  trapdoor, the crate lift and the furnace render as plain large boxes;
+  Ember's opened nook is a flat dark patch. Functional and readable, not
+  yet attractive. Combat balance (e.g. a full-height Bubble Trap knocks out
+  a 20 HP gloomlet) is untested with children.
 - **Landmark from the dock:** the mountain does not read as a landmark from
   the dock — the massif's south flank rises gently and the summit is
   > 400 m away. Options: steeper massif (deep canyons by the Hollow and
@@ -74,7 +102,9 @@ the expansion; the full suite has not been run end to end on this machine.
 
 ## Next Steps
 1. User decisions: the dock landmark (Known Issues); merge
-   `feature/act3-cloud-isle` into `main` (deploys; Cloud Isle stays locked).
+   `feature/elemental-combat` (contains `feature/act3-cloud-isle`) into
+   `main` (deploys; Cloud Isle stays locked). Optional polish pass on the
+   secret pockets.
 2. Full Playwright suite once, end to end, with `MI_LONG_TIMEOUT`.
 3. Chromebook play-test with `?debug=1` (Cloud Isle frame rate, grotto
    lights, fights).
@@ -84,6 +114,9 @@ None in flight. Codex's sandbox cannot bind ports or launch Chromium, so the
 controller captures all rendered evidence (`scripts/lib/dist-route.mjs`
 serves `dist` without a port). Codex runs stop at 45 minutes: keep orders
 narrow and name exactly what to read.
-- Worktrees: `~/Projects/mi-base` (this branch; controller acceptance),
-  `~/Projects/mi-wall`, `~/Projects/mi-kit` (merged; removable). The main
-  checkout `~/Projects/monster-island` is on `exp/x2` (merged).
+- Worktrees: `~/Projects/mi-combat` (`feature/elemental-combat`),
+  `~/Projects/mi-accept` (detached; controller acceptance),
+  `~/Projects/mi-e3` (merged slice branches; removable),
+  `~/Projects/mi-base` (`feature/act3-cloud-isle`), `~/Projects/mi-wall`,
+  `~/Projects/mi-kit` (merged; removable). The main checkout
+  `~/Projects/monster-island` is on `exp/x2` (merged).
