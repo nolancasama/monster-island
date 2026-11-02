@@ -1783,3 +1783,16 @@ Spec frozen in `docs/COMBAT_FEEL.md` (§0 lists every change).
   frame counter, time, drawn flag, actual curve base and right-hand world position
   together after Monsters poses the rig. Browser visual judgment remains with the
   controller.
+
+## 2026-11-02 — Beach side view, U forest, Port Town wall: accepted, with changes
+
+Spec frozen in `docs/U_FOREST_PORT_WALL.md` (§0 lists every change).
+- The mesa's footprint is limited so the fixed camera never sits inside it from the
+  causeway. Rejected: a mesa as far north as the causeway.
+- The tutorial clear stays in the base of the U; arm enemies are optional, with gates at
+  both necks. Rejected: arm enemies counting, and gates at the far ends of the arms.
+- A safe Forest Camp alcove keeps zone id `camp`, off the route, for wake and safe-zone
+  behaviour. Rejected: removing the only safe wake point between rope and town.
+- Grove and Canopy stay in place, which bounds the arms at 40+ m. Rejected: moving both
+  stages and their puzzles for a larger U.
+- A raised camera profile at the town gate, so the wall never hides the player.
