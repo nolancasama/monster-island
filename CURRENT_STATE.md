@@ -1,22 +1,35 @@
 # Current State
 
 ## Live
-`main` deployed 2026-10-31 (Act 3 branch fast-forwarded at `f108ed9`, then
-the debug live-shortcut/teleport branch merged on top).
+`origin/main` at `a278ef2` (2026-11-01): the prologue, Acts 2 and 3 (Cloud Isle stays
+locked behind the Coming Soon notice), gameplay polish, debug menu and elemental combat.
+Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
 https://nolancasama.github.io/monster-island/
 
-Live: the prologue, Act 2 "The Hunt for Lumo", the forest expansion, the
-continuity polish, Act 3 Cloud Isle, gameplay polish Parts 1–2 and the debug
-menu. Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
+## Branch `feature/combat-feel` (pushed, not merged)
+Frozen spec `docs/COMBAT_FEEL.md`, decisions dated 2026-11-02.
 
-**Private preview:** https://claude.ai/artifact/UKRJgebxGLhVAtk3ySYNtr
-(an older Act 2 build; microphone blocked inside it). Use the live site for
-Chromebook testing.
+- **One attack input** (`src/input/attackInput.ts`) for keys, mouse and touch. Left click =
+  J, right click = K; reads `e.buttons` for chords. Holds release on menus, dialogue, blur;
+  a fresh press is needed afterwards. Context menu blocked on the canvas only.
+- **Ember:** held J is a continuous cone (3 damage per 0.25 s), ignition after 0.5 s of
+  exposure, 2.5 s panic (2 s heavy) with per-kind motion, temporary limbs, bubble, a yelp and
+  a rate-limited TTS "I'm on fire!". Fire cannot KO in the first 1.2 s of panic. 4 s
+  resistance after. Inferno sustains on MP. Rules `logic/panic.ts`, pose `scene/panicPose.ts`.
+- **Leafy:** flexible whip on live hand anchors (`scene/anchors.ts`, `logic/whip.ts`); hits
+  land at the 0.15 s snap; held J repeats only with a target; Double Grab uses both hands;
+  Root Snare roots wrap the enemy.
+- Verified at `23e704b`: 569 unit tests, build, full Playwright 72/73. The one failure was
+  the Act 2 tutorial's `defeat` helper running out of presses under full-suite load; it
+  passed alone, and `act2.spec` passed 6/6 on its own. Base-to-hand test 0.0000 m over 25+
+  moving frames, and it failed against a deliberate 10 cm offset. Evidence `.tmp/shots/feel/`.
+- Not checked by ear: the yelp, flame loop and TTS bark (tests stub speech). Panic limbs of
+  raiders, crabs, drones and sprites were not rendered, only gloomlets.
 
-## Branch `feature/elemental-combat` (pushed, not merged)
+## Elemental combat (merged, on `main`)
 Built on `feature/act3-cloud-isle` + `main`'s debug teleport. Frozen spec
 `docs/ELEMENTAL_COMBAT.md`; decisions dated 2026-11-01 in
-`DESIGN_DECISIONS.md`. Merging this branch also brings everything below.
+`DESIGN_DECISIONS.md`.
 
 - **J (free) = signature power:** Ember Fire Breath (cone + burn), Bubbo
   Bubble Trap (lift, pop, fall damage; ≤3), Leafy Vine Grab (swing/fling as a
@@ -48,8 +61,8 @@ Built on `feature/act3-cloud-isle` + `main`'s debug teleport. Frozen spec
 - Fixed on the way: `DESIGN_DECISIONS.md` truncation from slice X1 restored;
   Beacon reinforcement sprites spawned 265 m from the moved arena.
 
-## Branch `feature/act3-cloud-isle` (pushed, not merged to `main`)
-Merging (= deploying) needs the user's approval. Contents:
+## Act 3 and polish (merged, on `main`)
+Contents:
 
 - **Act 3 "Cloud Isle: Above the Storm"** — spec `docs/ACT3_CLOUD_ISLE.md`.
 - **Gameplay polish Parts 1 and 2** (`docs/GAMEPLAY_POLISH.md`) and the
@@ -121,12 +134,10 @@ the expansion; the full suite has not been run end to end on this machine.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. User decisions: the dock landmark (Known Issues); merge
-   `feature/elemental-combat` (contains `feature/act3-cloud-isle`) into
-   `main` (deploys; Cloud Isle stays locked). Optional polish pass on the
-   secret pockets.
-2. Chromebook play-test with `?debug=1` (Cloud Isle frame rate, grotto
-   lights, fights).
+1. Beach side view, U-shaped forest and Port Town wall: spec `docs/U_FOREST_PORT_WALL.md`.
+2. User decisions: merge `feature/combat-feel` into `main` (deploys); the dock landmark;
+   optional polish on the secret pockets.
+3. Chromebook play-test with `?debug=1` (fire, panic audio, whip, frame rate, fights).
 
 ## Codex / Delegated Work
 None in flight. Codex's sandbox cannot bind ports or launch Chromium, so the
