@@ -1859,3 +1859,13 @@ the raised `port-gate` view is paired with the existing `occluderMat` dither alo
 line. Rejected: lowering the wall until it stopped reading as a fortification. The coast
 gate's cut narrows to the opening and two permanent cuts hold the rest of the wall line.
 Slice M4 was built directly by the controller after the user paused Codex use.
+
+## 2026-11-02 — Blue Inferno, Puff anchor, full swing, Grove crossing, expanded stages
+
+Frozen spec `docs/GROVE_CANOPY_EXPANSION.md`, §0 lists every change from the user's brief and why.
+Main choices: Puff's gust root follows the live beak briefly, then its tail outruns the player
+(rejected: fixed launch point, which a walker still overtakes). The swing ignores terrain and
+hazards until release, and releases straight along the live aim (rejected: tangent release, which
+cannot be aimed). The Grove crossing stays optional and solves at dismount. New Canopy ground is
+extruded decks, not the 2 m heightfield. Falls need real input and a short teeter, never knock
+out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for grade 3–6).
