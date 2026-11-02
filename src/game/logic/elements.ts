@@ -45,7 +45,7 @@ export function infernoStep(age: number, dt: number, held: boolean, mp: number, 
   return { age: next, drain, done: next >= limit - 1e-9 || (next >= 1.2 && held && !free && mp - drain <= 1e-9) };
 }
 
-const inside = (s: WalkShape, x: number, z: number) => s.kind === "disc" ? Math.hypot(x - s.x, z - s.z) <= s.r
+export const inShape = (s: WalkShape, x: number, z: number) => s.kind === "disc" ? Math.hypot(x - s.x, z - s.z) <= s.r
   : s.kind === "rect" ? x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 : nearestOnTrail(s.pts, x, z).d <= s.w;
 
 export const resistance = (weight: WeightClass) => weight === "light" ? 1.2 : 2;
@@ -70,7 +70,7 @@ export function tickBurn(burn: Burn | null, now: number, scale = 1): { burn: Bur
 export function bubbleProfile(weight: WeightClass, upgraded: boolean, x: number, z: number, cloud: boolean): { peak: number; duration: number } | null {
   if (weight === "heavy") return null;
   if (weight === "medium" && !upgraded) return { peak: 0.8, duration: 1 };
-  return { peak: cloud && CLOUD_CAVES.some(s => inside(s, x, z)) ? 1.4 : 2.4, duration: 1.9 };
+  return { peak: cloud && CLOUD_CAVES.some(s => inShape(s, x, z)) ? 1.4 : 2.4, duration: 1.9 };
 }
 export const bubbleAir = (control: Control, now: number) => Math.max(0, Math.min(1, (now - control.t0) / Math.min(1.1, control.until - control.t0))) * Math.min(2.4, control.peak ?? 2.4);
 export const fallDamage = (air: number) => Math.round(6 + 8 * Math.max(0, Math.min(2.4, air)));
@@ -96,6 +96,6 @@ export function forwardTargets<T extends Point>(targets: readonly T[], origin: P
 /** Return a new victim list only for a first collision during this swing/fling. */
 export const weaponVictims = (victims: readonly number[], victim: number): number[] | null => victims.includes(victim) ? null : [...victims, victim];
 export function hazardAt(x: number, z: number, world: "home" | "cloud", solved: readonly string[] = [], hazards: readonly Hazard[] = HAZARDS): Hazard | null {
-  return hazards.find(h => h.world === world && inside(h.shape, x, z)
-    && !((!h.safeWhen || solved.includes(h.safeWhen)) && h.safe?.some(s => inside(s, x, z)))) ?? null;
+  return hazards.find(h => h.world === world && inShape(h.shape, x, z)
+    && !((!h.safeWhen || solved.includes(h.safeWhen)) && h.safe?.some(s => inShape(s, x, z)))) ?? null;
 }

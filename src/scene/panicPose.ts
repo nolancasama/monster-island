@@ -43,6 +43,10 @@ export function enemyBodyPose(e: EnemyRt, t: number, out: EnemyBodyPose): EnemyB
     out.lean = ranged ? -.06 * k : -.25 * k;
   } else if (e.state === "lunge") { out.squash = 1.15; out.lean = .45;
   } else if (e.state === "stun") { out.lean = Math.sin(t * 9) * .15;
+  } else if (e.plunge) {
+    // Tips over the lip, then tumbles.
+    const age = t - e.plunge.t0;
+    out.hop = 0; out.lean = Math.min(1.4, age * 3.2); out.roll = age * 2.4; out.squash = 1;
   } else if (e.state === "ko") {
     const k = 1 - Math.max(0, e.timer) / .9;
     out.hop = Math.sin(k * Math.PI) * .9; out.scale = 1 - k * .6;

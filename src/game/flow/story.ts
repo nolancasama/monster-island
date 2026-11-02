@@ -40,9 +40,9 @@ export function saveNow() {
   // Never save mid-ride or mid-climb: resume at the bank or the foot of the rope instead.
   // The cliff rope below the sanctuary resumes on its ledge.
   const climbAt = p.z < -140 ? CLIFF_ROPE.top : { x: ROPE.x, z: ROPE.z + 1.4 };
-  const at = p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
+  const at = p.fall ? p.fall.land : p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
   // Act 2's live HP and MP are written in with the rest of the progress.
-  const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: g.progress.act3.world === "cloud" ? g.progress.act2.zone : zoneAt(p.x, p.z) },
+  const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: g.progress.act3.world === "cloud" ? g.progress.act2.zone : zoneAt(at.x, at.z) },
     act3: { ...g.progress.act3, area: g.progress.act3.world === "cloud" ? cloudZoneAt(p.x,p.z) ?? "cloudDock" : g.progress.act3.area } } : g.progress;
   const text = encodeSave(progress, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
   if (text === lastSaved) return;

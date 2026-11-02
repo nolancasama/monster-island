@@ -128,6 +128,12 @@ export const rt = {
     rideFrom: { x: 0, z: 0 },
     /** Climbing the cliff rope: the height the player hangs at (null = on the ground). */
     climbY: null as number | null,
+    /** Over a Canopy edge: a scene owns this; the simulation only drops the body. */
+    fall: null as null | { t0: number; y0: number; vx: number; vz: number; land: { x: number; z: number } },
+    /** Seconds spent pushing against a dangerous edge. */
+    teeter: 0,
+    /** Last ground with nothing dangerous near it, in this stage. */
+    safeGround: null as null | { x: number; z: number },
     /** Going over the cliff lip at the top of the climb (0 = on the face, 0..1 = the mantle). */
     mantle: 0,
     /** Short gesture: give food, cheer. */
@@ -231,6 +237,9 @@ export function resetRuntime() {
   p.riding = false;
   p.seat = 0;
   p.climbY = null;
+  p.fall = null;
+  p.teeter = 0;
+  p.safeGround = null;
   p.mantle = 0;
   p.action = null;
   rt.joy.x = rt.joy.y = 0;

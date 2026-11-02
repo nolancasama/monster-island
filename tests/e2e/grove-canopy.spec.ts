@@ -212,3 +212,85 @@ test("views of the expanded stages, in budget", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+const canopySave = (friend: CompanionId) => {
+  const save = JSON.parse(forestSave(friend));
+  save.progress.act2.cleared = ["forest1"];
+  save.progress.act2.zone = "canopy";
+  save.player = { x: 100, z: -212, yaw: Math.PI };
+  return save;
+};
+type Falling = { player: { falling: boolean; teeter: number; y: number }; act2: { hp: number; enemies: Array<{ i: number; plunge: boolean; state: string; x: number; z: number }>; cleared: string[]; coins?: number } };
+
+test("the player teeters, falls into the Canopy gap, loses HP and lands safely with nothing lost", async ({ page }) => {
+  await page.addInitScript(s => localStorage.setItem("mi.save.v4", s), JSON.stringify(canopySave("leafy")));
+  const errors = await boot(page, "");
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, s => s.mode === "explore" && s.act2.zone === "canopy", 30_000, "in the canopy");
+  await hook(page, "combatFixture", { enemies: [] });
+  await hook(page, "setHp", 100);
+  // A tap at the edge cancels: no fall without a sustained push.
+  await hook(page, "teleport", 100, -215.6, Math.PI);
+  await page.waitForTimeout(1200);
+  const before = await state(page);
+  const y0 = before.player.y;
+  // Recorded every rendered frame in the page: a screenshot round trip outlasts the fall.
+  await page.evaluate(() => {
+    const mi = (window as unknown as { __mi: { state(): { player: { falling: boolean; y: number } } } }).__mi;
+    const log = { lowest: Infinity, frames: 0, ended: false };
+    (window as unknown as { __fall: typeof log }).__fall = log;
+    const tick = () => {
+      const p = mi.state().player;
+      if (p.falling) { log.frames++; log.lowest = Math.min(log.lowest, p.y); }
+      else if (log.frames) log.ended = true;
+      if (!log.ended) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await page.keyboard.down("KeyW");
+  await page.waitForFunction(y => (window as unknown as { __fall: { lowest: number } }).__fall.lowest < y - 1.5, y0, { timeout: 40_000, polling: "raf" });
+  await page.keyboard.up("KeyW");
+  await page.screenshot({ path: `${SHOTS}/d-fall-midair.png` });
+  await page.waitForFunction(() => (window as unknown as { __fall: { ended: boolean } }).__fall.ended, undefined, { timeout: 40_000 });
+  const log = await page.evaluate(() => (window as unknown as { __fall: { lowest: number; frames: number } }).__fall);
+  console.log(`fell from ${y0.toFixed(1)} to ${log.lowest.toFixed(1)} over ${log.frames} frames`);
+  expect(y0 - log.lowest).toBeGreaterThan(2);
+  const after = await waitFor(page, s => s.mode === "explore", 30_000, "explore after fall");
+  expect(after.act2.hp).toBe(88);
+  expect(after.progress.act2.cleared).toEqual(before.progress.act2.cleared);
+  expect(after.player.ground).toBeGreaterThan(y0 - 1);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${SHOTS}/d-landed.png` });
+  // The ordinary boundary still blocks: pushing east at the outer rim never falls.
+  await hook(page, "teleport", 118.2, -212, Math.PI / 2);
+  await page.keyboard.down("KeyD");
+  await page.waitForTimeout(1500);
+  await page.keyboard.up("KeyD");
+  expect(((await state(page)) as unknown as Falling).player.falling).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("Puff's blast knocks an enemy off a ledge: it drops, counts as defeated, and rewards stay on ground", async ({ page }) => {
+  await page.addInitScript(s => localStorage.setItem("mi.save.v4", s), JSON.stringify(canopySave("puff")));
+  const errors = await boot(page);
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, s => s.mode === "explore" && s.act2.zone === "canopy" && s.act2.stance.friend === "puff" && s.act2.stance.k > .99, 30_000, "puff mounted");
+  const gloom = (await state(page)).act2.enemies.find(e => e.zone === "canopy" && e.kind === "gloomlet")!;
+  await hook(page, "timeScale", 0);
+  await hook(page, "combatFixture", { enemies: [{ i: gloom.i, x: 100, z: -215, state: "recover", timer: 30 }] });
+  await hook(page, "teleport", 100, -212, Math.PI);
+  await hook(page, "renderFrames", 3);
+  await hook(page, "timeScale", .25);
+  await page.keyboard.press("KeyJ");
+  const seen = await waitFor(page, s => (s as unknown as Falling).act2.enemies.find(e => e.i === gloom.i)!.plunge, 60_000, "plunge");
+  await hook(page, "timeScale", .1);
+  await page.waitForTimeout(1500);
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/d-enemy-plunge.png` });
+  await hook(page, "timeScale", 1);
+  await waitFor(page, s => s.act2.enemies.find(e => e.i === gloom.i)!.state === "gone", 30_000, "gone");
+  expect(seen.act2.enemies.find(e => e.i === gloom.i)!.x).toBeCloseTo(100, 0);
+  expect(errors).toEqual([]);
+});

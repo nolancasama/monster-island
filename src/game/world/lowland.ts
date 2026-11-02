@@ -228,7 +228,8 @@ const canopyDeck = (id: string, x0: number, x1: number, z0: number, z1: number) 
   id, walk: rect(x0, x1, z0, z1), pts: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]] as Array<[number, number]>,
 });
 export const CANOPY_DECKS = [
-  canopyDeck("armApproach", 92, 108, -206, -200.5),
+  // The ramp itself is terrain up to the first platform; this is only its footprint.
+  canopyDeck("armApproach", 92, 108, -204, -200.5),
   canopyDeck("cliffsideClearingSouth", 85, 119, -209, -204),
   canopyDeck("cliffsideClearing", 83, 119, -216, -209),
   canopyDeck("brokenBridgeSouth", 83, 119, -221.2, -219.5),
@@ -471,7 +472,7 @@ const bumps = (x: number, z: number) => 0.18 * Math.sin(x * 0.21 + z * 0.13) + 0
 
 /** Raised root walk above the forest floor along CANOPY_TRAIL (0 off it). */
 export function canopyRaise(x: number, z: number): number {
-  if (x < 92 || x > 119 || z > -193 || z < -205) return 0;
+  if (x < 92 || x > 119 || z > -193 || z < -204) return 0;
   // The arm climbs gradually before joining the authored deck; no heightfield
   // is raised beneath the elevated platforms or their voids.
   return CANOPY_HEIGHT * smooth((-193 - z) / 11);

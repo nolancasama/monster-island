@@ -10,7 +10,7 @@ import { conformBridge } from "./models/bridge";
 import { CHEST_HINGE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import {
   cliffFaceGeometry, cliffRopeGeometry, giantFernGeometry, lilyPadGeometry,
-  lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
+  canopyDeckGeometry, lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
   mesaGeometry, npcGeometry, primevalTreeGeometry, reedGeometry, ropeBridgeGeometry,
   spatialGeometry, stageBarrierGeometry, townGeometry, treeFernGeometry, vineBridgeGeometry,
   type Spot,
@@ -56,6 +56,7 @@ function instances(name: string, geometry: THREE.BufferGeometry, spots: Spot[], 
 beforeAll(() => {
   for (const geometry of lowlandTerrainTiles(TILE)) add("terrain", geometry);
   for (const geometry of spatialGeometry(lowlandPropsGeometry(), TILE)) add("props", geometry);
+  add("canopyDecks", canopyDeckGeometry());
   for (const geometry of spatialGeometry(lowlandWaterGeometry(), TILE)) add("water", geometry);
   add("cliff", cliffFaceGeometry(), 0, 0, 0, 0, Infinity);
   add("rope", cliffRopeGeometry(), 0, 0, 0, 0, Infinity);

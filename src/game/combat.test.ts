@@ -999,11 +999,13 @@ describe("elemental J simulation", () => {
     expect(e.state).toBe("ko");
     expect(cb.zones.defeated.canopy).toContain(e.i);
     expect(hazardAt(e.x, e.z, "home")?.kind).toBe("fall");
+    expect(e.plunge).not.toBeNull();
     expect(cb.drops.length).toBeGreaterThan(0);
     for (const drop of cb.drops) {
       expect(hazardAt(drop.x, drop.z, "home")).toBeNull();
       expect(isWalkable(drop.x, drop.z, gatesOf(getGame().progress), 0)).toBe(true);
-      expect(Math.hypot(drop.x - e.x, drop.z - e.z)).toBeLessThan(.2);
+      // The body keeps tumbling away; the reward stays where it left the floor.
+      expect(Math.hypot(drop.x - e.lastGround.x, drop.z - e.lastGround.z)).toBeLessThan(.01);
     }
   });
 

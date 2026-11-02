@@ -27,7 +27,11 @@ describe("authored Canopy decks", () => {
       expect(Math.abs(hit.point.y - standY(x, z, solved)), `stand at ${x},${z}`).toBeLessThanOrEqual(.15);
       samples++;
     };
-    for (const { walk } of CANOPY_DECKS) {
+    // Terrain draws the arm's ramp itself; check it agrees instead of raycasting a deck.
+    for (let x = 92.5; x < 108; x += 1.1) for (let z = -203.9; z < -200.5; z += .7)
+      expect(Math.abs(lowlandY(x, z) - lowlandDeckY(x, z, solved)), `ramp at ${x},${z}`).toBeLessThanOrEqual(.15);
+    for (const { id, walk } of CANOPY_DECKS) {
+      if (id === "armApproach") continue;
       for (let x = walk.x0 + .04; x < walk.x1; x += .91)
         for (let z = walk.z0 + .04; z < walk.z1; z += .91) check(x, z);
       for (let x = walk.x0 + .04; x < walk.x1; x += .73) { check(x, walk.z0 + .04); check(x, walk.z1 - .04); }

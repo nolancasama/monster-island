@@ -7,10 +7,11 @@ import { buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDe
 import { companions } from "../logic/progress";
 import { banner, getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
-import { cb, hint, hooks, learn, resetCombat, wakeUp } from "../combat";
+import { cb, fallHurt, hint, hooks, learn, resetCombat, wakeUp } from "../combat";
+import { FALL_SECONDS, fallLanding } from "../logic/falls";
 import { CAMP2, CHESTS, CLIFF_ROPE, MAPLE_PORT, SERVICES, ZONES, type ServiceId, type ZoneId } from "../world/lowland";
 import { LEDGE, groundY } from "../world/island";
-import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
+import { PLAYER_R, gatesOf, nearestWalkable, standY } from "../world/collision";
 import { ask, fastMode, lastHeard, say, wait } from "./ask";
 import { fadeThrough, frameTwo, run, shot } from "./script";
 import { poofTo } from "./companion";
@@ -384,6 +385,30 @@ const CHECKPOINT_SPOT: Record<Checkpoint, { x: number; z: number; yaw: number }>
   cliff: { ...CLIFF_ROPE.foot, yaw: Math.PI },
   camp: { x: CAMP2.rest.x, z: CAMP2.rest.z - 0.4, yaw: Math.PI },
   port: { x: SERVICES.inn.keeper.x - 2, z: SERVICES.inn.keeper.z, yaw: -Math.PI / 2 }
+};
+
+hooks.playerFall = (ux, uz) => {
+  const pl = rt.player;
+  const land = fallLanding(pl.safeGround, pl.z), y0 = pl.y;
+  pl.frozen = true;
+  pl.vx = pl.vz = 0;
+  pl.fall = { t0: rt.time, y0, vx: ux * 3, vz: uz * 3, land };
+  void run(async () => {
+    audio.play("whoosh");
+    // From above the gap: behind the lip, the platform itself would hide the fall.
+    shot({ x: pl.x + ux * .8 + uz * 1.6, y: y0 + 7, z: pl.z + uz * .8 - ux * 1.6 }, { x: pl.x + ux * 1.3, y: y0 - 5, z: pl.z + uz * 1.3 });
+    await wait(FALL_SECONDS * 1000);
+    fallHurt();
+    toast({ en: "Watch out!", ja: "あぶない! おちちゃった", icon: "heart", tone: "warn" }, 2200);
+    await fadeThrough(() => {
+      const s = nearestWalkable(land.x, land.z, PLAYER_R, gatesOf(getGame().progress));
+      pl.x = s.x;
+      pl.z = s.z;
+      pl.fall = null;
+      pl.y = standY(s.x, s.z, getGame().progress.solved);
+      gatherParty();
+    }, 280);
+  });
 };
 
 hooks.knockout = () => {

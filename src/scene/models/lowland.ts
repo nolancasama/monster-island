@@ -9,7 +9,7 @@ import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Ou
 import { makeRng } from "../../game/logic/rng";
 import { MESA_CENTER, MESA_FOOT, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaRimY } from "../../game/world/mesa";
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
-import { HAZARDS } from "../../game/world/hazards";
+import { CANOPY_VOIDS, HAZARDS } from "../../game/world/hazards";
 import {
   STAGES,
   STAGE_EXITS,
@@ -50,6 +50,7 @@ import {
   STREAMS,
   ZONE_ORDER,
   ZONES,
+  zoneAt,
   canopyRaise,
   canopySurfaceY,
   lowlandDeckY,
@@ -178,6 +179,29 @@ const canopyTrunk = (x: number, z: number) => x >= 83 && x <= 119 && z <= -201 &
 
 /** The same polygons as collision, with explicit bark sides down to the basin floor.
  * Submetre cells also conform the two entrance ramps to their shared height rule. */
+const onCanopyDeck = (x: number, z: number) => CANOPY_DECKS.some(({ walk }) => x >= walk.x0 && x <= walk.x1 && z >= walk.z0 && z <= walk.z1);
+
+/** A low root rim wherever a platform ends without a drop you can fall into, so
+ * the blocked outer edges are never invisible walls. Open void lips stay open. */
+function canopyRim(b: PartBuilder) {
+  const blockedEdge = (x: number, z: number) => !onCanopyDeck(x, z) && zoneAt(x, z) === null
+    && !CANOPY_VOIDS.some(h => h.shape.kind === "rect" && x >= h.shape.x0 && x <= h.shape.x1 && z >= h.shape.z0 && z <= h.shape.z1);
+  for (const deck of CANOPY_DECKS) {
+    if (deck.id === "armApproach") continue;
+    for (let i = 0; i < deck.pts.length; i++) {
+      const [ax, az] = deck.pts[i], [bx, bz] = deck.pts[(i + 1) % deck.pts.length];
+      const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+      for (let s = 1; s < len; s += 2.6) {
+        const x = ax + ux * s, z = az + uz * s;
+        if (!blockedEdge(x + uz * .5, z - ux * .5) && !blockedEdge(x - uz * .5, z + ux * .5)) continue;
+        const y = canopySurfaceY(x, z), n = hash(x, z);
+        between(b, [x - ux * 1.5, y + .22 + n * .1, z - uz * 1.5], [x + ux * 1.5, y + .3 - n * .08, z + uz * 1.5], .3, .26, n > .5 ? "#6b4a2e" : "#7a5532", 6);
+        if (n > .7) b.sphere(.28, x, y + .52, z, "#5f9a44", [1.4, .45, 1], 6);
+      }
+    }
+  }
+}
+
 export function canopyDeckGeometry(): THREE.BufferGeometry {
   const positions: number[] = [], colors: number[] = [];
   const top = new THREE.Color("#71984a"), dark = new THREE.Color("#4a452f"), bark = new THREE.Color("#6b4a30");
@@ -185,6 +209,8 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     for (const p of [a, b, c]) { positions.push(...p); colors.push(color.r, color.g, color.b); }
   };
   for (const deck of CANOPY_DECKS) {
+    // Terrain already draws the ramp; a second skin here would z-fight it.
+    if (deck.id === "armApproach") continue;
     const { x0, x1, z0, z1 } = deck.walk;
     const nx = Math.ceil((x1 - x0) / .75), nz = Math.ceil((z1 - z0) / .75);
     const vertex = (i: number, j: number) => {
@@ -193,7 +219,9 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     };
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const a = vertex(i, j), b = vertex(i + 1, j), c = vertex(i, j + 1), d = vertex(i + 1, j + 1);
-      const edge = i === 0 || j === 0 || i === nx - 1 || j === nz - 1;
+      // Dark lips mark real edges only, never the seam between two platforms.
+      const edge = (i === 0 && !onCanopyDeck(x0 - .4, (a[2] + c[2]) / 2)) || (i === nx - 1 && !onCanopyDeck(x1 + .4, (a[2] + c[2]) / 2))
+        || (j === 0 && !onCanopyDeck((a[0] + b[0]) / 2, z0 - .4)) || (j === nz - 1 && !onCanopyDeck((a[0] + b[0]) / 2, z1 + .4));
       const plank = deck.id.startsWith("brokenBridge") || deck.id.startsWith("upperRoot");
       const color = edge ? dark : plank ? bark.clone().multiplyScalar(j % 2 ? 1.2 : .88) : top.clone().multiplyScalar(.9 + hash(i, j) * .2);
       triangle(a, c, b, color); triangle(b, c, d, color);
@@ -720,7 +748,8 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
       b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
   }
   const tent = tentGeometry().rotateY(CAMP2.tent.yaw).translate(CAMP2.tent.x, gy(CAMP2.tent.x, CAMP2.tent.z), CAMP2.tent.z);
-  return mergeGeometries([b.build(), tent, canopyDeckGeometry()]);
+  canopyRim(b);
+  return mergeGeometries([b.build(), tent]);
 }
 
 /** A joined channel ribbon: shared banks at bends and tapered, rounded ends. */

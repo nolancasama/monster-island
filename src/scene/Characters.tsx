@@ -164,6 +164,16 @@ export function Player() {
     }
     if (shadow.current) shadow.current.visible = p.climbY === null && k < 0.5;
     if (p.climbY !== null) climbPose(p.climbY, p.mantle);
+    // Windmilling at an edge, then flailing on the way down.
+    const edge = p.fall ? 1 : p.teeter > 0 ? .55 : 0;
+    if (edge > 0 && pose.current && armL.current && armR.current) {
+      const flail = Math.sin(rt.time * (p.fall ? 26 : 19));
+      pose.current.rotation.x = p.fall ? -.55 : .3;
+      pose.current.rotation.z = flail * .14 * edge;
+      armL.current.rotation.x = -2.6 + flail * .7;
+      armR.current.rotation.x = -2.6 - flail * .7;
+    }
+    if (shadow.current && p.fall) shadow.current.visible = false;
     const h = held.current;
     if (h) {
       // Food in the hand: the gift being offered, or the food just picked (from

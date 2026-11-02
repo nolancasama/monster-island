@@ -5,6 +5,9 @@ import { PICK_TIME, animate, rt, type MonsterRt } from "./runtime";
 import { keyboardMove, keys } from "../input/keyboard";
 import { isAttackHeld, releaseAllAttacks } from "../input/attackInput";
 import { gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
+import { FALL_SECONDS, TEETER_SECONDS, fallAhead, fallHeight, safeFromFalls } from "./logic/falls";
+import { groundY } from "./world/island";
+import { zoneAt } from "./world/lowland";
 import { CAVE, LAVA, MONSTER_STONE, RIVER, shoreZ } from "./world/island";
 import { findFocus } from "./flow/focus";
 import { talkTo } from "./flow/encounter";
@@ -13,7 +16,7 @@ import { isRunning } from "./flow/script";
 import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
-import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale } from "./combat";
+import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale, hooks } from "./combat";
 import { lumoHidden, startAct2Scene } from "./flow/act2";
 import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
@@ -132,6 +135,14 @@ function monsterObstacles(): Obstacles[] {
 function movePlayer(dt: number, canMove: boolean) {
   const p = rt.player;
   if (rt.voyage.active) { p.x = rt.voyage.x; p.z = rt.voyage.z; p.y = rt.voyage.y + .75; p.vx = p.vz = p.speed = 0; return; }
+  if (p.fall) {
+    // Keeps its push over the edge; the scene ends it at the landing.
+    p.x += p.fall.vx * dt;
+    p.z += p.fall.vz * dt;
+    p.y = fallHeight(p.fall.y0, groundY(p.x, p.z), Math.min(FALL_SECONDS * 1.2, rt.time - p.fall.t0));
+    p.vx = p.vz = p.speed = 0;
+    return;
+  }
   let ix = 0;
   let iy = 0;
   if (canMove) {
@@ -189,9 +200,11 @@ function movePlayer(dt: number, canMove: boolean) {
     const q = moveCircle(p.x, p.z, nx, nz, playerRadius(), gatesOf(getGame().progress), false, monsterObstacles(), moveResult);
     p.vx = (q.x - p.x) / dt - kx;
     p.vz = (q.z - p.z) / dt - kz;
+    updateEdge(dt, canMove, wx, wz, walk, q.x - p.x, q.z - p.z, Math.abs(kx) + Math.abs(kz));
     p.x = q.x;
     p.z = q.z;
-  }
+  } else p.teeter = 0;
+  updateSafeGround(dt);
   p.speed = p.frozen ? 0 : Math.hypot(p.vx, p.vz);
   if (p.speed > 0.3 && !p.frozen) {
     const want = Math.atan2(p.vx, p.vz);
@@ -225,6 +238,30 @@ function movePlayer(dt: number, canMove: boolean) {
     }
   }
   if (p.climbY !== null) p.y = p.climbY;
+}
+
+/** Only the player's own push, stopped by a flagged edge, can start a fall.
+ * Enemy knock-back, scripts and sliding along a lip never do. */
+function updateEdge(dt: number, canMove: boolean, wx: number, wz: number, walk: number, movedX: number, movedZ: number, knock: number) {
+  const p = rt.player;
+  const wish = Math.hypot(wx, wz), solved = getGame().progress.solved;
+  const pushing = canMove && canFight() && knock < .5 && !p.riding && p.climbY === null && wish > walk * .4 && getGame().progress.act3.world !== "cloud";
+  const ux = pushing ? wx / wish : 0, uz = pushing ? wz / wish : 0;
+  const stopped = pushing && (movedX * ux + movedZ * uz) / (wish * dt) < .5;
+  if (!stopped || !fallAhead(p.x, p.z, ux, uz, playerRadius(), solved)) { p.teeter = 0; return; }
+  if (p.teeter === 0) audio.play("bump");
+  p.teeter += dt;
+  if (p.teeter >= TEETER_SECONDS) { p.teeter = 0; hooks.playerFall?.(ux, uz); }
+}
+
+let safeClock = 0;
+function updateSafeGround(dt: number) {
+  safeClock -= dt;
+  if (safeClock > 0) return;
+  safeClock = .2;
+  const p = rt.player;
+  if (getGame().progress.act3.world === "cloud" || p.climbY !== null || zoneAt(p.x, p.z) !== "canopy") { p.safeGround = null; return; }
+  if (safeFromFalls(p.x, p.z, getGame().progress.solved)) p.safeGround = { x: p.x, z: p.z };
 }
 
 /** Act 2: friends who are not active walk with the party, a little further back during fights. */

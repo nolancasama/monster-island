@@ -10,6 +10,7 @@ import { CLOUD_ENEMY_SPAWNS } from "../game/world/cloudisle";
 import { standY } from "../game/world/collision";
 import { additiveSprite, flatMat, shadowMaterial } from "./materials";
 import { emptyBodyPose, enemyBodyPose } from "./panicPose";
+import { FALL_GRAVITY } from "../game/logic/falls";
 import { airshipGeometry, cageGeometry, coinGeometry, enemyGeometry, propellerGeometry } from "./models/lowland";
 import { foodGeometry } from "./models/props";
 import { cloudEnemyGeometry } from "./models/cloudEnemies";
@@ -23,6 +24,8 @@ import type { FoodId } from "../game/types";
  */
 
 const VIEW = 48;
+
+const plungeY = (p: { t0: number; y0: number }, t: number) => p.y0 - .5 * FALL_GRAVITY * (t - p.t0) * (t - p.t0);
 
 function textSprite(text: string, color: string): THREE.SpriteMaterial {
   const c = document.createElement("canvas");
@@ -71,7 +74,8 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     g.visible = e.zone === currentCombatZone() && e.state !== "gone" && near && getGame().progress.act2.started;
     if (!g.visible) return;
     const t = rt.time;
-    const y = standY(e.x, e.z, getGame().progress.solved);
+    // A plunge keeps its own height: the ground under the void is far below the lip.
+    const y = e.plunge ? plungeY(e.plunge, t) : standY(e.x, e.z, getGame().progress.solved);
     g.position.set(e.x, y, e.z);
     g.rotation.y = e.yaw;
     enemyBodyPose(e, t, pose);
@@ -102,7 +106,7 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
       alert.current.position.y = e.air + 1.5 + (e.kind === "shellback" ? 0.2 : 0);
     }
     if (stars.current) {
-      stars.current.visible = e.state === "stun" || e.state === "ko";
+      stars.current.visible = (e.state === "stun" || e.state === "ko") && !e.plunge;
       stars.current.position.y = e.air + top;
       stars.current.rotation.y = t * 5;
     }

@@ -56,7 +56,7 @@ export function installE2eHook(seed: number) {
             }
           : null,
         line: g.line ? { by: g.line.by, en: g.line.en } : null,
-        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, yaw: rt.player.yaw, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null },
+        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, yaw: rt.player.yaw, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null, falling: rt.player.fall !== null, teeter: rt.player.teeter, safeGround: rt.player.safeGround },
         monsters: Object.fromEntries(
           LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, visible: companionVisible(id), air: rt.monsters[id].air }])
         ),
@@ -105,7 +105,7 @@ export function installE2eHook(seed: number) {
           })),
           cyclone: cb.cyclone ? { ...cb.cyclone, bubbles: [...cb.cyclone.bubbles], carried: cb.enemies.filter(e => e.control?.kind === "carried" && e.control.source === cb.cyclone!.id).map(e => e.i) } : null,
           bombChain: cb.bombChain ? { ...cb.bombChain, pops: cb.bombChain.pops.map(p => ({ ...p })), victims: [...cb.bombChain.victims] } : null,
-          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, burn: e.burn ? { ...e.burn } : null, panic: e.panic ? { ...e.panic } : null, panicResistUntil: e.panicResistUntil, fireTicks: e.fireTicks, lastFireT: e.lastFireT, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
+          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, plunge: e.plunge !== null, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, burn: e.burn ? { ...e.burn } : null, panic: e.panic ? { ...e.panic } : null, panicResistUntil: e.panicResistUntil, fireTicks: e.fireTicks, lastFireT: e.lastFireT, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
           drops: cb.drops.length,
           shots: cb.shots.length,
           projectiles: cb.shots.map(s => ({ id: s.id, shape: s.shape, damage: s.damage, hostile: Boolean(s.hostile), source: s.source, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, age: s.age, life: s.life, radius: s.radius })),

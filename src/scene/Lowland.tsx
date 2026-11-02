@@ -33,6 +33,7 @@ import {
   cliffFaceGeometry,
   cliffRopeGeometry,
   giantFernGeometry,
+  canopyDeckGeometry,
   lilyPadGeometry,
   updateLilyPadMatrices,
   lowlandPropsGeometry,
@@ -293,6 +294,8 @@ export function Lowland() {
   const fernTree = useMemo(treeFernGeometry, []);
   const reed = useMemo(reedGeometry, []);
   const props = useMemo(() => spatialGeometry(lowlandPropsGeometry(), TILE), []);
+  // Solid: walking surfaces must not dither away under the player like props do.
+  const canopyDecks = useMemo(canopyDeckGeometry, []);
   const cliff = useMemo(cliffFaceGeometry, []);
   const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
@@ -315,6 +318,7 @@ export function Lowland() {
         <DistanceMesh key={i} geometry={g} material={flatMat} />
       ))}
       <mesh geometry={cliff} material={flatMat} />
+      <DistanceMesh geometry={canopyDecks} material={flatMat} />
       <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />

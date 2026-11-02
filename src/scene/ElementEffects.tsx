@@ -355,6 +355,7 @@ export function ElementEffects() {
       for (let enemyIndex = 0; enemyIndex < cb.enemies.length; enemyIndex++) {
         const e = cb.enemies[enemyIndex];
         if (e.zone !== zone || e.state === "gone" || Math.hypot(e.x - rt.player.x, e.z - rt.player.z) > 48) continue;
+        if (e.plunge) continue;
         const ground = standY(e.x, e.z, game.progress.solved);
         const y = ground + e.air, radius = ENEMIES[e.kind].radius;
         enemyBodyPose(e, t, bodyPose);

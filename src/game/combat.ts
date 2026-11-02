@@ -20,6 +20,7 @@ import { objectState, secretEvent, tickSecrets, type ElementState, type SecretPr
 import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementObject } from "./world/elementObjects";
 import { releaseAllAttacks } from "../input/attackInput";
 import { fireDamage } from "./logic/elements";
+import { hpAfterFall } from "./logic/falls";
 import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
 import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, type Swing } from "./logic/swing";
 
@@ -103,6 +104,8 @@ export interface EnemyRt {
   /** Heavy Root Snare slows locomotion without preventing attacks. */
   slowUntil: number;
   fall: { from: number; t0: number } | null;
+  /** Pushed into a Canopy void: tips over and drops, then is gone. */
+  plunge: { t0: number; y0: number; vx: number; vz: number } | null;
   /** One victim ledger survives the swing-to-fling transition. */
   flight: { owner: CompanionId; victims: number[]; x: number; z: number; yaw: number; startX: number; startZ: number; bash?: { x: number; z: number }; swing?: Swing } | null;
   step: number;
@@ -226,7 +229,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, lastGround: { x: s.x, z: s.z }, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, step: 0
   };
 }
 
@@ -273,7 +276,7 @@ export const cb = {
 };
 
 /** Called with the live fight when a knock-out happens (the flow owns the scene). */
-export const hooks = { knockout: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void) };
+export const hooks = { knockout: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void), playerFall: null as null | ((ux: number, uz: number) => void) };
 
 /** No per-attempt boss progress is saved; checkpoints and lamps live in act3. */
 export function resetBeaconFight() {
@@ -1278,8 +1281,13 @@ function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: (() => bool
     if (blocked(nx, nz, radius, gates) || (!hazard && !isWalkable(nx, nz, gates, 0))) return false;
     e.x = nx; e.z = nz;
     if (hazard) {
-      pushFx("splashKo", nx, standY(nx, nz, getGame().progress.solved) + e.air, nz, 0, 0, 0, 1);
+      const plunges = hazard.kind === "fall" && cb.world === "home";
+      const lip = standY(e.lastGround.x, e.lastGround.z, progress.solved) + e.air;
+      const d = Math.hypot(nx - e.lastGround.x, nz - e.lastGround.z) || 1;
+      const vx = (nx - e.lastGround.x) / d * 2.4, vz = (nz - e.lastGround.z) / d * 2.4;
+      if (!plunges) pushFx("splashKo", nx, standY(nx, nz, getGame().progress.solved) + e.air, nz, 0, 0, 0, 1);
       knockOut(e, e.lastGround);
+      if (plunges) e.plunge = { t0: rt.time, y0: lip, vx, vz };
       return true;
     }
     e.lastGround.x = nx; e.lastGround.z = nz;
@@ -1739,7 +1747,8 @@ export function combatTick(dt: number) {
   const paused = g.journalOpen || g.settingsOpen;
   const p = rt.player;
   // Areas (null on the rope and anywhere south of the cliff).
-  const zone = p.climbY === null ? combatZoneAt(p.x, p.z) : null;
+  // A falling player stays in the stage; the void below belongs to no zone.
+  const zone = p.fall ? currentCombatZone() : p.climbY === null ? combatZoneAt(p.x, p.z) : null;
   if (world === "cloud" && zone !== cb.cloudZones.current) {
     const mem = cb.cloudZones;
     if (mem.current) {
@@ -1944,6 +1953,11 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
   if (e.state === "ko") {
     // Dizzy spin, a hop, then a poof: it runs off home (no fall, no hurt).
     e.timer -= dt;
+    if (e.plunge) {
+      e.x += e.plunge.vx * dt; e.z += e.plunge.vz * dt;
+      if (e.timer <= 0) { e.state = "gone"; e.plunge = null; }
+      return;
+    }
     e.yaw += dt * 14;
     if (e.timer <= 0) {
       e.state = "gone";
@@ -2108,6 +2122,15 @@ function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
     if (onCloudIsle() && cb.beacon.active) resetBeaconFight();
     hooks.knockout?.();
   }
+}
+
+/** Falling: a flat HP cost with a safety floor, then protection at the landing. */
+export function fallHurt() {
+  if (!(debugEnabled && useDebug.getState().invincible)) cb.vitals = { ...cb.vitals, hp: hpAfterFall(cb.vitals.hp) };
+  cb.safeUntil = rt.time + 2.5;
+  cb.hurtT = rt.time;
+  cb.knock.x = cb.knock.z = 0;
+  audio.play("hurt");
 }
 
 /** After the knock-out scene: HP back, everything else kept, the area calm again. */
