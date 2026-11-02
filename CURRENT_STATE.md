@@ -1,13 +1,13 @@
 # Current State
 
 ## Live
-`main` deployed 2026-11-02: everything below, plus the prologue, Acts 2 and 3 (Cloud Isle
+`main` deployed 2026-11-02 at `e3821b0`: everything below, plus the prologue, Acts 2 and 3 (Cloud Isle
 stays locked behind the Coming Soon notice), gameplay polish and the debug menu. Save v4
 (`mi.save.v4`); v1–v3 still load and are never overwritten; `act2.forestLayout: 2` marks
 migrated saves. https://nolancasama.github.io/monster-island/
 
-## Blue Inferno, Puff anchor, full swing, Grove crossing, expanded stages (branch, not merged)
-Branch `feature/grove-canopy-expansion`, frozen spec `docs/GROVE_CANOPY_EXPANSION.md`. Not deployed.
+## Blue Inferno, Puff anchor, full swing, Grove crossing, expanded stages (merged, deployed)
+Frozen spec `docs/GROVE_CANOPY_EXPANSION.md`.
 
 - **Ember:** Inferno has its own blue flame style; Fire Breath is unchanged.
 - **Puff:** gust root follows the live beak (`anchors.puffBeak`, `logic/wind.ts`), then its tail outruns the player.
@@ -165,9 +165,8 @@ the expansion; the full suite has not been run end to end on this machine.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. User review of `feature/grove-canopy-expansion`, then merge and deploy on approval.
-2. Play-test on a school Chromebook with `?debug=1`: fire, panic audio, whip, falls, frame rate, fights.
-3. User decisions: a new "Can you…?" unlock for Ember; the dock landmark; secret pocket polish.
+1. Play-test on a school Chromebook with `?debug=1`: fire, panic audio, whip, falls, frame rate, fights.
+2. User decisions: a new "Can you…?" unlock for Ember; the dock landmark; secret pocket polish.
 
 ## Codex / Delegated Work
 None in flight. The user restored Codex on 2026-11-02 (quota ran out mid-branch; Slice D and fixes were built by the controller). Codex's sandbox cannot bind ports or launch Chromium, so the
