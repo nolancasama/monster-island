@@ -58,6 +58,9 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
     contains: (p, m) => !p.cloud && p.x > 94 - m && p.z > -207 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
   { ...DEFAULT_CAMERA, id: "forest-base", kind: "lowland", pitch: .36, dist: 11.5, ahead: 2,
     contains: (p, m) => !p.cloud && p.z < -165 + m && p.x > 58 - m && p.x < 94 + m && zoneAt(p.x, p.z) === "forest1" },
+  // Sees over the town wall from both sides; the wall also fades on the sight line.
+  { ...DEFAULT_CAMERA, id: "port-gate", kind: "lowland", pitch: .85, dist: 11, ahead: 1,
+    contains: (p, m) => !p.cloud && p.z < -282 + m && p.z > -298 - m },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,
     contains: home((p, m) => rect(p, m, TUNNEL.x - 3.6, TUNNEL.x + 3.6, TUNNEL.z0 - 1.2, TUNNEL.z1 + .8)) },

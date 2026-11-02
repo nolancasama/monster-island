@@ -1851,3 +1851,11 @@ The default Act 2 pitch puts the top of the frame below the horizon, so a 20 m m
 get fixed, lower profiles (pitch .36), with each arm's yaw ±.5 toward the mesa. Rejected:
 a taller mesa (still out of frame) and rotating cameras (Act 2 stays fixed). Faces use one
 colour each, in alternating warm and cool strata; per-vertex noise blurred into a gradient.
+
+## 2026-11-02 — Port Town wall: fade instead of line-of-sight clearance
+
+Right against the wall's inner face no usable camera pitch can see over a 4.6 m wall, so
+the raised `port-gate` view is paired with the existing `occluderMat` dither along the sight
+line. Rejected: lowering the wall until it stopped reading as a fortification. The coast
+gate's cut narrows to the opening and two permanent cuts hold the rest of the wall line.
+Slice M4 was built directly by the controller after the user paused Codex use.

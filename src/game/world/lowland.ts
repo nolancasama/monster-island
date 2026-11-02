@@ -377,6 +377,9 @@ export function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
   const g = CANOPY_GAPS[id];
   return rect(g.x - DECK_HALF, g.x + DECK_HALF, g.z0 - 1, g.z1 + 1);
 }
+/** The town wall's footprint on each side of the gate, always shut. */
+const PORT_WALL_CUTS = [rect(19, 72.6, -289.2, -287.6), rect(79.4, 135, -289.2, -287.6)];
+
 /** True when a circle of radius m fits the lowland's open land (solid scenery is checked separately). */
 export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number): boolean {
   if (z > CLIFF_FOOT_Z - m) return false;
@@ -388,6 +391,7 @@ export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number
       if (!inside(t.walk, x, z, m)) return false;
     }
   for (const gate of STAGE_EXITS) if (!g.cleared?.includes(gate.id) && touches(gate.cut, x, z, m)) return false;
+  for (const wall of PORT_WALL_CUTS) if (touches(wall, x, z, m)) return false;
   // Decks added by unlocks (narrower than the gaps they span).
   if (solved.includes("groveLilies") && (inside(LILY_WALK, x, z, m) || inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m))) return true;
   for (const id of ["canopyVines", "canopyRope"] as const) {
@@ -605,6 +609,11 @@ export const FOUNTAIN = { x: 77, z: -306, r: 1.6 };
 /** Maple waits on the quay once the town is reached. */
 export const MAPLE_PORT = { x: 80.5, z: -317.5, yaw: Math.PI * 0.85 };
 export const TOWN_GATE = { x: 76, z: -289.5 };
+/** The town's landward fortification, running east and west of the gate. */
+export const PORT_WALL = { z: -288.4, x0: 46, x1: 108, thick: 1.6, gateHalf: 3.4, height: 4.6, towerHeight: 7.4, towerR: 2 };
+/** Opens on approach once the coast is cleared, and never closes again. */
+export const townGateOpen = (cleared: boolean, portFound: boolean, distance: number, wasOpen: boolean) =>
+  cleared && (portFound || wasOpen || distance < 9);
 
 /** Canopy approach: progressively larger trunks, with their full buttress feet solid. */
 export const RIGHT_ARM_TREES: Array<Vec2 & { r: number; h: number; footR: number }> = [
@@ -789,6 +798,7 @@ export function lowlandSolids(): SolidShape[] {
   for (const c of CRATES) box(c.x, c.z, 0.4 * c.s, 0.4 * c.s, c.yaw);
   for (const l of LAMPS) circle(l.x, l.z, 0.12);
   circle(FOUNTAIN.x, FOUNTAIN.z, FOUNTAIN.r);
+  for (const side of [-1, 1]) circle(TOWN_GATE.x + side * (PORT_WALL.gateHalf + PORT_WALL.towerR), PORT_WALL.z, PORT_WALL.towerR);
   return out;
 }
 
@@ -817,7 +827,7 @@ export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: numbe
   { id: "grove", x: 56, z: -241.4, half: 5.8, orientation: "x", kind: "reeds", cut: rect(19, 70, -241.8, -241) },
   { id: "canopy", x: 97, z: -241.4, half: 6, orientation: "x", kind: "roots", cut: rect(82, 135, -241.8, -241) },
   { id: "causeway", x: 76, z: -264, half: 5, orientation: "x", kind: "stone", cut: rect(19, 135, -264.4, -263.6) },
-  { id: "coast", x: 76, z: -288, half: 5, orientation: "x", kind: "wood", cut: rect(19, 135, -288.4, -287.6) },
+  { id: "coast", x: 76, z: -288, half: 3.4, orientation: "x", kind: "wood", cut: rect(72.6, 79.4, -288.4, -287.6) },
 ];
 
 /** Draw the real basin from the sanctuary and below; the prologue tunnel stays isolated. */

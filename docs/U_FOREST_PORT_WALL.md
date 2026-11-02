@@ -132,8 +132,8 @@ Scripted shots unchanged. Movement already reads the rendered camera yaw, so D i
   animating over about .7 s with a sound; once opened they stay open after arrival.
   Closed look before clear. No quiz or other interaction.
 - Camera: new profile `port-gate` for z ∈ [−298, −282] with pitch about .85, dist 11,
-  so the camera sees over the wall. Unit test: line of sight from camera to player
-  clears wall height for each walkable point in that band; towers checked too.
+  so the camera sees over the wall. Right against the wall's inner face no pitch clears
+  it, so the wall, towers and doors use `occluderMat`, which fades the sight line.
 - Inside: existing safe-zone logic, music, `arriveAtPort`, companion behaviour and
   services. Enemies stay out through `stepTo`'s zone guard. Leaving and returning works.
 

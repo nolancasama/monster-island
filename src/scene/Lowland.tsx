@@ -6,7 +6,10 @@ import { getGame } from "../game/store";
 import { NPCS, NPC_OF } from "../game/data/town";
 import {
   lowlandRegionVisible,
+  PORT_WALL,
   STAGE_EXITS,
+  TOWN_GATE,
+  townGateOpen,
   gapDeck,
   lowlandBridgeY,
   CANOPY_GAPS,
@@ -18,6 +21,8 @@ import {
 import { TUNNEL, groundY, inTunnel } from "../game/world/island";
 import { flatMat, occluderMat, smoothMat } from "./materials";
 import { conformBridge } from "./models/bridge";
+import { portDoorGeometry, portWallGeometry } from "./models/portWall";
+import { audio } from "../audio/audio";
 import { Chest } from "./Chest";
 import { Secrets } from "./Secrets";
 import {
@@ -259,6 +264,7 @@ export function Lowland() {
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
   const waterMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }), []);
   const town = useMemo(townGeometry, []);
+  const portWall = useMemo(portWallGeometry, []);
   const signs = useMemo(townSigns, []);
   const signMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signs.tex, side: THREE.DoubleSide }), [signs]);
   useFrame(() => {
@@ -283,12 +289,14 @@ export function Lowland() {
         <DistanceMesh key={i} geometry={geometry} material={waterMat} />
       ))}
       <DistanceMesh geometry={town} material={flatMat} />
+      <DistanceMesh geometry={portWall} material={occluderMat} />
+      <PortGate />
       <DistanceMesh geometry={signs.geo} material={signMat} />
       <TiledInstances geometry={tree} spots={spots.trees} material={occluderMat} />
       <TiledInstances geometry={fernTree} spots={spots.fernTrees} material={occluderMat} />
       <TiledInstances geometry={fern} spots={spots.ferns} material={flatMat} far={60} />
       <TiledInstances geometry={reed} spots={spots.reeds} material={flatMat} far={50} />
-      {STAGE_EXITS.map((gate) => (
+      {STAGE_EXITS.filter((gate) => gate.kind !== "wood").map((gate) => (
         <StageBarrier key={`${gate.id}:${gate.x}`} gate={gate} />
       ))}
       <CliffRope />
@@ -315,6 +323,30 @@ function DistanceMesh({ geometry, material }: { geometry: THREE.BufferGeometry; 
     if (ref.current) ref.current.visible = Math.hypot(c.x - bounds.center.x, c.y - bounds.center.y, c.z - bounds.center.z) < FOG_FAR + bounds.radius;
   });
   return <mesh ref={ref} geometry={geometry} material={material} />;
+}
+/** The town's gate: its doors swing in toward the town once the coast is cleared. */
+function PortGate() {
+  const left = useRef<THREE.Mesh>(null), right = useRef<THREE.Mesh>(null);
+  const doors = useMemo(() => ({ left: portDoorGeometry(1), right: portDoorGeometry(-1) }), []);
+  const state = useRef({ open: false, k: -1 });
+  useFrame((_, dt) => {
+    const a2 = getGame().progress.act2, p = rt.player, s = state.current;
+    const cleared = a2.cleared.includes("coast");
+    s.open = townGateOpen(cleared, a2.portFound, Math.hypot(p.x - TOWN_GATE.x, p.z - PORT_WALL.z), s.open);
+    // A save that loads with the gate open starts open, without a sound.
+    if (s.k < 0) s.k = s.open ? 1 : 0;
+    if (s.open && s.k === 0) audio.play("stones");
+    s.k = Math.max(0, Math.min(1, s.k + (s.open ? dt : -dt) / .7));
+    lowlandView.barriers.coast = cleared ? 1 : 0;
+    const e = s.k * s.k * (3 - 2 * s.k) * Math.PI / 2;
+    if (left.current) left.current.rotation.y = e;
+    if (right.current) right.current.rotation.y = -e;
+  });
+  const y = groundY(TOWN_GATE.x, PORT_WALL.z);
+  return <>
+    <mesh ref={left} geometry={doors.left} material={occluderMat} position={[TOWN_GATE.x - PORT_WALL.gateHalf, y, PORT_WALL.z]} />
+    <mesh ref={right} geometry={doors.right} material={occluderMat} position={[TOWN_GATE.x + PORT_WALL.gateHalf, y, PORT_WALL.z]} />
+  </>;
 }
 function StageBarrier({ gate }: { gate: (typeof STAGE_EXITS)[number] }) {
   const geometry = useMemo(() => stageBarrierGeometry(gate), [gate]),
