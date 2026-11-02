@@ -16,6 +16,8 @@ Branch `feature/grove-canopy-expansion`, frozen spec `docs/GROVE_CANOPY_EXPANSIO
 - **World:** keyhole mesa (`mesa.ts`), Grove 1,404.5 m² (1.86×), Canopy 818.75 m² (2.01×). Canopy ground is extruded decks, 10 m up; voids and ponds live in `world/hazards.ts`. Map: `node scripts/lowland-map.mjs`.
 - **Falls:** flagged Canopy edges only (`logic/falls.ts`, `hooks.playerFall`, `p.fall`): teeter, drop, -12 HP floored at 1, back to the last safe ground. Enemies `plunge`, with rewards on the lip.
 
+Verified at `0acb0a2`: tsc, 717 unit tests, build, and the full Playwright suite end to end, 86/86 in 1.4 h (`MI_LONG_TIMEOUT=3600000`). Evidence: `.tmp/shots/grove-canopy/`. Not viewed in a browser: Cyclone's emergence from the beak, Leafy and Bubbo enemy falls (unit tests only).
+
 ## Beach side view, U forest, Port Town wall (merged)
 Frozen spec `docs/U_FOREST_PORT_WALL.md`, decisions dated 2026-11-02.
 
