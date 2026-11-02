@@ -307,6 +307,8 @@ for (const size of [{width:1366,height:768},{width:1280,height:800}]) {
     await ascend(); await shot("beacon-arena");
     await page.getByTestId("team-puff").click();
     await hook(page,"teleport",0,(BEACON.z - 4),Math.PI/2);
+    // Time stops at the tell, so Puff must already be on the shoulder or it could never attack.
+    await waitFor(page,s=>s.act2.stance.friend==="puff"&&s.act2.stance.k>.99,20_000,"Puff in position");
     await pauseAt(page,{attack:"gustTell"});
     try {
       await shot("beacon-gust-telegraph");

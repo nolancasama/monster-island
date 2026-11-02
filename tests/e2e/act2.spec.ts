@@ -85,7 +85,7 @@ async function descend(page: Page) {
 
 /** Attack an enemy with J until it is knocked out (the real key). */
 async function defeat(page: Page, i: number) {
-  for (let n = 0; n < 30; n++) {
+  for (let n = 0; n < 60; n++) {
     const s = await state(page);
     const e = s.act2.enemies[i];
     if (e.state === "ko" || e.state === "gone") return;

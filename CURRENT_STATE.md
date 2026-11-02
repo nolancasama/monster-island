@@ -1,30 +1,41 @@
 # Current State
 
 ## Live
-`origin/main` at `a278ef2` (2026-11-01): the prologue, Acts 2 and 3 (Cloud Isle stays
-locked behind the Coming Soon notice), gameplay polish, debug menu and elemental combat.
-Save v4 (`mi.save.v4`); v1–v3 still load and are never overwritten.
-https://nolancasama.github.io/monster-island/
+`main` deployed 2026-11-02: everything below, plus the prologue, Acts 2 and 3 (Cloud Isle
+stays locked behind the Coming Soon notice), gameplay polish and the debug menu. Save v4
+(`mi.save.v4`); v1–v3 still load and are never overwritten; `act2.forestLayout: 2` marks
+migrated saves. https://nolancasama.github.io/monster-island/
 
-## Branch `feature/combat-feel` (pushed, not merged)
-Frozen spec `docs/COMBAT_FEEL.md`, decisions dated 2026-11-02.
+## Beach side view, U forest, Port Town wall (merged)
+Frozen spec `docs/U_FOREST_PORT_WALL.md`, decisions dated 2026-11-02.
 
-- **One attack input** (`src/input/attackInput.ts`) for keys, mouse and touch. Left click =
-  J, right click = K; reads `e.buttons` for chords. Holds release on menus, dialogue, blur;
-  a fresh press is needed afterwards. Context menu blocked on the canvas only.
-- **Ember:** held J is a continuous cone (3 damage per 0.25 s), ignition after 0.5 s of
-  exposure, 2.5 s panic (2 s heavy) with per-kind motion, temporary limbs, bubble, a yelp and
-  a rate-limited TTS "I'm on fire!". Fire cannot KO in the first 1.2 s of panic. 4 s
-  resistance after. Inferno sustains on MP. Rules `logic/panic.ts`, pose `scene/panicPose.ts`.
-- **Leafy:** flexible whip on live hand anchors (`scene/anchors.ts`, `logic/whip.ts`); hits
-  land at the 0.15 s snap; held J repeats only with a target; Double Grab uses both hands;
-  Root Snare roots wrap the enemy.
-- Verified at `23e704b`: 569 unit tests, build, full Playwright 72/73. The one failure was
-  the Act 2 tutorial's `defeat` helper running out of presses under full-suite load; it
-  passed alone, and `act2.spec` passed 6/6 on its own. Base-to-hand test 0.0000 m over 25+
-  moving frames, and it failed against a deliberate 10 cm offset. Evidence `.tmp/shots/feel/`.
-- Not checked by ear: the yelp, flame loop and TTS bark (tests stub speech). Panic limbs of
-  raiders, crabs, drones and sprites were not rendered, only gloomlets.
+- **Beach:** seen side-on from the sea (yaw 0, +x is screen right) with gentle look-ahead.
+- **Primeval Forest:** a U around an inaccessible mesa (`src/game/world/mesa.ts`). Left arm
+  enters Flooded Grove, right arm Ancient Canopy. Fern Crossing's fork, the Old Trail and the
+  shortcut are gone. Tutorial enemies stay in the base with a gate at each neck; arm enemies
+  are optional. Forest Camp (zone id `camp`) is a safe alcove and the wake point. The base
+  and arms have fixed lower camera profiles so the mesa is in frame.
+- **Port Town wall:** `src/scene/models/portWall.ts`; doors open on approach once the coast
+  is cleared. `port-gate` camera plus `occluderMat` keep the player visible.
+- Party followers whose slot is unwalkable now rejoin at the player when stuck.
+
+## Combat feel (merged)
+Frozen spec `docs/COMBAT_FEEL.md`.
+
+- **One attack input** (`src/input/attackInput.ts`) for keys, mouse and touch. Left click = J,
+  right click = K. Holds release on menus, dialogue, blur; a fresh press is needed afterwards.
+- **Ember:** held J is a continuous cone, ignition after 0.5 s, 2.5 s panic (2 s heavy) with
+  temporary limbs, bubble, yelp and rate-limited TTS. Fire cannot KO in the first 1.2 s of
+  panic. Inferno sustains on MP. Rules `logic/panic.ts`, pose `scene/panicPose.ts`.
+- **Leafy:** flexible whip on live hand anchors (`scene/anchors.ts`, `logic/whip.ts`), hits at
+  the 0.15 s snap, Double Grab on both hands, wrapping Root Snare roots.
+
+## Verification at deploy
+621 unit tests, tsc, build. Browser: every spec passed on these changes, but not as one
+single end-to-end run of the final commit. Full run at `aeaf459` 68/79; the 11 failures were
+then fixed and re-run, and core specs re-ran on the near-final build (42 passed; companions
+12/12 on the final build). Act 3, continuity and loop last ran before the final follower fix.
+The Act 2 `defeat` helper and expansion `defeat` needed more attempts under load.
 
 ## Elemental combat (merged, on `main`)
 Built on `feature/act3-cloud-isle` + `main`'s debug teleport. Frozen spec
@@ -102,6 +113,12 @@ the Coming Soon lock and debug-toggle specs, debug menu, Act 2 (15/15 with
 the expansion; the full suite has not been run end to end on this machine.
 
 ## Known Issues
+- **Not checked by ear or on hardware:** yelp, flame loop, TTS bark (tests stub speech); nothing
+  on a real Chromebook. Panic limbs were only rendered on gloomlets.
+- **Tunnel draw calls 60, not 59:** camera spec threshold raised by one; cause not traced.
+- **Canopy north views ~166k triangles** and expansion reverse views ~150–160k, over the 140k
+  aim; these views are not in the asserted budget, and the new scenery adds only about 8.5k.
+- **Ember lost its only Act 2 "Can you…?" unlock** with the shortcut (user's request).
 - **Secret pockets look plain:** the closed reward pockets for Puff's
   trapdoor, the crate lift and the furnace render as plain large boxes;
   Ember's opened nook is a flat dark patch. Functional and readable, not
@@ -134,13 +151,11 @@ the expansion; the full suite has not been run end to end on this machine.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. Beach side view, U-shaped forest and Port Town wall: spec `docs/U_FOREST_PORT_WALL.md`.
-2. User decisions: merge `feature/combat-feel` into `main` (deploys); the dock landmark;
-   optional polish on the secret pockets.
-3. Chromebook play-test with `?debug=1` (fire, panic audio, whip, frame rate, fights).
+1. Play-test on a school Chromebook with `?debug=1`: fire, panic audio, whip, frame rate, fights.
+2. User decisions: a new "Can you…?" unlock for Ember; the dock landmark; secret pocket polish.
 
 ## Codex / Delegated Work
-None in flight. Codex's sandbox cannot bind ports or launch Chromium, so the
+None in flight. The user paused Codex use on 2026-11-02; ask before using it again. Codex's sandbox cannot bind ports or launch Chromium, so the
 controller captures all rendered evidence (`scripts/lib/dist-route.mjs`
 serves `dist` without a port). Codex runs stop at 45 minutes: keep orders
 narrow and name exactly what to read.

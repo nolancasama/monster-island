@@ -62,10 +62,15 @@ async function start(page: Page, cleared: string[] = []) {
   return errors;
 }
 async function defeat(page: Page, i: number) {
-  for (let n = 0; n < 20; n++) {
+  // Real-time presses: the whip's cooldown and slow software rendering both eat attempts.
+  for (let n = 0; n < 40; n++) {
     const e = (await state(page)).act2.enemies[i];
     if (["ko", "gone"].includes(e.state)) return;
-    await hook(page, "nearEnemy", i, 1.5);
+    // A bank can cut the straight line from one side, so later attempts walk around it.
+    if (n > 8) {
+      const a = n * 2.4, x = e.x + Math.sin(a) * 1.5, z = e.z + Math.cos(a) * 1.5;
+      await hook(page, "teleport", x, z, Math.atan2(e.x - x, e.z - z));
+    } else await hook(page, "nearEnemy", i, 1.5);
     await hook(page, "setHp", 100);
     await page.keyboard.press("KeyJ");
     await page.waitForTimeout(480);

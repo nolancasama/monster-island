@@ -12,7 +12,7 @@ type CompanionState = MiState & { act3: { zone: string } };
 const destinations = [
   { name: "forest-camp", zone: "camp", hostile: "forest1", cloud: false,
     start: [CAMP_SITE.x - CAMP_SITE.r - 1.5, CAMP_SITE.z] as Point,
-    entrance: [CAMP2.rest.x - 2.5, CAMP2.rest.z] as Point, onward: [CAMP2.rest.x + 1, CAMP2.rest.z] as Point },
+    entrance: [CAMP2.rest.x - 3.5, CAMP2.rest.z] as Point, onward: [CAMP2.rest.x - 1, CAMP2.rest.z + 3.6] as Point },
   { name: "port-town", zone: "port", hostile: "coast", cloud: false, start: [76, -287] as Point, entrance: [76, -293] as Point, onward: [76, -300] as Point },
   { name: "hidden-hollow", zone: "hiddenHollow", hostile: "stormbreakCoast", cloud: true, start: [COAST_GATE.x, COAST_GATE.z - 5] as Point, entrance: [-6, COAST_GATE.z + 5.5] as Point, onward: HOLLOW_APPROACH[1] as Point }
 ] as const;
@@ -63,7 +63,8 @@ for (const destination of destinations) for (const friend of friends) {
     }
     const border = { ...s.monsters[friend] };
     await walk(destination.onward);
-    s = await waitFor(page, current => friends.every(id => Math.hypot(current.monsters[id].x - current.player.x, current.monsters[id].z - current.player.z) < 5.5), 30_000, "whole party catches up inside safe zone");
+    s = await waitFor(page, current => friends.every(id => Math.hypot(current.monsters[id].x - current.player.x, current.monsters[id].z - current.player.z) < 5.5)
+      && Math.hypot(current.monsters[friend].x - border.x, current.monsters[friend].z - border.z) > 2, 30_000, "whole party catches up inside safe zone");
     expect(Math.hypot(s.monsters[friend].x - border.x, s.monsters[friend].z - border.z), "last active friend leaves the border").toBeGreaterThan(2);
     expect(s.micState).not.toBe("listening");
     await shot("following");

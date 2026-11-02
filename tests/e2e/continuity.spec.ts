@@ -195,7 +195,8 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
       await gates(page, open);
       for (const c of connections) {
         await stand(page, c.from[0], c.from[1]);
-        await precondition(page, `${c.name} fixed follow framing`, s => s.camera.framing === "lowland" && s.camera.yaw === 0);
+        // The arms hold fixed views angled toward the mesa; everything else looks north.
+        await precondition(page, `${c.name} fixed follow framing`, s => s.camera.framing === "lowland" && Math.abs(Math.abs(s.camera.yaw) - (c.name.includes("arm") ? .5 : 0)) < 1e-6);
         await hook(page, "timeScale", 0);
         await capture(`${c.name}-${open ? "open" : "locked"}-ahead`, width, height);
       }

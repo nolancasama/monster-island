@@ -58,6 +58,8 @@ const TILE = 96;
 const FOG_NEAR = 55;
 const FOG_FAR = 260;
 const FAR = FOG_FAR;
+/** The town wall drops out of distant views such as the sanctuary's lookout. */
+const PORT_WALL_FAR = 70;
 
 /** Read-only inspection surface for rendered region and gate transitions. */
 export const lowlandView = { visible: false, fog: { near: FOG_NEAR, far: FOG_FAR }, barriers: {} as Record<string, number> };
@@ -289,7 +291,7 @@ export function Lowland() {
         <DistanceMesh key={i} geometry={geometry} material={waterMat} />
       ))}
       <DistanceMesh geometry={town} material={flatMat} />
-      <DistanceMesh geometry={portWall} material={occluderMat} />
+      <DistanceMesh geometry={portWall} material={occluderMat} far={PORT_WALL_FAR} />
       <PortGate />
       <DistanceMesh geometry={signs.geo} material={signMat} />
       <TiledInstances geometry={tree} spots={spots.trees} material={occluderMat} />
@@ -312,7 +314,7 @@ export function Lowland() {
   );
 }
 
-function DistanceMesh({ geometry, material }: { geometry: THREE.BufferGeometry; material: THREE.Material }) {
+function DistanceMesh({ geometry, material, far = FOG_FAR }: { geometry: THREE.BufferGeometry; material: THREE.Material; far?: number }) {
   const ref = useRef<THREE.Mesh>(null);
   const bounds = useMemo(() => {
     geometry.computeBoundingSphere();
@@ -320,7 +322,7 @@ function DistanceMesh({ geometry, material }: { geometry: THREE.BufferGeometry; 
   }, [geometry]);
   useFrame(() => {
     const c = rt.camera.pos;
-    if (ref.current) ref.current.visible = Math.hypot(c.x - bounds.center.x, c.y - bounds.center.y, c.z - bounds.center.z) < FOG_FAR + bounds.radius;
+    if (ref.current) ref.current.visible = Math.hypot(c.x - bounds.center.x, c.y - bounds.center.y, c.z - bounds.center.z) < far + bounds.radius;
   });
   return <mesh ref={ref} geometry={geometry} material={material} />;
 }
@@ -329,7 +331,9 @@ function PortGate() {
   const left = useRef<THREE.Mesh>(null), right = useRef<THREE.Mesh>(null);
   const doors = useMemo(() => ({ left: portDoorGeometry(1), right: portDoorGeometry(-1) }), []);
   const state = useRef({ open: false, k: -1 });
+  const group = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
+    if (group.current) group.current.visible = Math.hypot(rt.camera.pos.x - TOWN_GATE.x, rt.camera.pos.z - PORT_WALL.z) < 120;
     const a2 = getGame().progress.act2, p = rt.player, s = state.current;
     const cleared = a2.cleared.includes("coast");
     s.open = townGateOpen(cleared, a2.portFound, Math.hypot(p.x - TOWN_GATE.x, p.z - PORT_WALL.z), s.open);
@@ -343,10 +347,10 @@ function PortGate() {
     if (right.current) right.current.rotation.y = -e;
   });
   const y = groundY(TOWN_GATE.x, PORT_WALL.z);
-  return <>
+  return <group ref={group}>
     <mesh ref={left} geometry={doors.left} material={occluderMat} position={[TOWN_GATE.x - PORT_WALL.gateHalf, y, PORT_WALL.z]} />
     <mesh ref={right} geometry={doors.right} material={occluderMat} position={[TOWN_GATE.x + PORT_WALL.gateHalf, y, PORT_WALL.z]} />
-  </>;
+  </group>;
 }
 function StageBarrier({ gate }: { gate: (typeof STAGE_EXITS)[number] }) {
   const geometry = useMemo(() => stageBarrierGeometry(gate), [gate]),

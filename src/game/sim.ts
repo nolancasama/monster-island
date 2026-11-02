@@ -254,7 +254,11 @@ function partyFollow(m: MonsterRt, dt: number) {
     return;
   }
   const stuck = walkTo(m, sx, sz, Math.min(6.4, 1.4 + dSpot * 1.5), dt);
-  if (stuck && dPlayer > 6 && isWalkable(sx, sz, gatesOf(g), MONSTERS[m.id].radius)) poofTo(m.id, sx, sz);
+  if (stuck && dPlayer > 6) {
+    // A slot against a cliff is never walkable: rejoin at the player instead of staying stuck.
+    const clear = isWalkable(sx, sz, gatesOf(g), MONSTERS[m.id].radius);
+    poofTo(m.id, clear ? sx : p.x, clear ? sz : p.z);
+  }
 }
 
 // ------------------------------------------------------------ monsters
