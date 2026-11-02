@@ -150,6 +150,7 @@ const near = (x: number, z: number) =>
   Math.hypot(rt.camera.pos.x - x, rt.camera.pos.y - groundY(x, z), rt.camera.pos.z - z) < FOG_FAR + 6;
 /** Secret chests sit inside closed pockets: drawn only near the player (each chest is several calls). */
 const nearSecretChest = (x: number, z: number) => Math.hypot(rt.player.x - x, rt.player.z - z) < 28;
+const nearSideChest = (x: number, z: number) => Math.hypot(rt.player.x - x, rt.player.z - z) < 45;
 
 function Keeper({ service }: { service: ServiceId }) {
   const def = NPCS[NPC_OF[service]];
@@ -342,7 +343,7 @@ export function Lowland() {
       <GroveWake />
       <Secrets />
       {CHESTS.map((c) => (
-        <Chest key={c.id} id={c.id} visible={c.secret ? nearSecretChest : near} />
+        <Chest key={c.id} id={c.id} visible={c.secret ? nearSecretChest : c.close ? nearSideChest : near} />
       ))}
       {(Object.keys(SERVICES) as ServiceId[]).map((s) => (
         <Keeper key={s} service={s} />

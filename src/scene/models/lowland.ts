@@ -212,7 +212,7 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     // Terrain already draws the ramp; a second skin here would z-fight it.
     if (deck.id === "armApproach") continue;
     const { x0, x1, z0, z1 } = deck.walk;
-    const nx = Math.ceil((x1 - x0) / .75), nz = Math.ceil((z1 - z0) / .75);
+    const nx = Math.ceil((x1 - x0) / 1.5), nz = Math.ceil((z1 - z0) / 1.5);
     const vertex = (i: number, j: number) => {
       const x = x0 + (x1 - x0) * i / nx, z = z0 + (z1 - z0) * j / nz;
       return [x, canopySurfaceY(x, z), z];
@@ -228,7 +228,7 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     }
     for (let i = 0; i < deck.pts.length; i++) {
       const [ax, az] = deck.pts[i], [bx, bz] = deck.pts[(i + 1) % deck.pts.length];
-      const n = Math.ceil(Math.hypot(bx - ax, bz - az) / .75);
+      const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 1.5);
       for (let j = 0; j < n; j++) {
         const x = ax + (bx - ax) * j / n, z = az + (bz - az) * j / n;
         const xx = ax + (bx - ax) * (j + 1) / n, zz = az + (bz - az) * (j + 1) / n;

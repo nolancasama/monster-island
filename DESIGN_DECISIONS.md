@@ -1927,6 +1927,9 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
   shrink lateral clearance only: shrinking both joined ends left a 0.4-metre
   invisible seam for a mounted body. A causeway pillar at (58, -243.6) also
   closed the mounted passage; it moves to (55.5, -244.8) with its shared collider.
-- Reachable floor is pinned at Grove 1,401.75 m² (1.852 times 757) and Canopy
+- A swing that ends short of a throw (release over a bank, or an interruption) sets the
+  enemy down on real ground toward the player. Stranded off the ground it could not be
+  targeted or walk back; Act 3's browser chapter found this (spec §3 asked for the clamp).
+- Reachable floor is pinned at Grove 1,404.5 m² (1.855 times 757, after the pad walk widened to match the rendered pads) and Canopy
   818.75 m² (2.008 times 407.75). Grove stays below the two-times target while
   exceeding the 1.7-times floor, retaining arm separation and the fixed exits.

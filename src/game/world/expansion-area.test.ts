@@ -39,7 +39,7 @@ export function measureAreas() {
 it("preserves the base and downstream floor budgets, accounting for the removed branch approaches and new arms", () => {
   const a = measureAreas();
   // Frozen brief baseline; only reachable floor with every puzzle open counts.
-  expect(a.grove).toBe(1401.75);
+  expect(a.grove).toBe(1404.5);
   expect(a.canopy).toBe(818.75);
   expect(a.grove).toBeGreaterThanOrEqual(757 * 1.7);
   expect(a.canopy).toBeGreaterThanOrEqual(407.75 * 1.7);

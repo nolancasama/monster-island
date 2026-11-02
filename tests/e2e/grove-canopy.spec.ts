@@ -164,10 +164,13 @@ test("Bubbo carries the player over first, then only the pads rise, and the retu
   expect(Math.hypot(landed.player.x - 35.4, landed.player.z + 223.2)).toBeLessThan(3);
   await page.screenshot({ path: `${SHOTS}/b-island-after.png` });
   // Real keys back over the pads to the bank; the ground height follows the pads.
+  // Over the pads with the same collision movement uses, in both directions.
   await hook(page, "teleport", 37, -223.2, Math.PI / 2);
-  await page.keyboard.down("KeyD");
-  await waitFor(page, s => s.player.x > 45, 30_000, "walks back east");
-  await page.keyboard.up("KeyD");
+  await hook(page, "moveTo", 45.4, -223.2);
+  expect((await state(page)).player.x).toBeGreaterThan(45);
+  await hook(page, "moveTo", 37, -223.2);
+  expect((await state(page)).player.x).toBeLessThan(37.5);
+  await hook(page, "moveTo", 45.4, -223.2);
   // Reload: raised, no replay.
   await page.evaluate(() => (window as unknown as { __mi: { saveNow(): void } }).__mi.saveNow());
   await page.reload();

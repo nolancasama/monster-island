@@ -6,6 +6,16 @@ stays locked behind the Coming Soon notice), gameplay polish and the debug menu.
 (`mi.save.v4`); v1–v3 still load and are never overwritten; `act2.forestLayout: 2` marks
 migrated saves. https://nolancasama.github.io/monster-island/
 
+## Blue Inferno, Puff anchor, full swing, Grove crossing, expanded stages (branch, not merged)
+Branch `feature/grove-canopy-expansion`, frozen spec `docs/GROVE_CANOPY_EXPANSION.md`. Not deployed.
+
+- **Ember:** Inferno has its own blue flame style; Fire Breath is unchanged.
+- **Puff:** gust root follows the live beak (`anchors.puffBeak`, `logic/wind.ts`), then its tail outruns the player.
+- **Leafy:** one grabbed light or medium enemy circles the live player 360°+, then is thrown along the live aim (`logic/swing.ts`). Double Grab and Root Snare unchanged.
+- **Grove crossing:** ride Bubbo over, dismount, solve, pads rise one at a time; still optional. Pads are instances, the island is static.
+- **World:** keyhole mesa (`mesa.ts`), Grove 1,404.5 m² (1.86×), Canopy 818.75 m² (2.01×). Canopy ground is extruded decks, 10 m up; voids and ponds live in `world/hazards.ts`. Map: `node scripts/lowland-map.mjs`.
+- **Falls:** flagged Canopy edges only (`logic/falls.ts`, `hooks.playerFall`, `p.fall`): teeter, drop, -12 HP floored at 1, back to the last safe ground. Enemies `plunge`, with rewards on the lip.
+
 ## Beach side view, U forest, Port Town wall (merged)
 Frozen spec `docs/U_FOREST_PORT_WALL.md`, decisions dated 2026-11-02.
 
@@ -113,6 +123,8 @@ the Coming Soon lock and debug-toggle specs, debug menu, Act 2 (15/15 with
 the expansion; the full suite has not been run end to end on this machine.
 
 ## Known Issues
+- **Grove reeds look like fence posts:** the Ember secret's dry reeds read as wooden stakes; functional, not yet attractive.
+- **Leafy's damage rate is lower:** a full swing takes about 1.1 s plus the throw, against 0.75 s before. Damage per grab is unchanged, so an open-ground fight takes longer. Untested with children.
 - **Not checked by ear or on hardware:** yelp, flame loop, TTS bark (tests stub speech); nothing
   on a real Chromebook. Panic limbs were only rendered on gloomlets.
 - **Tunnel draw calls 60, not 59:** camera spec threshold raised by one; cause not traced.
@@ -151,11 +163,12 @@ the expansion; the full suite has not been run end to end on this machine.
 - `feature/physical-stage-passages` is superseded and can be deleted.
 
 ## Next Steps
-1. Play-test on a school Chromebook with `?debug=1`: fire, panic audio, whip, frame rate, fights.
-2. User decisions: a new "Can you…?" unlock for Ember; the dock landmark; secret pocket polish.
+1. User review of `feature/grove-canopy-expansion`, then merge and deploy on approval.
+2. Play-test on a school Chromebook with `?debug=1`: fire, panic audio, whip, falls, frame rate, fights.
+3. User decisions: a new "Can you…?" unlock for Ember; the dock landmark; secret pocket polish.
 
 ## Codex / Delegated Work
-None in flight. The user paused Codex use on 2026-11-02; ask before using it again. Codex's sandbox cannot bind ports or launch Chromium, so the
+None in flight. The user restored Codex on 2026-11-02 (quota ran out mid-branch; Slice D and fixes were built by the controller). Codex's sandbox cannot bind ports or launch Chromium, so the
 controller captures all rendered evidence (`scripts/lib/dist-route.mjs`
 serves `dist` without a port). Codex runs stop at 45 minutes: keep orders
 narrow and name exactly what to read.

@@ -214,7 +214,8 @@ const LILY_WALK = trail(
     [GROVE_CROSSING.near.x, GROVE_CROSSING.near.z],
     [GROVE_CROSSING.landing.x, GROVE_CROSSING.landing.z],
   ],
-  1.05,
+  // Matches the rendered pads, so a walker on them is never stopped by empty water.
+  1.3,
 );
 
 /** The raised root route: height profile along CANOPY_TRAIL and its two gaps. */
@@ -597,6 +598,8 @@ export const FORK_SIGN = { x: 76.5, z: -175, yaw: 0 };
 export interface ChestDef {
   id: string;
   secret?: SecretId;
+  /** Each chest is several draws: optional ones stay out of long views. */
+  close?: true;
   x: number;
   z: number;
   yaw: number;
@@ -613,8 +616,8 @@ export const CHESTS: ChestDef[] = [
   { id: "rootHollowChest", x: 63, z: -170, yaw: 0.7, coins: 12, amber: 0, food: { id: "berries", n: 1 } },
   { id: "coastChest", x: 62.8, z: -275.5, yaw: 1, coins: 18, amber: 0, food: { id: "fish", n: 1 } },
   { id: "shrineChest", x: 108.6, z: -252.6, yaw: -1.6, coins: 40, amber: 1, food: { id: "meat", n: 2 } },
-  { id: "groveHiddenCache", x: 61, z: -201, yaw: .5, coins: 25, amber: 1 },
-  { id: "canopyTreasureLedge", x: 85.5, z: -210, yaw: -.5, coins: 25, amber: 1 },
+  { id: "groveHiddenCache", close: true, x: 61, z: -201, yaw: .5, coins: 25, amber: 1 },
+  { id: "canopyTreasureLedge", close: true, x: 85.5, z: -210, yaw: -.5, coins: 25, amber: 1 },
   ...SECRET_IDS.map(secret => ({ id: `${secret}Chest`, secret, ...SECRET_SITES[secret].chest, yaw: 0, coins: 20, amber: 1 })),
 ];
 

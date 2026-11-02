@@ -387,6 +387,8 @@ test("touch: big attack buttons fight, the special button spends MP, the eat but
   await page.waitForTimeout(200);
   await page.getByTestId("btn-basic").dispatchEvent("pointerup");
   let s = await waitFor(page, (x) => x.act2.enemies[1].hp < 20, 5_000, "hit by touch");
+  // A grabbed enemy finishes its full swing before another attack can start.
+  await waitFor(page, (x) => !(x.act2 as unknown as { swings: Array<{ control: string | null }> }).swings.some(w => w.control === "grabbed"), 15_000, "swing ends");
   await hook(page, "nearEnemy", 1, 3);
   await page.getByTestId("btn-special").dispatchEvent("pointerdown");
   s = await waitFor(page, (x) => x.act2.mp.leafy < 100, 5_000, "special by touch");

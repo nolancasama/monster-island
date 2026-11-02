@@ -44,14 +44,16 @@ async function openShipFromDebugMenu(page: Page) {
   await page.keyboard.press("Escape");
 }
 async function defeat(page: Page, i: number, touch: boolean) {
-  for (let n=0;n<30;n++) {
+  // Budget for the full swing and throw: one grab now takes over a second of game time.
+  for (let n=0;n<60;n++) {
     const s=await state(page), e=s.act2.enemies.find(e=>e.i===i);
     if (e && (e.state==="ko" || e.state==="gone")) return;
     await hook(page,"nearEnemy",i,1.4); await hook(page,"setHp",100);
     if (touch) {await page.getByTestId("btn-basic").dispatchEvent("pointerdown");await page.waitForTimeout(650);await page.getByTestId("btn-basic").dispatchEvent("pointerup");}
     else {await page.keyboard.down("KeyJ");await page.waitForTimeout(650);await page.keyboard.up("KeyJ");}
   }
-  throw new Error(`Cloud enemy ${i} survived 30 real attack attempts`);
+  const last=await state(page);
+  throw new Error(`Cloud enemy ${i} survived 60 real attack attempts: ${JSON.stringify({enemy:last.act2.enemies.find(e=>e.i===i),player:last.player,active:last.progress.active,stance:last.act2.stance,whip:(last.act2 as unknown as {whip:unknown}).whip,swings:(last.act2 as unknown as {swings:unknown}).swings,zone:last.act2.zone,mode:last.mode,time:last.time,fps:last.perf.fps})}`);
 }
 
 /** Pause in the frame that shows the beat, before a CPU screenshot can miss it. */

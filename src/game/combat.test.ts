@@ -985,6 +985,50 @@ describe("elemental J simulation", () => {
     expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
   });
 
+  it("a release over a bank sets the enemy down on real ground, where it can be hit again", () => {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(e => e.zone === "canopy")!;
+    Object.assign(e, { kind: "snapjaw", x: 115.8, z: -207.5, hp: 100, state: "recover", timer: 99 });
+    Object.assign(rt.player, { x: 118, z: -207.5, yaw: -Math.PI / 2 });
+    cb.zones.current = "canopy";
+    friend("leafy");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
+    expect(e.control?.kind).toBe("grabbed");
+    rt.player.yaw = Math.PI / 2;
+    const before = e.hp;
+    advanceCombat(.95);
+    expect(e.control).toBeNull();
+    expect(e.state).not.toBe("ko");
+    expect(e.hp).toBeLessThan(before);
+    expect(isWalkable(e.x, e.z, gatesOf(getGame().progress), .55)).toBe(true);
+  });
+
+  it("an interrupted swing over a void sets the enemy down instead of stranding it", () => {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(e => e.zone === "canopy")!;
+    Object.assign(e, { kind: "snapjaw", x: 100, z: -212.5, hp: 100, state: "recover", timer: 99 });
+    Object.assign(rt.player, { x: 100, z: -214.8, yaw: 0 });
+    cb.zones.current = "canopy";
+    friend("leafy");
+    basicAttack();
+    advanceCombat(.15);
+    let overVoid = false;
+    for (let i = 0; i < 40 && !overVoid; i++) {
+      advanceCombat(.02);
+      overVoid = hazardAt(e.x, e.z, "home") !== null;
+    }
+    expect(overVoid).toBe(true);
+    expect(e.control?.kind).toBe("grabbed");
+    friend("puff");
+    advanceCombat(.05);
+    expect(e.control?.kind).not.toBe("grabbed");
+    expect(hazardAt(e.x, e.z, "home")).toBeNull();
+    expect(isWalkable(e.x, e.z, gatesOf(getGame().progress), .55)).toBe(true);
+  });
+
   it("a Canopy void uses the same forced-motion KO and leaves its reward on the last floor", () => {
     changeWorld("home");
     for (const enemy of cb.enemies) enemy.state = "gone";

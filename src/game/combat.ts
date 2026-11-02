@@ -917,7 +917,7 @@ function sampleWhipAim() {
 
 function cancelWhip() {
   if (cb.whip && cb.whip.cancelAt === null) cb.whip.cancelAt = rt.time;
-  for (const e of cb.enemies) if (e.control?.kind === "grabbed" && e.flight?.swing) endControl(e);
+  for (const e of cb.enemies) if (e.control?.kind === "grabbed" && e.flight?.swing) { landSwung(e); endControl(e); }
 }
 
 function swingingEnemy(): boolean {
@@ -1330,6 +1330,21 @@ function wallImpact(e: EnemyRt, speed: number) {
   if (swinging || speed > 3) hit(e, 8, 0, swinging ? 0 : 0.6, 0, 0, owner);
 }
 
+/** The tether carries an enemy over banks and voids. Wherever a swing ends short of a
+ * throw, set it down on real ground toward the player: off the ground it would be
+ * untargetable (sight lines need ground) and unable to walk back. */
+function landSwung(e: EnemyRt) {
+  const gates = gatesOf(getGame().progress), r = ENEMIES[e.kind].radius, p = rt.player;
+  if (isWalkable(e.x, e.z, gates, r)) return;
+  const dx = p.x - e.x, dz = p.z - e.z, count = Math.max(1, Math.ceil(Math.hypot(dx, dz) / .1));
+  for (let i = 1; i <= count; i++) {
+    const x = e.x + dx * i / count, z = e.z + dz * i / count;
+    if (isWalkable(x, z, gates, r)) { e.x = x; e.z = z; return; }
+  }
+  const ground = nearestWalkable(p.x, p.z, r, gates);
+  e.x = ground.x; e.z = ground.z;
+}
+
 const swingGates: Gates = { solved: [] };
 const swingCloudGates: NonNullable<Gates["cloud"]> = { cleared: [], solved: [], tunnelOpen: false };
 
@@ -1394,6 +1409,14 @@ function updateSwing(e: EnemyRt, c: Control, flight: NonNullable<EnemyRt["flight
   flight.x = p.x; flight.z = p.z;
   if (alive(e) && age >= SWING_DURATION - 1e-9) {
     s.phase = "released";
+    // Over a bank there is nowhere to throw it: that is a wall impact, on real ground.
+    if (!hazardAt(e.x, e.z, cb.world, onCloudIsle() ? progress.act3.puzzles : progress.solved) && !isWalkable(e.x, e.z, gates, 0)) {
+      landSwung(e);
+      const hitWall = !s.wallHit;
+      endControl(e);
+      if (hitWall) hit(e, 8, 0, 0, 0, 0, flight.owner);
+      return;
+    }
     c.kind = "flung"; c.t0 += SWING_DURATION; c.until = c.t0 + .55;
     flight.yaw = p.yaw;
     e.kx = Math.sin(p.yaw) * 11; e.kz = Math.cos(p.yaw) * 11;
