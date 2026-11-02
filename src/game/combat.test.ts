@@ -7,7 +7,7 @@ import { region } from "./world/region";
 import { COMBAT, ENEMIES, MP_REGEN, type CompanionId, type EnemyKind } from "./data/combat";
 import { BEACON_PYLONS } from "./logic/beacon";
 import { BEACON, CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
-import { ENEMY_SPAWNS, POND } from "./world/lowland";
+import { CAMP2, ENEMY_SPAWNS, POND } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/collision";
 import { run } from "./flow/script";
@@ -267,7 +267,7 @@ describe("Leafy's snap-timed whip", () => {
 
 describe("companions leaving combat", () => {
   const destinations = [
-    { name: "Fern Crossing", world: "home", hostile: [76, -183], safe: [76, -188] },
+    { name: "Forest Camp", world: "home", hostile: [76, -168], safe: [CAMP2.rest.x, CAMP2.rest.z] },
     { name: "Port Town", world: "home", hostile: [76, -287], safe: [76, -293] },
     { name: "Hidden Hollow", world: "cloud", hostile: [0, 151], safe: [-10, 190] }
   ] as const;

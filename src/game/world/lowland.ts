@@ -9,12 +9,12 @@ import { SECRET_IDS, SECRET_SITES, type SecretId } from "./elementObjects";
  *
  *            LUMO'S SANCTUARY (ledge, rope)
  *                     |
- *             PRIMEVAL FOREST 1 (tutorial)
- *                     |
- *                FERN CROSSING (fork)
- *           /         |          \
- *   FLOODED GROVE  OLD TRAIL   ANCIENT CANOPY (raised roots, two gaps)
- *           \     (shortcut)     /
+ *        PRIMEVAL FOREST BASE ── FOREST CAMP (safe alcove)
+ *           /                    \
+ *     LEFT ARM      MESA       RIGHT ARM
+ *           |    (inaccessible)   |
+ *   FLOODED GROVE          ANCIENT CANOPY (raised roots, two gaps)
+ *           \                    /
  *              RUINED CAUSEWAY (+ shrine)
  *                     |
  *               COASTAL PATH
@@ -24,13 +24,13 @@ import { SECRET_IDS, SECRET_SITES, type SecretId } from "./elementObjects";
  * Pure geometry, no imports from island.ts (island.ts blends lowlandY into
  * the island's ground). Walkable land is a union of shapes (rectangles,
  * trails with a half-width, discs) minus cut-outs (the pond, the canopy
- * gaps, the closed shortcut gate) plus decks that permanent unlocks add.
+ * gaps, the mesa) plus decks that permanent unlocks add.
  */
 
 export const STAGES = ["forest1", "grove", "canopy", "causeway", "coast"] as const;
 export type StageId = (typeof STAGES)[number];
 
-export type ZoneId = "forest1" | "camp" | "grove" | "canopy" | "oldTrail" | "causeway" | "coast" | "port";
+export type ZoneId = "forest1" | "camp" | "grove" | "canopy" | "causeway" | "coast" | "port";
 
 type Rect = { kind: "rect"; x0: number; x1: number; z0: number; z1: number };
 type Trail = { kind: "trail"; pts: Array<[number, number]>; w: number };
@@ -131,28 +131,25 @@ export const FOREST1_TRAIL: Array<[number, number]> = [
   [73.5, -161],
   [78.5, -169],
   [73.5, -178],
-  [76, -186],
+  [76, -181],
 ];
+/** Each route starts at its first-clear neck and joins its next stage directly. */
+export const FOREST_ARMS: Record<"left" | "right", Array<[number, number]>> = {
+  left: [[58, -172], [47, -175], [42, -185], [42, -197], [42, -204], [45.5, -207]],
+  right: [[94, -170], [104, -174], [113, -184], [113, -194], [102, -201]],
+};
 export const GROVE_TRAIL: Array<[number, number]> = [
-  [72, -199.5],
-  [61, -203.5],
   [51, -211],
   [45.5, -223],
   [49, -235],
   [58, -244.5],
 ];
 export const CANOPY_TRAIL: Array<[number, number]> = [
-  [81, -199],
-  [92, -201],
   [102, -205],
   [106, -212],
   [106, -232],
   [100, -238],
   [94, -245],
-];
-export const OLD_TRAIL: Array<[number, number]> = [
-  [76, -200],
-  [76, -242.6],
 ];
 export const COAST_TRAIL: Array<[number, number]> = [
   [76, -263.5],
@@ -167,7 +164,24 @@ export const CAUSEWAY = rect(50, 112, -264.5, -242.5);
 export const PORT = rect(54, 100, -322.5, -289.5);
 export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.55 };
 export const SHRINE = disc(106.5, -251.5, 4.8);
-export const CAMP_SITE = { x: 76, z: -191.5, r: 6.5 };
+export const CAMP_SITE = { x: 88, z: -160, r: 5.5 };
+
+/** Reserved rock footprint; its mesh belongs to the next slice. Never add walk shapes here. */
+export const MESA_OUTLINE: Array<[number, number]> = [
+  [69, -187], [83, -188], [89, -197], [88, -221],
+  [84, -231], [69, -230], [65, -218], [65, -198],
+];
+const MESA_EDGE = [...MESA_OUTLINE, MESA_OUTLINE[0]];
+/** Includes an optional clearance outside the closed outline. */
+export function inMesa(x: number, z: number, clearance = 0): boolean {
+  if (x < 65 - clearance || x > 89 + clearance || z < -231 - clearance || z > -187 + clearance) return false;
+  let within = false;
+  for (let i = 0, j = MESA_OUTLINE.length - 1; i < MESA_OUTLINE.length; j = i++) {
+    const [ax, az] = MESA_OUTLINE[i], [bx, bz] = MESA_OUTLINE[j];
+    if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) within = !within;
+  }
+  return within || nearestOnTrail(MESA_EDGE, x, z).d <= clearance;
+}
 
 /** The pond in the grove with its islet (reached on Bubbo's lily pads). */
 export const POND = { x: 37.6, z: -222.5, r: 5 };
@@ -188,7 +202,9 @@ const LILY_WALK = trail(
 /** The raised root route: height profile along CANOPY_TRAIL and its two gaps. */
 export const CANOPY_HEIGHT = 4.5;
 const CANOPY_LEN = trailLength(CANOPY_TRAIL);
-const CANOPY_RAMPS = { up: [6, 16], down: [CANOPY_LEN - 12, CANOPY_LEN - 3] };
+// Keep the original raised walk and bridge landings after trimming its approach.
+const CANOPY_APPROACH = Math.hypot(92 - 81, -201 + 199) + Math.hypot(102 - 92, -205 + 201);
+const CANOPY_RAMPS = { up: [6 - CANOPY_APPROACH, 16 - CANOPY_APPROACH], down: [CANOPY_LEN - 12, CANOPY_LEN - 3] };
 /** Gaps in the root walk (x is the trail's straight north-south stretch). */
 export const CANOPY_GAPS = {
   canopyVines: { x: 106, z0: -219.5, z1: -216 },
@@ -196,9 +212,6 @@ export const CANOPY_GAPS = {
 };
 const GAP_HALF = 14;
 export const DECK_HALF = 0.95;
-
-/** The old trail's gate into the causeway (closed until the shortcut is opened). */
-export const SHORTCUT_GATE = { x: 76, z: -241.4, half: 2.2 };
 
 export interface ZoneDef {
   id: ZoneId;
@@ -211,9 +224,9 @@ export interface ZoneDef {
 export const ZONES: Record<ZoneId, ZoneDef> = {
   camp: {
     id: "camp",
-    name: { en: "Fern Crossing", ja: "シダの ぶんきてん" },
+    name: { en: "Forest Camp", ja: "もりの キャンプ" },
     hostile: false,
-    walk: [disc(CAMP_SITE.x, CAMP_SITE.z, CAMP_SITE.r), rect(70.5, 81.5, -201.5, -195)],
+    walk: [disc(CAMP_SITE.x, CAMP_SITE.z, CAMP_SITE.r)],
   },
   port: {
     id: "port",
@@ -221,7 +234,6 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     hostile: false,
     walk: [PORT, rect(PIER2.x - PIER2.half, PIER2.x + PIER2.half, PIER2.z0, PIER2.z1 + 0.5)],
   },
-  oldTrail: { id: "oldTrail", name: { en: "Old Trail", ja: "ふるい こみち" }, hostile: false, walk: [trail(OLD_TRAIL, 1.9)] },
   canopy: {
     id: "canopy",
     name: { en: "Ancient Canopy", ja: "こだいの きのうえ" },
@@ -305,6 +317,11 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     hostile: true,
     walk: [
       trail(FOREST1_TRAIL, 4.2),
+      trail([[79, -161], [88, -160]], 2.6),
+      trail([[64, -174], ...FOREST_ARMS.left], 4),
+      trail([[88, -170], ...FOREST_ARMS.right], 4.5),
+      disc(43, -189, 4.8),
+      disc(113, -187, 5),
       disc(76.5, -168, 6.5),
       disc(74.5, -178.5, 6),
       disc(68, -166, 7.5),
@@ -331,11 +348,12 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
   },
 };
 /** Overlaps are decided in this order (the camp before the forest round it, the town before the coast). */
-export const ZONE_ORDER: ZoneId[] = ["camp", "port", "oldTrail", "canopy", "grove", "causeway", "coast", "forest1"];
+export const ZONE_ORDER: ZoneId[] = ["camp", "port", "canopy", "grove", "causeway", "coast", "forest1"];
 
 /** The zone at a point (null outside the lowland's walkable land). */
 export function zoneAt(x: number, z: number): ZoneId | null {
   if (z > CLIFF_FOOT_Z + 0.5) return null;
+  if (inMesa(x, z, 1.5)) return null;
   for (const id of ZONE_ORDER) if (ZONES[id].walk.some((sh) => inside(sh, x, z, 0))) return id;
   return null;
 }
@@ -359,11 +377,10 @@ export function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
   const g = CANOPY_GAPS[id];
   return rect(g.x - DECK_HALF, g.x + DECK_HALF, g.z0 - 1, g.z1 + 1);
 }
-const GATE_CUT = rect(SHORTCUT_GATE.x - SHORTCUT_GATE.half - 0.5, SHORTCUT_GATE.x + SHORTCUT_GATE.half + 0.5, SHORTCUT_GATE.z - 0.45, SHORTCUT_GATE.z + 0.45);
-
 /** True when a circle of radius m fits the lowland's open land (solid scenery is checked separately). */
 export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number): boolean {
   if (z > CLIFF_FOOT_Z - m) return false;
+  if (inMesa(x, z, 1.5 + m)) return false;
   const solved = g.solved;
   // The two narrow branch crossings retain their original walking footprints.
   for (const t of STAGE_PASSAGES)
@@ -377,7 +394,6 @@ export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number
     if (touches(gapCut(id), x, z, m)) return solved.includes(id) && inside(gapDeck(id), x, z, m);
   }
   if (touches(POND_CUT, x, z, m) && !inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m)) return false;
-  if (!solved.includes("causewayGate") && touches(GATE_CUT, x, z, m)) return false;
   for (const id of ZONE_ORDER) for (const sh of ZONES[id].walk) if (inside(sh, x, z, m)) return true;
   return false;
 }
@@ -508,13 +524,12 @@ export function lowlandDeckY(x: number, z: number, solved: readonly ObstacleId[]
 // ------------------------------------------------------------------ places
 
 export const CAMP2 = {
-  tent: { x: 71.5, z: -193.5, yaw: 0.9 },
-  fire: { x: 76.5, z: -190.5 },
-  bench: { x: 79, z: -188.6, yaw: -0.5 },
-  /** Legacy camp wake point; Fern Crossing has no rest interaction. */
-  rest: { x: 75.6, z: -189.2 },
+  tent: { x: 90.5, z: -158, yaw: 0.9 },
+  fire: { x: 87, z: -162 },
+  bench: { x: 89.5, z: -162.5, yaw: -0.5 },
+  rest: { x: 88, z: -160 },
 };
-export const FORK_SIGN = { x: 78.6, z: -198.2, yaw: 0 };
+export const FORK_SIGN = { x: 76.5, z: -175, yaw: 0 };
 
 export interface ChestDef {
   id: string;
@@ -539,11 +554,10 @@ export const CHESTS: ChestDef[] = [
 ];
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */
-export const ACT2_OBSTACLE_PLACE: Record<"groveLilies" | "canopyVines" | "canopyRope" | "causewayGate", Vec2 & { face: Vec2 }> = {
+export const ACT2_OBSTACLE_PLACE: Record<"groveLilies" | "canopyVines" | "canopyRope", Vec2 & { face: Vec2 }> = {
   groveLilies: { x: 44.3, z: -221.6, face: { x: 39, z: -223 } },
   canopyVines: { x: 106, z: -214.6, face: { x: 106, z: -218 } },
   canopyRope: { x: 106, z: -224.2, face: { x: 106, z: -227.5 } },
-  causewayGate: { x: 76, z: -244, face: { x: 76, z: -241.4 } },
 };
 
 /** The town: each service has a building, a keeper and the spot E works from. */
@@ -623,7 +637,7 @@ export const LOGS: Array<{ ax: number; az: number; bx: number; bz: number; r: nu
 export const RUIN_PILLARS: Vec2[] = (() => {
   const out: Vec2[] = [];
   for (let x = 58; x <= 96; x += 6.4) {
-    if (Math.abs(x - SHORTCUT_GATE.x) < 4) continue;
+    if (Math.abs(x - 76) < 4) continue;
     out.push({ x, z: -243.6 }, { x: x + 3.2, z: -255.4 });
   }
   out.push({x:52.5,z:-259.5},{x:109,z:-260.5},{x:45.2,z:-251},{x:45.2,z:-256});
@@ -637,6 +651,8 @@ export interface EnemySpawn {
   kind: EnemyKind;
   /** Preserve the replaced spawn's HP and rewards while changing its attacks. */
   replaces?: "gloomlet" | "snapjaw" | "shellback";
+  /** Arm encounters respawn normally but never count toward the first clear. */
+  optional?: true;
   x: number;
   z: number;
 }
@@ -648,7 +664,7 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "forest1", kind: "snapjaw", x: 72.6, z: -178.6 },
   { zone: "forest1", kind: "gloomlet", x: 85, z: -177.2 },
   // The grove: more enemies, simple ground.
-  { zone: "grove", kind: "gloomlet", x: 62, z: -203.2 },
+  { zone: "grove", kind: "gloomlet", x: 57, z: -211 },
   { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 38.8, z: -211.6 },
   { zone: "grove", kind: "snapjaw", x: 51.5, z: -211.8 },
   { zone: "grove", kind: "gloomlet", x: 48.6, z: -216.4 },
@@ -675,6 +691,12 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "coast", kind: "raiderShooter", replaces: "snapjaw", x: 77.4, z: -284.6 },
   { zone: "coast", kind: "gloomlet", x: 64, z: -278 },
   { zone: "canopy", kind: "gloomlet", x: 98, z: -207 },
+  { zone: "forest1", kind: "gloomlet", x: 49, z: -175, optional: true },
+  { zone: "forest1", kind: "snapjaw", x: 42, z: -186, optional: true },
+  { zone: "forest1", kind: "gloomlet", x: 42, z: -196, optional: true },
+  { zone: "forest1", kind: "gloomlet", x: 103, z: -174, optional: true },
+  { zone: "forest1", kind: "snapjaw", x: 113, z: -184, optional: true },
+  { zone: "forest1", kind: "gloomlet", x: 113, z: -194, optional: true },
 ];
 
 /** Town props (scenery placements shared by the scene and collision). */
@@ -707,6 +729,23 @@ export function lowlandSolids(): SolidShape[] {
   const out: SolidShape[] = [];
   const box = (x: number, z: number, hx: number, hz: number, yaw = 0) => out.push({ kind: "box", x, z, hx, hz, yaw });
   const circle = (x: number, z: number, r: number) => out.push({ kind: "circle", x, z, r });
+  // A sealed outline and overlapping interior strips reserve solid rock even if
+  // a future walk shape is accidentally extended into this footprint.
+  for (let i = 0; i < MESA_OUTLINE.length; i++) {
+    const [ax, az] = MESA_OUTLINE[i], [bx, bz] = MESA_OUTLINE[(i + 1) % MESA_OUTLINE.length];
+    out.push({ kind: "capsule", ax, az, bx, bz, r: 1.5 });
+  }
+  for (let z = -230.5; z < -187; z++) {
+    const xs: number[] = [];
+    for (let i = 0; i < MESA_OUTLINE.length; i++) {
+      const [ax, az] = MESA_OUTLINE[i], [bx, bz] = MESA_OUTLINE[(i + 1) % MESA_OUTLINE.length];
+      if ((az > z) !== (bz > z)) xs.push(ax + (bx - ax) * (z - az) / (bz - az));
+    }
+    if (xs.length === 2) box((xs[0] + xs[1]) / 2, z, Math.abs(xs[1] - xs[0]) / 2, 0.55);
+  }
+  box(CAMP2.tent.x, CAMP2.tent.z, 1.6, 1.25, CAMP2.tent.yaw);
+  circle(CAMP2.fire.x, CAMP2.fire.z, 0.65);
+  box(CAMP2.bench.x, CAMP2.bench.z, 1, 0.2, CAMP2.bench.yaw);
   for (const t of GIANT_TREES) circle(t.x, t.z, t.r);
   for (const b of MOSSY_BOULDERS) circle(b.x, b.z, b.r * 0.9);
   for (const l of LOGS) out.push({ kind: "capsule", ...l });
@@ -726,24 +765,30 @@ export function lowlandSolids(): SolidShape[] {
 
 /** Waypoints for the ★ marker on the way to the town (either route). */
 export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
-  forest1: { x: 76, z: -186 },
-  camp: { x: 76, z: -199 },
+  forest1: { x: 47, z: -175 },
+  camp: { x: 94, z: -170 },
   grove: { x: 58, z: -244 },
   canopy: { x: 95, z: -244.5 },
-  oldTrail: { x: 76, z: -240 },
   causeway: { x: 76, z: -256 },
   coast: { x: 76, z: -290 },
   port: { x: SERVICES.harbor.keeper.x, z: SERVICES.harbor.keeper.z },
 };
 
+/** The base and camp point toward the nearest arm rather than the closed mesa. */
+export function routeMarker(zone: ZoneId, playerX: number): Vec2 {
+  if (zone === "forest1" || zone === "camp") return playerX < 76 ? { x: 47, z: -175 } : { x: 104, z: -174 };
+  return ROUTE_MARKERS[zone];
+}
+
 /** Narrow exits span every walkable crossing, including the mounted body radius.
  * Backward routes to the preceding safe area remain open. */
-export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: number; kind: "roots" | "reeds" | "stone" | "wood"; cut: Rect }> = [
-  { id: "forest1", x: 76, z: -184.5, half: 5.7, kind: "roots", cut: rect(19, 135, -184.9, -184.1) },
-  { id: "grove", x: 56, z: -241.4, half: 5.8, kind: "reeds", cut: rect(19, 70, -241.8, -241) },
-  { id: "canopy", x: 97, z: -241.4, half: 6, kind: "roots", cut: rect(82, 135, -241.8, -241) },
-  { id: "causeway", x: 76, z: -264, half: 5, kind: "stone", cut: rect(19, 135, -264.4, -263.6) },
-  { id: "coast", x: 76, z: -288, half: 5, kind: "wood", cut: rect(19, 135, -288.4, -287.6) },
+export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: number; orientation: "x" | "z"; kind: "roots" | "reeds" | "stone" | "wood"; cut: Rect }> = [
+  { id: "forest1", x: 58, z: -172, half: 9, orientation: "z", kind: "roots", cut: rect(57.6, 58.4, -184, -160) },
+  { id: "forest1", x: 94, z: -170, half: 9, orientation: "z", kind: "roots", cut: rect(93.6, 94.4, -182, -158) },
+  { id: "grove", x: 56, z: -241.4, half: 5.8, orientation: "x", kind: "reeds", cut: rect(19, 70, -241.8, -241) },
+  { id: "canopy", x: 97, z: -241.4, half: 6, orientation: "x", kind: "roots", cut: rect(82, 135, -241.8, -241) },
+  { id: "causeway", x: 76, z: -264, half: 5, orientation: "x", kind: "stone", cut: rect(19, 135, -264.4, -263.6) },
+  { id: "coast", x: 76, z: -288, half: 5, orientation: "x", kind: "wood", cut: rect(19, 135, -288.4, -287.6) },
 ];
 
 /** Draw the real basin from the sanctuary and below; the prologue tunnel stays isolated. */
@@ -757,20 +802,17 @@ function shapeDistance(sh: WalkShape, x: number, z: number): number {
   if (sh.kind === "trail") return Math.max(0, nearestOnTrail(sh.pts, x, z).d - sh.w);
   return Math.hypot(Math.max(sh.x0 - x, 0, x - sh.x1), Math.max(sh.z0 - z, 0, z - sh.z1));
 }
-/** Low shoulders frame the paths; broad saddles keep neighbouring places visible. */
+/** Banks follow the actual walk shapes, enclosing both arms and the reserved mesa. */
 export function forestBankY(x: number, z: number): number {
   if (z > -159 || z < -288 || x < 30 || x > 123) return 0;
   let d = Infinity;
   for (const id of ZONE_ORDER) for (const sh of ZONES[id].walk) d = Math.min(d, shapeDistance(sh, x, z));
   for (const t of STAGE_PASSAGES) if (inPassageBand(t, x, z)) d = shapeDistance(t.walk, x, z);
   let opening = 0;
-  for (const gate of [...STAGE_EXITS, SHORTCUT_GATE]) {
+  for (const gate of STAGE_EXITS.filter(gate => gate.id !== "forest1")) {
     const distance = Math.hypot(Math.max(0, Math.abs(x - gate.x) - gate.half - 3) / 5, (z - gate.z) / 11);
     opening = Math.max(opening, 1 - smooth((distance - 0.6) / 0.9));
   }
-  // Open the fork as well as the first-clear crossings, preserving every walk shape.
-  for (const [cx, cz] of [[62, -202], [92, -202], [76, -211]])
-    opening = Math.max(opening, 1 - smooth((Math.hypot((x - cx) / 14, (z - cz) / 12) - 0.5) / 0.8));
   const edge = smooth((-159 - z) / 6) * smooth((z + 288) / 6) * smooth((x - 30) / 4) * smooth((123 - x) / 4);
   return (4 - 3.6 * opening) * smooth((d - 1.2) / 4.5) * edge;
 }

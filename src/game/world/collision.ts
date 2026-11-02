@@ -94,7 +94,7 @@ export function gatesOf(p: { solved: readonly ObstacleId[]; endings: number; act
 
 const GATE_IDS: readonly ObstacleId[] = [
   "fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame",
-  "groveLilies", "canopyVines", "canopyRope", "causewayGate"
+  "groveLilies", "canopyVines", "canopyRope"
 ];
 const gateCache: Record<string, Gates> = {};
 const secretKey = (secrets: readonly string[] = []) => SECRET_IDS.reduce((key, id, i) => key | (secrets.includes(id) ? 1 << i : 0), 0);

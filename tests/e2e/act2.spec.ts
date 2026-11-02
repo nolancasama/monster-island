@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { CAMP2, CLIFF_ROPE, ENEMY_SPAWNS } from "../../src/game/world/lowland";
 
 /**
  * Act 2, The Hunt for Lumo: the real UI (keys, taps, clicks) in tap mode
@@ -196,14 +197,15 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   expect(s.act2.mp.leafy).toBeGreaterThanOrEqual(40);
   expect(s.progress.act2.tutorial).toContain("eat");
 
-  // First-clear progression now requires every forest enemy before camp.
-  for (const e of (await state(page)).act2.enemies.filter(e => e.zone === "forest1")) await defeat(page,e.i);
+  // Only the five base enemies are required; either arm opens after this clear.
+  for (const e of (await state(page)).act2.enemies.filter(e => e.zone === "forest1" && !ENEMY_SPAWNS[e.i].optional)) await defeat(page,e.i);
   expect((await state(page)).progress.act2.cleared).toContain("forest1");
+  expect((await state(page)).progress.act2.checkpoint).toBe("camp");
 
-  // Fern Crossing is safe and records the wake point without healing.
+  // Forest Camp is safe and records the rest tutorial without healing.
   const hpBeforeCrossing = (await state(page)).act2.hp;
-  await hook(page, "teleport", 75.6, -189.2, Math.PI);
-  s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.tutorial.includes("rest"), 30_000, "reached Crossing");
+  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
+  s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.tutorial.includes("rest"), 30_000, "reached Forest Camp");
   expect(s.act2.hp).toBe(hpBeforeCrossing);
   expect(s.focus?.id).not.toBe("campRest");
   expect(s.act2.zone).toBe("camp");
@@ -219,7 +221,7 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   expect(errors).toEqual([]);
 });
 
-test("enemies return only after a real absence; both routes' puzzles and the shortcut; the town is reached", async ({ page }) => {
+test("enemies return only after a real absence; both routes' puzzles; the town is reached", async ({ page }) => {
   test.setTimeout(240_000);
   await seed(page, DONE_V3, "mi.save.v3");
   const errors = await boot(page);
@@ -230,21 +232,21 @@ test("enemies return only after a real absence; both routes' puzzles and the sho
   // Knock out the first enemy, step out and straight back: still gone. After 12 s away: back.
   await defeat(page, 0);
   await waitFor(page, (x) => x.act2.enemies[0].state === "gone", 5_000, "enemy gone");
-  await hook(page, "teleport", 75.6, -189.2, Math.PI);
+  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
   await waitFor(page, (x) => x.act2.zone === "camp", 5_000, "in the camp");
-  await hook(page, "teleport", 76, -184, Math.PI);
+  await hook(page, "teleport", CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, Math.PI);
   let s = await waitFor(page, (x) => x.act2.zone === "forest1", 5_000, "back in the forest");
   expect(s.act2.enemies[0].state).toBe("gone");
-  await hook(page, "teleport", 75.6, -189.2, Math.PI);
+  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
   // 12 s of play away (the clock is play time, which a slow software renderer stretches).
   const away = (await waitFor(page, (x) => x.act2.zone === "camp", 5_000, "away in the camp")).playTime;
   await waitFor(page, (x) => x.playTime > away + 12.5, 60_000, "12 s of play away");
-  await hook(page, "teleport", 76, -184, Math.PI);
+  await hook(page, "teleport", CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, Math.PI);
   s = await waitFor(page, (x) => x.act2.zone === "forest1" && x.act2.enemies[0].state === "idle", 5_000, "respawned");
   expect(s.act2.enemies[0].hp).toBe(20);
 
   // The canopy: Leafy's vines over the first gap, Puff's rope bridge over the second.
-  for (const [key, id, target, question] of [[1, "leafy", "canopyVines", "canHelp"], [3, "puff", "canopyRope", "canFly"], [2, "bubbo", "groveLilies", "canSwim"], [4, "ember", "causewayGate", "canFire"]] as const) {
+  for (const [key, id, target, question] of [[1, "leafy", "canopyVines", "canHelp"], [3, "puff", "canopyRope", "canFly"], [2, "bubbo", "groveLilies", "canSwim"]] as const) {
     await hook(page, "setHp", 100);
     await select(page, key, id);
     await use(page, target);
@@ -255,7 +257,7 @@ test("enemies return only after a real absence; both routes' puzzles and the sho
     await waitFor(page, (x) => x.mode === "explore", 20_000, `explore after ${target}`);
   }
   s = await state(page);
-  expect(s.act2.unlock).toMatchObject({ canopyVines: 1, canopyRope: 1, groveLilies: 1, causewayGate: 1 });
+  expect(s.act2.unlock).toMatchObject({ canopyVines: 1, canopyRope: 1, groveLilies: 1 });
 
   // Into the town: a safe place (everyone follows), Maple is waiting, the objective moves on.
   await hook(page, "teleport", 76, -286, Math.PI);
@@ -333,12 +335,13 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   // Upgraded Leafy still deals Vine Grab's contact damage with a manual J.
   await hook(page, "teleport", 70, -272, Math.PI);
   await waitFor(page, (x) => x.act2.zone === "coast" && x.act2.stance.friend === "leafy" && x.act2.stance.k > 0.99, 10_000, "Leafy in position on the coast");
-  await hook(page, "nearEnemy", 24, 1.8);
-  const target = await waitFor(page, (x) => x.act2.enemies[24].hp > 0 && x.progress.act2.upgrades.includes("leafy") && x.act2.stance.friend === "leafy" && x.act2.stance.k > .99,
+  const coastEnemy = (await state(page)).act2.enemies.find(e => e.zone === "coast")!.i;
+  await hook(page, "nearEnemy", coastEnemy, 1.8);
+  const target = await waitFor(page, (x) => x.act2.enemies[coastEnemy].hp > 0 && x.progress.act2.upgrades.includes("leafy") && x.act2.stance.friend === "leafy" && x.act2.stance.k > .99,
     5_000, "HARNESS_PRECONDITION_FAILED: upgraded Leafy ready with a live target");
   await page.keyboard.press("KeyJ");
-  s = await waitFor(page, (x) => x.act2.enemies[24].hp < target.act2.enemies[24].hp, 5_000, "hit");
-  expect(target.act2.enemies[24].hp - s.act2.enemies[24].hp).toBeGreaterThanOrEqual(8);
+  s = await waitFor(page, (x) => x.act2.enemies[coastEnemy].hp < target.act2.enemies[coastEnemy].hp, 5_000, "hit");
+  expect(target.act2.enemies[coastEnemy].hp - s.act2.enemies[coastEnemy].hp).toBeGreaterThanOrEqual(8);
   expect(errors).toEqual([]);
 });
 

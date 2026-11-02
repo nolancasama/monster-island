@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, type MiState } from "./helpers";
+import { CAMP2, CAMP_SITE, CLIFF_ROPE, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
 
 type Vec = { x: number; y: number; z: number };
 type ViewState = MiState & {
@@ -53,12 +54,10 @@ async function gates(page: Page, open: boolean) {
   await hook(page, "timeScale", 1);
   await hook(page, "set", { mode: "busy", progress: {
     ...progress,
-    solved: open ? [...new Set([...progress.solved, "causewayGate"])] : progress.solved.filter(x => x !== "causewayGate"),
     act2: { ...progress.act2, cleared: open ? stages : [] }
   } });
   await hook(page, "settleAct2Unlocks");
   await precondition(page, open ? "all gates withdrawn" : "all gates obstructing", s =>
-    s.act2.unlock.causewayGate === Number(open) &&
     stages.every(id => open ? s.lowland.barriers[id] > .995 : s.lowland.barriers[id] < .005));
 }
 
@@ -72,14 +71,22 @@ async function stand(page: Page, x: number, z: number) {
 }
 
 const connections = [
-  { name: "primeval-camp", from: [76, -181.5], to: [76, -188], gate: "forest1" },
-  { name: "camp-grove", from: [71, -199], to: [63, -202.5] },
-  { name: "camp-canopy", from: [81, -199], to: [91, -201] },
+  ...STAGE_EXITS.filter(g => g.id === "forest1").map(g => {
+    const direction = g.x < CLIFF_ROPE.foot.x ? -1 : 1;
+    return { name: direction < 0 ? "left-neck" : "right-neck", from: [g.x - direction * 3, g.z], to: [g.x + direction * 3, g.z] };
+  }),
+  { name: "forest-camp", from: [CAMP_SITE.x - CAMP_SITE.r - 1.5, CAMP_SITE.z], to: [CAMP2.rest.x, CAMP2.rest.z] },
+  { name: "left-arm-grove", from: FOREST_ARMS.left[3], to: FOREST_ARMS.left.at(-1)! },
+  { name: "right-arm-canopy", from: FOREST_ARMS.right[3], to: FOREST_ARMS.right.at(-1)! },
   { name: "grove-causeway", from: [56, -239], to: [61, -246], gate: "grove" },
   { name: "canopy-causeway", from: [98, -239], to: [93, -246], gate: "canopy" },
   { name: "causeway-coast", from: [76, -261], to: [76, -266], gate: "causeway" },
-  { name: "coast-port", from: [76, -285], to: [76, -292], gate: "coast" },
-  { name: "old-trail", from: [76, -238.5], to: [76, -244] }
+  { name: "coast-port", from: [76, -285], to: [76, -292], gate: "coast" }
+] as const;
+const vistas = [
+  ["primeval", 68, -168], ["camp", CAMP2.rest.x, CAMP2.rest.z], ["grove", 49, -231], ["canopy", 109, -234],
+  ["left-arm", ...FOREST_ARMS.left[3]], ["right-arm", ...FOREST_ARMS.right[3]],
+  ["causeway", 83, -255], ["coast", 66, -275], ["town-arrival", 76, -293], ["town", 74, -307]
 ] as const;
 
 test("continuous geography, fixed lowland camera, stable rope and Chromebook render budgets", async ({ page }) => {
@@ -105,7 +112,7 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
   };
 
   // Real keyboard movement crosses two boundaries; pointer and wheel cannot change the lowland framing.
-  await stand(page, 76, -181);
+  await stand(page, CAMP_SITE.x - CAMP_SITE.r - 1.5, CAMP_SITE.z);
   await hook(page, "set", { mode: "explore" });
   await precondition(page, "starting in Primeval", s => s.act2.zone === "forest1" && s.camera.framing === "lowland");
   const fixed = (await read(page)).camera;
@@ -119,18 +126,18 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
   expect(afterInput.yaw).toBe(0);
   expect(afterInput.pitch).toBe(fixed.pitch);
   expect(afterInput.dist).toBe(fixed.dist);
-  await page.keyboard.down("KeyW");
-  try {
-    for (const zone of ["camp", "oldTrail"]) {
+  for (const [key, zone] of [["KeyD", "camp"], ["KeyA", "forest1"]]) {
+    await page.keyboard.down(key);
+    try {
       const s = await precondition(page, `walking into ${zone}`, s => {
         expect(s.camera.yaw, "heading stays fixed while walking").toBe(0);
         return s.act2.zone === zone;
       }, 45000);
       expect(s.camera.yaw, `${zone} fixed heading`).toBe(0);
       expect(s.camera.framing).toBe("lowland");
+    } finally {
+      await page.keyboard.up(key);
     }
-  } finally {
-    await page.keyboard.up("KeyW");
   }
   await hook(page, "set", { mode: "busy" });
 
@@ -201,17 +208,14 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
       await hook(page, "timeScale", 0);
       await capture(`${c.name}-back`, width, height);
     }
-    for (const [name, x, z] of [
-      ["primeval", 68, -168], ["camp", 76, -192], ["grove", 49, -231], ["canopy", 109, -234],
-      ["old-trail-centre", 76, -221], ["causeway", 83, -255], ["coast", 66, -275], ["town-arrival", 76, -293], ["town", 74, -307]
-    ] as const) {
+    for (const [name, x, z] of vistas) {
       await stand(page, x, z);
       await hook(page, "timeScale", 0);
       await capture(name, width, height);
     }
   }
   writeReport();
-  expect(after.length).toBe(84);
+  expect(after.length).toBe(2 * (9 + connections.length * 3 + vistas.length));
   // The "-back" views are mirrored inspection cameras the fixed lowland camera never produces; they are reported, not budgeted.
   expect(after.filter(view => !view.name.endsWith("-back") && (view.perf.calls > 120 || view.perf.triangles > 150000)), "every gameplay view stays within 120 calls / 150k triangles").toEqual([]);
   const fogNear = after.map(view => view.fog.near);

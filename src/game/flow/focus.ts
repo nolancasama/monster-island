@@ -9,7 +9,7 @@ import { ACT2_PLACE, PHASE3_PLACE } from "./obstacles";
 import { lumoHidden } from "./act2";
 import { cloudCandidates } from "./act3";
 import { CLOUD_SPAWNS, HOLLOW } from "../world/cloudisle";
-import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, zoneAt, type ServiceId } from "../world/lowland";
+import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
 import { obstacleAvailable } from "../logic/progress";
 import type { ObstacleId } from "../types";
 
@@ -21,7 +21,7 @@ const SERVICE_FOCUS: Record<ServiceId, { verb: string; noun: string }> = {
   inn: { verb: "Rest at", noun: "the inn" },
   harbor: { verb: "Ask about", noun: "the ship" }
 };
-const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap", causewayGate: "the gate" };
+const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap" };
 
 /**
  * What E (or the touch action button) would use right now: the nearest usable
@@ -93,12 +93,9 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {
     if (isSolved(p, id) || !obstacleAvailable(p, id as ObstacleId)) continue;
-    // The shortcut's thorns are reached from the causeway side only.
-    if (id === "causewayGate" && rt.player.z > SHORTCUT_GATE.z) continue;
     const place = ACT2_PLACE[id];
     add({ id, kind: "obstacle", verb: "Look at", noun: ACT2_NOUN[id], x: place.x, z: place.z }, 2.6);
   }
-  if (!isSolved(p, "causewayGate") && rt.player.z > SHORTCUT_GATE.z) add({ id: "lockedGate", kind: "sign", verb: "Look at", noun: "the gate", x: SHORTCUT_GATE.x, z: SHORTCUT_GATE.z + 1.2 }, 2.4);
   for (const s of Object.values(SERVICES)) add({ id: s.id, kind: "npc", ...SERVICE_FOCUS[s.id], x: s.keeper.x, z: s.keeper.z }, 2.8);
 }
 
@@ -180,7 +177,7 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       return { x: CAMP2.rest.x, z: CAMP2.rest.z, y: 1.8 };
     case "reachPort": {
       const zone = zoneAt(rt.player.x, rt.player.z);
-      const t = zone ? ROUTE_MARKERS[zone] : CLIFF_ROPE.top;
+      const t = zone ? routeMarker(zone, rt.player.x) : CLIFF_ROPE.top;
       return { x: t.x, z: t.z, y: 2.2 };
     }
     case "market":

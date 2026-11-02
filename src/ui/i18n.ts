@@ -79,7 +79,7 @@ export function objectiveText(o: Objective): Text {
     case "openChest":
       return { en: "Find the treasure chest!", ja: "たからばこを さがそう!" };
     case "crossing":
-      return { en: "Reach Fern Crossing!", ja: "シダの ぶんきてんへ いこう!" };
+      return { en: "Visit Forest Camp by the rope!", ja: "ロープの そばの もりの キャンプへ!" };
     case "reachPort":
       return { en: "Rescue Lumo! Reach the port.", ja: "ルモを たすけよう! みなとへ いこう" };
     case "market":

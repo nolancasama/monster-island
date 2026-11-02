@@ -185,7 +185,7 @@ export const rt = {
   /** Act 2: the rope down the sanctuary's cliff (0 = not there, 1 = tied). */
   cliffRope: 0,
   /** Act 2 permanent unlocks, animated by the friends' powers (0..1). */
-  act2Unlock: { groveLilies: 0, canopyVines: 0, canopyRope: 0, causewayGate: 0 } as Partial<Record<ObstacleId, number>>,
+  act2Unlock: { groveLilies: 0, canopyVines: 0, canopyRope: 0 } as Partial<Record<ObstacleId, number>>,
   /** Opened chests' lids (id -> 0..1). */
   chestLid: new Map<string, number>(),
   /** Act 2 scene stage, read-only through __mi.state() for captures and acceptance waits. */

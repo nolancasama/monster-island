@@ -11,7 +11,7 @@ import { switchTo } from "./companion";
 import { cloudInteract } from "./act3";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
-import { climbCliff, lookAtLockedGate, openChestScene, readForkSign, talkToKeeper } from "./act2";
+import { climbCliff, openChestScene, readForkSign, talkToKeeper } from "./act2";
 import type { ServiceId } from "../world/lowland";
 import type { MonsterId, ObstacleId } from "../types";
 
@@ -46,7 +46,6 @@ export function interact(f: Focus | null = getGame().focus) {
       return;
     case "sign":
       if (f.id === "forkSign") void readForkSign();
-      else if (f.id === "lockedGate") void lookAtLockedGate();
       else void readSign();
       return;
     // Act 2.

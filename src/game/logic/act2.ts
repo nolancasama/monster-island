@@ -17,6 +17,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = ["attack", "coins", "special", "ea
 export type Checkpoint = "cliff" | "camp" | "port";
 
 export interface Act2 {
+  /** Walkability version for the U-shaped forest save migration. */
+  forestLayout: 2;
   /** The kidnapping has played (Lumo stays a friend; being taken is a separate fact). */
   started: boolean;
   /** First-clear exits, independent of transient respawning enemies. */
@@ -52,7 +54,7 @@ export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo
 
 export function newAct2(): Act2 {
   return {
-    started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
+    forestLayout: 2, started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
     chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
   };
 }
@@ -90,7 +92,7 @@ export function findPort(p: Progress): Progress {
   return p.act2.portFound || !p.act2.started ? p : withAct2(p, { portFound: true });
 }
 
-/** Keep the saved lesson token `rest`; the lesson now records reaching the crossing. */
+/** Keep the saved lesson token `rest`; the lesson records reaching Forest Camp. */
 export function reachCrossing(p: Progress): Progress {
   return !p.act2.started ? p : setCheckpoint(markTutorial(p, "rest"), "camp");
 }
@@ -314,13 +316,13 @@ export function act2Objective(p: Progress): Act2Objective {
 }
 
 /** Act 2's permanent unlocks exist only once the chapter has begun. */
-export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "causewayGate"];
+export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope"];
 
 /** Only registered enemies in this stage count; duplicate or foreign indices cannot clear it. */
 export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): number {
-  return ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !defeated.includes(i)), 0);
+  return ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !e.optional && !defeated.includes(i)), 0);
 }
 export function clearStage(p: Progress, zone: ZoneId, defeated: readonly number[]): Progress {
   if (!p.act2.started || !STAGES.includes(zone as StageId) || p.act2.cleared.includes(zone as StageId) || remainingEnemies(zone, defeated) !== 0) return p;
-  return withAct2(p, { cleared: [...p.act2.cleared, zone as StageId] });
+  return withAct2(p, { cleared: [...p.act2.cleared, zone as StageId], ...(zone === "forest1" && p.act2.checkpoint === "cliff" ? { checkpoint: "camp" } : {}) });
 }

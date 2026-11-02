@@ -378,12 +378,6 @@ export function readForkSign(): Promise<void> {
   });
 }
 
-export function lookAtLockedGate(): Promise<void> {
-  return run(async () => {
-    await say("self", "The gate is shut! Thorns hold it on the other side.", "とびらが しまっている! むこうがわに いばらが からまっている");
-  });
-}
-
 // ------------------------------------------------------------ knock-out
 
 const CHECKPOINT_SPOT: Record<Checkpoint, { x: number; z: number; yaw: number }> = {
@@ -431,7 +425,7 @@ hooks.enterZone = (zone: ZoneId) => {
     const first = !getGame().progress.act2.tutorial.includes("rest");
     updateProgress(reachCrossing);
     if (first) {
-      toast({ en: "Fern Crossing is a wake point. Choose either path to the port!", ja: "たおれても ここに もどれるよ。ふたつの みちは みなとへ!", icon: "heart", tone: "info" }, 5000);
+      toast({ en: "Forest Camp is a wake point. Take the left or right forest path to the port!", ja: "もりの キャンプだよ。たおれても ここに もどれるよ。ひだりか みぎの みちで みなとへ!", icon: "heart", tone: "info" }, 5000);
       hint("switch");
     }
   }

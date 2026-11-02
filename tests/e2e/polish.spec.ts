@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, waitFor, speak, tap, type MiState } from "./helpers";
 import { BRIDGE, CAMP, TUNNEL, groundY } from "../../src/game/world/island";
-import { CANOPY_GAPS } from "../../src/game/world/lowland";
+import { CAMP2, CANOPY_GAPS, CLIFF_ROPE } from "../../src/game/world/lowland";
 
 const directory = ".tmp/shots/polish";
 const phase = process.env.POLISH_PHASE === "before" ? "before" : "after";
@@ -169,19 +169,19 @@ for (const mode of ["tap", "speak"] as const) test(`paid inn: no, insufficient c
   expect(errors).toEqual([]);
 });
 
-test("Fern Crossing arrival sets the compatible wake point without healing or a rest interaction", async ({ page }) => {
+test("Forest Camp arrival sets the compatible wake point without healing or a rest interaction", async ({ page }) => {
   test.skip(phase === "before", "Baseline visual capture precedes implementation");
   test.setTimeout(180000);
-  const errors = await start(page, { portFound: false, zone: "forest1" }, "tap", { x: 76, z: -184, yaw: Math.PI });
+  const errors = await start(page, { portFound: false, zone: "forest1" }, "tap", { ...CLIFF_ROPE.foot, yaw: Math.PI });
   await hook(page, "setHp", 37);
-  await hook(page, "teleport", 75.6, -189.2, Math.PI);
-  const crossing = await waitFor(page, s => s.act2.zone === "camp" && s.progress.act2.checkpoint === "camp" && s.act2.stance.friend === null, 60000, "Crossing arrival and safe party formation");
+  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
+  const crossing = await waitFor(page, s => s.act2.zone === "camp" && s.progress.act2.checkpoint === "camp" && s.act2.stance.friend === null, 60000, "Forest Camp arrival and safe party formation");
   expect(crossing.act2.hp).toBe(37);
   expect(crossing.progress.act2.tutorial).toContain("rest");
   expect(crossing.act2.stance.friend).toBeNull();
   expect(crossing.act2.enemies.filter(enemy => enemy.zone === "camp")).toEqual([]);
   expect(crossing.focus?.id).not.toBe("campRest");
-  await expect(page.getByTestId("toast").filter({ hasText: "Fern Crossing" }).first()).toBeVisible();
+  await expect(page.getByTestId("toast").filter({ hasText: "Forest Camp" }).first()).toBeVisible();
   await page.keyboard.press("KeyE");
   await hook(page, "renderFrames", 5);
   const after = await state(page);
@@ -198,10 +198,10 @@ test("legacy camp checkpoint survives reload and knock-out without charging or l
   expect((await state(page)).progress.act2.checkpoint).toBe("camp");
   await hook(page, "nearEnemy", 0, 1);
   await hook(page, "setHp", 1);
-  const awake = await waitFor(page, s => !s.act2.knockedOut && s.mode === "explore" && s.act2.zone === "camp", 90000, "wake at legacy Crossing checkpoint");
+  const awake = await waitFor(page, s => !s.act2.knockedOut && s.mode === "explore" && s.act2.zone === "camp", 90000, "wake at Forest Camp checkpoint");
   expect(awake.act2.hp).toBeGreaterThanOrEqual(60);
   expect(awake.progress.act2.coins).toBe(25);
-  expect(Math.hypot(awake.player.x - 75.6, awake.player.z + 189.2)).toBeLessThan(1);
+  expect(Math.hypot(awake.player.x - CAMP2.rest.x, awake.player.z - CAMP2.rest.z)).toBeLessThan(1);
   const time = awake.playTime;
   const stable = await waitFor(page, s => s.playTime > time + 2, 30000, "wake point stays safe");
   expect(stable.act2.knockedOut).toBe(false);

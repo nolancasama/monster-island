@@ -27,9 +27,8 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "kidnapping", label: "Kidnapping start", target: "lumo", step: 7, act: "Act 2", world: "home" },
   { id: "ropeTop", label: "Cliff rope top", target: "cliffDown", step: 8, act: "Act 2", world: "home" },
   { id: "ropeFoot", label: "Cliff rope foot", target: "cliffUp", step: 9, act: "Act 2", world: "home" },
-  { id: "fernCamp", label: "Fern Camp", target: "campRest", step: 9, zone: "camp", act: "Act 2", world: "home" },
+  { id: "forestCamp", label: "Forest Camp", target: "campRest", step: 9, zone: "camp", act: "Act 2", world: "home" },
   ...(Object.keys(ZONES) as ZoneId[]).map(zone => ({ id: `zone:${zone}`, label: ZONES[zone].name.en, target: `zone:${zone}`, step: 9, zone, act: "Act 2" as const, world: "home" as const })),
-  { id: "shortcut", label: "Shortcut gate", target: "lockedGate", step: 9, zone: "causeway", act: "Act 2", world: "home" },
   ...["market", "kitchen", "trainer", "inn", "harbor"].map(target => ({ id: target, label: `Port Town ${target === "harbor" ? "harbour" : target}`, target, step: 9, zone: "port" as const, act: "Act 2" as const, world: "home" as const })),
   { id: "voyage", label: "Voyage / Port dock", target: "harbor", step: 10, zone: "port", act: "Act 3", world: "home" },
   ...CLOUD_AREAS.map(area => ({ id: `cloud:${area}`, label: CLOUD_ZONES[area].name.en, target: `cloud:${area}`, step: 10, area, act: "Act 3" as const, world: "cloud" as const })),
@@ -64,11 +63,10 @@ export function progressForDestination(id: string, previous?: Progress): Progres
     const zone = d.step >= 10 ? "port" : d.zone;
     p.act2.descended = true;
     p.act2.zone = zone ?? null;
-    const before: Partial<Record<ZoneId, number>> = { forest1: 0, camp: 1, grove: 1, canopy: 1, oldTrail: 1, causeway: 3, coast: 4, port: 5 };
+    const before: Partial<Record<ZoneId, number>> = { forest1: 0, camp: 1, grove: 1, canopy: 1, causeway: 3, coast: 4, port: 5 };
     p.act2.cleared = STAGES.slice(0, before[zone ?? "forest1"] ?? 0);
     if (zone && zone !== "forest1") { p.act2.checkpoint = "camp"; p.act2.tutorial = ["attack", "coins", "special", "eat", "rest", "switch"]; }
     if (zone === "causeway" || zone === "coast" || zone === "port") solve("canopyVines", "canopyRope");
-    if (zone === "coast" || zone === "port") solve("causewayGate");
     p.act2.portFound = zone === "port";
   }
   if (d.step >= 10) p.act2.harbor = true;

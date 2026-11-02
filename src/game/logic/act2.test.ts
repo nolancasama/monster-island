@@ -218,7 +218,7 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
   });
 });
 
-describe("paid inn and Fern Crossing", () => {
+describe("paid inn and Forest Camp", () => {
   it("only yes with 10 coins buys a room; no and insufficient funds change nothing", () => {
     for (const coins of [0, 9, 10, 25]) {
       const p = findPort(addCoins(markDescended(startAct2(done())), coins));
@@ -234,7 +234,7 @@ describe("paid inn and Fern Crossing", () => {
     }
   });
 
-  it("reaching the safe crossing records the compatible wake point without healing", () => {
+  it("reaching the safe camp records the compatible wake point without healing", () => {
     const p = markDescended(startAct2(done()));
     p.act2.hp = 12;
     p.act2.mp = v(12, 8).mp;
@@ -243,7 +243,7 @@ describe("paid inn and Fern Crossing", () => {
     expect(reached.act2).toMatchObject({ checkpoint: "camp", hp: 12, mp: v(12, 8).mp, coins: 9, tutorial: ["rest"] });
     expect(reachCrossing(reached)).toBe(reached);
     expect(zoneAt(CAMP2.rest.x, CAMP2.rest.z)).toBe("camp");
-    expect(ZONES.camp).toMatchObject({ name: { en: "Fern Crossing" }, hostile: false });
+    expect(ZONES.camp).toMatchObject({ name: { en: "Forest Camp", ja: "もりの キャンプ" }, hostile: false });
     const loaded = decodeSave(encodeSave(reached, { ...CAMP2.rest, yaw: Math.PI }, 50))!;
     expect(loaded.progress.act2.checkpoint).toBe("camp");
     expect(isWalkable(loaded.player.x, loaded.player.z, gatesOf(loaded.progress), PLAYER_R)).toBe(true);
@@ -354,9 +354,9 @@ describe("Act 2 English", () => {
 });
 
 describe("persistent stage clears and pre-expansion saves",()=>{
-  it("requires every registered enemy; duplicates and other stages cannot satisfy the count",()=>{
+  it("requires every required enemy; duplicates and other stages cannot satisfy the count",()=>{
     for(const zone of STAGES){
-      const ids=ENEMY_SPAWNS.flatMap((e,i)=>e.zone===zone?[i]:[]),p=startAct2(done());
+      const ids=ENEMY_SPAWNS.flatMap((e,i)=>e.zone===zone&&!e.optional?[i]:[]),p=startAct2(done());
       expect(remainingEnemies(zone,[])).toBe(ids.length);
       expect(clearStage(p,zone,[...ids.slice(1),...ids.slice(1),999])).toBe(p);
       const cleared=clearStage(p,zone,ids);
@@ -372,12 +372,26 @@ describe("persistent stage clears and pre-expansion saves",()=>{
       expect(loaded.progress.act2.cleared).toEqual([zone]);
     }
   });
+  it("optional arm enemies do not count, and clearing the base sets a wake point without healing",()=>{
+    const p=startAct2(done());p.act2.hp=12;p.act2.mp=v(12,8).mp;
+    const required=ENEMY_SPAWNS.flatMap((e,i)=>e.zone==="forest1"&&!e.optional?[i]:[]);
+    const optional=ENEMY_SPAWNS.flatMap((e,i)=>e.zone==="forest1"&&e.optional?[i]:[]);
+    expect(required).toHaveLength(5);
+    expect(optional.length).toBeGreaterThanOrEqual(6);
+    expect(remainingEnemies("forest1",optional)).toBe(5);
+    expect(remainingEnemies("forest1",required)).toBe(0);
+    const cleared=clearStage(p,"forest1",required);
+    expect(cleared.act2).toMatchObject({cleared:["forest1"],checkpoint:"camp",hp:12,mp:v(12,8).mp,tutorial:[]});
+    const atPort={...p,act2:{...p.act2,checkpoint:"port" as const}};
+    expect(clearStage(atPort,"forest1",required).act2.checkpoint).toBe("port");
+  });
   it("migrates old town and route saves without replaying the story or losing inventory",()=>{
     for(const [zone,flags]of [["port",STAGES],["coast",["forest1","grove","canopy","causeway"]],["causeway",["forest1","grove","canopy"]],["grove",["forest1"]]] as const){
       const p=startAct2(done());p.act2.descended=true;p.act2.zone=zone;p.act2.portFound=zone==="port";
       p.act2.coins=73;p.act2.upgrades=["leafy"];p.bag={fish:3};
       const raw=JSON.parse(encodeSave(p,{x:77,z:zone==="port"?-300:-203,yaw:0},99));
       delete raw.progress.act2.cleared;
+      delete raw.progress.act2.forestLayout;
       const loaded=decodeSave(JSON.stringify(raw))!;
       expect(loaded.progress.act2.cleared).toEqual([...flags]);
       expect(loaded.progress.act2).toMatchObject({started:true,lumoTaken:true,coins:73,upgrades:["leafy"]});
@@ -387,7 +401,7 @@ describe("persistent stage clears and pre-expansion saves",()=>{
   });
   it("new in-progress saves do not acquire unlocks merely by loading or resting",()=>{
     const p=startAct2(done());p.act2.descended=true;p.act2.zone="camp";p.act2.checkpoint="camp";
-    const loaded=decodeSave(encodeSave(p,{x:76,z:-191,yaw:0},10))!;
+    const loaded=decodeSave(encodeSave(p,{...CAMP2.rest,yaw:0},10))!;
     expect(loaded.progress.act2.cleared).toEqual([]);
   });
 });
@@ -395,7 +409,7 @@ describe("persistent stage clears and pre-expansion saves",()=>{
 it("legacy branch saves already past a new exit keep their retreat route",()=>{
   for(const [zone,x,z]of [["grove",58,-243],["canopy",95,-244],["forest1",79,-185],["coast",76,-289]]as const){
     const p=startAct2(done());p.act2.descended=true;p.act2.zone=zone;
-    const raw=JSON.parse(encodeSave(p,{x,z,yaw:0},20));delete raw.progress.act2.cleared;
+    const raw=JSON.parse(encodeSave(p,{x,z,yaw:0},20));delete raw.progress.act2.cleared;delete raw.progress.act2.forestLayout;
     expect(decodeSave(JSON.stringify(raw))!.progress.act2.cleared).toContain(zone);
   }
 });

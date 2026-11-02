@@ -9,7 +9,7 @@ import { frontierGateGeometry, frontierRenderedFoundation, frontierWallGeometry 
 import { cliffFaceGeometry } from "../../scene/models/lowland";
 
 const open: Gates = { forest: true, volcano: true, act2: true, cleared: [...STAGES],
-  solved: ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope", "causewayGate"] };
+  solved: ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope"] };
 const closed = { ...open, act2: false };
 
 describe("the Sanctuary frontier", () => {

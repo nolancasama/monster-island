@@ -188,7 +188,7 @@ export function installE2eHook(seed: number) {
     /** Match save loading's settled puzzle poses after a visual progress fixture. */
     settleAct2Unlocks() {
       const solved = getGame().progress.solved;
-      for (const id of ["groveLilies", "canopyVines", "canopyRope", "causewayGate"] as const)
+      for (const id of ["groveLilies", "canopyVines", "canopyRope"] as const)
         rt.act2Unlock[id] = solved.includes(id) ? 1 : 0;
     },
     /** Match loaded sanctuary poses after changing only a visual fixture's solved flags. */

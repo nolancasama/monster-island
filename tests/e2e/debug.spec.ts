@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { boot, state } from "./helpers";
-import { SERVICES } from "../../src/game/world/lowland";
+import { SERVICES, STAGE_EXITS } from "../../src/game/world/lowland";
 import { CLOUD_SPAWNS } from "../../src/game/world/cloudisle";
 
 for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }]) {
@@ -67,15 +67,16 @@ test("fresh debug coordinates open the earliest story point for lowland ground",
   expect(dialogBounds!.y).toBeGreaterThanOrEqual(0);
   expect(dialogBounds!.y + dialogBounds!.height).toBeLessThanOrEqual(768);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
-  await menu.getByLabel("x", { exact: true }).fill("76");
-  await menu.getByLabel("z", { exact: true }).fill("-184.5");
+  const forestNeck = STAGE_EXITS.find(g => g.id === "forest1")!;
+  await menu.getByLabel("x", { exact: true }).fill(String(forestNeck.x));
+  await menu.getByLabel("z", { exact: true }).fill(String(forestNeck.z));
   await menu.getByRole("button", { name: "Go", exact: true }).click();
 
-  await expect(menu.locator(".debug-message")).toContainText("Story set to Fern Camp to reach this spot");
+  await expect(menu.locator(".debug-message")).toContainText("Story set to Forest Camp to reach this spot");
   const lowland = await state(page);
   expect(lowland.progress.act2.started).toBe(true);
   expect(lowland.progress.act2.cleared).toContain("forest1");
-  expect(Math.hypot(lowland.player.x - 76, lowland.player.z + 184.5)).toBeLessThan(1);
+  expect(Math.hypot(lowland.player.x - forestNeck.x, lowland.player.z - forestNeck.z)).toBeLessThan(1);
   expect(await page.evaluate(() => localStorage.getItem("mi.save.v4"))).toBe("real-save-sentinel");
 });
 

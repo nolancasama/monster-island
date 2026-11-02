@@ -6,6 +6,7 @@ import { BACK_TUNNEL, BEACON, CLOUD_CHESTS, CLOUD_PUZZLES, CLOUD_SPAWNS, CLOUD_S
 import { CAMERA_PROFILES } from "../../src/scene/cameraProfiles";
 import { BEACON_ARENA } from "../../src/game/logic/beacon";
 import { GATE_PILLARS, groundY } from "../../src/game/world/island";
+import { FOREST_ARMS } from "../../src/game/world/lowland";
 
 type Vec = { x: number; y: number; z: number };
 type CameraState = MiState & { camera: MiState["camera"] & {
@@ -36,7 +37,7 @@ const HOME: Sample[] = [
   { profile: "volcano-tunnel", x: 64, z: -113 },
   { profile: "sanctuary-courtyard", x: 70, z: -127.2 },
   { profile: "sanctuary-garden", x: 64, z: -137 },
-  { profile: "lowland", x: 76, z: -194 },
+  { profile: "lowland", x: FOREST_ARMS.left[3][0], z: FOREST_ARMS.left[3][1] },
   { profile: "lowland-rope-foot", x: 75.5, z: -157.5 }
 ];
 const CLOUD: Sample[] = [
@@ -54,7 +55,7 @@ function fixture() {
   for (const id of ["leafy", "bubbo", "puff", "ember", "lumo"] as const)
     p.monsters[id] = { discovered: true, friend: true, invited: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true } };
   p.metMaple = true; p.endings = 3; p.active = "leafy";
-  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope", "causewayGate"];
+  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope"];
   p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true,
     cleared: ["forest1", "grove", "canopy", "causeway", "coast"], tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   p.act3 = { ...p.act3, voyageDone: true, hollowFound: true, cleared: [...CLOUD_STAGES], puzzles: [...CLOUD_PUZZLES],

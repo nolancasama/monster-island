@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import type { CompanionId } from "../../src/game/data/combat";
+import { ENEMY_SPAWNS } from "../../src/game/world/lowland";
 
 const SHOTS = ".tmp/shots/feel";
 
@@ -17,6 +18,8 @@ function forestSave(friend: CompanionId, upgrades: CompanionId[] = []) {
 }
 
 async function enterForest(page: Page, friend: CompanionId, upgrades: CompanionId[] = []) {
+  expect(ENEMY_SPAWNS[1]).toMatchObject({ zone: "forest1", kind: "gloomlet" });
+  expect(ENEMY_SPAWNS[1].optional, "combat fixture uses a required base enemy").not.toBe(true);
   await page.addInitScript(save => localStorage.setItem("mi.save.v4", save), forestSave(friend, upgrades));
   const errors = await boot(page);
   await chooseMode(page, "tap");

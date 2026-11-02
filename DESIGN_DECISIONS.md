@@ -1796,3 +1796,25 @@ Spec frozen in `docs/U_FOREST_PORT_WALL.md` (§0 lists every change).
 - Grove and Canopy stay in place, which bounds the arms at 40+ m. Rejected: moving both
   stages and their puzzles for a larger U.
 - A raised camera profile at the town gate, so the wall never hides the player.
+
+## 2026-11-02 — M2: two forest arms and layout migration
+
+- Primeval Forest keeps its five required tutorial enemies and treasures in the
+  base. Two gates across the west and east necks open together on its first clear;
+  three optional enemies on each arm do not affect that clear or the remaining count.
+- The arms enter the existing Grove and Canopy directly. Their puzzles, canopy gap
+  and deck positions, and the Causeway, Coast and Port walking shapes stay in place.
+  The base has no north exit. The central mesa outline is reserved and solid, with
+  1.5 m of walking clearance; its mesh and arm dressing remain work for M3.
+- Forest Camp keeps the saved `camp` id in a safe alcove near (88, -160). Its props
+  share the CAMP2 placements. Clearing the base sets that checkpoint without healing;
+  visiting camp still records the rest tutorial. Signs and route markers direct
+  players toward the left or right arm, with English and easy-kana Japanese text.
+- Removed the central route and its Ember fire question, including its runtime
+  obstacle and gate art. Saves read the former unlock only to preserve progress,
+  then discard it. This removes Ember's Act 2 “Can you…?” unlock as accepted in §0.
+- `act2.forestLayout: 2` marks the new map. Legacy positions on removed ground move
+  to the camp wake point when its checkpoint is valid, otherwise to the rope foot.
+  Movement's actual gates and solids validate restored positions. Existing valid
+  branch and later-stage positions, inventory, vitals and older save keys survive.
+- Port Town wall, doors and its raised gate camera remain work for M4.

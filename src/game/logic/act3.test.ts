@@ -6,6 +6,7 @@ import { claimErrand, clearCloudStage, cloudWakeArea, collectErrandPickup, compl
 import { decodeSave, encodeSave } from "./save";
 import { CLOUD_AREAS, CLOUD_DOCK, CLOUD_ENEMY_SPAWNS, CLOUD_PICKUPS, CLOUD_SPAWNS, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_PUZZLES, CLOUD_STAGES, HOLLOW, OBSERVATORY_PUZZLES, cloudWalkable, type CloudPuzzleId } from "../world/cloudisle";
 import type { MonsterId } from "../types";
+import { STAGES } from "../world/lowland";
 
 function harbor(): Progress {
   const p = newProgress();
@@ -15,7 +16,8 @@ function harbor(): Progress {
   p.endings = 3;
   p.active = "leafy";
   p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
-  return hearLead(findPort(markDescended(startAct2(p))));
+  const arrived = hearLead(findPort(markDescended(startAct2(p))));
+  return { ...arrived, act2: { ...arrived.act2, cleared: [...STAGES] } };
 }
 
 function hollow(): Progress {

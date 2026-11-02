@@ -4,10 +4,10 @@ import { FOODS } from "../data/foods";
 import { OBSTACLES, gateOpen, newProgress, obstacleAvailable, type MonsterRecord, type Progress } from "./progress";
 import { PHRASES, type PhraseId } from "./english";
 import type { FoodId, MonsterId, ObstacleId } from "../types";
-import { PLAYER_R, gatesOf, nearestWalkable } from "../world/collision";
+import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
+import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
@@ -93,16 +93,17 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   const checkpoints: Checkpoint[] = ["cliff", "camp", "port"];
   const cp = raw.checkpoint as Checkpoint;
   a.checkpoint = checkpoints.includes(cp) && (cp !== "port" || a.portFound) && (cp !== "camp" || a.descended) ? cp : "cliff";
-  a.zone = typeof raw.zone === "string" && raw.zone in ZONES ? (raw.zone as ZoneId) : null;
+  a.zone = raw.zone === "oldTrail" ? "forest1" : typeof raw.zone === "string" && raw.zone in ZONES ? (raw.zone as ZoneId) : null;
   a.cleared = list(raw.cleared, STAGES);
   // Pre-expansion v4 has no clear flags. Honour already-reached places without
   // guessing which branch was taken; never replay the prologue or kidnapping.
   if (!Array.isArray(raw.cleared)) {
     if (a.portFound || a.zone === "port") a.cleared = [...STAGES];
     else if (a.zone === "coast") a.cleared = ["forest1", "grove", "canopy", "causeway"];
-    else if (a.zone === "causeway" || p.solved.includes("causewayGate")) a.cleared = ["forest1", "grove", "canopy"];
-    else if (a.checkpoint === "camp" || (a.zone && ["camp", "grove", "canopy", "oldTrail"].includes(a.zone))) a.cleared = ["forest1"];
+    else if (a.zone === "causeway") a.cleared = ["forest1", "grove", "canopy"];
+    else if (a.checkpoint === "camp" || raw.zone === "oldTrail" || (a.zone && ["camp", "grove", "canopy"].includes(a.zone))) a.cleared = ["forest1"];
   }
+  if (a.portFound) a.cleared = [...STAGES];
   return a;
 }
 
@@ -228,7 +229,12 @@ export function decodeSave(text: string | null): SaveData | null {
   p.act2 = readAct2(raw.v === VERSION ? src.act2 : null, p);
   p.act3 = readAct3(raw.v === VERSION ? src.act3 : null, p);
   for (const id of ACT2_OBSTACLES) if (solved.includes(id) && obstacleAvailable(p, id)) p.solved.push(id);
-  if (p.act2.started && isObj(src.act2) && !Array.isArray(src.act2.cleared) && solved.includes("causewayGate")) p.act2.cleared = [...new Set([...p.act2.cleared, "forest1", "grove", "canopy"] as const)];
+  // Read the removed shortcut from the raw save, before discarding it. Its
+  // former users retain access through both forest necks, even with clear flags.
+  if (p.act2.started && isObj(src.act2) && solved.includes("causewayGate")) {
+    const inferred = !Array.isArray(src.act2.cleared) ? ["forest1", "grove", "canopy"] as const : ["forest1"] as const;
+    p.act2.cleared = [...new Set([...p.act2.cleared, ...inferred])];
+  }
   if (isObj(src.bag)) {
     const max = bagMax(p);
     for (const f of Object.keys(src.bag)) if (f in FOODS) p.bag[f as FoodId] = Math.max(0, Math.min(max, Math.floor(num(src.bag[f], 0))));
@@ -238,7 +244,7 @@ export function decodeSave(text: string | null): SaveData | null {
   // still labelled with that branch. Preserve the return route as well.
   if (p.act2.started && isObj(src.act2) && !Array.isArray(src.act2.cleared)) {
     const z = num(pl.z, Infinity), zone = p.act2.zone;
-    const passed = zone === "forest1" && z < -184.1 ? "forest1"
+    const passed = zone === "forest1" && src.act2.forestLayout !== 2 && z < -184.1 ? "forest1"
       : (zone === "grove" || zone === "canopy") && z < -241 ? zone
       : zone === "coast" && z < -287.6 ? "coast" : null;
     if (passed && !p.act2.cleared.includes(passed)) p.act2.cleared.push(passed);
@@ -266,7 +272,24 @@ export function decodeSave(text: string | null): SaveData | null {
     }
     p.act3.area = cloudZoneAt(safe.x, safe.z) ?? "cloudDock";
   } else {
-    safe = nearestWalkable(num(pl.x, NaN), num(pl.z, NaN), PLAYER_R, gatesOf(p), false, true);
+    let x = num(pl.x, NaN), z = num(pl.z, NaN);
+    const gates = gatesOf(p);
+    const legacyForest = isObj(src.act2) && src.act2.forestLayout !== 2;
+    const oldCamp = Math.hypot(x - 76, z + 191.5) <= 6.5
+      || (x >= 70.5 && x <= 81.5 && z >= -201.5 && z <= -195);
+    // The trail's north cap overlapped the unchanged causeway. Keep valid
+    // causeway positions there; only the removed approach requires relocation.
+    const oldTrail = Math.abs(x - 76) <= 1.9 && z <= -200 && z > -242.5;
+    const lowlandSave = p.act2.descended && (z < CLIFF_FOOT_Z + 1 || (!Number.isFinite(z) && p.act2.zone !== null));
+    if (lowlandSave && ((legacyForest && (oldCamp || oldTrail)) || !isWalkable(x, z, gates, PLAYER_R))) {
+      ({ x, z } = p.act2.checkpoint === "camp" ? CAMP2.rest : CLIFF_ROPE.foot);
+      // These authored wake points are tested against the same gates and solids
+      // as movement; projection is only a guard against future prop changes.
+      safe = isWalkable(x, z, gates, PLAYER_R) ? { x, z } : nearestWalkable(x, z, PLAYER_R, gates, false, true);
+      p.act2.zone = p.act2.checkpoint === "camp" ? "camp" : "forest1";
+    } else {
+      safe = nearestWalkable(x, z, PLAYER_R, gates, false, true);
+    }
   }
   return {
     v: VERSION,

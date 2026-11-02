@@ -57,7 +57,7 @@ describe("burning panic rules", () => {
 
 describe("panic movement property", () => {
   it("makes net progress from every spawn in both worlds while staying walkable, in-zone and outside hazards", () => {
-    const home: Gates = { solved: ["groveLilies", "canopyVines", "canopyRope", "causewayGate"], act2: true, cleared: STAGES };
+    const home: Gates = { solved: ["groveLilies", "canopyVines", "canopyRope"], act2: true, cleared: STAGES };
     const cloud: Gates = { solved: [], cloud: { cleared: CLOUD_STAGES, solved: CLOUD_PUZZLES, tunnelOpen: true } };
     const out = { x: 0, z: 0 };
     for (const world of ["home", "cloud"] as const) {

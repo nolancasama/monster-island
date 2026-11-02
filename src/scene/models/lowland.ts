@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PartBuilder } from "../partBuilder";
 import { bridgeDeck } from "./bridge";
+import { tentGeometry } from "./tent";
 import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
 import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Outfit } from "./people";
@@ -20,6 +21,7 @@ import {
   COAST_TRAIL,
   CRATES,
   FOREST1_TRAIL,
+  FOREST_ARMS,
   FORK_SIGN,
   FOUNTAIN,
   GIANT_TREES,
@@ -30,14 +32,12 @@ import {
   LILY_PADS,
   LOGS,
   MOSSY_BOULDERS,
-  OLD_TRAIL,
   PIER2,
   POND,
   POND_Y,
   PORT,
   RUIN_PILLARS,
   SERVICES,
-  SHORTCUT_GATE,
   SHRINE,
   STREAMS,
   ZONE_ORDER,
@@ -77,7 +77,7 @@ const SAND = new THREE.Color("#d9c08c");
 const SEABED = new THREE.Color("#8d8268");
 const ROCK = new THREE.Color("#7f7064");
 
-const TRAILS = [FOREST1_TRAIL, GROVE_TRAIL, CANOPY_TRAIL, COAST_TRAIL, OLD_TRAIL];
+const TRAILS = [FOREST1_TRAIL, ...Object.values(FOREST_ARMS), GROVE_TRAIL, CANOPY_TRAIL, COAST_TRAIL];
 
 /** Same surface rule as the massif: sunk a little under the sanctuary's own floor where they overlap. */
 function surface(x: number, z: number): number {
@@ -240,7 +240,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     ferns: Spot[] = [],
     fernTrees: Spot[] = [],
     reeds: Spot[] = [];
-  const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope", "causewayGate"] as const };
+  const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
   const off = (x: number, z: number, pad: number) => {
     // Nothing grows on the sanctuary's shelf or against the cliff (it would poke up beside the garden).
     if (z > -157.5) return false;
@@ -420,8 +420,16 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     b.sphere(0.12, x - 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
     b.sphere(0.12, x + 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
   }
-  // Fern Crossing retains its junction and sign, with no rest-only furnishings.
-  // The fork's signpost with two arrow boards.
+  // The forest base points left and right; the safe camp is an alcove off it.
+  const fire = CAMP2.fire, bench = CAMP2.bench;
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * Math.PI * 2, x = fire.x + Math.cos(a) * .6, z = fire.z + Math.sin(a) * .6;
+    b.add(rockGeometry(.2, .15, i + 3, 0), "#8f8a84", [x, gy(x, z) + .06, z]);
+  }
+  for (const yaw of [.5, -.7]) b.cylAt(.08, .9, [fire.x, gy(fire.x, fire.z) + .15, fire.z], [0, yaw, Math.PI / 2], "#8a6238", 7);
+  b.cone(.22, .55, fire.x, gy(fire.x, fire.z) + .2, fire.z, "#ffb340", 6);
+  b.cylAt(.18, 2, [bench.x, gy(bench.x, bench.z) + .22, bench.z], [0, bench.yaw, Math.PI / 2], "#8a6238", 8);
+  // The base's signpost with two arrow boards.
   const s = FORK_SIGN;
   const fy = gy(s.x, s.z);
   b.cyl(0.08, 0.1, 2.2, s.x, fy - 0.1, s.z, "#6e4a2c", 6);
@@ -467,17 +475,8 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     ])
       b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
   }
-  // The islet: a small mossy mound; the shortcut gate's stone frame.
-  b.cyl(0.5, 0.6, 2.8, SHORTCUT_GATE.x - SHORTCUT_GATE.half - 0.5, gy(SHORTCUT_GATE.x, SHORTCUT_GATE.z) - 0.1, SHORTCUT_GATE.z, "#a89e8c", 8);
-  b.cyl(0.5, 0.6, 2.8, SHORTCUT_GATE.x + SHORTCUT_GATE.half + 0.5, gy(SHORTCUT_GATE.x, SHORTCUT_GATE.z) - 0.1, SHORTCUT_GATE.z, "#a89e8c", 8);
-  b.box(SHORTCUT_GATE.half * 2 + 2.2, 0.6, 1, SHORTCUT_GATE.x, gy(SHORTCUT_GATE.x, SHORTCUT_GATE.z) + 2.7, SHORTCUT_GATE.z, "#b6ab97");
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < 4; k++) {
-      const x = SHORTCUT_GATE.x + side * (SHORTCUT_GATE.half + 1.6 + k * 1.3);
-      b.add(rockGeometry(0.9, 1.4, 1700 + k + side * 10, 0), "#7d786a", [x, gy(x, SHORTCUT_GATE.z) - 0.2, SHORTCUT_GATE.z]);
-    }
-  }
-  return b.build();
+  const tent = tentGeometry().rotateY(CAMP2.tent.yaw).translate(CAMP2.tent.x, gy(CAMP2.tent.x, CAMP2.tent.z), CAMP2.tent.z);
+  return mergeGeometries([b.build(), tent]);
 }
 
 /** Water: the pond and the shallow streams (one transparent draw). */
@@ -524,27 +523,6 @@ export function ropeBridgeGeometry(len: number): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   bridgeDeck(b, len, DECK_HALF, -len / 2, ["#a77a46", "#b88a52"]);
   for (const side of [-1, 1]) between(b, [side * (DECK_HALF + .05), 0.85, -len / 2], [side * (DECK_HALF + .05), 0.85, len / 2], 0.035, 0.035, "#c79a5c", 4);
-  return b.build();
-}
-
-/** The shortcut's portcullis (bars) and its tangle of thorns (burned away). */
-export function gateBarsGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0);
-  const w = SHORTCUT_GATE.half * 2;
-  for (let x = -w / 2 + 0.2; x <= w / 2; x += 0.45) b.cyl(0.05, 0.05, 2.6, x, 0, 0, "#5b5550", 5);
-  b.box(w + 0.2, 0.12, 0.12, 0, 1.2, 0, "#5b5550");
-  b.box(w + 0.2, 0.12, 0.12, 0, 2.4, 0, "#5b5550");
-  return b.build();
-}
-export function thornsGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0.2);
-  const rand = makeRng(5);
-  for (let i = 0; i < 16; i++) {
-    const x = (rand() - 0.5) * SHORTCUT_GATE.half * 2.2;
-    const y = rand() * 2.2;
-    between(b, [x, y, -0.25], [x + (rand() - 0.5) * 1.5, y + (rand() - 0.5) * 1.2, -0.3], 0.07, 0.04, "#4a3a2a", 4);
-    b.add(new THREE.ConeGeometry(0.05, 0.22, 4), "#2f3a24", [x, y + 0.12, -0.32], [rand(), rand(), rand()]);
-  }
   return b.build();
 }
 
@@ -920,5 +898,13 @@ export function stageBarrierGeometry(gate: (typeof STAGE_EXITS)[number]): THREE.
     }
     between(b, [-gate.half, 2.4, 0], [gate.half, 2.7, 0], 0.12, 0.1, "#5b6540", 5);
   }
-  return b.build();
+  const geometry = b.build(), p = geometry.attributes.position;
+  const yaw = gate.orientation === "z" ? Math.PI / 2 : 0;
+  const c = Math.cos(yaw), s = Math.sin(yaw), floor = groundY(gate.x, gate.z);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, p.getY(i) + groundY(gate.x + c * x + s * z, gate.z - s * x + c * z) - floor);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
 }

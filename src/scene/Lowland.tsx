@@ -13,7 +13,6 @@ import {
   CHESTS,
   POND_Y,
   SERVICES,
-  SHORTCUT_GATE,
   type ServiceId,
 } from "../game/world/lowland";
 import { TUNNEL, groundY, inTunnel } from "../game/world/island";
@@ -26,7 +25,6 @@ import {
   stageBarrierGeometry,
   cliffFaceGeometry,
   cliffRopeGeometry,
-  gateBarsGeometry,
   giantFernGeometry,
   lilyPadGeometry,
   lowlandPropsGeometry,
@@ -37,7 +35,6 @@ import {
   primevalTreeGeometry,
   reedGeometry,
   ropeBridgeGeometry,
-  thornsGeometry,
   townGeometry,
   townSigns,
   treeFernGeometry,
@@ -165,7 +162,7 @@ function Keeper({ service }: { service: ServiceId }) {
   );
 }
 
-/** Lily pads rise, the bridges grow and unroll, the gate's thorns burn and the bars lift. */
+/** Lily pads rise and the bridges grow and unroll. */
 function Unlocks() {
   const root = useRef<THREE.Group>(null);
   const lilies = useMemo(lilyPadGeometry, []);
@@ -177,26 +174,13 @@ function Unlocks() {
     (x, z) => lowlandBridgeY("canopyVines", x, z)), [g1]);
   const rope = useMemo(() => conformBridge(ropeBridgeGeometry(d2.z1 - d2.z0), g2.x, (d2.z0 + d2.z1) / 2, deck("canopyRope"),
     (x, z) => lowlandBridgeY("canopyRope", x, z)), [g2]);
-  const bars = useMemo(gateBarsGeometry, []);
-  const thorns = useMemo(thornsGeometry, []);
   const padRef = useRef<THREE.Mesh>(null);
-  const bRef = useRef<THREE.Mesh>(null);
-  const tRef = useRef<THREE.Mesh>(null);
   useFrame(() => {
     if (root.current) root.current.visible = true;
     const u = rt.act2Unlock;
     if (padRef.current) {
       padRef.current.visible = near(39, -223);
       padRef.current.position.y = POND_Y - 0.6 + (u.groveLilies ?? 0) * 0.66;
-    }
-    const gk = u.causewayGate ?? 0;
-    if (tRef.current) {
-      tRef.current.visible = gk < 0.6 && near(SHORTCUT_GATE.x, SHORTCUT_GATE.z);
-      tRef.current.scale.setScalar(Math.max(0.01, 1 - gk * 1.6));
-    }
-    if (bRef.current) {
-      bRef.current.visible = near(SHORTCUT_GATE.x, SHORTCUT_GATE.z);
-      bRef.current.position.y = groundY(SHORTCUT_GATE.x, SHORTCUT_GATE.z) + (Math.max(0, gk - 0.4) / 0.6) * 2.5;
     }
   });
   return (
@@ -205,10 +189,6 @@ function Unlocks() {
       {/* Each bridge grows from the near (south) end toward the far end. */}
       <BridgeGrow geometry={vines} at={[g1.x, deck("canopyVines"), d1.z1]} len={d1.z1 - d1.z0} which="canopyVines" />
       <BridgeGrow geometry={rope} at={[g2.x, deck("canopyRope"), d2.z1]} len={d2.z1 - d2.z0} which="canopyRope" />
-      <group position={[SHORTCUT_GATE.x, 0, SHORTCUT_GATE.z]}>
-        <mesh ref={bRef} geometry={bars} material={flatMat} />
-        <mesh ref={tRef} geometry={thorns} material={flatMat} position={[0, groundY(SHORTCUT_GATE.x, SHORTCUT_GATE.z), 0]} />
-      </group>
     </group>
   );
 }
@@ -306,7 +286,7 @@ export function Lowland() {
       <TiledInstances geometry={fern} spots={spots.ferns} material={flatMat} far={60} />
       <TiledInstances geometry={reed} spots={spots.reeds} material={flatMat} far={50} />
       {STAGE_EXITS.map((gate) => (
-        <StageBarrier key={gate.id} gate={gate} />
+        <StageBarrier key={`${gate.id}:${gate.x}`} gate={gate} />
       ))}
       <CliffRope />
       <Unlocks />
@@ -347,5 +327,5 @@ function StageBarrier({ gate }: { gate: (typeof STAGE_EXITS)[number] }) {
     m.position.y = groundY(gate.x, gate.z) - open.current * 4.3;
     m.scale.y = Math.max(0.01, 1 - open.current);
   });
-  return <mesh ref={ref} geometry={geometry} material={flatMat} position={[gate.x, groundY(gate.x, gate.z), gate.z]} />;
+  return <mesh ref={ref} geometry={geometry} material={flatMat} position={[gate.x, groundY(gate.x, gate.z), gate.z]} rotation={[0, gate.orientation === "z" ? Math.PI / 2 : 0, 0]} />;
 }

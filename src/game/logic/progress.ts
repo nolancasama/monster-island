@@ -225,11 +225,10 @@ export const OBSTACLES: Record<ObstacleId, ObstacleDef> = {
   gateDrop: { id: "gateDrop", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: ["cave"] },
   gateWing: { id: "gateWing", needs: "fly", question: "canFly", others: ["canFire", "canSwim"], after: ["cave"] },
   gateFlame: { id: "gateFlame", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: ["cave"] },
-  // Act 2: the grove's lily pads (optional treasure), the canopy's two gaps, and the causeway's shortcut gate.
+  // Act 2: the grove's lily pads (optional treasure) and the canopy's two gaps.
   groveLilies: { id: "groveLilies", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: [] },
   canopyVines: { id: "canopyVines", needs: "grow", question: "canHelp", others: ["canSwim", "canFire"], after: [] },
-  canopyRope: { id: "canopyRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["canopyVines"] },
-  causewayGate: { id: "causewayGate", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: [] }
+  canopyRope: { id: "canopyRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["canopyVines"] }
 };
 
 export const GATES: ObstacleId[] = ["gateLeaf", "gateDrop", "gateWing", "gateFlame"];

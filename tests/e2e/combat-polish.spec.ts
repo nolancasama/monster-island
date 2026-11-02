@@ -4,6 +4,7 @@ import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers"
 import { newProgress } from "../../src/game/logic/progress";
 import { newAct3 } from "../../src/game/logic/act3";
 import { RAIDER_BARRICADE as WALL } from "../../src/game/world/cloudisle";
+import { ENEMY_SPAWNS } from "../../src/game/world/lowland";
 
 // These frame captures already retain screenshots and state. Large trace streams
 // can stall Windows/SwiftShader context teardown while transferring image data.
@@ -73,7 +74,7 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
 
     // The forest variant charges in the actual fixed gameplay view, then the
     // player's lateral dodge leaves its committed, straight seed path behind.
-    const spitter = (await state(page)).act2.enemies.find(e => e.kind === "forestSpitter" && e.zone === "forest1")!;
+    const spitter = (await state(page)).act2.enemies.find(e => e.kind === "forestSpitter" && e.zone === "forest1" && !ENEMY_SPAWNS[e.i].optional)!;
     expect(spitter).toBeTruthy();
     await hook(page, "timeScale", 0); await fixture(spitter.i, 75, -178.5);
     await hook(page, "teleport", 75, -171, Math.PI);
@@ -116,7 +117,7 @@ for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }])
         const t0 = (await state(page)).time;
         await waitFor(page, s => s.time > t0 + 2.6, 20_000, "HARNESS_PRECONDITION_FAILED: special cooldown expired");
       }
-      const enemy = (await state(page)).act2.enemies.find(e => e.zone === "forest1" && e.kind === "snapjaw")!;
+      const enemy = (await state(page)).act2.enemies.find(e => e.zone === "forest1" && e.kind === "snapjaw" && !ENEMY_SPAWNS[e.i].optional)!;
       expect(enemy, "HARNESS_PRECONDITION_FAILED: forest snapjaw exists").toBeTruthy();
       const enemyX = 75.2;
       await hook(page, "timeScale", 0); await fixture(enemy.i, enemyX, -178, "chase");

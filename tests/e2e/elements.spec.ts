@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { COMBAT, type CompanionId } from "../../src/game/data/combat";
+import { ENEMY_SPAWNS } from "../../src/game/world/lowland";
 
 function forestSave(friend: CompanionId) {
   const p = newProgress();
@@ -23,6 +24,8 @@ async function precondition(page: Page, predicate: (s: MiState) => boolean, labe
 
 async function enterForest(page: Page, friend: CompanionId) {
   try {
+    expect(ENEMY_SPAWNS[1]).toMatchObject({ zone: "forest1", kind: "gloomlet" });
+    expect(ENEMY_SPAWNS[1].optional, "element fixture uses a required base enemy").not.toBe(true);
     await page.addInitScript(save => localStorage.setItem("mi.save.v4", save), forestSave(friend));
     const errors = await boot(page);
     await chooseMode(page, "tap");

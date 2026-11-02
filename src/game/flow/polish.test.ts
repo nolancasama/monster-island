@@ -91,7 +91,7 @@ it("chest food overflow has an explicit coin toast and preserves the chest's oth
   expect(getGame().toasts.some((t) => t.en === "Bag full! +2 coins")).toBe(true);
 });
 
-it("Crossing arrival records a safe wake point without healing or offering a rest", () => {
+it("Forest Camp arrival records a safe wake point without healing or offering a rest", () => {
   rt.player.x = CAMP2.rest.x;
   rt.player.z = CAMP2.rest.z;
   hooks.enterZone!("camp");

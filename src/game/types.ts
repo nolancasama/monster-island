@@ -17,7 +17,7 @@ export type AbilityId = "swim" | "fly" | "jump" | "grow" | "fire";
 export type ObstacleId =
   | "fallenPalm" | "river" | "bridge" | "cliff" | "lava" | "cave" | "gateLeaf" | "gateDrop" | "gateWing" | "gateFlame"
   // Act 2 (the lowland below the sanctuary).
-  | "groveLilies" | "canopyVines" | "canopyRope" | "causewayGate";
+  | "groveLilies" | "canopyVines" | "canopyRope";
 /** Rare crafting materials (Act 2). */
 export type ItemId = "amber";
 export type SizeId = "small" | "big";

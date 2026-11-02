@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { CLIFF_ROPE, ENEMY_SPAWNS, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
 
 const friends = Object.fromEntries(
   ["leafy", "bubbo", "puff", "ember", "lumo"].map((id) => [
@@ -72,18 +73,23 @@ async function defeat(page: Page, i: number) {
   throw new Error(`required enemy ${i} could not be defeated`);
 }
 async function clear(page: Page, zone: string) {
-  const enemies = (await state(page)).act2.enemies.filter((e) => e.zone === zone);
+  const enemies = (await state(page)).act2.enemies.filter((e) => e.zone === zone && !ENEMY_SPAWNS[e.i].optional);
   for (const e of enemies) await defeat(page, e.i);
   await waitFor(page, (s) => s.progress.act2.cleared.includes(zone), 10000, `${zone} exit unlocked`);
 }
-const exit: Record<string, [number, number]> = { forest1: [76, -184.5], grove: [56, -241.4], canopy: [97, -241.4], causeway: [76, -264], coast: [76, -288] };
 async function probe(page: Page, zone: string, open: boolean) {
-  const [x, z] = exit[zone];
-  await hook(page, "teleport", x, z + 1.9, Math.PI);
-  await hook(page, "moveTo", x, z - 1.8);
-  const s = await state(page);
-  if (open) expect(s.player.z, `${zone} open`).toBeLessThan(z);
-  else expect(s.player.z, `${zone} closed`).toBeGreaterThan(z);
+  for (const gate of STAGE_EXITS.filter(g => g.id === zone)) {
+    const sideways = gate.orientation === "z";
+    const direction = sideways && gate.x > CLIFF_ROPE.foot.x ? 1 : -1;
+    const start = sideways ? [gate.x - direction * 1.9, gate.z] : [gate.x, gate.z + 1.9];
+    const end = sideways ? [gate.x + direction * 1.8, gate.z] : [gate.x, gate.z - 1.8];
+    await hook(page, "teleport", ...start, Math.PI);
+    await hook(page, "moveTo", ...end);
+    const s = await state(page);
+    const across = sideways ? (s.player.x - gate.x) * direction : gate.z - s.player.z;
+    if (open) expect(across, `${zone} ${gate.x} open`).toBeGreaterThan(0);
+    else expect(across, `${zone} ${gate.x} closed`).toBeLessThan(0);
+  }
 }
 
 test("first forest clear, active-only companions, retreat, re-entry and save persistence", async ({ page }) => {
@@ -118,6 +124,7 @@ test("first forest clear, active-only companions, retreat, re-entry and save per
   await hook(page, "moveTo", 75.5, -154.4);
   expect((await state(page)).player.z).toBeGreaterThan(-155);
   await clear(page, "forest1");
+  expect((await state(page)).act2.enemies.filter(e => e.zone === "forest1" && ENEMY_SPAWNS[e.i].optional).every(e => e.hp > 0)).toBe(true);
   await probe(page, "forest1", true);
   await hook(page, "goTo", "campRest", 1.4);
   await waitFor(page, (s) => s.act2.zone === "camp");
@@ -142,6 +149,15 @@ for (const branch of ["grove", "canopy"])
   test(`${branch} alone, causeway and coast clear to the town`, async ({ page }) => {
     test.setTimeout(300000);
     const errors = await start(page, ["forest1"]);
+    // Follow the selected arm from its neck into the next stage.
+    const arm = FOREST_ARMS[branch === "grove" ? "left" : "right"];
+    await hook(page, "teleport", ...arm[0]);
+    for (const [x, z] of arm.slice(1)) {
+      await hook(page, "setHp", 100);
+      const at = await hook(page, "moveTo", x, z) as { x: number; z: number };
+      expect(Math.hypot(at.x - x, at.z - z), `${branch} arm waypoint`).toBeLessThan(.1);
+    }
+    await waitFor(page, s => s.act2.zone === branch, 10000, `${branch} reached by its arm`);
     for (const zone of [branch, "causeway", "coast"]) {
       await probe(page, zone, false);
       await clear(page, zone);

@@ -5,6 +5,7 @@ import { newProgress } from "./progress";
 import { gatesOf, isWalkable, PLAYER_R } from "../world/collision";
 import { SPAWN } from "../world/island";
 import { BEACON } from "../world/cloudisle";
+import { FOREST_ARMS, STAGE_EXITS } from "../world/lowland";
 
 describe("debug teleport story selection", () => {
   it("keeps current progress for ground that is already walkable", () => {
@@ -12,8 +13,9 @@ describe("debug teleport story selection", () => {
     expect(isWalkable(SPAWN.x, SPAWN.z, gates, PLAYER_R)).toBe(true);
     expect(destinationForDebugPoint(SPAWN.x, SPAWN.z, "home", gates)).toBeUndefined();
 
-    const later = gatesOf(progressForDestination("fernCamp"));
-    expect(destinationForDebugPoint(76, -184.5, "home", later)).toBeUndefined();
+    const later = gatesOf(progressForDestination("forestCamp"));
+    const [x, z] = FOREST_ARMS.left[1];
+    expect(destinationForDebugPoint(x, z, "home", later)).toBeUndefined();
   });
 
   it("opens the forest with its earliest story point", () => {
@@ -30,9 +32,12 @@ describe("debug teleport story selection", () => {
 
   it("breaks equal-step ties by destination list order", () => {
     const gates = gatesOf(newProgress());
-    expect(isWalkable(76, -184.5, gates, PLAYER_R)).toBe(false);
-    expect(isWalkable(76, -184.5, gatesOf(progressForDestination("ropeFoot")), PLAYER_R)).toBe(false);
-    expect(destinationForDebugPoint(76, -184.5, "home", gates)?.id).toBe("fernCamp");
+    const [x, z] = FOREST_ARMS.left[1];
+    expect(isWalkable(x, z, gates, PLAYER_R)).toBe(false);
+    // A gate at each neck opens with the first clear, regardless of the chosen arm.
+    const neck = STAGE_EXITS.find(gate => gate.id === "forest1")!;
+    expect(isWalkable(neck.x, neck.z, gatesOf(progressForDestination("ropeFoot")), PLAYER_R)).toBe(false);
+    expect(destinationForDebugPoint(neck.x, neck.z, "home", gates)?.id).toBe("forestCamp");
   });
 
   it("selects a cloud destination that opens the summit gates", () => {

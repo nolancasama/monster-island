@@ -5,7 +5,7 @@ import { SPAWN, VOLCANO_PATH, BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOO
 import { LIVE_MONSTERS } from "./data/monsters";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
-import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, ROUTE_MARKERS, SERVICES, SHORTCUT_GATE, type ServiceId, type ZoneId } from "./world/lowland";
+import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
 export const placePlayer = (x: number, z: number, faceX: number, faceZ: number) => {
@@ -50,9 +50,8 @@ export const travelTarget = (name: string): { x: number; z: number } | null => {
     if (name === "cliffUp") return { x: CLIFF_ROPE.foot.x, z: CLIFF_ROPE.foot.z + 0.6 };
     if (name === "campRest") return CAMP2.rest;
     if (name === "forkSign") return FORK_SIGN;
-    if (name === "lockedGate") return { x: SHORTCUT_GATE.x, z: SHORTCUT_GATE.z + 1.2 };
     if (name in SERVICES) return SERVICES[name as ServiceId].keeper;
-    if (name.startsWith("zone:")) return ROUTE_MARKERS[name.slice(5) as ZoneId] ?? null;
+    if (name.startsWith("zone:")) return routeMarker(name.slice(5) as ZoneId, rt.player.x) ?? null;
     const chest = CHESTS.find((c) => c.id === name);
     if (chest) return chest;
     if ((LIVE_MONSTERS as string[]).includes(name)) return rt.monsters[name as keyof typeof rt.monsters];
@@ -67,7 +66,7 @@ export function goToTarget(name: string, dist = 1.6) {
       // Act 2: unlocks are asked from their own standing spot; keepers are faced across their counter.
       if (name in ACT2_PLACE) {
         const f = ACT2_PLACE[name as keyof typeof ACT2_PLACE];
-        const face = ({ groveLilies: { x: 39, z: -223 }, canopyVines: { x: 106, z: -218 }, canopyRope: { x: 106, z: -227.5 }, causewayGate: SHORTCUT_GATE } as Record<string, { x: number; z: number }>)[name];
+        const face = ({ groveLilies: { x: 39, z: -223 }, canopyVines: { x: 106, z: -218 }, canopyRope: { x: 106, z: -227.5 } } as Record<string, { x: number; z: number }>)[name];
         return placePlayer(f.x, f.z, face.x, face.z);
       }
       if (name in SERVICES) {
