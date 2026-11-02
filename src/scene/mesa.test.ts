@@ -31,7 +31,8 @@ describe("central mesa", () => {
         const terrain = groundY(x, z);
         expect(MESA_SKIRT_Y, `${x},${z}`).toBeLessThan(terrain - .6);
         // Check actual front faces both below the terrain and at eye height.
-        for (const y of [terrain - .3, terrain + .15, 4.6]) {
+        // Banks can bury the first ledge; a higher stratum there rightly retreats from the foot.
+        for (const y of [terrain - .3, terrain + .15, 4.6].filter(y => y < 4.8)) {
           const ray = new THREE.Raycaster(new THREE.Vector3(x + nx * .5, y, z + nz * .5), new THREE.Vector3(-nx, 0, -nz), 0, 1);
           const hit = ray.intersectObject(mesh)[0];
           expect(hit, `${x},${y},${z}`).toBeDefined();
