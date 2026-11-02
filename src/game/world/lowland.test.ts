@@ -4,6 +4,7 @@ import { groundY } from "./island";
 import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck, canopyRaise,
+  RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, lowlandSolids,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
@@ -199,6 +200,48 @@ it("opens low visual shoulders beside every crossing without widening gate colli
 });
 
 describe("the U around the reserved mesa", () => {
+  it("keeps the new canopy trunks, roots and rocks outside a four-metre mounted corridor and enemy homes", () => {
+    expect(RIGHT_ARM_TREES).toHaveLength(3);
+    expect(RIGHT_ARM_TREES.map(t => t.r)).toEqual([...RIGHT_ARM_TREES.map(t => t.r)].sort((a, b) => a - b));
+    expect(RIGHT_ARM_SOLIDS).toHaveLength(RIGHT_ARM_TREES.length + RIGHT_ARM_ROOTS.length + RIGHT_ARM_BOULDERS.length);
+    const solids = lowlandSolids();
+    for (const solid of RIGHT_ARM_SOLIDS) {
+      expect(solids).toContainEqual(solid);
+      if (solid.kind === "box") throw new Error("Canopy dressing uses circles and capsules");
+      const pts: Array<[number, number]> = solid.kind === "circle" ? [[solid.x, solid.z]] : [[solid.ax, solid.az], [solid.bx, solid.bz]];
+      const length = trailLength(pts);
+      // Include both ends and every 5 cm of an exposed root, including the
+      // full visible radius. An extra .7 m leaves a 4 m mounted corridor.
+      const samples = Math.max(1, Math.ceil(length / .05));
+      for (let sample = 0; sample <= samples; sample++) {
+        const s = length * sample / samples;
+        const p = pts.length === 1 ? { x: pts[0][0], z: pts[0][1] } : trailPoint(pts, s);
+        for (const arm of Object.values(FOREST_ARMS))
+          expect(nearestOnTrail(arm, p.x, p.z).d - solid.r, `${JSON.stringify(solid)} at ${s}`).toBeGreaterThanOrEqual(2.7);
+      }
+      for (const home of ENEMY_SPAWNS.filter(e => e.optional)) {
+        const distance = solid.kind === "circle" ? Math.hypot(home.x - solid.x, home.z - solid.z)
+          : nearestOnTrail(pts, home.x, home.z).d;
+        expect(distance - solid.r, `enemy home ${home.x},${home.z}`).toBeGreaterThan(ENEMIES[home.kind].radius + .7);
+      }
+    }
+  });
+
+  it("still moves a mounted body along both complete arm centrelines with the new scenery solids", () => {
+    const g = gates(["canopyVines", "canopyRope"]);
+    for (const side of ["left", "right"] as const) {
+      const pts = FOREST_ARMS[side], length = trailLength(pts);
+      let previous = trailPoint(pts, 0);
+      for (let s = .25; s <= length + .25; s += .25) {
+        const next = trailPoint(pts, Math.min(s, length));
+        expect(isWalkable(next.x, next.z, g, .7), `${side} at ${s}`).toBe(true);
+        const actual = moveCircle(previous.x, previous.z, next.x, next.z, .7, g);
+        expect(Math.hypot(actual.x - next.x, actual.z - next.z), `${side} at ${s}`).toBeLessThan(.01);
+        previous = actual;
+      }
+    }
+  });
+
   it("has two independent first-clear necks and at least forty metres before either next-stage boundary", () => {
     expect(STAGE_EXITS.filter(gate => gate.id === "forest1").map(gate => gate.orientation)).toEqual(["z", "z"]);
     for (const side of ["left", "right"] as const) {

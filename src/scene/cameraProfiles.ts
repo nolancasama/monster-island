@@ -1,6 +1,6 @@
 import { BEACON_ARENA } from "../game/logic/beacon";
 import { TUNNEL } from "../game/world/island";
-import { CLIFF_ROPE, inLowland } from "../game/world/lowland";
+import { CLIFF_ROPE, inLowland, zoneAt } from "../game/world/lowland";
 import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
 
 export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean }
@@ -50,6 +50,14 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   { ...DEFAULT_CAMERA, id: "cloud", yaw: Math.PI, fov: 80, viewShift: -.2, contains: p => p.cloud },
   { ...DEFAULT_CAMERA, id: "lowland-rope-foot", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) && p.z > CLIFF_ROPE.foot.z - 6 - m,
     resolve: p => { const k = smooth((p.z - (CLIFF_ROPE.foot.z - 6)) / 5); return { yaw: 0, pitch: .55 + .6 * k, dist: 10 - 2 * k, ahead: 3 * (1 - k) }; } },
+  // Fixed views angled toward the mesa, low enough for its strata to be in frame:
+  // the default pitch cuts the frame off below the horizon. The arms are mirrored.
+  { ...DEFAULT_CAMERA, id: "forest-left-arm", kind: "lowland", yaw: -.5, pitch: .36, dist: 11, ahead: 2,
+    contains: (p, m) => !p.cloud && p.x < 58 + m && p.z > -207 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
+  { ...DEFAULT_CAMERA, id: "forest-right-arm", kind: "lowland", yaw: .5, pitch: .36, dist: 11, ahead: 2,
+    contains: (p, m) => !p.cloud && p.x > 94 - m && p.z > -207 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
+  { ...DEFAULT_CAMERA, id: "forest-base", kind: "lowland", pitch: .36, dist: 11.5, ahead: 2,
+    contains: (p, m) => !p.cloud && p.z < -165 + m && p.x > 58 - m && p.x < 94 + m && zoneAt(p.x, p.z) === "forest1" },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,
     contains: home((p, m) => rect(p, m, TUNNEL.x - 3.6, TUNNEL.x + 3.6, TUNNEL.z0 - 1.2, TUNNEL.z1 + .8)) },

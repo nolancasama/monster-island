@@ -7,6 +7,7 @@ import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
 import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Outfit } from "./people";
 import { makeRng } from "../../game/logic/rng";
+import { MESA_CENTER, MESA_FOOT, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaRimY } from "../../game/world/mesa";
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import {
   STAGES,
@@ -37,6 +38,8 @@ import {
   POND_Y,
   PORT,
   RUIN_PILLARS,
+  RIGHT_ARM_ROOTS,
+  RIGHT_ARM_TREES,
   SERVICES,
   SHRINE,
   STREAMS,
@@ -44,6 +47,7 @@ import {
   ZONES,
   canopyRaise,
   lowlandWalkable,
+  inMesa,
   nearestOnTrail,
   streamY,
   type EnemyKind,
@@ -79,6 +83,82 @@ const ROCK = new THREE.Color("#7f7064");
 
 const TRAILS = [FOREST1_TRAIL, ...Object.values(FOREST_ARMS), GROVE_TRAIL, CANOPY_TRAIL, COAST_TRAIL];
 
+// Decorative wet pockets follow the existing arm surface; no walking height or
+// shallow-water rules change. More/larger pockets gather near the Grove.
+export const ARM_POOLS = [
+  { x: 47.5, z: -179, rx: .65, rz: 1.1 },
+  { x: 39.8, z: -188.5, rx: .9, rz: 1.7 },
+  { x: 44.5, z: -197, rx: 1.15, rz: 2 },
+  { x: 39.8, z: -202, rx: 1.25, rz: 2.1 },
+];
+const ARM_STREAMS: Array<Array<[number, number]>> = [
+  [[39.8, -187], [39.4, -190], [39.9, -193.5]],
+  [[44.5, -195], [44.7, -198], [44, -201], [43.6, -204]],
+];
+
+/** One closed strata shell and its plateau furnishings, one material/draw.
+ * Vertical walls and inset ledges share vertices exactly; no intersecting rocks
+ * conceal seams. All variation is deterministic and stays inside the footprint. */
+export function mesaGeometry(): THREE.BufferGeometry {
+  type V = [number, number, number];
+  const p: number[] = [], colors: number[] = [];
+  const warm = new THREE.Color("#b39478"), cool = new THREE.Color("#78838b");
+  const moss = new THREE.Color("#577d45"), lightMoss = new THREE.Color("#86a453");
+  const triangle = (a: V, b: V, c: V, band: number, ledge = false, seam = false) => {
+    // One colour per face: blended per-vertex noise smears into a soft gradient.
+    // Alternating warm and cool bands make the strata read at a distance.
+    const weather = hash(a[0] + band * 7, a[2]);
+    const col = warm.clone().lerp(cool, (band % 2 ? .78 : .08) + weather * .2);
+    const green = ledge ? .55 + weather * .35 : seam ? .7 + weather * .25 : weather > .88 ? .45 : 0;
+    col.lerp(ledge ? lightMoss : moss, green).multiplyScalar((seam ? .62 : .84) + .24 * hash(a[2], a[1]));
+    for (const v of [a, b, c]) {
+      p.push(...v);
+      colors.push(col.r, col.g, col.b);
+    }
+  };
+  const quad = (a: V, b: V, c: V, d: V, band: number, ledge = false, seam = false) => {
+    triangle(a, b, c, band, ledge, seam); triangle(a, c, d, band, ledge, seam);
+  };
+  MESA_STRATA.forEach((stratum, band) => {
+    const n = stratum.outline.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, [x, z] = stratum.outline[i], [xx, zz] = stratum.outline[j];
+      const bottom = (k: number) => band === 0 ? MESA_SKIRT_Y : mesaRimY(band - 1, k);
+      const top = mesaRimY(band, i), next = mesaRimY(band, j);
+      quad([x, bottom(i), z], [xx, bottom(j), zz], [xx, next - .22, zz], [x, top - .22, z], band);
+      quad([x, top - .22, z], [xx, next - .22, zz], [xx, next, zz], [x, top, z], band, false, true);
+      if (band < MESA_STRATA.length - 1) {
+        const inner = MESA_STRATA[band + 1].outline;
+        quad([x, top, z], [xx, next, zz], [inner[j][0], next, inner[j][1]], [inner[i][0], top, inner[i][1]], band, true);
+      } else triangle([MESA_CENTER[0], MESA_PLATEAU_Y, MESA_CENTER[1]], [x, top, z], [xx, next, zz], band, true);
+    }
+  });
+  for (let i = 0; i < MESA_FOOT.length; i++) {
+    const a = MESA_FOOT[i], c = MESA_FOOT[(i + 1) % MESA_FOOT.length];
+    triangle([77, MESA_SKIRT_Y, -209], [c[0], MESA_SKIRT_Y, c[1]], [a[0], MESA_SKIRT_Y, a[1]], 0);
+  }
+  const shell = new THREE.BufferGeometry();
+  shell.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+  shell.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  shell.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(p.length / 3 * 2), 2));
+  shell.computeVertexNormals();
+  const b = new PartBuilder(0);
+  const trees = [[72, -201, .34], [80, -214, .42], [73, -221, .29]].map(([x, z, s]) =>
+    primevalTreeGeometry().scale(s, s, s).rotateY(x).translate(x, MESA_PLATEAU_Y - .25, z));
+  // Two weathered small pillars give scale without suggesting a playable route.
+  for (const [x, h] of [[75, 2.1], [78.2, 1.4]]) {
+    b.cyl(.38, .5, h, x, MESA_PLATEAU_Y - .25, -207, "#c1b59d", 7);
+    b.cyl(.55, .6, .25, x, MESA_PLATEAU_Y - .25, -207, "#75865b", 7);
+    b.cyl(.49, .41, .18, x, MESA_PLATEAU_Y + h - .25, -207, "#a99b87", 7);
+  }
+  const furnishings = b.build();
+  // Keep the tree builders' original bark/foliage colours when merging.
+  const merged = mergeGeometries([shell, furnishings, ...trees], false);
+  shell.dispose(); furnishings.dispose(); trees.forEach(g => g.dispose());
+  merged.computeBoundingSphere();
+  return merged;
+}
+
 /** Same surface rule as the massif: sunk a little under the sanctuary's own floor where they overlap. */
 function surface(x: number, z: number): number {
   return groundY(x, z) - 0.3 * volcanoMask(x, z);
@@ -89,6 +169,15 @@ function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Co
   let trail = Infinity;
   for (const t of TRAILS) trail = Math.min(trail, nearestOnTrail(t, x, z).d);
   c.lerp(DIRT, (1 - sstep(1.2, 2.6, trail)) * 0.8);
+  const wet = 1 - sstep(1.3, 5, nearestOnTrail(FOREST_ARMS.left, x, z).d);
+  const towardGrove = sstep(-175, -205, z);
+  if (wet > 0) {
+    c.lerp(MUD, wet * towardGrove * .42);
+    for (const pool of ARM_POOLS) {
+      const d = Math.hypot((x - pool.x) / (pool.rx + 1.1), (z - pool.z) / (pool.rz + 1.1));
+      c.lerp(hash(x, z) > .65 ? MOSS : MUD, (1 - sstep(.7, 1.6, d)) * .8);
+    }
+  }
   const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, pad: number) => x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad;
   if (inRect({x0:44,x1:52,z0:-257,z1:-250},0) || inRect(CAUSEWAY, 0) || Math.hypot(x - SHRINE.x, z - SHRINE.z) < SHRINE.r) c.lerp(STONE, 0.9);
   if (inRect(PORT, 0)) c.lerp(COBBLE, 0.92);
@@ -228,6 +317,7 @@ export interface Spot {
   s: number;
   r: number;
   tint: number;
+  sy?: number;
 }
 
 /**
@@ -243,7 +333,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
   const off = (x: number, z: number, pad: number) => {
     // Nothing grows on the sanctuary's shelf or against the cliff (it would poke up beside the garden).
-    if (z > -157.5) return false;
+    if (z > -157.5 || inMesa(x, z, pad + 1)) return false;
     for (const [dx, dz] of [
       [0, 0],
       [pad, 0],
@@ -292,10 +382,19 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
       }
     }
   }
+  // Wet fringing thickens toward the Grove in the existing instance batches.
+  for (const [i, pool] of ARM_POOLS.entries()) {
+    for (let j = 0; j < 4 + i * 3; j++) {
+      const a = j * 2.4, x = pool.x + Math.cos(a) * (pool.rx + .35), z = pool.z + Math.sin(a) * (pool.rz + .35);
+      reeds.push({ x, z, s: .65 + .08 * i, r: a, tint: .9 + .04 * i });
+      if (j % 2 === 0) ferns.push({ x: x + .5 * Math.cos(a), z: z + .5 * Math.sin(a), s: .45 + .08 * i, r: a, tint: .95 });
+    }
+  }
   // Thin out overlaps: one big tree per 5 m.
   const kept: Spot[] = [];
   for (const t of trees) if (kept.every((k) => Math.hypot(k.x - t.x, k.z - t.z) > 5 * Math.max(k.s, t.s))) kept.push(t);
-  for (const t of GIANT_TREES) kept.push({ x: t.x, z: t.z, s: t.r / 0.95, r: t.x * 0.7, tint: 1 });
+  for (const t of GIANT_TREES) if (!inMesa(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
+    sy: RIGHT_ARM_TREES.some(tree => tree === t) ? t.h / 11.2 : undefined, r: t.x * 0.7, tint: 1 });
   return { trees: kept, ferns, fernTrees, reeds };
 }
 
@@ -436,6 +535,9 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   b.boxAt(1.4, 0.32, 0.06, [s.x - 0.55, fy + 1.75, s.z], [0, 0, 0.08], "#c99a5a");
   b.boxAt(1.4, 0.32, 0.06, [s.x + 0.55, fy + 1.35, s.z], [0, 0, -0.08], "#c99a5a");
   // Fallen logs and mossy boulders.
+  for (const r of RIGHT_ARM_ROOTS) {
+    between(b, [r.ax, gy(r.ax, r.az) + r.r * .65, r.az], [r.bx, gy(r.bx, r.bz) + r.r * .65, r.bz], r.r, r.r * .5, "#6b4a30", 6);
+  }
   for (const l of LOGS) {
     const mx = (l.ax + l.bx) / 2,
       mz = (l.az + l.bz) / 2;
@@ -494,7 +596,33 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
       b.add(plane, "#5cc6d6", [mx, streamY(mx, mz), mz], [0, Math.atan2(bx - ax, bz - az), 0], [1, 1, 1], { flatAo: true });
     }
   }
-  return b.build();
+  // Conform visual water to the rendered 2 m terrain triangles. This shares
+  // water's existing tiled draw and never cuts a channel into walking ground.
+  const waterY = (x: number, z: number) => {
+    const gx = BASIN.x0 + Math.floor((x - BASIN.x0) / STEP) * STEP;
+    const gz = BASIN.z0 + Math.floor((z - BASIN.z0) / STEP) * STEP;
+    const u = (x - gx) / STEP, v = (z - gz) / STEP;
+    return .045 + (u + v <= 1
+      ? surface(gx, gz) * (1 - u - v) + surface(gx + STEP, gz) * u + surface(gx, gz + STEP) * v
+      : surface(gx + STEP, gz + STEP) * (u + v - 1) + surface(gx + STEP, gz) * (1 - v) + surface(gx, gz + STEP) * (1 - u));
+  };
+  const decor = new PartBuilder(0);
+  for (const pool of ARM_POOLS) {
+    const g = new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2).scale(pool.rx, 1, pool.rz).translate(pool.x, 0, pool.z);
+    decor.add(g, "#459e9e", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+  }
+  for (const stream of ARM_STREAMS) for (let i = 1; i < stream.length; i++) {
+    const [ax, az] = stream[i - 1], [bx, bz] = stream[i];
+    const len = Math.hypot(bx - ax, bz - az);
+    decor.add(new THREE.PlaneGeometry(.65, len + .2, 1, Math.ceil(len / .5)).rotateX(-Math.PI / 2), "#65b9b2",
+      [(ax + bx) / 2, 0, (az + bz) / 2], [0, Math.atan2(bx - ax, bz - az), 0], [1, 1, 1], { flatAo: true });
+  }
+  const wet = decor.build(), positions = wet.getAttribute("position");
+  for (let i = 0; i < positions.count; i++) positions.setY(i, waterY(positions.getX(i), positions.getZ(i)));
+  wet.computeVertexNormals();
+  const existing = b.build(), merged = mergeGeometries([existing, wet], false);
+  existing.dispose(); wet.dispose();
+  return merged;
 }
 
 export function lilyPadGeometry(): THREE.BufferGeometry {

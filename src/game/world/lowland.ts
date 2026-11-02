@@ -166,7 +166,7 @@ export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.55 };
 export const SHRINE = disc(106.5, -251.5, 4.8);
 export const CAMP_SITE = { x: 88, z: -160, r: 5.5 };
 
-/** Reserved rock footprint; its mesh belongs to the next slice. Never add walk shapes here. */
+/** Central rock footprint shared by the landmark and collision. Never add walk shapes here. */
 export const MESA_OUTLINE: Array<[number, number]> = [
   [69, -187], [83, -188], [89, -197], [88, -221],
   [84, -231], [69, -230], [65, -218], [65, -198],
@@ -606,6 +606,32 @@ export const FOUNTAIN = { x: 77, z: -306, r: 1.6 };
 export const MAPLE_PORT = { x: 80.5, z: -317.5, yaw: Math.PI * 0.85 };
 export const TOWN_GATE = { x: 76, z: -289.5 };
 
+/** Canopy approach: progressively larger trunks, with their full buttress feet solid. */
+export const RIGHT_ARM_TREES: Array<Vec2 & { r: number; h: number; footR: number }> = [
+  { x: 103.5, z: -181, r: 1.05, h: 15, footR: 2.1 },
+  { x: 118.3, z: -189, r: 1.15, h: 17, footR: 2.3 },
+  { x: 101, z: -195, r: 1.25, h: 19, footR: 2.5 },
+];
+/** Absolute endpoints shared by the visible exposed roots and their collision. */
+export const RIGHT_ARM_ROOTS = [
+  { ax: 103.5, az: -181, bx: 101, bz: -182.2, r: .42 },
+  { ax: 103.5, az: -181, bx: 104, bz: -184, r: .36 },
+  { ax: 118.3, az: -189, bx: 120.4, bz: -191, r: .5 },
+  { ax: 118.3, az: -189, bx: 119.7, bz: -186.3, r: .4 },
+  { ax: 101, az: -195, bx: 98.6, bz: -194.8, r: .55 },
+  { ax: 101, az: -195, bx: 100.6, bz: -192.5, r: .45 },
+];
+export const RIGHT_ARM_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
+  { x: 108.5, z: -188, r: .7, h: .9 },
+  { x: 108.5, z: -202, r: 1, h: 1.35 },
+];
+/** Covers the rendered buttresses and the boulder builder's maximum radial jitter. */
+export const RIGHT_ARM_SOLIDS: SolidShape[] = [
+  ...RIGHT_ARM_TREES.map(t => ({ kind: "circle" as const, x: t.x, z: t.z, r: t.footR })),
+  ...RIGHT_ARM_ROOTS.map(root => ({ kind: "capsule" as const, ...root })),
+  ...RIGHT_ARM_BOULDERS.map(b => ({ kind: "circle" as const, x: b.x, z: b.z, r: b.r * 1.16 })),
+];
+
 /** Big trees standing inside walkable clearings (solid trunks). */
 export const GIANT_TREES: Array<Vec2 & { r: number; h: number }> = [
   { x: 81.3, z: -163.4, r: 1.05, h: 15 },
@@ -615,6 +641,7 @@ export const GIANT_TREES: Array<Vec2 & { r: number; h: number }> = [
   { x: 47.2, z: -217.6, r: 0.9, h: 13 },
   { x: 43.6, z: -235.5, r: 1.15, h: 16 },
   { x: 69.3, z: -194.6, r: 0.95, h: 14 },
+  ...RIGHT_ARM_TREES,
 ];
 export const MOSSY_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
   { x: 72.2, z: -163.5, r: 0.9, h: 1.1 },
@@ -625,6 +652,7 @@ export const MOSSY_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
   { x: 68.5, z: -278, r: 1.2, h: 1.8 },
   { x: 74.5, z: -270.5, r: 0.8, h: 0.9 },
   { x: 80.2, z: -283.4, r: 0.9, h: 1 },
+  ...RIGHT_ARM_BOULDERS,
 ];
 export const LOGS: Array<{ ax: number; az: number; bx: number; bz: number; r: number }> = [
   { ax: 65, az: -163, bx: 67, bz: -161, r: 0.35 },
@@ -746,8 +774,9 @@ export function lowlandSolids(): SolidShape[] {
   box(CAMP2.tent.x, CAMP2.tent.z, 1.6, 1.25, CAMP2.tent.yaw);
   circle(CAMP2.fire.x, CAMP2.fire.z, 0.65);
   box(CAMP2.bench.x, CAMP2.bench.z, 1, 0.2, CAMP2.bench.yaw);
-  for (const t of GIANT_TREES) circle(t.x, t.z, t.r);
-  for (const b of MOSSY_BOULDERS) circle(b.x, b.z, b.r * 0.9);
+  for (const t of GIANT_TREES) if (!RIGHT_ARM_TREES.some(arm => arm === t)) circle(t.x, t.z, t.r);
+  for (const b of MOSSY_BOULDERS) if (!RIGHT_ARM_BOULDERS.includes(b)) circle(b.x, b.z, b.r * 0.9);
+  out.push(...RIGHT_ARM_SOLIDS);
   for (const l of LOGS) out.push({ kind: "capsule", ...l });
   for (const p of RUIN_PILLARS) circle(p.x, p.z, 0.6);
   circle(FORK_SIGN.x, FORK_SIGN.z, 0.12);

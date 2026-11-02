@@ -1818,3 +1818,36 @@ Spec frozen in `docs/U_FOREST_PORT_WALL.md` (§0 lists every change).
   Movement's actual gates and solids validate restored positions. Existing valid
   branch and later-stage positions, inventory, vitals and older save keys survive.
 - Port Town wall, doors and its raised gate camera remain work for M4.
+
+## 2026-11-02 — M3: layered central mesa and arm dressing
+
+- The reserved MESA_OUTLINE remains the exact outer foot. Five vertical strata
+  retreat into irregular, offset ledge rings; shared seam heights close every
+  ledge. Warm/cool stone variation, dark moss seams and green ledges use vertex
+  colours. The shell, three small plateau trees and two ruined pillars merge into
+  one flat-shaded draw under 6,000 triangles, without primitive rock piles.
+- The skirt bottom samples the full outline and neighbouring terrain cells and
+  stays 1.2 m below their minimum. Existing banks and all walking heights and
+  shapes remain in place. Vegetation sampling excludes the reserved rock.
+- Camera lift shares the strata outlines and ceiling heights. Exact line/edge
+  intersections supplement spaced probes, and clearance also applies after
+  camera smoothing. The mesh uses the existing lowland region and distance/frustum
+  culling, including sanctuary basin views.
+- The left arm gains four progressively larger wet pockets, two short streams,
+  wet-soil/moss terrain colours and denser reed/fern fringes toward the Grove.
+  Water conforms to the rendered terrain triangles as visual dressing only.
+- Three progressively larger right-arm trunks, six exposed roots and two rocks
+  reuse tree instances and tiled props. New solids cover the full buttress feet,
+  roots and rock extents, preserving a 4 m corridor plus mounted-body clearance
+  and keeping optional enemy homes clear. Dressing adds no new batch types;
+  any additional spatial tile draws remain within the three-call allowance.
+- Controller captures and final aesthetic judgment remain separate from unit
+  geometry, camera, clearance and representative-view triangle checks.
+
+## 2026-11-02 — Forest camera profiles for the mesa
+
+The default Act 2 pitch puts the top of the frame below the horizon, so a 20 m mesa
+25 m to the side could never be seen and could not act as a landmark. The base and arms
+get fixed, lower profiles (pitch .36), with each arm's yaw ±.5 toward the mesa. Rejected:
+a taller mesa (still out of frame) and rotating cameras (Act 2 stays fixed). Faces use one
+colour each, in alternating warm and cool strata; per-vertex noise blurred into a gradient.

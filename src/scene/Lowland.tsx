@@ -31,6 +31,7 @@ import {
   lowlandSpots,
   lowlandTerrainTiles,
   lowlandWaterGeometry,
+  mesaGeometry,
   npcGeometry,
   primevalTreeGeometry,
   reedGeometry,
@@ -94,7 +95,7 @@ function Tile({ geometry, spots, material, far }: { geometry: THREE.BufferGeomet
     items.forEach((s, i) => {
       o.position.set(s.x, s.y, s.z);
       o.rotation.set(0, s.r, 0);
-      o.scale.setScalar(s.s);
+      o.scale.set(s.s, s.sy ?? s.s, s.s);
       o.updateMatrix();
       m.setMatrixAt(i, o.matrix);
       m.setColorAt(i, c.setRGB(s.tint, s.tint * (0.95 + (i % 3) * 0.04), s.tint));
@@ -121,7 +122,7 @@ function Tile({ geometry, spots, material, far }: { geometry: THREE.BufferGeomet
       s.scale = scale;
       object.position.set(s.x, s.y, s.z);
       object.rotation.set(0, s.r, 0);
-      object.scale.setScalar(scale);
+      object.scale.set(scale, (s.sy ?? s.s) * scale / s.s, scale);
       object.updateMatrix();
       m.setMatrixAt(i, object.matrix);
       changed = true;
@@ -254,6 +255,7 @@ export function Lowland() {
   const reed = useMemo(reedGeometry, []);
   const props = useMemo(() => spatialGeometry(lowlandPropsGeometry(), TILE), []);
   const cliff = useMemo(cliffFaceGeometry, []);
+  const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
   const waterMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }), []);
   const town = useMemo(townGeometry, []);
@@ -273,6 +275,7 @@ export function Lowland() {
         <DistanceMesh key={i} geometry={g} material={flatMat} />
       ))}
       <mesh geometry={cliff} material={flatMat} />
+      <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />
       ))}

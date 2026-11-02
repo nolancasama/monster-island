@@ -6,6 +6,7 @@ import { getGame } from "../game/store";
 import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from "../game/world/island";
 
 import { CLIFF_ROPE, MOSSY_BOULDERS } from "../game/world/lowland";
+import { mesaCameraLift, mesaFloorY } from "../game/world/mesa";
 import { CAMERA_BLEND_SECONDS, DEFAULT_CAMERA, cameraProfileAt, type CameraProfile, type Framing } from "./cameraProfiles";
 
 const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
@@ -45,7 +46,7 @@ export function CameraRig() {
 
   /** Raise the endpoint until the whole target-to-camera line clears the ground and the big rocks. */
   const lift = (target: THREE.Vector3, candidate: THREE.Vector3): number => {
-    let up = 0;
+    let up = mesaCameraLift(target, candidate);
     for (let i = 2; i <= 14; i++) {
       const u = i / 14;
       probe.lerpVectors(target, candidate, u);
@@ -55,6 +56,7 @@ export function CameraRig() {
       const cover = tunnelCoverY(probe.x, probe.z);
       const open = cover !== null && inTunnel(probe.x, probe.z, 0.4) && lineY0 < tunnelRoof - 0.4;
       let floor = (cover !== null && !open ? cover : groundY(probe.x, probe.z)) + 0.7;
+      floor = Math.max(floor, mesaFloorY(probe.x, probe.z) + .7);
       for (const b of (rt.player.z < -153.6 ? MOSSY_BOULDERS : BOULDERS)) {
         const d = Math.hypot(probe.x - b.x, probe.z - b.z);
         if (d < b.r * 1.1) floor = Math.max(floor, groundY(b.x, b.z) + b.h * 0.95 * Math.sqrt(1 - (d / (b.r * 1.1)) ** 2) + 0.6);
@@ -182,7 +184,7 @@ export function CameraRig() {
             up = shorter;
           }
         }
-        want.current.y += Math.min(1.5, up);
+        want.current.y += Math.max(Math.min(1.5, up), mesaCameraLift(wantLook.current, want.current));
       } else if (!cloud && !tunnelClearance) {
         // Against the mountain (the volcano's flank, the ridge) the view
         // comes in closer rather than climbing tens of metres up the rock;
@@ -197,7 +199,7 @@ export function CameraRig() {
             up = shorter;
           }
         }
-        want.current.y += Math.min(up, 8);
+        want.current.y += Math.max(Math.min(up, 8), mesaCameraLift(wantLook.current, want.current));
       }
     }
     if (!rope && !lowland && !rt.voyage.active) {
@@ -227,6 +229,9 @@ export function CameraRig() {
     if (!cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && inTunnel(pos.current.x, pos.current.z, -.2)) {
       pos.current.y = Math.min(pos.current.y, tunnelRoof - .55);
     }
+    // Smoothing can sweep a clear endpoint back through a mesa corner.
+    if (!cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && !rope)
+      pos.current.y += mesaCameraLift(look.current, pos.current);
     camera.position.copy(pos.current);
     camera.lookAt(look.current);
     // Lens shift: while a prompt or line covers the bottom of the screen, the
