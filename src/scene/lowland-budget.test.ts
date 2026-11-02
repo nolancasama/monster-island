@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { groundY } from "../game/world/island";
-import { CANOPY_GAPS, CHESTS, POND_Y, SERVICES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible } from "../game/world/lowland";
+import { CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible } from "../game/world/lowland";
 import { mesaCameraLift } from "../game/world/mesa";
 import { NPCS, NPC_OF } from "../game/data/town";
 import { cameraProfileAt, DEFAULT_CAMERA } from "./cameraProfiles";
@@ -67,7 +67,12 @@ beforeAll(() => {
   instances("reeds", reedGeometry(), spots.reeds, 50);
   for (const gate of STAGE_EXITS)
     add("barrier", stageBarrierGeometry(gate), gate.x, groundY(gate.x, gate.z), gate.z, gate.orientation === "z" ? Math.PI / 2 : 0);
-  add("lilies", lilyPadGeometry(), 0, POND_Y + .06);
+  const lilies = lilyPadGeometry();
+  geometries.add(lilies);
+  lilies.computeBoundingSphere();
+  const lilyBounds = new THREE.Sphere().makeEmpty();
+  for (const pad of LILY_PADS) lilyBounds.union(lilies.boundingSphere!.clone().translate(new THREE.Vector3(pad.x, POND_Y + .06, pad.z)));
+  draws.push({ name: "lilies", bounds: lilyBounds, triangles: triangles(lilies) * LILY_PADS.length, far: FOG_FAR });
   for (const id of ["canopyVines", "canopyRope"] as const) {
     const gap = CANOPY_GAPS[id], deck = gapDeck(id), len = deck.z1 - deck.z0;
     const y = lowlandBridgeY(id, gap.x, deck.z1);
@@ -75,7 +80,7 @@ beforeAll(() => {
     add("bridge", geometry, gap.x, y, (deck.z0 + deck.z1) / 2);
   }
   for (const chest of CHESTS) {
-    const y = chest.id === "isletChest" ? POND_Y + .15 : groundY(chest.x, chest.z);
+    const y = groundY(chest.x, chest.z);
     add("chest", chestBaseGeometry(), chest.x, y, chest.z, chest.yaw);
     const lid = chestLidGeometry().translate(...CHEST_HINGE);
     add("chest lid", lid, chest.x, y, chest.z, chest.yaw);

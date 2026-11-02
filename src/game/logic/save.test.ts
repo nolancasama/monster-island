@@ -3,7 +3,7 @@ import { SAVE_KEY, SAVE_KEY_V1, SAVE_KEY_V2, SAVE_KEY_V3, decodeSave, encodeSave
 import { befriend, describeLine, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { CAMP, CLIFF_TOP_SPOT, SPAWN } from "../world/island";
-import { CAMP2, CLIFF_ROPE, STAGES, STAGE_EXITS } from "../world/lowland";
+import { CAMP2, CLIFF_ROPE, GROVE_CROSSING, POND, STAGES, STAGE_EXITS } from "../world/lowland";
 import { startAct2, markDescended } from "./act2";
 import type { MonsterId } from "../types";
 import { readdirSync, readFileSync } from "node:fs";
@@ -203,6 +203,21 @@ describe("forest layout save migration", () => {
     if (legacy) delete act2.forestLayout;
     return decodeSave(JSON.stringify({ v: 4, progress: { ...p, act2, solved: [...p.solved, ...(shortcut ? ["causewayGate"] : [])] }, player: { ...position, yaw: .7 }, seconds: 87 }))!;
   }
+
+  it("recovers an unsolved swim or island save at the near bank, and preserves solved dismount saves", () => {
+    for (const position of [POND, GROVE_CROSSING.swimEnd, GROVE_CROSSING.friendLanding, GROVE_CROSSING.landing]) {
+      const p = chapter();
+      p.act2.zone = "grove";
+      const back = decodeSave(encodeSave(p, { ...position, yaw: .7 }, 87))!;
+      expect(back.player).toEqual({ ...GROVE_CROSSING.near, yaw: .7 });
+      expect(back.progress.solved).not.toContain("groveLilies");
+      expect(back.progress.act2.zone).toBe("grove");
+    }
+    const p = solve(chapter(), "groveLilies");
+    const back = decodeSave(encodeSave(p, { ...GROVE_CROSSING.landing, yaw: .7 }, 87))!;
+    expect(back.player).toEqual({ ...GROVE_CROSSING.landing, yaw: .7 });
+    expect(back.progress.solved).toContain("groveLilies");
+  });
 
   it.each([
     { label: "old camp", position: { x: 76, z: -191.5 }, zone: "camp" },

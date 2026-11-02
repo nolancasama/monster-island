@@ -14,6 +14,8 @@ import {
   lowlandBridgeY,
   CANOPY_GAPS,
   CHESTS,
+  LILY_PADS,
+  POND,
   POND_Y,
   SERVICES,
   type ServiceId,
@@ -32,6 +34,7 @@ import {
   cliffRopeGeometry,
   giantFernGeometry,
   lilyPadGeometry,
+  updateLilyPadMatrices,
   lowlandPropsGeometry,
   lowlandSpots,
   lowlandTerrainTiles,
@@ -182,23 +185,51 @@ function Unlocks() {
     (x, z) => lowlandBridgeY("canopyVines", x, z)), [g1]);
   const rope = useMemo(() => conformBridge(ropeBridgeGeometry(d2.z1 - d2.z0), g2.x, (d2.z0 + d2.z1) / 2, deck("canopyRope"),
     (x, z) => lowlandBridgeY("canopyRope", x, z)), [g2]);
-  const padRef = useRef<THREE.Mesh>(null);
+  const padRef = useRef<THREE.InstancedMesh>(null);
+  const padValues = useMemo(() => new Float64Array(LILY_PADS.length).fill(-1), []);
+  const padMatrix = useMemo(() => new THREE.Matrix4(), []);
   useFrame(() => {
     if (root.current) root.current.visible = true;
     const u = rt.act2Unlock;
     if (padRef.current) {
       padRef.current.visible = near(39, -223);
-      padRef.current.position.y = POND_Y - 0.6 + (u.groveLilies ?? 0) * 0.66;
+      updateLilyPadMatrices(padRef.current, u.groveLilies ?? 0, padValues, padMatrix);
     }
   });
   return (
     <group ref={root}>
-      <mesh ref={padRef} geometry={lilies} material={flatMat} />
+      <instancedMesh ref={padRef} args={[lilies, flatMat, LILY_PADS.length]} frustumCulled={false} />
       {/* Each bridge grows from the near (south) end toward the far end. */}
       <BridgeGrow geometry={vines} at={[g1.x, deck("canopyVines"), d1.z1]} len={d1.z1 - d1.z0} which="canopyVines" />
       <BridgeGrow geometry={rope} at={[g2.x, deck("canopyRope"), d2.z1]} len={d2.z1 - d2.z0} which="canopyRope" />
     </group>
   );
+}
+
+/** Reused trailing ripples make Bubbo's pond crossing readable from the wide shot. */
+function GroveWake() {
+  const root = useRef<THREE.Group>(null);
+  const rings = useRef<Array<THREE.Mesh | null>>([]);
+  const geometry = useMemo(() => {
+    const g = new THREE.RingGeometry(0.76, 0.82, 24).rotateX(-Math.PI / 2);
+    const colours = new Float32Array(g.getAttribute("position").count * 3).fill(1);
+    g.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+    return g;
+  }, []);
+  useFrame(() => {
+    const m = rt.monsters.bubbo;
+    if (root.current) root.current.visible = m.swimming && Math.hypot(m.x - POND.x, m.z - POND.z) < POND.r + 2;
+    for (let i = 0; i < 3; i++) {
+      const ring = rings.current[i];
+      if (!ring) continue;
+      const t = (rt.time * 0.8 + i / 3) % 1;
+      ring.position.set(m.x - Math.sin(m.yaw) * (0.7 + t * 1.7), POND_Y + 0.025 + i * 0.003, m.z - Math.cos(m.yaw) * (0.7 + t * 1.7));
+      ring.scale.setScalar(0.45 + t * 0.85);
+    }
+  });
+  return <group ref={root} visible={false}>
+    {[0, 1, 2].map(i => <mesh key={i} ref={m => { rings.current[i] = m; }} geometry={geometry} material={flatMat} />)}
+  </group>;
 }
 
 /** A bridge that grows across its gap from the near end (scale along -z from the anchor). */
@@ -303,6 +334,7 @@ export function Lowland() {
       ))}
       <CliffRope />
       <Unlocks />
+      <GroveWake />
       <Secrets />
       {CHESTS.map((c) => (
         <Chest key={c.id} id={c.id} visible={c.secret ? nearSecretChest : near} />

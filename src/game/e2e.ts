@@ -3,9 +3,10 @@ import { cloudIsleOpen, setE2eCloudIsleShipOpen } from "./release";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
+import { groveCrossingView } from "./flow/obstacles";
 import { objective } from "./logic/progress";
 import { PLAYER_R, moveCircle, gatesOf, standY } from "./world/collision";
-import { GATE_PILLARS, MAPLE } from "./world/island";
+import { GATE_PILLARS, MAPLE, groundY } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
@@ -17,7 +18,7 @@ import { ENEMIES } from "./data/combat";
 import { travelCombat } from "./combat";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_ELECTRIC_PANELS, electricPanelActive, electricPanelPhase, type CloudAreaId } from "./world/cloudisle";
 import { newAct3, type Act3 } from "./logic/act3";
-import { decodeSave, encodeSave } from "./logic/save";
+import { decodeSave, encodeSave, writeSave } from "./logic/save";
 import { cloudView } from "../scene/CloudIsle";
 import { gustFrame, whipFrame } from "../scene/ElementEffects";
 
@@ -111,6 +112,7 @@ export function installE2eHook(seed: number) {
           ship: { visible: rt.ship.visible, x: rt.ship.x, y: rt.ship.y, z: rt.ship.z, cage: rt.ship.cage.visible },
           cliffRope: rt.cliffRope,
           unlock: { ...rt.act2Unlock },
+          groveCrossing: groveCrossingView.phase,
           panel: g.panel,
           banner: g.banner?.title ?? null,
           hint: g.hint
@@ -135,6 +137,9 @@ export function installE2eHook(seed: number) {
       p.x=q.x;p.z=q.z;p.vx=p.vz=0;
       return q;
     },
+    /** Terrain height alone, ignoring decks: proves puzzle animation moves no land. */
+    groundAt(x: number, z: number) { return groundY(x, z); },
+    saveNow() { writeSave(encodeSave(getGame().progress, { x: rt.player.x, z: rt.player.z, yaw: rt.player.yaw }, rt.playTime)); },
     teleport(x: number, z: number, yaw = 0, snap = true) {
       placePlayer(x, z, x + Math.sin(yaw), z + Math.cos(yaw));
       rt.camera.snap = snap;

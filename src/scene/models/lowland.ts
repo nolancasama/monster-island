@@ -30,7 +30,9 @@ import {
   HOUSES,
   ISLET,
   LAMPS,
+  LILY_PAD_R,
   LILY_PADS,
+  lilyPadRise,
   LOGS,
   MOSSY_BOULDERS,
   PIER2,
@@ -474,6 +476,15 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
   const rand = makeRng(31);
   const gy = (x: number, z: number) => groundY(x, z);
+  // The islet belongs to scenery, never to the animated pad instances.
+  const mound = new THREE.CylinderGeometry(ISLET.r, ISLET.r + 0.35, 1, 24, 1);
+  const mp = mound.getAttribute("position");
+  for (let i = 0; i < mp.count; i++) {
+    const x = mp.getX(i) + ISLET.x, z = mp.getZ(i) + ISLET.z;
+    mp.setXYZ(i, x, mp.getY(i) > 0 ? groundY(x, z) + 0.015 : POND_Y - 0.65, z);
+  }
+  mound.computeVertexNormals();
+  b.add(mound, "#5f9a44", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   // Causeway slabs.
   for (let x = CAUSEWAY.x0 + 1; x < CAUSEWAY.x1; x += 2.1) {
     for (let z = CAUSEWAY.z0 + 1.6; z < CAUSEWAY.z1 - 0.6; z += 2.1) {
@@ -627,12 +638,26 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
 
 export function lilyPadGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (const p of LILY_PADS) {
-    b.add(new THREE.CylinderGeometry(0.75, 0.75, 0.08, 10, 1, false, 0.3, Math.PI * 1.8), "#5fae4f", [p.x, 0, p.z], [0, p.x, 0], [1, 1, 1], { flatAo: true });
-    b.sphere(0.12, p.x + 0.25, 0.08, p.z - 0.2, "#ff8fb8", [1, 0.7, 1], 6);
-  }
-  b.add(new THREE.CylinderGeometry(ISLET.r + 0.4, ISLET.r + 0.9, 0.5, 12), "#5f9a44", [ISLET.x, POND_Y - 0.1, ISLET.z]);
+  // One pad in local space. The notch points away from the walking centreline.
+  b.add(new THREE.CylinderGeometry(LILY_PAD_R, LILY_PAD_R, 0.08, 16, 1, false, -0.3, Math.PI * 1.8), "#5fae4f", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+  b.sphere(0.12, 0.25, 0.08, -0.2, "#ff8fb8", [1, 0.7, 1], 6);
   return b.build();
+}
+
+/** Updates only changing pads; all scratch storage belongs to the mounted scene. */
+export function updateLilyPadMatrices(mesh: THREE.InstancedMesh, unlock: number, values: Float64Array, matrix: THREE.Matrix4): boolean {
+  let changed = false;
+  for (let i = 0; i < LILY_PADS.length; i++) {
+    const rise = lilyPadRise(unlock, i);
+    if (values[i] === rise) continue;
+    values[i] = rise;
+    const pad = LILY_PADS[i];
+    matrix.makeTranslation(pad.x, POND_Y - 0.6 + rise * 0.66, pad.z);
+    mesh.setMatrixAt(i, matrix);
+    changed = true;
+  }
+  if (changed) mesh.instanceMatrix.needsUpdate = true;
+  return changed;
 }
 
 /** The vine bridge Leafy weaves over the first gap (built along +z, centred). */

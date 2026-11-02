@@ -7,7 +7,7 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, type ZoneId } from "../world/lowland";
+import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, type ZoneId } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
@@ -273,6 +273,12 @@ export function decodeSave(text: string | null): SaveData | null {
     p.act3.area = cloudZoneAt(safe.x, safe.z) ?? "cloudDock";
   } else {
     let x = num(pl.x, NaN), z = num(pl.z, NaN);
+    // A ride has no permanent bridge until dismount. Recover every unsolved
+    // pond/island position on the near shore, including a save during the hop.
+    if (p.act2.descended && !p.solved.includes("groveLilies") && Math.hypot(x - POND.x, z - POND.z) < POND.r + 1) {
+      ({ x, z } = GROVE_CROSSING.near);
+      p.act2.zone = "grove";
+    }
     const gates = gatesOf(p);
     const legacyForest = isObj(src.act2) && src.act2.forestLayout !== 2;
     const oldCamp = Math.hypot(x - 76, z + 191.5) <= 6.5

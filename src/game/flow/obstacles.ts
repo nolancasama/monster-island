@@ -11,7 +11,7 @@ import { companionSpot, poofTo } from "./companion";
 import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
 import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
-import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, LILY_PADS } from "../world/lowland";
+import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, GROVE_CROSSING, LILY_PADS, POND_Y } from "../world/lowland";
 
 type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
 const A2 = ACT2_OBSTACLE_PLACE;
@@ -220,7 +220,8 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   else if (id === "river") await ferry(monster);
   else if (id === "bridge") await weaveBridge(monster);
   else if (id === "cliff") await flyRope(monster);
-  else if (id in ACT2_PLACE) await act2Power(id as Act2Obstacle, monster);
+  else if (id === "groveLilies") await groveCrossing(monster);
+  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies">, monster);
   else await phase3Power(id, monster);
 }
 
@@ -415,7 +416,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
  * Act 2's powers, each a visible permanent change: Bubbo raises lily pads to
  * the islet, Leafy weaves a vine bridge, Puff flies the rolled-up rope bridge across.
  */
-async function act2Power(id: Act2Obstacle, monster: MonsterId) {
+async function act2Power(id: Exclude<Act2Obstacle, "groveLilies">, monster: MonsterId) {
   const place = A2[id];
   const target = place.face;
   const m = rt.monsters[monster];
@@ -423,14 +424,14 @@ async function act2Power(id: Act2Obstacle, monster: MonsterId) {
   m.mode = "script";
   m.look = target;
   // Beside the player, toward the obstacle; the camera frames both from the side.
-  const side = id === "groveLilies" ? { x: 0.4, z: 1.6 } : { x: 1.4, z: 0.3 };
+  const side = { x: 1.4, z: 0.3 };
   m.x = place.x + side.x;
   m.z = place.z + side.z;
   m.yaw = Math.atan2(target.x - m.x, target.z - m.z);
-  const camSide = id === "groveLilies" ? { x: 4, z: 7 } : { x: -6.5, z: 2.5 };
+  const camSide = { x: -6.5, z: 2.5 };
   shot({ x: target.x + camSide.x, y: gy + 3.6, z: target.z + camSide.z }, { x: target.x, y: gy + 0.6, z: target.z });
   animate(monster, "power");
-  audio.play(id === "groveLilies" ? "splash" : id === "canopyVines" ? "vines" : "whoosh");
+  audio.play(id === "canopyVines" ? "vines" : "whoosh");
   if (id === "canopyRope") {
     const g = CANOPY_GAPS.canopyRope;
     await glide(monster, { x: g.x + 0.6, z: g.z0 - 0.6 }, 3.4, 1.2);
@@ -442,10 +443,7 @@ async function act2Power(id: Act2Obstacle, monster: MonsterId) {
     rt.act2Unlock[id] = k;
     if (Math.floor(k * 5) > burst) {
       burst = Math.floor(k * 5);
-      if (id === "groveLilies") {
-        const pad = LILY_PADS[Math.min(LILY_PADS.length - 1, burst)];
-        effect("splash", pad.x, gy, pad.z);
-      } else effect(id === "canopyVines" ? "leaves" : "sparkle", target.x, gy + 0.6, target.z);
+      effect(id === "canopyVines" ? "leaves" : "sparkle", target.x, gy + 0.6, target.z);
     }
     if (k === 1) break;
     await wait(30);
@@ -591,6 +589,71 @@ async function growVines(id: MonsterId) {
 }
 
 // ------------------------------------------------------------ Bubbo's ferry
+
+type GrovePhase = "idle" | "boarding" | "swimming" | "dismounting" | "raising" | "complete";
+let grovePhase: GrovePhase = "idle";
+/** Semantic observation only; the script owns transitions. */
+export const groveCrossingView = { get phase(): GrovePhase { return grovePhase; } };
+
+async function groveCrossing(id: MonsterId) {
+  const m = rt.monsters[id], p = rt.player;
+  const { near, landing, friendLanding, swimEnd } = GROVE_CROSSING;
+  m.mode = "script";
+  m.look = null;
+  m.air = m.airTarget = 0;
+  p.frozen = true;
+  p.vx = p.vz = 0;
+  grovePhase = "boarding";
+  // A single wide shot holds the two shores and the entire swim in view.
+  const centre = (near.x + landing.x) / 2;
+  shot({ x: centre + 1, y: POND_Y + 7, z: near.z + 13 }, { x: centre, y: POND_Y + .5, z: near.z });
+  await glideWalk(m, { x: near.x - .5, z: near.z }, .6);
+  m.yaw = -Math.PI / 2;
+  m.swimming = true;
+  await hop(p, { x: p.x, z: p.z }, true);
+  grovePhase = "swimming";
+  const from = m.x, start = rt.time, duration = 4.2;
+  let splashAt = -1;
+  for (;;) {
+    const k = Math.min(1, (rt.time - start) / duration);
+    const s = k * k * (3 - 2 * k);
+    m.x = from + (swimEnd.x - from) * s;
+    m.z = near.z;
+    m.step += .15;
+    if (Math.floor(k * 8) > splashAt) {
+      splashAt = Math.floor(k * 8);
+      effect("splash", m.x, POND_Y, m.z + (splashAt % 2 ? .45 : -.45));
+      audio.play("splash");
+    }
+    if (k === 1) break;
+    await wait(30);
+  }
+  grovePhase = "dismounting";
+  // Wade onto the island before the hop: both bodies land well inside its lip.
+  await glideWalk(m, friendLanding, 1.1);
+  await hop(p, landing, false);
+  m.swimming = false;
+  updateProgress(pr => solve(pr, "groveLilies"));
+  grovePhase = "raising";
+  m.look = near;
+  animate(id, "power");
+  for (let i = 0; i < LILY_PADS.length; i++) {
+    const pad = LILY_PADS[i];
+    effect("splash", pad.x, POND_Y, pad.z);
+    audio.play("splash");
+    const t0 = rt.time;
+    for (;;) {
+      const k = Math.min(1, (rt.time - t0) / .45);
+      rt.act2Unlock.groveLilies = (i + k) / LILY_PADS.length;
+      if (k === 1) break;
+      await wait(30);
+    }
+  }
+  grovePhase = "complete";
+  p.frozen = false;
+  animate(id, "friend");
+  audio.voice(id, "excited");
+}
 
 /** A scripted walk for a monster (eased, facing where it goes). */
 async function glideWalk(m: MonsterRt, to: Vec2, seconds: number) {

@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
-import { CHESTS, POND_Y } from "../game/world/lowland";
+import { CHESTS } from "../game/world/lowland";
 import { groundY } from "../game/world/island";
 import { additiveSprite, flatMat } from "./materials";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
@@ -45,7 +45,7 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
       openingGlowRef.current.scale.setScalar(0.35 + t * 0.5);
     }
   });
-  const y = id === "isletChest" ? POND_Y + 0.15 : groundY(c.x, c.z);
+  const y = groundY(c.x, c.z);
   return (
     <group ref={root} position={[c.x, y, c.z]} rotation={[0, c.yaw, 0]}>
       <mesh geometry={base} material={flatMat} />

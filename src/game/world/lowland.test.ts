@@ -5,11 +5,14 @@ import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck, canopyRaise,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, lowlandSolids,
+  GROVE_CROSSING, ISLET, POND, POND_Y, LILY_PAD_R, lilyPadRise,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
 import { cameraProfileAt, DEFAULT_CAMERA } from "../../scene/cameraProfiles";
 import { SECRET_SITES } from "./elementObjects";
+import { hazardAt } from "../logic/elements";
+import { rt } from "../runtime";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
@@ -98,6 +101,60 @@ describe("the lowland below the sanctuary", () => {
       const radius = e.kind === "forestSpitter" || e.kind === "raiderShooter" ? ENEMIES[e.kind].radius : .5;
       expect(isWalkable(e.x, e.z, gates(["canopyVines", "canopyRope", "groveLilies"]), radius), `${e.zone} ${e.x},${e.z}`).toBe(true);
       expect(zoneAt(e.x, e.z), `${e.x},${e.z}`).toBe(e.zone);
+    }
+  });
+
+  it("fits both dismounted bodies safely inland and walks the raised pads both ways at either radius", () => {
+    expect(ISLET.r).toBeGreaterThanOrEqual(3);
+    for (const [p, radius] of [[GROVE_CROSSING.landing, PLAYER_R], [GROVE_CROSSING.friendLanding, .55]] as const)
+      expect(ISLET.r - Math.hypot(p.x - ISLET.x, p.z - ISLET.z) - radius).toBeGreaterThanOrEqual(1.2);
+    expect(Math.hypot(GROVE_CROSSING.near.x - POND.x, GROVE_CROSSING.near.z - POND.z) - POND.r).toBeGreaterThanOrEqual(1.2);
+    expect(LILY_PADS.length).toBeGreaterThanOrEqual(5);
+    for (const radius of [PLAYER_R, .7]) {
+      for (const [start, end] of [[GROVE_CROSSING.near, GROVE_CROSSING.landing], [GROVE_CROSSING.landing, GROVE_CROSSING.near]]) {
+        let p = { ...start };
+        for (let i = 1; i <= 160; i++) {
+          const t = i / 160, x = start.x + (end.x - start.x) * t, z = start.z + (end.z - start.z) * t;
+          expect(isWalkable(x, z, gates(["groveLilies"]), radius), `${radius}: ${x},${z}`).toBe(true);
+          p = moveCircle(p.x, p.z, x, z, radius, gates(["groveLilies"]));
+          expect(Math.hypot(p.x - x, p.z - z)).toBeLessThan(.001);
+          // Physical discs overlap by enough for either body, including the seam midpoint.
+          if (x < POND.x + POND.r && x > ISLET.x + ISLET.r)
+            expect(LILY_PADS.some(pad => Math.hypot(x - pad.x, z - pad.z) <= LILY_PAD_R)).toBe(true);
+        }
+        expect(p.x).toBeCloseTo(end.x);
+      }
+    }
+  });
+
+  it("keeps water, terrain and island standing heights fixed throughout the sequential rise", () => {
+    const previous = rt.act2Unlock.groveLilies;
+    const samples = [GROVE_CROSSING.landing, GROVE_CROSSING.friendLanding, GROVE_CROSSING.near, ...LILY_PADS];
+    const heights = samples.map(p => groundY(p.x, p.z));
+    const land = [GROVE_CROSSING.landing, GROVE_CROSSING.friendLanding, GROVE_CROSSING.near];
+    const standing = land.map(p => standY(p.x, p.z, ["groveLilies"]));
+    const water = POND_Y;
+    try {
+      for (const unlock of [0, .1, .2, .45, .8, 1]) {
+        rt.act2Unlock.groveLilies = unlock;
+        expect(samples.map(p => groundY(p.x, p.z))).toEqual(heights);
+        expect(land.map(p => standY(p.x, p.z, ["groveLilies"]))).toEqual(standing);
+        expect(POND_Y).toBe(water);
+        const rise = LILY_PADS.map((_, i) => lilyPadRise(unlock, i));
+        expect(rise.filter(v => v > 0 && v < 1).length).toBeLessThanOrEqual(1);
+        expect(rise).toEqual([...rise].sort((a, b) => b - a));
+      }
+    } finally { rt.act2Unlock.groveLilies = previous; }
+  });
+
+  it("keeps the settled pond a splash hazard for enemies thrown off the safe island", () => {
+    const solved = ["groveLilies", "canopyVines", "canopyRope"];
+    expect(hazardAt(ISLET.x, ISLET.z, "home", solved)).toBeNull();
+    // A knock from either the island's north rim or the near bank reaches deep water.
+    for (const p of [{ x: ISLET.x, z: ISLET.z - ISLET.r - .5 }, { x: 41, z: -220 }]) {
+      expect(Math.hypot(p.x - POND.x, p.z - POND.z)).toBeLessThan(POND.r);
+      expect(hazardAt(p.x, p.z, "home", solved)?.kind).toBe("splash");
+      expect(hazardAt(p.x, p.z, "home", solved)?.id).toBe("pond");
     }
   });
 

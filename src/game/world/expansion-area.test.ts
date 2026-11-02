@@ -27,7 +27,10 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
   // M2 removes the two central approach segments from each branch. Their
   // retained floor is measured with the same sampler (measure-areas.mjs), so
   // the old whole-branch 2x budget no longer describes these trimmed stages.
-  expect(a.grove).toBe(757);
+  // Slice B enlarges only the pond cut (r 5 -> 6.4) and the static islet
+  // (r 2 -> 3.1), with its five-pad deck: the net sampled floor is 17.75 m²
+  // smaller. Keep the exact regression budget; Slice C owns other walk shapes.
+  expect(a.grove).toBe(739.25);
   expect(a.canopy).toBe(407.75);
   for (const zone of ["forest1", "causeway", "coast"] as const) {
     const area = zone === "forest1" ? a.forestBase : a[zone];

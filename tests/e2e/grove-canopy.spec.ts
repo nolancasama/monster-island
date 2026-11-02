@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import type { CompanionId } from "../../src/game/data/combat";
 
@@ -116,5 +116,68 @@ test("a single grabbed enemy circles the live player through a full turn, then f
   await page.screenshot({ path: `${SHOTS}/a5-swing-thrown.png` });
   const after = (await state(page)).act2.enemies.find(e => e.i === 1)!;
   expect(Math.hypot(after.x - releasedAt!.x, after.z - releasedAt!.z)).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+type Crossing = { act2: { groveCrossing: string; unlock: { groveLilies?: number } } };
+
+test("Bubbo carries the player over first, then only the pads rise, and the return walks", async ({ page }) => {
+  const save = JSON.parse(forestSave("bubbo"));
+  save.progress.act2.cleared = ["forest1"];
+  save.player = { x: 46, z: -224, yaw: -Math.PI / 2 };
+  save.progress.act2.zone = "grove";
+  await page.addInitScript(s => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", s); }, JSON.stringify(save));
+  const errors = await boot(page);
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, s => s.mode === "explore" && s.act2.zone === "grove", 30_000, "in the grove");
+  await hook(page, "combatFixture", { enemies: [] });
+  await hook(page, "goTo", "groveLilies", 1.4);
+  await waitFor(page, s => s.mode === "explore" && s.focus?.id === "groveLilies", 15_000, "focus");
+  await page.keyboard.press("KeyE");
+  await tap(page, "canSwim");
+  // Land under the island, the bank and a bank tree, sampled before anything has moved.
+  const probe = async () => page.evaluate(() => {
+    const mi = (window as unknown as { __mi: { groundAt?(x: number, z: number): number } }).__mi;
+    return mi.groundAt ? [mi.groundAt(35.4, -223.2), mi.groundAt(46, -224), mi.groundAt(33, -226)] : null;
+  });
+  const before = await probe();
+  const shots = new Set<string>();
+  let riding = false, solvedBeforeLanding = false;
+  const end = Date.now() + 90_000;
+  while (Date.now() < end) {
+    const s = await state(page), c = (s as unknown as Crossing).act2.groveCrossing;
+    if (s.player.riding) riding = true;
+    if (c === "swimming" && s.progress.solved.includes("groveLilies")) solvedBeforeLanding = true;
+    if (!shots.has(c) && c !== "idle") { shots.add(c); await page.screenshot({ path: `${SHOTS}/b-${c}.png` }); }
+    if (c === "raising" && ((s as unknown as Crossing).act2.unlock.groveLilies ?? 0) > .5 && !shots.has("half")) { shots.add("half"); await page.screenshot({ path: `${SHOTS}/b-raising-half.png` }); }
+    if (c === "complete") break;
+  }
+  expect(riding).toBe(true);
+  expect(solvedBeforeLanding).toBe(false);
+  expect([...shots]).toEqual(expect.arrayContaining(["boarding", "swimming", "dismounting", "raising", "complete"]));
+  expect(await probe()).toEqual(before);
+  await waitFor(page, s => Boolean(s.prompt?.choices.includes("thankYou")) || s.mode === "explore", 30_000, "thanks or explore");
+  if ((await state(page)).prompt) await tap(page, "thankYou");
+  await waitFor(page, s => s.mode === "explore", 30_000, "explore");
+  const landed = await state(page);
+  expect(Math.hypot(landed.player.x - 35.4, landed.player.z + 223.2)).toBeLessThan(3);
+  await page.screenshot({ path: `${SHOTS}/b-island-after.png` });
+  // Real keys back over the pads to the bank; the ground height follows the pads.
+  await hook(page, "teleport", 37, -223.2, Math.PI / 2);
+  await page.keyboard.down("KeyD");
+  await waitFor(page, s => s.player.x > 45, 30_000, "walks back east");
+  await page.keyboard.up("KeyD");
+  // Reload: raised, no replay.
+  await page.evaluate(() => (window as unknown as { __mi: { saveNow(): void } }).__mi.saveNow());
+  await page.reload();
+  await chooseMode(page, "tap").catch(() => {});
+  await page.getByTestId("btn-continue").click();
+  const back = await waitFor(page, s => s.mode === "explore", 30_000, "reloaded");
+  expect(back.progress.solved).toContain("groveLilies");
+  expect((back as unknown as Crossing).act2.unlock.groveLilies).toBe(1);
+  await hook(page, "teleport", 41, -223.2, 0);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${SHOTS}/b-reloaded-pads.png` });
   expect(errors).toEqual([]);
 });

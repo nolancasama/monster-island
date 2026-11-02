@@ -1,4 +1,5 @@
 import { RIVER_Y } from "./world/island";
+import { POND, POND_Y } from "./world/lowland";
 import { standY } from "./world/collision";
 import { rt, type MonsterRt } from "./runtime";
 import type { ObstacleId } from "./types";
@@ -19,7 +20,8 @@ export function breathe(m: MonsterRt, t: number): number {
 export function monsterRootY(m: MonsterRt, solved: readonly ObstacleId[], t: number): number {
   if (rt.voyage.active) return rt.voyage.y + .75;
   const ground = standY(m.x, m.z, solved);
-  const water = m.swimming ? RIVER_Y - (m.id === "bubbo" ? 0.32 : 0.1) + Math.sin(t * 3) * 0.04 : -Infinity;
+  const level = Math.hypot(m.x - POND.x, m.z - POND.z) < POND.r + 3 ? POND_Y : RIVER_Y;
+  const water = m.swimming ? level - (m.id === "bubbo" ? 0.32 : 0.1) + Math.sin(t * 3) * 0.04 : -Infinity;
   const hover = m.air > 0.05 ? m.air + Math.sin(t * 2.6 + m.x) * 0.06 : 0;
   return Math.max(ground, water) + hover;
 }

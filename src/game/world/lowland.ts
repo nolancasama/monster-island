@@ -184,17 +184,30 @@ export function inMesa(x: number, z: number, clearance = 0): boolean {
 }
 
 /** The pond in the grove with its islet (reached on Bubbo's lily pads). */
-export const POND = { x: 37.6, z: -222.5, r: 5 };
-export const ISLET = { x: 35.4, z: -223.2, r: 2 };
+export const POND = { x: 37.6, z: -222.5, r: 6.4 };
+export const ISLET = { x: 35.4, z: -223.2, r: 3.1 };
+export const GROVE_CROSSING = {
+  near: { x: 45.6, z: -223.2 },
+  landing: { x: 36.8, z: -223.2 },
+  friendLanding: { x: 34.6, z: -221.2 },
+  swimEnd: { x: 39.6, z: -223.2 },
+};
+export const LILY_PAD_R = 1.35;
 export const LILY_PADS: Vec2[] = [
-  { x: 41.6, z: -222.5 },
-  { x: 40.1, z: -222.8 },
-  { x: 38.6, z: -223.1 },
+  { x: 44.6, z: -223.2 },
+  { x: 43.2, z: -223.2 },
+  { x: 41.8, z: -223.2 },
+  { x: 40.4, z: -223.2 },
+  { x: 39, z: -223.2 },
 ];
+/** Independent, sequential rise; geometry and terrain never depend on this value. */
+export function lilyPadRise(unlock: number, index: number): number {
+  return Math.max(0, Math.min(1, unlock * LILY_PADS.length - index));
+}
 const LILY_WALK = trail(
   [
-    [43.8, -222.4],
-    [37, -223.1],
+    [GROVE_CROSSING.near.x, GROVE_CROSSING.near.z],
+    [GROVE_CROSSING.landing.x, GROVE_CROSSING.landing.z],
   ],
   1.05,
 );
@@ -559,7 +572,7 @@ export const CHESTS: ChestDef[] = [
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */
 export const ACT2_OBSTACLE_PLACE: Record<"groveLilies" | "canopyVines" | "canopyRope", Vec2 & { face: Vec2 }> = {
-  groveLilies: { x: 44.3, z: -221.6, face: { x: 39, z: -223 } },
+  groveLilies: { ...GROVE_CROSSING.near, face: { ...GROVE_CROSSING.landing } },
   canopyVines: { x: 106, z: -214.6, face: { x: 106, z: -218 } },
   canopyRope: { x: 106, z: -224.2, face: { x: 106, z: -227.5 } },
 };
