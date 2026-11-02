@@ -21,7 +21,7 @@ export function whipPoints(
   // A local rise over the backpack/head remains even when the long span is taut.
   const clearanceEnd = Math.min(.85, 1.2 / Math.max(1.2, distance));
   const forwardSpan = dx * fx + dz * fz;
-  const clearance = forwardSpan > .4 ? .75 * size * (1 - taut * .2) : 0;
+  const clearance = forwardSpan > .4 || taut > .8 ? .75 * size * (1 - taut * .2) : 0;
   for (let i = 1; i < n - 1; i++) {
     const t = i / (n - 1);
     const bow = Math.sin(Math.PI * t);

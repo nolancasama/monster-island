@@ -11,6 +11,8 @@ import { splashParticle } from "./splashParticle";
 import { anchors, fireStreamBase } from "./anchors";
 import { emptyBodyPose, enemyBodyPose, PANIC_LIMBS } from "./panicPose";
 import { whipPoints } from "../game/logic/whip";
+import { createWindFrame, stepWindFrame } from "../game/logic/wind";
+import { inCone } from "../game/logic/elements";
 
 // Existing seven batches plus panic limbs and speech; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
@@ -26,6 +28,17 @@ export const whipFrame = {
   frame: 0, time: 0, drawn: false,
   base: { x: 0, y: 0, z: 0 }, handR: { x: 0, y: 0, z: 0 }
 };
+
+const gustFrameState = {
+  frame: 0, time: 0, id: -1, drawn: false, attached: false, beakValid: false,
+  yaw: 0, length: 0,
+  root: { x: 0, y: 0, z: 0 }, beak: { x: 0, y: 0, z: 0 }
+};
+/** Same rendered frame as the sampled rig; consumers receive a read-only view. */
+export const gustFrame: Readonly<Omit<typeof gustFrameState, "root" | "beak">> & {
+  readonly root: Readonly<typeof gustFrameState.root>;
+  readonly beak: Readonly<typeof gustFrameState.beak>;
+} = gustFrameState;
 
 class Batch {
   mesh: THREE.InstancedMesh;
@@ -112,7 +125,14 @@ function spriteMaterial() {
           float width = max(.02, sin(pow(y, .6) * 3.14159) * .72);
           float x = p.x + sin(y * 7.) * .16 * y;
           a = (1. - smoothstep(width * .25, width, abs(x))) * smoothstep(0., .12, y) * (1. - smoothstep(.8, 1., y));
-          c = mix(c, vec3(1., .95, .36), (1. - y) * .75);
+          if (vStyle > 1.5) {
+            // A separate palette: tinting the yellow core turns blue green.
+            float core = (1. - smoothstep(0., width * .72, abs(x))) * (1. - y);
+            c = mix(vec3(.015, .045, .8), vec3(.015, .48, 1.), core);
+            c = mix(c, vec3(.42, .82, 1.), pow(core, 3.) * .65);
+          } else {
+            c = mix(c, vec3(1., .95, .36), (1. - y) * .75);
+          }
         } else {
           a = pow(max(0., 1. - dot(p, p)), 2.);
         }
@@ -208,6 +228,8 @@ export function ElementEffects() {
   const point = useMemo(() => new THREE.Vector3(), []);
   const streamBase = useMemo(() => new THREE.Vector3(), []);
   const stream = useMemo(() => ({ active: false, age: 0, stoppedAt: -Infinity, inferno: false }), []);
+  // At most 24 Fx can be alive; slots are selected by id and reused at mount time.
+  const winds = useMemo(() => Array.from({ length: 24 }, createWindFrame), []);
   const roots = useMemo(() => Array.from({ length: CAP }, () => ({ x: 0, z: 0, y: 0, t: -1, end: -1, zone: "", height: 1, radius: .5 })), []);
   const curve = useMemo(() => new Float32Array(WHIP_POINTS * 3), []);
   const rootCurve = useMemo(() => new Float32Array(8 * 3), []);
@@ -221,9 +243,9 @@ export function ElementEffects() {
 
   // Helpers are stable for this mounted pool; none are created in useFrame.
   const draw = useMemo(() => ({
-    sprite(x: number, y: number, z: number, w: number, h: number, tint: string, alpha: number, flame = false) {
+    sprite(x: number, y: number, z: number, w: number, h: number, tint: string, alpha: number, flame: boolean | 2 = false) {
       o.position.set(x, y, z); o.quaternion.copy(camera.quaternion); o.scale.set(w, h, 1);
-      pool.sprites.put(o, color.set(tint), alpha, flame ? 1 : 0);
+      pool.sprites.put(o, color.set(tint), alpha, flame === 2 ? 2 : flame ? 1 : 0);
     },
     ring(x: number, y: number, z: number, radius: number, tint: string, alpha: number, upright = false) {
       o.position.set(x, y, z); o.rotation.set(upright ? Math.PI / 2 : 0, 0, 0); o.scale.setScalar(radius);
@@ -288,6 +310,12 @@ export function ElementEffects() {
     whipFrame.handR.x = anchors.leafyHandR.x;
     whipFrame.handR.y = anchors.leafyHandR.y;
     whipFrame.handR.z = anchors.leafyHandR.z;
+    gustFrameState.frame++; gustFrameState.time = t; gustFrameState.drawn = false;
+    gustFrameState.attached = false; gustFrameState.length = 0;
+    gustFrameState.beakValid = anchors.puffBeakValid;
+    gustFrameState.beak.x = anchors.puffBeak.x;
+    gustFrameState.beak.y = anchors.puffBeak.y;
+    gustFrameState.beak.z = anchors.puffBeak.z;
     if (active) {
       // Environmental fire uses the same instanced flame sprites as Ember.
       // Read the backing runtime records to avoid allocating semantic snapshots per frame.
@@ -341,6 +369,7 @@ export function ElementEffects() {
           draw.bubble(e.x + Math.sin(t * 8 + e.i) * .05, y + .65, e.z, Math.max(.85, radius * 1.5));
         }
         if (e.burn && e.burn.until > t) {
+          const blue = e.infernoBlueUntil > t;
           // Cloaks the body: sized from its radius, and nudged toward the camera so
           // the mesh does not swallow them.
           const flames = fullPanic ? 6 : 3, big = fullPanic ? 1 : .75;
@@ -349,7 +378,7 @@ export function ElementEffects() {
             point.set(Math.cos(a) * radius * 1.15, .25 + (i % 3) * .3, Math.sin(a) * radius * 1.15).applyMatrix4(bodyFrame.matrixWorld);
             direction.subVectors(camera.position, point).normalize().multiplyScalar(radius * .35);
             draw.sprite(point.x + direction.x, point.y + direction.y, point.z + direction.z,
-              (.42 + radius * .6) * big, (.85 + radius * .9 + Math.sin(t * 22 + i) * .18) * big, i % 2 ? "#f2611a" : "#ffb22e", .62, true);
+              (.42 + radius * .6) * big, (.85 + radius * .9 + Math.sin(t * 22 + i) * .18) * big, blue ? "#1687ff" : i % 2 ? "#f2611a" : "#ffb22e", .62, blue ? 2 : true);
           }
         }
         if (panicking) {
@@ -448,7 +477,7 @@ export function ElementEffects() {
               bodyRoot.updateMatrixWorld(true);
               whipTip.set(0, BODY_HEIGHT[enemy.kind] * .55, 0).applyMatrix4(bodyFrame.matrixWorld);
               const c = enemy.control;
-              if (whip.struck && c?.kind === "grabbed") tension = .4 + .55 * Math.min(1, (t - c.t0) / (c.until - c.t0));
+              if (whip.struck && c?.kind === "grabbed") tension = .92;
             } else if (object) {
               whipTip.set(object.x, standY(object.x, object.z, game.progress.solved) + .6, object.z);
             } else {
@@ -494,26 +523,52 @@ export function ElementEffects() {
           // Additive overlap near the mouth blows out to white: start faint, hold the colour.
           const alpha = .34 + Math.min(1, p * 2.5) * .3 - p * p * .2;
           draw.sprite(streamBase.x + ux * d + uz * spread, streamBase.y + p * (stream.inferno ? .4 : .12) - p * .35, streamBase.z + uz * d - ux * spread,
-            size, size * (stream.inferno ? 1.6 : 1.3) * (1 + flutter * .08), i % 3 ? "#f2611a" : "#ffb22e", streamFade * alpha, true);
+            size, size * (stream.inferno ? 1.6 : 1.3) * (1 + flutter * .08), stream.inferno ? "#1687ff" : i % 3 ? "#f2611a" : "#ffb22e", streamFade * alpha, stream.inferno ? 2 : true);
+        }
+        if (stream.inferno) {
+          draw.sprite(streamBase.x, streamBase.y, streamBase.z, .68, .68, "#126dff", .35 * streamFade);
+          // Only recent real hits sparkle, so scenery cannot imply damage through a wall.
+          for (const e of cb.enemies) {
+            if (e.zone !== zone || e.state === "gone" || t - e.lastFireT > .16) continue;
+            for (let i = 0; i < 3; i++) {
+              const a = t * 23 + i * TAU / 3;
+              draw.sprite(e.x + Math.sin(a) * .45, standY(e.x, e.z, game.progress.solved) + e.air + .65 + Math.cos(a) * .3,
+                e.z + Math.cos(a) * .45, .16, .27, "#167eff", streamFade * .8);
+            }
+          }
+          if (fire && cb.world === "home") for (const object of ELEMENT_OBJECTS) {
+            const state = cb.elementObjects[object.id]?.state;
+            if (!object.on?.burn || object.world !== cb.world || (state !== "burning" && state !== "lit")
+              || !inCone(rt.player, yaw, object, range + object.r, 80)) continue;
+            const y = standY(object.x, object.z, game.progress.solved);
+            for (let i = 0; i < 3; i++) {
+              const a = t * 23 + i * TAU / 3;
+              draw.sprite(object.x + Math.sin(a) * object.r, y + .6 + Math.cos(a) * .3, object.z + Math.cos(a) * object.r,
+                .16, .27, "#167eff", streamFade * .8);
+            }
+          }
         }
       }
       const cyclone = cb.cyclone;
-      if (cyclone) {
-        const x = cyclone.x, z = cyclone.z, y = standY(x, z, game.progress.solved);
+      if (cyclone && anchors.puffBeakValid) {
+        const growth = Math.min(1, cyclone.age / .3);
+        const x = anchors.puffBeak.x + (cyclone.x - anchors.puffBeak.x) * growth;
+        const z = anchors.puffBeak.z + (cyclone.z - anchors.puffBeak.z) * growth;
+        const y = anchors.puffBeak.y + (standY(cyclone.x, cyclone.z, game.progress.solved) - anchors.puffBeak.y) * growth;
         const fade = Math.min(1, Math.max(0, (4 - cyclone.age) * 3));
         for (let i = 0; i < 3; i++) {
           const a = t * (4 + i) + i * TAU / 3;
-          o.position.set(x + Math.cos(a) * .12, y + .3 + i * .65, z + Math.sin(a) * .12);
+          o.position.set(x + Math.cos(a) * .12 * growth, y + (.3 + i * .65) * growth, z + Math.sin(a) * .12 * growth);
           o.rotation.set(Math.PI, a, Math.sin(a) * .08);
-          o.scale.set(.45 + i * .35, 1.25, .45 + i * .35);
+          o.scale.set((.45 + i * .35) * growth, 1.25 * growth, (.45 + i * .35) * growth);
           pool.shells.put(o, color.set("#d3f4ff"), fade);
-          o.position.y += .25; o.rotation.set(Math.PI / 2, a, a); o.scale.setScalar(.45 + i * .35);
+          o.position.y += .25 * growth; o.rotation.set(Math.PI / 2, a, a); o.scale.setScalar((.45 + i * .35) * growth);
           pool.streaks.put(o, color.set("#ffffff"), fade);
         }
-        draw.ring(x, y + .045, z, 1.25 + Math.sin(t * 15) * .08, "#d6c9a2", fade * .6);
+        draw.ring(x, y + .045, z, (1.25 + Math.sin(t * 15) * .08) * growth, "#d6c9a2", fade * .6 * growth);
         for (let i = 0; i < 8; i++) {
           const a = t * 5 + i * TAU / 8;
-          draw.sprite(x + Math.cos(a) * 1.15, y - .25, z + Math.sin(a) * 1.15, .45, .22, "#d6c9a2", fade * .4);
+          draw.sprite(x + Math.cos(a) * 1.15 * growth, y - .25, z + Math.sin(a) * 1.15 * growth, .45 * growth, .22 * growth, "#d6c9a2", fade * .4 * growth);
         }
       }
       for (const f of cb.fx) {
@@ -521,17 +576,32 @@ export function ElementEffects() {
         if (k < 0 || k >= 1 || Math.hypot(f.x - rt.player.x, f.z - rt.player.z) > 48) continue;
         const fade = Math.min(1, (1 - k) * 3);
         if (f.kind === "blast" || f.kind === "gust") {
-          // The existing gust's open cone, with travelling curved wind streaks.
-          o.position.set(f.x, f.y, f.z);
-          direction.set(-Math.sin(f.yaw), 0, -Math.cos(f.yaw));
+          let x = f.x, y = f.y, z = f.z, yaw = f.yaw;
+          let len = f.size * Math.min(1, age * 9);
+          if (f.kind === "blast") {
+            let wind = winds[0];
+            for (const candidate of winds) {
+              if (candidate.id === f.id && candidate.t0 === f.t0) { wind = candidate; break; }
+              let occupied = false;
+              for (const live of cb.fx) if (live.id === candidate.id && live.t0 === candidate.t0) { occupied = true; break; }
+              if (!occupied) wind = candidate;
+            }
+            stepWindFrame(wind, f, t, anchors.puffBeak, anchors.puffBeakValid);
+            if (!wind.drawn) continue;
+            x = wind.x; y = wind.y; z = wind.z; yaw = wind.yaw; len = wind.length;
+            gustFrameState.id = f.id; gustFrameState.drawn = true;
+            gustFrameState.attached = wind.attached; gustFrameState.yaw = yaw; gustFrameState.length = len;
+            gustFrameState.root.x = x; gustFrameState.root.y = y; gustFrameState.root.z = z;
+          }
+          o.position.set(x, y, z);
+          direction.set(-Math.sin(yaw), 0, -Math.cos(yaw));
           o.quaternion.setFromUnitVectors(up, direction);
-          const len = f.size * Math.min(1, age * 9);
           o.translateY(-len / 2); o.scale.set(len * .5, len, len * .23);
           pool.shells.put(o, color.set("#e4faff"), fade * .6);
           for (let i = 0; i < 7; i++) {
-            const d = f.size * ((i / 7 + age * 2) % 1);
-            o.position.set(f.x + Math.sin(f.yaw) * d, f.y, f.z + Math.cos(f.yaw) * d);
-            o.rotation.set(0, f.yaw, t * 9 + i); o.scale.set(.15 + d * .42, .1 + d * .18, 1);
+            const d = f.kind === "blast" ? i === 0 ? 0 : len * (((i - 1) / 6 + age * 2) % 1) : f.size * ((i / 7 + age * 2) % 1);
+            o.position.set(x + Math.sin(yaw) * d, y, z + Math.cos(yaw) * d);
+            o.rotation.set(0, yaw, t * 9 + i); o.scale.set(.15 + d * .42, .1 + d * .18, 1);
             pool.streaks.put(o, color.set("#e4faff"), fade);
           }
         } else if (f.kind === "bomb" || f.kind === "trap" || f.kind === "splashKo") {

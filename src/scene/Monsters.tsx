@@ -12,7 +12,7 @@ import type { MonsterId } from "../game/types";
 import { cb, companionVisible, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
-import { anchors, EMBER_MOUTH, LEAFY_HAND } from "./anchors";
+import { anchors, EMBER_MOUTH, LEAFY_HAND, PUFF_BEAK } from "./anchors";
 
 const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
@@ -112,6 +112,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
   const glowRef = useRef<THREE.Mesh>(null);
   const named = useRef<Record<string, THREE.Group | null>>({});
   const mouth = useRef<THREE.Object3D>(null);
+  const beak = useRef<THREE.Object3D>(null);
   const handL = useRef<THREE.Object3D>(null);
   const handR = useRef<THREE.Object3D>(null);
 
@@ -120,6 +121,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
     const g = root.current;
     const r = rig.current;
     if (id === "ember") anchors.emberMouthValid = false;
+    if (id === "puff") anchors.puffBeakValid = false;
     if (id === "leafy") anchors.leafyHandLValid = anchors.leafyHandRValid = false;
     if (!g || !r) return;
     g.visible = companionVisible(id);
@@ -259,6 +261,10 @@ function MonsterBody({ id }: { id: MonsterId }) {
       mouth.current.getWorldPosition(anchors.emberMouth);
       anchors.emberMouthValid = true;
     }
+    if (id === "puff" && beak.current && g.visible) {
+      beak.current.getWorldPosition(anchors.puffBeak);
+      anchors.puffBeakValid = getGame().progress.active === "puff";
+    }
     if (id === "leafy" && g.visible) {
       if (handL.current) {
         handL.current.getWorldPosition(anchors.leafyHandL);
@@ -275,6 +281,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
     <group ref={root}>
       <group ref={rig}>
         {id === "ember" && <object3D ref={mouth} position={EMBER_MOUTH} />}
+        {id === "puff" && <object3D ref={beak} position={PUFF_BEAK} />}
         {id === "lumo" && (
           <mesh ref={glowRef} position={[0, 1.03, -0.05]}>
             <sphereGeometry args={[0.86, 16, 10]} />

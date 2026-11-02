@@ -65,4 +65,15 @@ describe("live whip curve", () => {
     }
     expect(checked).toBeGreaterThan(0);
   });
+
+  it("keeps a taut sideward or rearward swing raised over the player's body", () => {
+    const out = new Float32Array(33 * 3);
+    const hand = { x: .287, y: 1.10, z: -.415 };
+    for (const target of [{ x: -2, y: 1.1, z: 0 }, { x: -2, y: 1.1, z: -.5 }]) {
+      whipPoints(out, 33, hand, target, facing, .7, 1);
+      // The span crossing the backpack remains above the body even behind aim.
+      expect(out[5 * 3 + 1]).toBeGreaterThan(1.55);
+      expect(Array.from(out.slice(-3))).toEqual([target.x, expect.closeTo(target.y), target.z]);
+    }
+  });
 });

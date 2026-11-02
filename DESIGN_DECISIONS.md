@@ -1869,3 +1869,14 @@ hazards until release, and releases straight along the live aim (rejected: tange
 cannot be aimed). The Grove crossing stays optional and solves at dismount. New Canopy ground is
 extruded decks, not the 2 m heightfield. Falls need real input and a short teeter, never knock
 out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for grade 3–6).
+
+## 2026-11-02 — Slice A implementation details
+
+- Inferno's blue burn lasts .6 s from fresh ignition; repeated ticks refresh the existing burn
+  without extending its blue opening. Fire Breath retains its original shader palette.
+- Puff's released gust tail travels at 12 m/s. The visual lifetime is .14 s plus range / 12,
+  so upgraded cones also end when the tail reaches the fixed tip. Release interpolates the
+  beak samples across the attachment boundary. Switching away invalidates the visual anchor.
+- Leafy's orbit chooses its direction toward the initial facing correction and keeps that
+  direction. Live turns continue to the next equivalent bearing, allowing more than one
+  revolution while ensuring the final throw follows the current aim.

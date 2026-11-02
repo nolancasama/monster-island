@@ -19,7 +19,7 @@ import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_ELECTRIC_PANELS, electricPanelActive, e
 import { newAct3, type Act3 } from "./logic/act3";
 import { decodeSave, encodeSave } from "./logic/save";
 import { cloudView } from "../scene/CloudIsle";
-import { whipFrame } from "../scene/ElementEffects";
+import { gustFrame, whipFrame } from "../scene/ElementEffects";
 
 /**
  * Test hook (only with ?e2e=1): read game state and put the player next to
@@ -92,9 +92,16 @@ export function installE2eHook(seed: number) {
           mp: { ...cb.vitals.mp },
           knockedOut: cb.knockedOut,
           inferno: cb.inferno ? { ...cb.inferno, held: cb.holdK } : null,
+          infernoBlueBurns: cb.enemies.filter(e => e.burn && e.infernoBlueUntil > rt.time)
+            .map(e => ({ enemy: e.i, until: e.infernoBlueUntil })),
           breath: cb.breath ? { ...cb.breath, held: cb.hold } : null,
           whip: cb.whip ? { ...cb.whip, strands: cb.whip.strands.map(strand => ({ ...strand })) } : null,
           whipFrame: { ...whipFrame, base: { ...whipFrame.base }, handR: { ...whipFrame.handR } },
+          gustFrame: { ...gustFrame, root: { ...gustFrame.root }, beak: { ...gustFrame.beak } },
+          swings: cb.enemies.filter(e => e.flight?.swing).map(e => ({
+            enemy: e.i, control: e.control?.kind ?? null, centre: { x: e.flight!.x, z: e.flight!.z },
+            yaw: e.flight!.yaw, victims: [...e.flight!.victims], ...e.flight!.swing
+          })),
           cyclone: cb.cyclone ? { ...cb.cyclone, bubbles: [...cb.cyclone.bubbles], carried: cb.enemies.filter(e => e.control?.kind === "carried" && e.control.source === cb.cyclone!.id).map(e => e.i) } : null,
           bombChain: cb.bombChain ? { ...cb.bombChain, pops: cb.bombChain.pops.map(p => ({ ...p })), victims: [...cb.bombChain.victims] } : null,
           enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, burn: e.burn ? { ...e.burn } : null, panic: e.panic ? { ...e.panic } : null, panicResistUntil: e.panicResistUntil, fireTicks: e.fireTicks, lastFireT: e.lastFireT, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
@@ -220,7 +227,7 @@ export function installE2eHook(seed: number) {
         const f = fixture.enemies.find(f => f.i === e.i);
         e.state = f?.state ?? (f ? "chase" : "gone");
         e.air = e.resistUntil = e.slowUntil = 0; e.burn = e.control = e.flight = e.fall = null;
-        e.panic = null; e.panicResistUntil = e.fireTicks = 0; e.lastFireT = -10;
+        e.panic = null; e.panicResistUntil = e.fireTicks = e.infernoBlueUntil = 0; e.lastFireT = -10;
         if (!f) continue;
         e.x = e.homeX = f.x; e.z = e.homeZ = f.z;
         e.hp = ENEMIES[e.kind].hp; e.timer = f.timer ?? 0;

@@ -13,6 +13,7 @@ import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/
 import { run } from "./flow/script";
 import { audio } from "../audio/audio";
 import { pressAttack, releaseAttack } from "../input/attackInput";
+import { hazardAt } from "./logic/elements";
 
 vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn() } }));
 
@@ -104,6 +105,13 @@ describe("held Fire Breath and burning panic", () => {
     expect(e.panic).not.toBeNull(); expect(e.burn).not.toBeNull();
     expect(e.state).toBe("chase"); expect(e.timer).toBe(0);
     expect(cb.shots[0].life).toBe(0);
+    expect(e.infernoBlueUntil).toBeCloseTo(rt.time + .6);
+    const blueUntil = e.infernoBlueUntil;
+    advanceCombat(.3);
+    expect(e.infernoBlueUntil).toBe(blueUntil);
+    advanceCombat(.35);
+    expect(e.infernoBlueUntil).toBeLessThan(rt.time);
+    expect(e.burn).not.toBeNull();
   });
 
   it("pauses panic/exposure, expires under control and grants four-second resistance", () => {
@@ -190,6 +198,8 @@ function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
 }
 
 describe("Leafy's snap-timed whip", () => {
+  afterEach(() => setGame({ line: null }));
+
   function leafy() {
     cb.stance.friend = "leafy"; cb.stance.k = 1;
     vi.mocked(audio.play).mockClear();
@@ -252,16 +262,20 @@ describe("Leafy's snap-timed whip", () => {
     });
   }
 
-  it("a friend switch retracts the strand while the existing swing still flings", () => {
+  it.each(["switch", "menu", "dialogue", "zone", "knockout"])("%s interrupts an existing swing cleanly", reason => {
     const e = loneEnemy("snapjaw", 0, 23);
     leafy(); basicAttack(); advanceCombat(.15);
     expect(e.control?.kind).toBe("grabbed");
-    setGame(g => ({ progress: { ...g.progress, active: "puff" } }));
+    if (reason === "switch") setGame(g => ({ progress: { ...g.progress, active: "puff" } }));
+    if (reason === "menu") setGame({ journalOpen: true });
+    if (reason === "dialogue") setGame({ line: { id: 1, by: "maple", en: "Wait!" } });
+    if (reason === "zone") rt.player.z = 5;
+    if (reason === "knockout") cb.knockedOut = true;
+    combatTick(0);
+    expect(e.control).toBeNull(); expect(e.flight).toBeNull();
+    expect(e.kx).toBe(0); expect(e.kz).toBe(0);
     advanceCombat(.12);
     expect(cb.whip).toBeNull();
-    expect(e.control?.kind).toBe("grabbed");
-    advanceCombat(.35);
-    expect(e.control?.kind).toBe("flung");
   });
 });
 
@@ -676,6 +690,19 @@ describe("elemental J simulation", () => {
     });
   }
 
+  it("Wind Blast keeps the visual yaw and player-centred hit cone on the same aim", () => {
+    rt.player.yaw = Math.PI / 2;
+    const front = loneEnemy("snapjaw", 3, 20), behind = extra(1, "snapjaw", -2, 20);
+    // This edge of the cone is measured from the player, despite Puff's offset perch.
+    const edge = extra(2, "snapjaw", 3 * Math.cos(Math.PI / 6 - .01), 20 + 3 * Math.sin(Math.PI / 6 - .01));
+    friend("puff"); expect(basicAttack()).toBe(true);
+    const visual = cb.fx.find(f => f.kind === "blast")!;
+    expect(visual.yaw).toBe(rt.player.yaw);
+    expect(visual.ax).toBeCloseTo(Math.sin(rt.player.yaw));
+    expect(visual.az).toBeCloseTo(Math.cos(rt.player.yaw));
+    expect(front.hp).toBe(92); expect(edge.hp).toBe(92); expect(behind.hp).toBe(100);
+  });
+
   it("Vine Grab excludes behind and through-solid targets", () => {
     const e = loneEnemy("snapjaw", 0, 19);
     friend("leafy");
@@ -694,19 +721,142 @@ describe("elemental J simulation", () => {
     expect(e.control).toBeNull();
   });
 
-  it("one Vine Grab press swings then flings along the locked tangent", () => {
+  it("one Vine Grab press completes its orbit then flings along the live aim", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("leafy");
     expect(basicAttack()).toBe(true);
     advanceCombat(.15);
     expect(e.hp).toBe(92); expect(e.control?.kind).toBe("grabbed");
     rt.player.yaw = Math.PI;
-    advanceCombat(.46);
+    advanceCombat(.95);
     expect(e.control?.kind).toBe("flung");
-    expect(e.kx).toBeGreaterThan(0); expect(e.kz).toBeLessThan(0);
+    expect(e.flight?.swing?.sweep).toBeGreaterThanOrEqual(Math.PI * 2 - 1e-8);
+    expect(e.kx).toBeCloseTo(0); expect(e.kz).toBeCloseTo(-11);
     advanceCombat(.55);
     expect(e.control).toBeNull();
     expect(e.resistUntil).toBeGreaterThan(rt.time);
+  });
+
+  it.each([10, 30, 60])("sweeps fully around a moving and turning player at %i fps", fps => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("leafy"); basicAttack();
+    const start = rt.time;
+    let measured = 0, previous = 0, sawPull = false, sawOrbit = false;
+    for (let frame = 1; frame <= Math.ceil(1.1 * fps); frame++) {
+      const age = frame / fps;
+      Object.assign(rt.player, { x: Math.max(0, age - .2) * .35, z: 20 + Math.max(0, age - .2) * .15,
+        yaw: Math.max(0, age - .2) * .5 });
+      rt.time = start + age; rt.playTime += 1 / fps; combatTick(1 / fps);
+      if (!e.flight?.swing) continue;
+      const swing = e.flight.swing;
+      const angle = Math.atan2(e.x - rt.player.x, e.z - rt.player.z);
+      measured += Math.atan2(Math.sin(angle - previous), Math.cos(angle - previous));
+      previous = angle;
+      if (e.control?.kind === "grabbed") {
+        sawPull ||= swing.phase === "pull";
+        sawOrbit ||= swing.phase === "orbit";
+        expect(e.air).toBeCloseTo(.7);
+        expect(Math.hypot(e.x - rt.player.x, e.z - rt.player.z)).toBeCloseTo(swing.radius);
+      }
+    }
+    expect(sawPull && sawOrbit).toBe(true);
+    expect(e.control?.kind).toBe("flung");
+    expect(e.flight?.swing?.sweep).toBeGreaterThanOrEqual(Math.PI * 2);
+    expect(measured).toBeGreaterThanOrEqual(Math.PI * 2);
+    expect(e.control!.t0 - (start + .15)).toBeCloseTo(.95);
+    expect(Math.atan2(e.kx, e.kz)).toBeCloseTo(rt.player.yaw);
+    expect(Math.hypot(e.kx, e.kz)).toBeCloseTo(11);
+  });
+
+  it.each([10, 30, 60])("has the same release point and complete throw distance at %i fps", fps => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("leafy"); basicAttack();
+    const start = rt.time;
+    for (let frame = 1; frame <= Math.ceil(1.65 * fps); frame++) {
+      rt.time = start + frame / fps; rt.playTime += 1 / fps; combatTick(1 / fps);
+    }
+    expect(e.control).toBeNull();
+    expect(e.x).toBeCloseTo(0);
+    expect(e.z).toBeCloseTo(23 + 11 * (1 - Math.exp(-1.5 * .55)) / 1.5);
+  });
+
+  it("tightens around a solid and deals wall damage at most once without ending the swing", () => {
+    Object.assign(rt.player, { x: -6, z: 27.5, yaw: Math.PI });
+    const e = loneEnemy("snapjaw", -6, 24.5);
+    friend("leafy"); expect(basicAttack()).toBe(true); advanceCombat(.15);
+    expect(e.control?.kind).toBe("grabbed");
+    let minimum = Infinity;
+    for (let frame = 0; frame < 56; frame++) {
+      advanceCombat(1 / 60);
+      expect(e.control?.kind).toBe("grabbed");
+      minimum = Math.min(minimum, e.flight!.swing!.radius);
+      expect(e.hp).toBeGreaterThanOrEqual(84);
+      expect(Math.hypot(e.x - rt.player.x, e.z - rt.player.z)).toBeGreaterThanOrEqual(1.2);
+    }
+    expect(minimum).toBeLessThan(2.1);
+    expect(e.flight?.swing?.wallHit).toBe(true);
+    expect(e.hp).toBe(84);
+    advanceCombat(1 / 60);
+    expect(e.control?.kind).toBe("flung");
+    expect(e.flight?.swing?.sweep).toBeGreaterThanOrEqual(Math.PI * 2 - 1e-8);
+  });
+
+  it("shares the once-per-victim ledger between a low-fps orbit and its fling", () => {
+    const e = loneEnemy("snapjaw", 0, 23), victim = extra(1, "snapjaw", 2.2, 20);
+    e.hp = 1000;
+    victim.control = { kind: "snared", t0: rt.time, until: rt.time + 20 };
+    friend("leafy"); basicAttack();
+    for (let frame = 0; frame < 11; frame++) { rt.time += .1; combatTick(.1); }
+    expect(e.control?.kind).toBe("flung");
+    expect(victim.hp).toBe(90);
+    expect(e.hp).toBe(986);
+    const ledger = e.flight!.victims;
+    expect(ledger).toEqual([victim.i]);
+    Object.assign(victim, { x: e.x, z: e.z + .3 });
+    const next = extra(2, "snapjaw", e.x, e.z + 1.8);
+    next.control = { kind: "snared", t0: rt.time, until: rt.time + 20 };
+    advanceCombat(.2);
+    expect(victim.hp).toBe(90); expect(next.hp).toBe(90);
+    expect(e.hp).toBe(980);
+    expect(e.flight!.victims).toEqual([victim.i, next.i]);
+  });
+
+  it("ignores a real pond throughout the orbit and applies its hazard at release", () => {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(enemy => enemy.zone === "grove")!;
+    Object.assign(e, { kind: "snapjaw", x: POND.x + POND.r + .2, z: POND.z, hp: 100, state: "recover", timer: 99 });
+    Object.assign(rt.player, { x: e.x + 2, z: e.z, yaw: -Math.PI / 2 });
+    cb.zones.current = "grove";
+    friend("leafy"); expect(basicAttack()).toBe(true); advanceCombat(.15);
+    expect(e.control?.kind).toBe("grabbed");
+    let crossedHazard = false;
+    for (let frame = 0; frame < 56; frame++) {
+      advanceCombat(1 / 60);
+      crossedHazard ||= !!hazardAt(e.x, e.z, "home", getGame().progress.solved);
+      expect(e.state).not.toBe("ko");
+      expect(e.control?.kind).toBe("grabbed");
+    }
+    expect(crossedHazard).toBe(true);
+    advanceCombat(1 / 60);
+    expect(e.state).toBe("ko");
+    expect(cb.zones.defeated.grove).toContain(e.i);
+  });
+
+  it("rejects a new basic or special throughout the swing, including held J after its cooldown", () => {
+    const e = loneEnemy("snapjaw", 0, 23);
+    friend("leafy"); basicAttack(); cb.hold = true;
+    advanceCombat(.8);
+    expect(e.control?.kind).toBe("grabbed");
+    expect(rt.time).toBeGreaterThan(cb.ready.basic);
+    const whip = cb.whip, mp = cb.vitals.mp.leafy;
+    expect(basicAttack()).toBe(false); expect(specialAttack()).toBe(false);
+    advanceCombat(.2);
+    expect(cb.whip).toBe(whip);
+    expect(cb.whip?.t0).toBeCloseTo(10);
+    expect(cb.vitals.mp.leafy).toBeGreaterThanOrEqual(mp);
+    expect(e.hp).toBe(92);
+    cb.hold = false;
   });
 
   for (const target of ["none", "behind", "occluded"] as const) {
@@ -1330,7 +1480,7 @@ describe("elemental K simulation and shared combinations", () => {
   it("Wind Blast can redirect Vine Grab's fling, but cannot extend it during resistance", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     friend("leafy"); expect(basicAttack()).toBe(true);
-    advanceCombat(.61);
+    advanceCombat(1.11);
     expect(e.control?.kind).toBe("flung");
     Object.assign(rt.player, { x: e.x, z: e.z - 3, yaw: 0 });
     friend("puff"); expect(basicAttack()).toBe(true);

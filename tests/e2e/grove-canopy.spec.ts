@@ -1,0 +1,120 @@
+import { expect, test, type Page } from "@playwright/test";
+import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { newProgress } from "../../src/game/logic/progress";
+import type { CompanionId } from "../../src/game/data/combat";
+
+const SHOTS = ".tmp/shots/grove-canopy";
+
+function forestSave(friend: CompanionId) {
+  const p = newProgress();
+  for (const id of ["leafy", "bubbo", "puff", "ember", "lumo"] as const)
+    p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true };
+  p.active = friend; p.metMaple = true; p.endings = 3;
+  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
+  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true,
+    zone: "forest1", checkpoint: "camp", tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
+  return JSON.stringify({ v: 4, progress: p, player: { x: 75, z: -171, yaw: Math.PI }, seconds: 3000 });
+}
+
+async function enterForest(page: Page, friend: CompanionId) {
+  await page.addInitScript(save => localStorage.setItem("mi.save.v4", save), forestSave(friend));
+  const errors = await boot(page);
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, s => s.mode === "explore" && s.act2.zone === "forest1" && s.act2.stance.friend === friend && s.act2.stance.k > .99, 30_000, `${friend} mounted`);
+  return errors;
+}
+
+async function faceEnemy(page: Page, friend: CompanionId) {
+  await hook(page, "timeScale", 0);
+  await hook(page, "combatFixture", { enemies: [{ i: 1, x: 75, z: -174, state: "recover", timer: 30 }] });
+  await hook(page, "teleport", 75, -171, Math.PI);
+  await hook(page, "setMp", friend, 100);
+  await waitFor(page, s => s.act2.enemies.find(e => e.i === 1)?.hp === 20, 30_000, "fresh enemy");
+}
+
+type Extra = { act2: {
+  gustFrame: { frame: number; drawn: boolean; attached: boolean; beakValid: boolean; root: { x: number; y: number; z: number }; beak: { x: number; y: number; z: number } };
+  swings: Array<{ enemy: number; control: string | null; centre: { x: number; z: number }; sweep: number; phase: string }>;
+} };
+
+test("Fire Breath stays orange and Inferno renders blue, on the same enemy and ground", async ({ page }) => {
+  const errors = await enterForest(page, "ember");
+  await faceEnemy(page, "ember");
+  await hook(page, "timeScale", .15);
+  await page.keyboard.down("KeyJ");
+  await waitFor(page, s => (s.act2.breath?.age ?? 0) > .12, 60_000, "breath");
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/a1-fire-breath.png` });
+  await hook(page, "timeScale", .15);
+  await page.keyboard.up("KeyJ");
+  await waitFor(page, s => s.act2.breath === null, 30_000, "breath ends");
+  await faceEnemy(page, "ember");
+  await hook(page, "timeScale", .15);
+  await page.keyboard.down("KeyK");
+  await waitFor(page, s => (s.act2.inferno?.age ?? 0) > .25, 60_000, "inferno");
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/a2-inferno.png` });
+  await hook(page, "timeScale", .15);
+  await page.keyboard.up("KeyK");
+  expect(errors).toEqual([]);
+});
+
+test("Puff's gust root is on the beak on every attached frame while walking and turning", async ({ page }) => {
+  const errors = await enterForest(page, "puff");
+  await hook(page, "combatFixture", { enemies: [] });
+  await hook(page, "teleport", 75, -163, Math.PI);
+  let samples = 0, worst = 0, shot = false;
+  const seen = new Set<number>();
+  for (const key of ["KeyW", "KeyS", "KeyA", "KeyD"]) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(250);
+    await page.keyboard.down("KeyJ");
+    const end = Date.now() + 1500;
+    while (Date.now() < end) {
+      const f = ((await state(page)) as unknown as Extra).act2.gustFrame;
+      if (f.drawn && f.attached && !seen.has(f.frame)) {
+        seen.add(f.frame); samples++;
+        worst = Math.max(worst, Math.hypot(f.root.x - f.beak.x, f.root.y - f.beak.y, f.root.z - f.beak.z));
+        if (!shot) { shot = true; await page.screenshot({ path: `${SHOTS}/a3-puff-gust-moving.png` }); }
+      }
+    }
+    await page.keyboard.up("KeyJ");
+    await page.keyboard.up(key);
+  }
+  console.log(`gust samples ${samples}, worst root-to-beak ${worst.toFixed(4)} m`);
+  expect(samples).toBeGreaterThan(3);
+  expect(worst).toBeLessThan(.01);
+  expect(errors).toEqual([]);
+});
+
+test("a single grabbed enemy circles the live player through a full turn, then flies", async ({ page }) => {
+  const errors = await enterForest(page, "leafy");
+  await faceEnemy(page, "leafy");
+  await hook(page, "timeScale", .08);
+  await page.keyboard.press("KeyJ");
+  await waitFor(page, s => (s as unknown as Extra).act2.swings.some(w => w.control === "grabbed"), 30_000, "grabbed");
+  let last = 0, total = 0, prev: number | null = null, shots = 0, releasedAt: { x: number; z: number } | null = null;
+  const end = Date.now() + 60_000;
+  while (Date.now() < end) {
+    const s = await state(page), w = (s as unknown as Extra).act2.swings[0], e = s.act2.enemies.find(e => e.i === 1)!;
+    if (!w) break;
+    if (w.control !== "grabbed") { releasedAt = { x: e.x, z: e.z }; break; }
+    // Measured independently of the swing's own counter, around the live player.
+    const a = Math.atan2(e.x - s.player.x, e.z - s.player.z);
+    if (prev !== null) total += Math.abs(Math.atan2(Math.sin(a - prev), Math.cos(a - prev)));
+    prev = a; last = w.sweep;
+    const at = Math.floor(total / (Math.PI / 2));
+    if (at >= shots && shots < 4) { await hook(page, "timeScale", 0); await page.screenshot({ path: `${SHOTS}/a4-swing-${shots}.png` }); await hook(page, "timeScale", .08); shots++; }
+  }
+  console.log(`measured sweep ${(total * 180 / Math.PI).toFixed(0)} deg, recorded ${(last * 180 / Math.PI).toFixed(0)} deg`);
+  expect(releasedAt).not.toBeNull();
+  expect(total).toBeGreaterThanOrEqual(Math.PI * 2 * .9);
+  await hook(page, "timeScale", .5);
+  await page.waitForTimeout(900);
+  await hook(page, "timeScale", 0);
+  await page.screenshot({ path: `${SHOTS}/a5-swing-thrown.png` });
+  const after = (await state(page)).act2.enemies.find(e => e.i === 1)!;
+  expect(Math.hypot(after.x - releasedAt!.x, after.z - releasedAt!.z)).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});

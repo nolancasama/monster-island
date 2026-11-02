@@ -21,6 +21,7 @@ import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementOb
 import { releaseAllAttacks } from "../input/attackInput";
 import { fireDamage } from "./logic/elements";
 import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
+import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, type Swing } from "./logic/swing";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -89,6 +90,8 @@ export interface EnemyRt {
   alertT: number;
   air: number;
   burn: Burn | null;
+  /** Visual only: Inferno's first ignition briefly burns blue. */
+  infernoBlueUntil: number;
   panic: Panic | null;
   panicResistUntil: number;
   fireTicks: number;
@@ -99,7 +102,7 @@ export interface EnemyRt {
   slowUntil: number;
   fall: { from: number; t0: number } | null;
   /** One victim ledger survives the swing-to-fling transition. */
-  flight: { owner: CompanionId; victims: number[]; x: number; z: number; yaw: number; startX: number; startZ: number; bash?: { x: number; z: number } } | null;
+  flight: { owner: CompanionId; victims: number[]; x: number; z: number; yaw: number; startX: number; startZ: number; bash?: { x: number; z: number }; swing?: Swing } | null;
   step: number;
 }
 
@@ -221,7 +224,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, air: 0, burn: null, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
   };
 }
 
@@ -692,6 +695,7 @@ function aimAt(range: number): { x: number; z: number } {
 
 /** J: the active friend's basic attack (free; repeats while held). */
 export function basicAttack(options: { repeat?: boolean } = {}): boolean {
+  if (swingingEnemy()) return false;
   const f = friendNow();
   if (f === "ember" && cb.inferno) return false;
   if (f === "ember" && cb.breath && canFight()) return true;
@@ -754,6 +758,7 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
 
 /** K: the active friend's special (costs MP; a short cooldown). */
 export function specialAttack(): boolean {
+  if (swingingEnemy()) return false;
   const f = friendNow();
   if (!f || !canFight() || rt.time < cb.ready.special || cb.inferno) return false;
   const move = COMBAT[f].special;
@@ -907,6 +912,12 @@ function sampleWhipAim() {
 
 function cancelWhip() {
   if (cb.whip && cb.whip.cancelAt === null) cb.whip.cancelAt = rt.time;
+  for (const e of cb.enemies) if (e.control?.kind === "grabbed" && e.flight?.swing) endControl(e);
+}
+
+function swingingEnemy(): boolean {
+  for (const e of cb.enemies) if (e.control?.kind === "grabbed" && e.flight?.swing) return true;
+  return false;
 }
 
 function whipEnemy(id: number | null): EnemyRt | null {
@@ -946,9 +957,12 @@ function strikeWhip() {
     if (heavy) {
       const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz) || 1;
       displaceEnemy(e, e.x + dx / d, e.z + dz / d);
-    } else if (startControl(e, "grabbed", .45, "leafy")) {
+    } else if (startControl(e, "grabbed", SWING_DURATION, "leafy")) {
       e.control!.t0 = w.t0 + .15;
-      e.control!.until = e.control!.t0 + .45;
+      e.control!.until = e.control!.t0 + SWING_DURATION;
+      const bearing = Math.atan2(e.x - p.x, e.z - p.z), radius = Math.hypot(e.x - p.x, e.z - p.z);
+      e.flight!.swing = { age: 0, phase: "pull", startBearing: bearing, direction: swingDirection(bearing, p.yaw),
+        startRadius: radius, radius, sweep: 0, wallHit: false };
     } else { e.kx += ux * 5; e.kz += uz * 5; }
   }
   w.retractAt = w.t0 + .24;
@@ -1031,6 +1045,7 @@ function fireTick(inferno: boolean, now: number) {
     e.fireTicks++;
     e.lastFireT = now;
     // Start panic before this tick's damage so ignition itself respects the floor.
+    if (inferno && (!e.burn || e.burn.until < now)) e.infernoBlueUntil = now + .6;
     if (inferno || e.fireTicks >= 3) igniteEnemy(e, now);
     fireHit(e, move.damage, ux, uz, !inferno, now);
   }
@@ -1244,7 +1259,7 @@ function popBubble(e: EnemyRt) {
 
 /** Forced motion samples centres for hazards, bodies for solids. No sliding
  * around a wall, and no inference that every unwalkable edge is a hazard. */
-function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: () => boolean | void): boolean {
+function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: (() => boolean | void) | "weapon"): boolean {
   const progress = getGame().progress, gates = gatesOf(progress), radius = ENEMIES[e.kind].radius;
   const solved = cb.world === "cloud" ? progress.act3.puzzles : progress.solved;
   const fromX = e.x, fromZ = e.z, count = Math.max(1, Math.ceil(Math.hypot(x - fromX, z - fromZ) / 0.1));
@@ -1258,7 +1273,8 @@ function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: () => boole
       knockOut(e);
       return true;
     }
-    if (collision?.() === false) return true;
+    if (collision === "weapon") weaponCollisions(e);
+    else if (collision?.() === false) return true;
   }
   return true;
 }
@@ -1296,6 +1312,91 @@ function wallImpact(e: EnemyRt, speed: number) {
   if (swinging || speed > 3) hit(e, 8, 0, swinging ? 0 : 0.6, 0, 0, owner);
 }
 
+const swingGates: Gates = { solved: [] };
+const swingCloudGates: NonNullable<Gates["cloud"]> = { cleared: [], solved: [], tunnelOpen: false };
+
+/** Airborne tether movement deliberately ignores ground and hazards. Solids only
+ * shorten its radius; contacts share one damage allowance for the whole orbit. */
+function updateSwing(e: EnemyRt, c: Control, flight: NonNullable<EnemyRt["flight"]>) {
+  const s = flight.swing!, p = rt.player, progress = getGame().progress;
+  const gates = swingGates;
+  gates.solved = progress.solved;
+  if (onCloudIsle()) {
+    gates.act2 = true; gates.cloud = swingCloudGates;
+    swingCloudGates.cleared = progress.act3.cleared; swingCloudGates.solved = progress.act3.puzzles;
+    swingCloudGates.tunnelOpen = progress.act3.family.tunnelOpen;
+    swingCloudGates.observatoryLamps = progress.act3.observatoryLamps;
+  } else {
+    gates.cloud = undefined; gates.act2 = progress.act2.started;
+    gates.forest = progress.endings >= 1; gates.volcano = progress.endings >= 2;
+    gates.cleared = progress.act2.cleared; gates.secrets = progress.act2.secrets;
+  }
+  const age = Math.max(0, Math.min(SWING_DURATION, rt.time - c.t0));
+  const sweep = swingSweep(age, s.startBearing, s.direction, p.yaw, s.sweep);
+  const minimum = Math.max(1.2, playerRadius() + ENEMIES[e.kind].radius + .05);
+  const desired = swingRadius(age, s.startRadius, minimum);
+  const fromSweep = s.sweep, fromAge = s.age, fromX = flight.x, fromZ = flight.z;
+  // Bound both angular travel and centre movement, including a late aim change.
+  const count = Math.max(1, Math.ceil(((sweep - fromSweep) * Math.max(3, s.radius)
+    + Math.hypot(p.x - fromX, p.z - fromZ) + Math.abs(desired - s.radius)) / .08));
+  const elapsed = Math.max(0, age - fromAge) / count;
+  for (let i = 1; i <= count && alive(e); i++) {
+    const t = i / count, cx = fromX + (p.x - fromX) * t, cz = fromZ + (p.z - fromZ) * t;
+    const a = fromSweep + (sweep - fromSweep) * t;
+    const angle = s.startBearing + s.direction * a;
+    const stepAge = fromAge + (age - fromAge) * t;
+    let safe = swingRadius(stepAge, s.startRadius, minimum);
+    // Anticipate the next short arc so tightening is visible before contact.
+    const look = swingSweep(Math.min(SWING_DURATION, stepAge + .1), s.startBearing, s.direction, p.yaw, a);
+    let contact = false;
+    for (let j = 0; j <= 4; j++) {
+      const heading = angle + s.direction * (look - a) * j / 4;
+      while (safe > minimum && blocked(cx + Math.sin(heading) * safe, cz + Math.cos(heading) * safe, ENEMIES[e.kind].radius, gates)) {
+        contact = true;
+        safe = Math.max(minimum, safe - .05);
+      }
+      if (blocked(cx + Math.sin(heading) * safe, cz + Math.cos(heading) * safe, ENEMIES[e.kind].radius, gates)) contact = true;
+    }
+    // Fast tightening, gentle recovery. The safety clamp handles a moving player
+    // stepping directly beside a solid without ever aborting the sweep.
+    const blend = 1 - Math.exp(-elapsed * (safe < s.radius ? 24 : 8));
+    s.radius = !contact && !s.wallHit ? safe : s.radius + (safe - s.radius) * blend;
+    let radius = Math.max(minimum, s.radius);
+    while (radius > minimum && blocked(cx + Math.sin(angle) * radius, cz + Math.cos(angle) * radius, ENEMIES[e.kind].radius, gates)) {
+      contact = true; radius = Math.max(minimum, radius - .025);
+    }
+    s.radius = radius;
+    e.x = cx + Math.sin(angle) * radius; e.z = cz + Math.cos(angle) * radius;
+    e.air = .7;
+    s.sweep = a;
+    if (contact && !s.wallHit) { s.wallHit = true; hit(e, 8, 0, 0, 0, 0, flight.owner); }
+    if (alive(e)) weaponCollisions(e);
+  }
+  s.age = age; s.phase = age < SWING_PULL ? "pull" : "orbit";
+  flight.x = p.x; flight.z = p.z;
+  if (alive(e) && age >= SWING_DURATION - 1e-9) {
+    s.phase = "released";
+    c.kind = "flung"; c.t0 += SWING_DURATION; c.until = c.t0 + .55;
+    flight.yaw = p.yaw;
+    e.kx = Math.sin(p.yaw) * 11; e.kz = Math.cos(p.yaw) * 11;
+    // Test the release point itself: a tether can cross a gap safely, a released
+    // enemy already over that gap must immediately enter the normal hazard path.
+    displaceEnemy(e, e.x, e.z);
+    if (alive(e) && e.control === c) updateSwingFling(e, c, Math.max(0, rt.time - c.t0));
+  }
+}
+
+/** Integrate the released tether's decaying velocity exactly, including the
+ * fraction of a slow frame left after release and the final expiry fraction. */
+function updateSwingFling(e: EnemyRt, c: Control, dt: number) {
+  const elapsed = Math.min(dt, Math.max(0, c.until - (rt.time - dt)));
+  const speed = Math.hypot(e.kx, e.kz), decay = Math.exp(-1.5 * elapsed);
+  if (!displaceEnemy(e, e.x + e.kx * (1 - decay) / 1.5, e.z + e.kz * (1 - decay) / 1.5, "weapon")) wallImpact(e, speed);
+  if (!alive(e) || e.control !== c) return;
+  e.kx *= decay; e.kz *= decay;
+  if (rt.time >= c.until - 1e-9) endControl(e);
+}
+
 /** Returns true while scripted control/falling owns the enemy's turn. */
 function updateElements(e: EnemyRt, dt: number): boolean {
   if (e.slowUntil > 0 && rt.time >= e.slowUntil) {
@@ -1331,19 +1432,12 @@ function updateElements(e: EnemyRt, dt: number): boolean {
         hit(e, 14, 0, 1, Math.sin(flight.yaw), Math.cos(flight.yaw), flight.owner, true);
         pushFx("hit", bx, standY(bx, bz, getGame().progress.solved) + .6, bz, 0, 0, 0, 1.1);
       }
-    } else {
-      const angle = flight.yaw - 70 * Math.PI / 180 + t * 140 * Math.PI / 180;
-      const x = flight.x + Math.sin(angle) * 2.2, z = flight.z + Math.cos(angle) * 2.2;
-      if (!displaceEnemy(e, x, z, () => weaponCollisions(e))) { wallImpact(e, 5); return true; }
-      if (alive(e) && t >= 1) {
-        e.control = { ...c, kind: "flung", t0: rt.time, until: rt.time + 0.5 };
-        e.kx = Math.cos(angle) * 5; e.kz = -Math.sin(angle) * 5;
-      }
-    }
+    } else if (flight.swing) updateSwing(e, c, flight);
     return true;
   }
   if (c?.kind === "snared") { e.kx = e.kz = 0; if (rt.time >= c.until) endControl(e); return true; }
   if (c?.kind === "carried") return true;
+  if (c?.kind === "flung" && flight?.swing) { updateSwingFling(e, c, dt); return true; }
   if (Math.abs(e.kx) + Math.abs(e.kz) > 0.05) {
     const speed = Math.hypot(e.kx, e.kz);
     if (!displaceEnemy(e, e.x + e.kx * dt, e.z + e.kz * dt, c?.kind === "flung" ? () => weaponCollisions(e) : undefined)) wallImpact(e, speed);
@@ -1366,7 +1460,7 @@ function updateElements(e: EnemyRt, dt: number): boolean {
 const HEAVY_TUG_DAMAGE = 14;
 
 function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
-  const life = kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+  const life = kind === "blast" ? .14 + size / 12 : kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
   cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
   if (cb.fx.length > 24) cb.fx.shift();
 }
@@ -1707,6 +1801,7 @@ function sendHome(zone: CombatZone) {
     e.kx = e.kz = 0;
     e.air = 0;
     e.burn = e.control = e.flight = e.fall = null;
+    e.infernoBlueUntil = 0;
     e.panic = null;
     e.panicResistUntil = e.fireTicks = 0;
     e.lastFireT = -10;
@@ -1822,6 +1917,7 @@ function pauseElements(e: EnemyRt, dt: number) {
   if (e.panic) { e.panic.t0 += dt; e.panic.until += dt; e.panic.turnAt += dt; }
   if (e.panicResistUntil > 0) e.panicResistUntil += dt;
   e.lastFireT += dt;
+  if (e.infernoBlueUntil > 0) e.infernoBlueUntil += dt;
   if (e.burn) { e.burn.until += dt; e.burn.tick += dt; }
   if (e.control) { e.control.t0 += dt; e.control.until += dt; }
   if (e.fall) e.fall.t0 += dt;
