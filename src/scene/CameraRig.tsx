@@ -33,6 +33,7 @@ export function CameraRig() {
   const probe2 = useMemo(() => new THREE.Vector3(), []);
   const ready = useRef(false);
   const shift = useRef(0);
+  const lead = useRef(0);
   const profile = useRef<CameraProfile | undefined>(undefined);
   const framing = useRef<Framing>({ ...DEFAULT_CAMERA });
   const blendFrom = useRef<Framing>({ ...DEFAULT_CAMERA });
@@ -143,8 +144,10 @@ export function CameraRig() {
       const pitch = c.pitch;
       const horiz = dist * Math.cos(pitch);
       const ahead = framing.current.ahead;
-      want.current.set(focus.x + Math.sin(c.yaw) * (horiz - ahead), ty + dist * Math.sin(pitch), focus.z + Math.cos(c.yaw) * (horiz - ahead));
-      wantLook.current.set(focus.x - Math.sin(c.yaw) * ahead, ty, focus.z - Math.cos(c.yaw) * ahead);
+      // Eases to the walking direction, so reversing never jolts or turns the view.
+      lead.current += ((selected.lead ?? 0) * Math.max(-1, Math.min(1, p.vx / 3)) - lead.current) * (c.snap ? 1 : 1 - Math.exp(-dt * 1.6));
+      want.current.set(focus.x + lead.current + Math.sin(c.yaw) * (horiz - ahead), ty + dist * Math.sin(pitch), focus.z + Math.cos(c.yaw) * (horiz - ahead));
+      wantLook.current.set(focus.x + lead.current - Math.sin(c.yaw) * ahead, ty, focus.z - Math.cos(c.yaw) * ahead);
       // Physical clearance also applies during blends through either portal.
       const tunnelClearance = !cloud && (tunnel || inTunnel(want.current.x, want.current.z, -0.2));
       if (tunnelClearance) {

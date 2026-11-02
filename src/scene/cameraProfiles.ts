@@ -12,12 +12,16 @@ export interface CameraProfile extends Framing {
   fov?: number;
   viewShift?: number;
   trackYaw?: boolean;
+  /** Metres of smoothed look-ahead along world x, from the player's velocity. */
+  lead?: number;
   anchor?: { x: number; z: number } | ((p: CameraPoint, frame: Framing) => { x: number; z: number });
   /** Position-dependent authored framing (rope foot / radial arena). */
   resolve?: (p: CameraPoint, previous: Framing) => Framing;
 }
 
 export const DEFAULT_CAMERA: Framing = { yaw: 0, pitch: .55, dist: 10, ahead: 3 };
+/** The original beach, seen from the sea: +x is screen right and it never turns. */
+const BEACH_SIDE: Framing & { lead: number } = { yaw: 0, pitch: .42, dist: 11, ahead: 1.5, lead: 2 };
 export const CAMERA_BLEND_SECONDS = 1;
 export const CAMERA_HYSTERESIS = .65;
 const rect = (p: CameraPoint, m: number, x0: number, x1: number, z0: number, z1: number) =>
@@ -71,15 +75,16 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   { ...DEFAULT_CAMERA, id: "forest-bridge", dist: 8, ahead: 2, contains: home((p, m) => p.z < -23.4 + m) },
   { ...DEFAULT_CAMERA, id: "forest-glade", contains: home((p, m) => p.z < -17 + m) },
   { ...DEFAULT_CAMERA, id: "forest-path", dist: 7, ahead: 1.5, contains: home((p, m) => p.z < -8 + m && p.x > 29 - m) },
-  { ...DEFAULT_CAMERA, id: "river-bridge", yaw: -Math.PI / 2, dist: 8, ahead: 2,
+  { ...BEACH_SIDE, id: "river-bridge",
     contains: home((p, m) => rect(p, m, 20, 29, -3, 1)) },
-  { ...DEFAULT_CAMERA, id: "pier", yaw: Math.PI, dist: 8, ahead: 2,
+  { ...BEACH_SIDE, id: "pier",
     contains: home((p, m) => rect(p, m, 11, 15, 5, 15)) },
-  { ...DEFAULT_CAMERA, id: "palm-pass", yaw: -Math.PI / 2, dist: 7, ahead: 1.5,
+  // Higher here: the seaward rock of the pass would otherwise fill the foreground.
+  { ...BEACH_SIDE, id: "palm-pass", pitch: .68, dist: 10, ahead: 2.5,
     contains: home((p, m) => rect(p, m, -5, 3, -2, 4.4)) },
-  { ...DEFAULT_CAMERA, id: "far-bank", contains: home((p, m) => p.x > 28 - m) },
-  { ...DEFAULT_CAMERA, id: "east-beach", yaw: -Math.PI / 2, contains: home((p, m) => p.x > 3 - m) },
-  { ...DEFAULT_CAMERA, id: "west-beach", yaw: -Math.PI / 2, contains: p => !p.cloud },
+  { ...BEACH_SIDE, id: "far-bank", contains: home((p, m) => p.x > 28 - m) },
+  { ...BEACH_SIDE, id: "east-beach", contains: home((p, m) => p.x > 3 - m) },
+  { ...BEACH_SIDE, id: "west-beach", contains: p => !p.cloud },
 ];
 
 /** Schmitt borders: retain until .65m outside, enter higher-priority zones
