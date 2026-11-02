@@ -1880,3 +1880,53 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
 - Leafy's orbit chooses its direction toward the initial facing correction and keeps that
   direction. Live turns continue to the next equivalent bearing, allowing more than one
   revolution while ensuring the final throw follows the current aim.
+
+## 2026-11-02 — Slice C: keyhole mesa and expanded lowland stages
+
+- The mesa keeps its broad southern head and a roughly ten-metre tail ending at
+  z=-231. Its outline supplies all bounds, strata, collision and camera probes.
+  Strata retreat radially about the star-shaped outline's common centre; the old
+  small translations could push a ledge outside a concave keyhole edge.
+- Grove expansion fills the mesa side of the left arm, with continuous colliding
+  root ridges separating the optional lobes from the arm. The existing passage
+  and gate coordinates stay fixed. Broad Grove floor approaches z=-240 before
+  narrowing into that passage, keeping the exit funnel and first-clear gate intact.
+- Canopy standing surfaces are authored polygon decks. Their tessellated tops
+  share the collision height function, with vertical bark faces reaching the
+  forest floor. The elevated floor remains ten metres high; only the approach
+  and exit ramps meet the ground. The fixed Canopy camera uses yaw .5, pitch .66
+  and distance 12.5 to show the drop while keeping its lens outside the head.
+  The Grove camera turns west by .55 radians to clear the other side.
+- Ponds, full-width bridge cuts and the additional Canopy voids live in hazards.ts.
+  The Canopy playerFall flag is data for Slice D. Player movement still blocks at
+  every edge. Ordinary solid banks have no fall hazard. Cloud hazard coordinates
+  are re-exported unchanged from this same list to avoid an initialization cycle.
+- Enemy additions append to the spawn array, preserving saved identities. Forced
+  displacement keeps the existing KO bookkeeping and drops rewards at the last
+  ground point without horizontal scatter. Ordinary enemy locomotion rejects
+  hazards. No falling animation or player fall state is introduced.
+- Both stages add an optional treasure and an Ember reed shortcut through the
+  existing persistent data tables. Existing treasure, secret, bridge, pond, pad
+  and crossing positions stay fixed. The original islet grows to radius 4 around
+  its existing centre so the unchanged companion landing has at least 1.2 metres
+  of dry clearance; this retains the existing optional island west of x=33.
+- Grove streams use joined channel ribbons with rounded ends. Ridges, exposed
+  trunks, reeds and half-sunk ruins reuse existing merged tiles and instance
+  batches. Foliage avoids the Canopy cuts and dark bands mark exposed lips.
+  A circular ring of radial wooden planks surrounds the Tree-Ring trunk, with
+  its western arc cut away over the void; its 0.025-metre trim stays within the
+  standing-surface tolerance without changing collision.
+- Removed-floor saves search for the nearest valid position in the saved zone
+  within eight metres, then use the existing checkpoint fallback. Save version 4
+  and all existing solved and reward flags remain unchanged.
+- Area measurements use the original half-metre grid, now restricted by a flood
+  fill using real movement from the rope foot with every puzzle and secret open.
+  Gameplay budget tests cover both requested viewport sizes; browser captures
+  and final aesthetic judgment remain with the controller.
+- The bridge ends retain their authored positions. Their joined landing checks
+  shrink lateral clearance only: shrinking both joined ends left a 0.4-metre
+  invisible seam for a mounted body. A causeway pillar at (58, -243.6) also
+  closed the mounted passage; it moves to (55.5, -244.8) with its shared collider.
+- Reachable floor is pinned at Grove 1,401.75 m² (1.852 times 757) and Canopy
+  818.75 m² (2.008 times 407.75). Grove stays below the two-times target while
+  exceeding the 1.7-times floor, retaining arm separation and the fixed exits.

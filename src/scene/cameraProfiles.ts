@@ -61,6 +61,12 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   // Sees over the town wall from both sides; the wall also fades on the sight line.
   { ...DEFAULT_CAMERA, id: "port-gate", kind: "lowland", pitch: .85, dist: 11, ahead: 1,
     contains: (p, m) => !p.cloud && p.z < -282 + m && p.z > -298 - m },
+  // A little more height exposes the bark faces beneath the authored platform lips.
+  { ...DEFAULT_CAMERA, id: "ancient-canopy", kind: "lowland", yaw: .5, pitch: .66, dist: 12.5, ahead: 2.3,
+    contains: p => !p.cloud && zoneAt(p.x, p.z) === "canopy" },
+  // The expanded east bank needs its lens west of the mesa's broad head.
+  { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55,
+    contains: p => !p.cloud && zoneAt(p.x, p.z) === "grove" },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,
     contains: home((p, m) => rect(p, m, TUNNEL.x - 3.6, TUNNEL.x + 3.6, TUNNEL.z0 - 1.2, TUNNEL.z1 + .8)) },

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { CHESTS } from "../game/world/lowland";
-import { groundY } from "../game/world/island";
+import { standY } from "../game/world/collision";
 import { additiveSprite, flatMat } from "./materials";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 
@@ -45,7 +45,7 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
       openingGlowRef.current.scale.setScalar(0.35 + t * 0.5);
     }
   });
-  const y = groundY(c.x, c.z);
+  const y = standY(c.x, c.z, getGame().progress.solved);
   return (
     <group ref={root} position={[c.x, y, c.z]} rotation={[0, c.yaw, 0]}>
       <mesh geometry={base} material={flatMat} />

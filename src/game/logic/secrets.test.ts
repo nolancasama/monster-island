@@ -23,7 +23,9 @@ const roundTrip = (p: Progress) => decodeSave(encodeSave(p, { x: 76, z: -191, ya
 function solveSecret(id: SecretId): SecretProgress {
   let p = fresh();
   switch (id) {
-    case "emberThicket": return tickSecrets(secretEvent(id, "burn", p), 1.5, away);
+    case "emberThicket":
+    case "groveDryReeds":
+    case "canopyDryReeds": return tickSecrets(secretEvent(id, "burn", p), 1.5, away);
     case "bubboLedgeKey": return secretEvent(id, "lift", p);
     case "leafyStatues": return secretEvent("leafyStatuesEast", "grab", secretEvent(id, "grab", p));
     case "puffLeaves": return tickSecrets(secretEvent(id, "wind", p), 0, ELEMENT_OBJECTS.find(o => o.id === id)!);
@@ -124,6 +126,36 @@ describe("optional secrets", () => {
 });
 
 describe("secret placement and collision", () => {
+  it.each([
+    { id: "groveDryReeds", from: { x: 62.5, z: -219.6 }, to: { x: 67.5, z: -219.6 } },
+    { id: "canopyDryReeds", from: { x: 112.5, z: -210 }, to: { x: 117.5, z: -210 } },
+  ] as const)("burning $id opens a direct optional shortcut", ({ id, from, to }) => {
+    const p = ready();
+    p.act2.secrets = SECRET_IDS.filter(secret => secret !== id);
+    const closed = gatesOf(p);
+    expect(isWalkable(from.x, from.z, closed, PLAYER_R)).toBe(true);
+    expect(isWalkable(to.x, to.z, closed, PLAYER_R)).toBe(true);
+    const stopped = moveCircle(from.x, from.z, to.x, to.z, PLAYER_R, closed);
+    expect(Math.hypot(stopped.x - to.x, stopped.z - to.z)).toBeGreaterThan(1);
+    const completed = solveSecret(id);
+    p.act2.secrets = [...p.act2.secrets, ...completed.secrets];
+    const reached = moveCircle(from.x, from.z, to.x, to.z, PLAYER_R, gatesOf(p));
+    expect(reached.x).toBeCloseTo(to.x);
+    expect(reached.z).toBeCloseTo(to.z);
+  });
+
+  it.each(["groveHiddenCache", "canopyTreasureLedge"])("%s uses the ordinary one-time persisted chest reward", id => {
+    const p = ready(), chest = CHESTS.find(chest => chest.id === id)!;
+    expect(chest).toBeDefined();
+    expect(chest.secret).toBeUndefined();
+    const opened = openChest(p, id);
+    expect(opened.act2.coins).toBe(chest.coins);
+    expect(opened.act2.chests).toContain(id);
+    const loaded = roundTrip(opened).progress;
+    expect(loaded.act2.chests).toContain(id);
+    expect(openChest(loaded, id)).toBe(loaded);
+  });
+
   it.each(SECRET_IDS)("%s stays on existing land and blocks access until completion", id => {
     const p = ready(), site = SECRET_SITES[id];
     const open = { ...p, act2: { ...p.act2, secrets: [id] } };

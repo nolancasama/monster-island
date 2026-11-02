@@ -1,4 +1,4 @@
-import { lowlandY, MESA_OUTLINE } from "./lowland";
+import { lowlandY, MESA_BOUNDS, MESA_OUTLINE } from "./lowland";
 
 export type MesaPoint = [number, number];
 export const MESA_CENTER: MesaPoint = [77, -209];
@@ -27,7 +27,7 @@ export const MESA_STRATA = [5.4, 8.8, 12.2, 15.7, 19.1, MESA_PLATEAU_Y].map((y, 
     if (band === 0) return [x, z];
     // The jag (0–.06) never exceeds the .06 step, so no band overhangs the one below.
     const scale = 1 - band * .06 - .03 * (1 + Math.sin(i * 1.93 + band * 1.7));
-    return [77 + (x - 77) * scale + .12 * Math.sin(band * 2), -209 + (z + 209) * scale + .16 * Math.cos(band * 2)];
+    return [MESA_CENTER[0] + (x - MESA_CENTER[0]) * scale, MESA_CENTER[1] + (z - MESA_CENTER[1]) * scale];
   }),
 }));
 
@@ -48,7 +48,7 @@ function within(outline: MesaPoint[], x: number, z: number): boolean {
 
 /** Conservative rock ceiling, independent of walking height. */
 export function mesaFloorY(x: number, z: number): number {
-  if (x < 65 || x > 89 || z < -231 || z > -187) return -Infinity;
+  if (x < MESA_BOUNDS.x0 || x > MESA_BOUNDS.x1 || z < MESA_BOUNDS.z0 || z > MESA_BOUNDS.z1) return -Infinity;
   for (let i = MESA_STRATA.length - 1; i >= 0; i--) {
     if (within(MESA_STRATA[i].outline, x, z)) return MESA_STRATA[i].y + .28;
   }
@@ -58,8 +58,8 @@ export function mesaFloorY(x: number, z: number): number {
 /** Exact horizontal edge crossings supplement CameraRig's spaced floor probes.
  * Checking every entry/exit clears even a very short clip through a jagged ledge. */
 export function mesaCameraLift(target: { x: number; y: number; z: number }, camera: { x: number; y: number; z: number }): number {
-  if (Math.max(target.x, camera.x) < 65 || Math.min(target.x, camera.x) > 89 ||
-      Math.max(target.z, camera.z) < -231 || Math.min(target.z, camera.z) > -187) return 0;
+  if (Math.max(target.x, camera.x) < MESA_BOUNDS.x0 || Math.min(target.x, camera.x) > MESA_BOUNDS.x1 ||
+      Math.max(target.z, camera.z) < MESA_BOUNDS.z0 || Math.min(target.z, camera.z) > MESA_BOUNDS.z1) return 0;
   const dx = camera.x - target.x, dz = camera.z - target.z;
   let lift = 0;
   for (const band of MESA_STRATA) {

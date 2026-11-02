@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, resistance, snareDuration, tickBurn, weaponVictims, type Control } from "./elements";
 import { CLOUD_CHASMS } from "../world/cloudisle";
 import { CANOPY_GAPS, ISLET, POND } from "../world/lowland";
-import { HAZARDS } from "../world/hazards";
+import { CANOPY_VOIDS, HAZARDS, HOME_PONDS } from "../world/hazards";
 import { fireDamage } from "./elements";
 
 describe("panic fire floor", () => {
@@ -155,6 +155,8 @@ describe("direction, collision and hazards", () => {
     expect(hazardAt((chasm.x0 + chasm.x1) / 2, (chasm.z0 + chasm.z1) / 2, "cloud")?.kind).toBe("fall");
     expect(hazardAt(-42, 62, "cloud")?.id).toBe("coastSea");
     expect(hazardAt(999, 999, "home")).toBeNull();
-    expect(HAZARDS).toHaveLength(1 + Object.keys(CANOPY_GAPS).length + CLOUD_CHASMS.length + 1);
+    expect(HOME_PONDS).toHaveLength(3);
+    expect(CANOPY_VOIDS).toHaveLength(6);
+    expect(HAZARDS).toHaveLength(HOME_PONDS.length + CANOPY_VOIDS.length + CLOUD_CHASMS.length + 1);
   });
 });

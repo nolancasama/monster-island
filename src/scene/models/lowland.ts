@@ -9,11 +9,13 @@ import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Ou
 import { makeRng } from "../../game/logic/rng";
 import { MESA_CENTER, MESA_FOOT, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaRimY } from "../../game/world/mesa";
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
+import { HAZARDS } from "../../game/world/hazards";
 import {
   STAGES,
   STAGE_EXITS,
   BASIN,
   CAMP2,
+  CANOPY_DECKS,
   CANOPY_GAPS,
   CANOPY_TRAIL,
   CAUSEWAY,
@@ -34,6 +36,7 @@ import {
   LILY_PADS,
   lilyPadRise,
   LOGS,
+  LOWLAND_RIDGES,
   MOSSY_BOULDERS,
   PIER2,
   POND,
@@ -48,6 +51,9 @@ import {
   ZONE_ORDER,
   ZONES,
   canopyRaise,
+  canopySurfaceY,
+  lowlandDeckY,
+  lowlandY,
   lowlandWalkable,
   inMesa,
   nearestOnTrail,
@@ -137,7 +143,7 @@ export function mesaGeometry(): THREE.BufferGeometry {
   });
   for (let i = 0; i < MESA_FOOT.length; i++) {
     const a = MESA_FOOT[i], c = MESA_FOOT[(i + 1) % MESA_FOOT.length];
-    triangle([77, MESA_SKIRT_Y, -209], [c[0], MESA_SKIRT_Y, c[1]], [a[0], MESA_SKIRT_Y, a[1]], 0);
+    triangle([MESA_CENTER[0], MESA_SKIRT_Y, MESA_CENTER[1]], [c[0], MESA_SKIRT_Y, c[1]], [a[0], MESA_SKIRT_Y, a[1]], 0);
   }
   const shell = new THREE.BufferGeometry();
   shell.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
@@ -145,13 +151,13 @@ export function mesaGeometry(): THREE.BufferGeometry {
   shell.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(p.length / 3 * 2), 2));
   shell.computeVertexNormals();
   const b = new PartBuilder(0);
-  const trees = [[72, -201, .34], [80, -214, .42], [73, -221, .29]].map(([x, z, s]) =>
+  const trees = [[74, -195, .26], [79, -197, .3], [77, -201, .2]].map(([x, z, s]) =>
     primevalTreeGeometry().scale(s, s, s).rotateY(x).translate(x, MESA_PLATEAU_Y - .25, z));
   // Two weathered small pillars give scale without suggesting a playable route.
-  for (const [x, h] of [[75, 2.1], [78.2, 1.4]]) {
-    b.cyl(.38, .5, h, x, MESA_PLATEAU_Y - .25, -207, "#c1b59d", 7);
-    b.cyl(.55, .6, .25, x, MESA_PLATEAU_Y - .25, -207, "#75865b", 7);
-    b.cyl(.49, .41, .18, x, MESA_PLATEAU_Y + h - .25, -207, "#a99b87", 7);
+  for (const [x, h] of [[75.5, 2.1], [78.2, 1.4]]) {
+    b.cyl(.38, .5, h, x, MESA_PLATEAU_Y - .25, -198, "#c1b59d", 7);
+    b.cyl(.55, .6, .25, x, MESA_PLATEAU_Y - .25, -198, "#75865b", 7);
+    b.cyl(.49, .41, .18, x, MESA_PLATEAU_Y + h - .25, -198, "#a99b87", 7);
   }
   const furnishings = b.build();
   // Keep the tree builders' original bark/foliage colours when merging.
@@ -164,6 +170,110 @@ export function mesaGeometry(): THREE.BufferGeometry {
 /** Same surface rule as the massif: sunk a little under the sanctuary's own floor where they overlap. */
 function surface(x: number, z: number): number {
   return groundY(x, z) - 0.3 * volcanoMask(x, z);
+}
+
+/** Static furnishings stand on authored platforms; terrain remains the floor below. */
+export const lowlandSceneryY = (x: number, z: number) => Math.max(groundY(x, z), lowlandDeckY(x, z, ["groveLilies", "canopyVines", "canopyRope"]));
+const canopyTrunk = (x: number, z: number) => x >= 83 && x <= 119 && z <= -201 && z >= -237.2 && Number.isFinite(lowlandDeckY(x, z, []));
+
+/** The same polygons as collision, with explicit bark sides down to the basin floor.
+ * Submetre cells also conform the two entrance ramps to their shared height rule. */
+export function canopyDeckGeometry(): THREE.BufferGeometry {
+  const positions: number[] = [], colors: number[] = [];
+  const top = new THREE.Color("#71984a"), dark = new THREE.Color("#4a452f"), bark = new THREE.Color("#6b4a30");
+  const triangle = (a: number[], b: number[], c: number[], color: THREE.Color) => {
+    for (const p of [a, b, c]) { positions.push(...p); colors.push(color.r, color.g, color.b); }
+  };
+  for (const deck of CANOPY_DECKS) {
+    const { x0, x1, z0, z1 } = deck.walk;
+    const nx = Math.ceil((x1 - x0) / .75), nz = Math.ceil((z1 - z0) / .75);
+    const vertex = (i: number, j: number) => {
+      const x = x0 + (x1 - x0) * i / nx, z = z0 + (z1 - z0) * j / nz;
+      return [x, canopySurfaceY(x, z), z];
+    };
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const a = vertex(i, j), b = vertex(i + 1, j), c = vertex(i, j + 1), d = vertex(i + 1, j + 1);
+      const edge = i === 0 || j === 0 || i === nx - 1 || j === nz - 1;
+      const plank = deck.id.startsWith("brokenBridge") || deck.id.startsWith("upperRoot");
+      const color = edge ? dark : plank ? bark.clone().multiplyScalar(j % 2 ? 1.2 : .88) : top.clone().multiplyScalar(.9 + hash(i, j) * .2);
+      triangle(a, c, b, color); triangle(b, c, d, color);
+    }
+    for (let i = 0; i < deck.pts.length; i++) {
+      const [ax, az] = deck.pts[i], [bx, bz] = deck.pts[(i + 1) % deck.pts.length];
+      const n = Math.ceil(Math.hypot(bx - ax, bz - az) / .75);
+      for (let j = 0; j < n; j++) {
+        const x = ax + (bx - ax) * j / n, z = az + (bz - az) * j / n;
+        const xx = ax + (bx - ax) * (j + 1) / n, zz = az + (bz - az) * (j + 1) / n;
+        const a = [x, canopySurfaceY(x, z), z], b = [xx, canopySurfaceY(xx, zz), zz];
+        const c = [xx, lowlandY(xx, zz) - .12, zz], d = [x, lowlandY(x, z) - .12, z];
+        const color = bark.clone().multiplyScalar(j % 3 === 0 ? .68 : .9);
+        triangle(a, b, c, color); triangle(a, c, d, color);
+      }
+    }
+  }
+  // Radial boards make the Tree-Ring Arena read as a circular crown around its
+  // giant trunk. Clip every board to the authored polygons: the western break
+  // stays an open drop, and the motif ends at the same lip as collision.
+  const center = { x: 94.8, z: -232.8 }, radii = [1.35, 1.57, 2.17, 2.77, 3.37, 3.95, 4.15];
+  const boardLight = new THREE.Color("#ad8752"), boardDark = new THREE.Color("#82603b");
+  const clip = (polygon: Array<[number, number]>, axis: 0 | 1, edge: number, keepGreater: boolean) => {
+    const result: Array<[number, number]> = [];
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+      const insideA = keepGreater ? a[axis] >= edge : a[axis] <= edge;
+      const insideB = keepGreater ? b[axis] >= edge : b[axis] <= edge;
+      if (insideA) result.push(a);
+      if (insideA !== insideB) {
+        const t = (edge - a[axis]) / (b[axis] - a[axis]);
+        result.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    return result;
+  };
+  for (let plank = 0; plank < 24; plank++) for (let ring = 1; ring < radii.length; ring++) {
+    const a = plank * Math.PI / 12 + .006, b = (plank + 1) * Math.PI / 12 - .006;
+    const at = (r: number, angle: number): [number, number] => [center.x + Math.cos(angle) * r, center.z + Math.sin(angle) * r];
+    const polygon = [at(radii[ring - 1], a), at(radii[ring - 1], b), at(radii[ring], b), at(radii[ring], a)];
+    for (const { walk } of CANOPY_DECKS) {
+      if (walk.z1 < center.z - 4.15 || walk.z0 > center.z + 4.15 || walk.x1 < center.x - 4.15 || walk.x0 > center.x + 4.15) continue;
+      let clipped = clip(polygon, 0, walk.x0, true);
+      clipped = clip(clipped, 0, walk.x1, false);
+      clipped = clip(clipped, 1, walk.z0, true);
+      clipped = clip(clipped, 1, walk.z1, false);
+      const vertices = clipped.map(([x, z]) => [x, canopySurfaceY(x, z) + .025, z]);
+      const color = ring === 1 || ring === radii.length - 1 ? dark : plank % 2 ? boardLight : boardDark;
+      for (let i = 1; i + 1 < vertices.length; i++) triangle(vertices[0], vertices[i], vertices[i + 1], color);
+    }
+  }
+  // The original north exit is still a sloping root. Polygonal capsule ends
+  // follow its collision trail to within five centimetres at the rounded lip.
+  const exit = ZONES.canopy.walk.find(shape => shape.kind === "trail");
+  if (exit?.kind === "trail") for (let segment = 1; segment < exit.pts.length; segment++) {
+    const geometry = streamRibbonGeometry([exit.pts[segment - 1], exit.pts[segment]], exit.w * 2, canopySurfaceY);
+    const p = geometry.getAttribute("position"), boundaries = new Map<string, { a: number[]; b: number[]; count: number }>();
+    const point = (i: number) => [p.getX(i), p.getY(i), p.getZ(i)];
+    const key = (v: number[]) => `${v[0].toFixed(4)},${v[2].toFixed(4)}`;
+    for (let i = 0; i < p.count; i += 3) {
+      const vertices = [point(i), point(i + 1), point(i + 2)];
+      triangle(vertices[0], vertices[1], vertices[2], bark);
+      for (let edge = 0; edge < 3; edge++) {
+        const a = vertices[edge], b = vertices[(edge + 1) % 3], id = [key(a), key(b)].sort().join("/");
+        const existing = boundaries.get(id);
+        if (existing) existing.count++; else boundaries.set(id, { a, b, count: 1 });
+      }
+    }
+    for (const { a, b, count } of boundaries.values()) if (count === 1) {
+      const c = [b[0], lowlandY(b[0], b[2]) - .12, b[2]], d = [a[0], lowlandY(a[0], a[2]) - .12, a[2]];
+      triangle(b, a, d, dark); triangle(b, d, c, dark);
+    }
+    geometry.dispose();
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(positions.length / 3 * 2), 2));
+  geometry.computeVertexNormals(); geometry.computeBoundingSphere();
+  return geometry;
 }
 
 function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Color) {
@@ -336,6 +446,14 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
   const off = (x: number, z: number, pad: number) => {
     // Nothing grows on the sanctuary's shelf or against the cliff (it would poke up beside the garden).
     if (z > -157.5 || inMesa(x, z, pad + 1)) return false;
+    // Keep crowns and fronds clear of the open drops, so every dark cut stays legible.
+    if (HAZARDS.some(hazard => {
+      if (hazard.world !== "home" || hazard.kind !== "fall") return false;
+      const sh = hazard.shape, margin = pad + 3;
+      if (sh.kind === "rect") return x > sh.x0 - margin && x < sh.x1 + margin && z > sh.z0 - margin && z < sh.z1 + margin;
+      if (sh.kind === "disc") return Math.hypot(x - sh.x, z - sh.z) < sh.r + margin;
+      return nearestOnTrail(sh.pts, x, z).d < sh.w + margin;
+    })) return false;
     for (const [dx, dz] of [
       [0, 0],
       [pad, 0],
@@ -392,10 +510,20 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
       if (j % 2 === 0) ferns.push({ x: x + .5 * Math.cos(a), z: z + .5 * Math.sin(a), s: .45 + .08 * i, r: a, tint: .95 });
     }
   }
+  // Dense reed beds frame the new deep pools without putting blocking props on
+  // their accessible combat banks. They use the existing reed instance tiles.
+  for (const hazard of HAZARDS) if (hazard.world === "home" && hazard.kind === "splash" && hazard.id !== "pond" && hazard.shape.kind === "disc") {
+    const pool = hazard.shape;
+    for (let i = 0; i < 16; i++) {
+      const angle = i * Math.PI / 8, r = pool.r + .1;
+      reeds.push({ x: pool.x + Math.cos(angle) * r, z: pool.z + Math.sin(angle) * r,
+        s: .8 + .3 * (i % 3), r: angle, tint: .85 + .06 * (i % 4) });
+    }
+  }
   // Thin out overlaps: one big tree per 5 m.
   const kept: Spot[] = [];
   for (const t of trees) if (kept.every((k) => Math.hypot(k.x - t.x, k.z - t.z) > 5 * Math.max(k.s, t.s))) kept.push(t);
-  for (const t of GIANT_TREES) if (!inMesa(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
+  for (const t of GIANT_TREES) if (!inMesa(t.x, t.z) && !canopyTrunk(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
     sy: RIGHT_ARM_TREES.some(tree => tree === t) ? t.h / 11.2 : undefined, r: t.x * 0.7, tint: 1 });
   return { trees: kept, ferns, fernTrees, reeds };
 }
@@ -475,7 +603,7 @@ export function cliffRopeGeometry(): THREE.BufferGeometry {
 export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
   const rand = makeRng(31);
-  const gy = (x: number, z: number) => groundY(x, z);
+  const gy = lowlandSceneryY;
   // The islet belongs to scenery, never to the animated pad instances.
   const mound = new THREE.CylinderGeometry(ISLET.r, ISLET.r + 0.35, 1, 24, 1);
   const mp = mound.getAttribute("position");
@@ -500,9 +628,10 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     }
   }
   for (const p of RUIN_PILLARS) {
-    const h = 1.6 + rand() * 2.6;
-    b.cyl(0.5, 0.58, h, p.x, gy(p.x, p.z) - 0.1, p.z, "#b8ad9a", 8);
-    b.box(1.3, 0.3, 1.3, p.x, gy(p.x, p.z) - 0.1, p.z, "#9d9384");
+    const halfSunk = p.x <= 69 && p.z >= -237 && p.z <= -186;
+    const h = halfSunk ? 1 + rand() * 1.3 : 1.6 + rand() * 2.6;
+    b.cyl(0.5, 0.58, h, p.x, gy(p.x, p.z) - (halfSunk ? .4 : .1), p.z, "#b8ad9a", 8);
+    b.box(1.3, 0.3, 1.3, p.x, gy(p.x, p.z) - (halfSunk ? .35 : .1), p.z, "#9d9384");
     if (h > 3) b.box(1.2, 0.28, 1.2, p.x, gy(p.x, p.z) - 0.1 + h, p.z, "#c4b9a6");
     b.sphere(0.35, p.x + 0.3, gy(p.x, p.z) + h * 0.4, p.z + 0.4, "#6aa04a", [1, 0.5, 0.8], 6);
   }
@@ -546,6 +675,18 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   b.boxAt(1.4, 0.32, 0.06, [s.x - 0.55, fy + 1.75, s.z], [0, 0, 0.08], "#c99a5a");
   b.boxAt(1.4, 0.32, 0.06, [s.x + 0.55, fy + 1.35, s.z], [0, 0, -0.08], "#c99a5a");
   // Fallen logs and mossy boulders.
+  for (const ridge of LOWLAND_RIDGES) {
+    const n = Math.ceil(Math.hypot(ridge.bx - ridge.ax, ridge.bz - ridge.az));
+    const at = (i: number): [number, number, number] => {
+      const x = ridge.ax + (ridge.bx - ridge.ax) * i / n, z = ridge.az + (ridge.bz - ridge.az) * i / n;
+      return [x, gy(x, z) + ridge.r * .55, z];
+    };
+    for (let i = 0; i < n; i++) between(b, at(i), at(i + 1), ridge.r, ridge.r, "#6b4a30", 7);
+    for (const i of [0, n]) {
+      const [x, y, z] = at(i);
+      b.sphere(ridge.r, x, y, z, "#6b4a30", [1, 1, 1], 8);
+    }
+  }
   for (const r of RIGHT_ARM_ROOTS) {
     between(b, [r.ax, gy(r.ax, r.az) + r.r * .65, r.az], [r.bx, gy(r.bx, r.bz) + r.r * .65, r.bz], r.r, r.r * .5, "#6b4a30", 6);
   }
@@ -559,27 +700,17 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     b.add(rockGeometry(r.r, r.h, 1600 + Math.round(r.x), 1), "#7d786a", [r.x, gy(r.x, r.z) - 0.2, r.z]);
     b.sphere(r.r * 0.75, r.x, gy(r.x, r.z) + r.h * 0.75, r.z, "#5f9a44", [1, 0.35, 1], 8);
   }
-  // The raised root walk: giant roots line both sides; posts mark each gap.
-  for (let i = 0; i < CANOPY_TRAIL.length - 1; i++) {
-    const [ax, az] = CANOPY_TRAIL[i],
-      [bx, bz] = CANOPY_TRAIL[i + 1];
-    const len = Math.hypot(bx - ax, bz - az);
-    const ux = (bx - ax) / len,
-      uz = (bz - az) / len;
-    for (let s = 1.5; s < len; s += 3.2) {
-      for (const side of [-1, 1]) {
-        const x = ax + ux * s - uz * side * 2.9,
-          z = az + uz * s + ux * side * 2.9;
-        const h = canopyRaise(x, z);
-        if (h < 1.2) continue;
-        const inGap = Object.values(CANOPY_GAPS).some((g) => Math.abs(x - g.x) < 4 && z > g.z0 - 0.3 && z < g.z1 + 0.3);
-        if (inGap) continue;
-        between(b, [x - ux * 1.9, groundY(x, z) + 0.2, z - uz * 1.9], [x + ux * 1.9, groundY(x, z) + 0.35, z + uz * 1.9], 0.45, 0.4, "#6b4a2e", 7);
-      }
-    }
+  // The playable crowns use exposed trunks and high branches. Keeping foliage
+  // out of this batch leaves the open cuts visible from the follow camera.
+  for (const tree of GIANT_TREES) if (canopyTrunk(tree.x, tree.z)) {
+    const y = gy(tree.x, tree.z);
+    b.cyl(tree.r * .75, tree.r, tree.h, tree.x, y - .1, tree.z, "#6b4a30", 8);
+    b.cyl(tree.r * .86, tree.r * .9, .45, tree.x, y + 3, tree.z, "#557744", 8);
+    between(b, [tree.x, y + 6.5, tree.z], [tree.x + 3.5, y + 8.2, tree.z + 1.1], .38, .18, "#6b4a30", 6);
   }
+  // Raised surfaces carry dark edge bands; the gap entrances retain their posts.
   for (const g of Object.values(CANOPY_GAPS)) {
-    const y = groundY(g.x, g.z1 + 1.2);
+    const y = gy(g.x, g.z1 + 1.2);
     for (const [dx, z] of [
       [-1.15, g.z1 + 0.5],
       [1.15, g.z1 + 0.5],
@@ -589,23 +720,65 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
       b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
   }
   const tent = tentGeometry().rotateY(CAMP2.tent.yaw).translate(CAMP2.tent.x, gy(CAMP2.tent.x, CAMP2.tent.z), CAMP2.tent.z);
-  return mergeGeometries([b.build(), tent]);
+  return mergeGeometries([b.build(), tent, canopyDeckGeometry()]);
 }
 
-/** Water: the pond and the shallow streams (one transparent draw). */
+/** A joined channel ribbon: shared banks at bends and tapered, rounded ends. */
+export function streamRibbonGeometry(points: Array<[number, number]>, width: number, height: (x: number, z: number) => number): THREE.BufferGeometry {
+  const banks: Array<[number, number, number, number]> = [];
+  for (let i = 0; i < points.length; i++) {
+    const previous = points[Math.max(0, i - 1)], next = points[Math.min(points.length - 1, i + 1)];
+    const dx = next[0] - previous[0], dz = next[1] - previous[1], length = Math.hypot(dx, dz);
+    banks.push([points[i][0] - dz / length * width / 2, points[i][1] + dx / length * width / 2,
+      points[i][0] + dz / length * width / 2, points[i][1] - dx / length * width / 2]);
+  }
+  const positions: number[] = [];
+  const vertex = (x: number, z: number) => positions.push(x, height(x, z), z);
+  for (let i = 1; i < banks.length; i++) {
+    const a = banks[i - 1], b = banks[i];
+    const steps = Math.ceil(Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]) / .65);
+    const across = Math.ceil(width / .65);
+    for (let j = 0; j < steps; j++) for (let k = 0; k < across; k++) {
+      const at = (t: number, u: number): [number, number] => {
+        const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
+        return [x + (a[2] + (b[2] - a[2]) * t - x) * u, z + (a[3] + (b[3] - a[3]) * t - z) * u];
+      };
+      const p = at(j / steps, k / across), q = at(j / steps, (k + 1) / across), r = at((j + 1) / steps, k / across), s = at((j + 1) / steps, (k + 1) / across);
+      vertex(...p); vertex(...r); vertex(...q);
+      vertex(...q); vertex(...r); vertex(...s);
+    }
+  }
+  for (const index of [0, points.length - 1]) {
+    const p = points[index], b = banks[index], outward = index === 0 ? 1 : -1;
+    const angle = Math.atan2(b[1] - p[1], b[0] - p[0]);
+    const rings = Math.ceil(width / 1.2);
+    for (let ring = 0; ring < rings; ring++) for (let i = 0; i < 12; i++) {
+      const a = angle + outward * Math.PI * i / 12, c = angle + outward * Math.PI * (i + 1) / 12;
+      const at = (theta: number, radius: number): [number, number] => [p[0] + Math.cos(theta) * width / 2 * radius, p[1] + Math.sin(theta) * width / 2 * radius];
+      const innerLeft = at(a, ring / rings), innerRight = at(c, ring / rings);
+      const left = at(a, (ring + 1) / rings), right = at(c, (ring + 1) / rings);
+      vertex(...innerLeft); vertex(...(outward > 0 ? right : left)); vertex(...(outward > 0 ? left : right));
+      if (ring > 0) {
+        vertex(...innerLeft); vertex(...(outward > 0 ? innerRight : right)); vertex(...(outward > 0 ? right : innerRight));
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Water: the pond and the shallow channels (the existing transparent tiles). */
 export function lowlandWaterGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   b.add(new THREE.CircleGeometry(POND.r + 0.6, 24).rotateX(-Math.PI / 2), "#3fb5c8", [POND.x, POND_Y, POND.z], [0, 0, 0], [1, 1, 1], { flatAo: true });
+  for (const hazard of HAZARDS) if (hazard.world === "home" && hazard.kind === "splash" && hazard.id !== "pond" && hazard.shape.kind === "disc") {
+    const pond = hazard.shape;
+    b.add(new THREE.CircleGeometry(pond.r, 16).rotateX(-Math.PI / 2), "#358f9b", [pond.x, streamY(pond.x, pond.z) - .12, pond.z], [0, 0, 0], [1, 1, 1], { flatAo: true });
+  }
   for (const s of STREAMS) {
-    for (let i = 1; i < s.length; i++) {
-      const [ax, az] = s[i - 1],
-        [bx, bz] = s[i];
-      const len = Math.hypot(bx - ax, bz - az);
-      const mx = (ax + bx) / 2,
-        mz = (az + bz) / 2;
-      const plane = new THREE.PlaneGeometry(1.6, len + 1.2).rotateX(-Math.PI / 2);
-      b.add(plane, "#5cc6d6", [mx, streamY(mx, mz), mz], [0, Math.atan2(bx - ax, bz - az), 0], [1, 1, 1], { flatAo: true });
-    }
+    b.add(streamRibbonGeometry(s, 1.6, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
   // Conform visual water to the rendered 2 m terrain triangles. This shares
   // water's existing tiled draw and never cuts a channel into walking ground.
@@ -622,12 +795,8 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
     const g = new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2).scale(pool.rx, 1, pool.rz).translate(pool.x, 0, pool.z);
     decor.add(g, "#459e9e", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
-  for (const stream of ARM_STREAMS) for (let i = 1; i < stream.length; i++) {
-    const [ax, az] = stream[i - 1], [bx, bz] = stream[i];
-    const len = Math.hypot(bx - ax, bz - az);
-    decor.add(new THREE.PlaneGeometry(.65, len + .2, 1, Math.ceil(len / .5)).rotateX(-Math.PI / 2), "#65b9b2",
-      [(ax + bx) / 2, 0, (az + bz) / 2], [0, Math.atan2(bx - ax, bz - az), 0], [1, 1, 1], { flatAo: true });
-  }
+  for (const stream of ARM_STREAMS)
+    decor.add(streamRibbonGeometry(stream, .65, () => 0), "#65b9b2", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   const wet = decor.build(), positions = wet.getAttribute("position");
   for (let i = 0; i < positions.count; i++) positions.setY(i, waterY(positions.getX(i), positions.getZ(i)));
   wet.computeVertexNormals();
@@ -1053,10 +1222,10 @@ export function stageBarrierGeometry(gate: (typeof STAGE_EXITS)[number]): THREE.
   }
   const geometry = b.build(), p = geometry.attributes.position;
   const yaw = gate.orientation === "z" ? Math.PI / 2 : 0;
-  const c = Math.cos(yaw), s = Math.sin(yaw), floor = groundY(gate.x, gate.z);
+  const c = Math.cos(yaw), s = Math.sin(yaw), floor = lowlandSceneryY(gate.x, gate.z);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
-    p.setY(i, p.getY(i) + groundY(gate.x + c * x + s * z, gate.z - s * x + c * z) - floor);
+    p.setY(i, p.getY(i) + lowlandSceneryY(gate.x + c * x + s * z, gate.z - s * x + c * z) - floor);
   }
   geometry.computeVertexNormals();
   return geometry;

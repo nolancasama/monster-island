@@ -26,9 +26,10 @@ export function secretEvent(id: string, event: ElementEvent, p: SecretProgress):
   if (id === "comboFurnace" && event === "wind" && before !== "lit") return p;
   // Sustained fire never restarts a thicket's burn or extends the furnace clock.
   if (before === response.becomes) return p;
-  const remaining = id === "emberThicket" ? 1.5 : id === "comboFurnace" && event === "burn" ? 8 : undefined;
+  const burningBarrier = response.becomes === "burning" && event === "burn";
+  const remaining = burningBarrier ? 1.5 : id === "comboFurnace" && event === "burn" ? 8 : undefined;
   let next: SecretProgress = { ...p, objects: { ...p.objects, [id]: { state: response.becomes, ...(remaining === undefined ? {} : { remaining }) } } };
-  if (!response.secret || id === "emberThicket" || id === "puffLeaves") return next;
+  if (!response.secret || burningBarrier || id === "puffLeaves") return next;
   if (response.secret === "leafyStatues" && !["leafyStatues", "leafyStatuesEast"].every(id => next.objects[id]?.state === "pulled")) return next;
   next = complete(next, response.secret);
   return next;
@@ -43,8 +44,9 @@ export function tickSecrets(p: SecretProgress, dt: number, player: { x: number; 
     if (!s) continue;
     if (s.remaining !== undefined) {
       const remaining = Math.max(0, s.remaining - dt);
-      next = { ...next, objects: { ...next.objects, [o.id]: remaining > 1e-9 ? { ...s, remaining } : { state: o.id === "emberThicket" ? "burnt" : "intact" } } };
-      if (remaining <= 1e-9 && o.id === "emberThicket") next = complete(next, o.id);
+      const burnt = s.state === "burning" && !!o.on?.burn?.secret;
+      next = { ...next, objects: { ...next.objects, [o.id]: remaining > 1e-9 ? { ...s, remaining } : { state: burnt ? "burnt" : "intact" } } };
+      if (remaining <= 1e-9 && burnt) next = complete(next, o.on!.burn!.secret!);
     }
     if (o.id === "puffLeaves" && s.state === "cleared" && Math.hypot(player.x - o.x, player.z - o.z) <= o.r + .35) next = complete(next, o.id);
   }

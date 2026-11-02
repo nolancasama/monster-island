@@ -11,7 +11,7 @@ export interface ElementObject {
   on?: Partial<Record<ElementEvent, { becomes: string; secret?: string }>>;
 }
 
-export const SECRET_IDS = ["emberThicket", "bubboLedgeKey", "leafyStatues", "puffLeaves", "comboCrateLift", "comboFurnace"] as const;
+export const SECRET_IDS = ["emberThicket", "bubboLedgeKey", "leafyStatues", "puffLeaves", "comboCrateLift", "comboFurnace", "groveDryReeds", "canopyDryReeds"] as const;
 export type SecretId = (typeof SECRET_IDS)[number];
 
 /** Optional pockets on existing land. Closed footprints enclose the reward so
@@ -29,6 +29,8 @@ export const SECRET_SITES: Record<SecretId, {
   puffLeaves: { stage: "canopy", blocker: { kind: "box", x: 112, z: -212, hx: 1.9, hz: 2.1, yaw: 0 }, chest: { x: 112, z: -212.5 }, approach: { x: 109.5, z: -208.5 } },
   comboCrateLift: { stage: "grove", blocker: { kind: "box", x: 42, z: -234, hx: 1.6, hz: 1.8, yaw: 0 }, chest: { x: 42, z: -233.5 }, approach: { x: 43, z: -231 } },
   comboFurnace: { stage: "coast", blocker: { kind: "box", x: 83, z: -276, hx: 1.8, hz: 1.6, yaw: 0 }, chest: { x: 83, z: -276.8 }, approach: { x: 77.4, z: -274 } },
+  groveDryReeds: { stage: "grove", blocker: { kind: "box", x: 65, z: -221, hx: 1.5, hz: 2, yaw: 0 }, chest: { x: 66.2, z: -221 }, approach: { x: 60, z: -221 } },
+  canopyDryReeds: { stage: "canopy", blocker: { kind: "box", x: 115, z: -211, hx: 1.5, hz: 2, yaw: 0 }, chest: { x: 115, z: -211.5 }, approach: { x: 114, z: -205.4 } },
 };
 
 export const ELEMENT_OBJECTS: readonly ElementObject[] = [
@@ -39,6 +41,8 @@ export const ELEMENT_OBJECTS: readonly ElementObject[] = [
   { id: "puffLeaves", world: "home", x: 112, z: -208, r: .9, tags: ["windy", "trigger"], on: { wind: { becomes: "cleared", secret: "puffLeaves" } } },
   { id: "comboCrateLift", world: "home", x: 43, z: -229, r: .7, tags: ["grabbable", "liftable"], on: { grab: { becomes: "onPad" }, lift: { becomes: "raised", secret: "comboCrateLift" } } },
   { id: "comboFurnace", world: "home", x: 79.8, z: -274, r: .8, tags: ["flammable", "windy", "anchored"], on: { burn: { becomes: "lit" }, wind: { becomes: "open", secret: "comboFurnace" } } },
+  { id: "groveDryReeds", world: "home", x: 62, z: -221, r: .7, tags: ["flammable"], on: { burn: { becomes: "burning", secret: "groveDryReeds" } } },
+  { id: "canopyDryReeds", world: "home", x: 115, z: -206.5, r: .7, tags: ["flammable"], on: { burn: { becomes: "burning", secret: "canopyDryReeds" } } },
 ];
 
 export const EVENT_TAG: Record<ElementEvent, ElementTag> = { burn: "flammable", grab: "grabbable", wind: "windy", lift: "liftable", bomb: "breakable" };

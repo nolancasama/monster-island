@@ -7,7 +7,7 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, type ZoneId } from "../world/lowland";
+import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
@@ -171,6 +171,22 @@ function observatoryApproachUnlocked(a: Act3): boolean {
   return observatoryReached(a);
 }
 
+/** Loading only: search the saved area before falling back to a checkpoint.
+ * Ring spacing bounds the error to a tenth of a metre; no search crosses an
+ * area boundary or projects more than eight metres across changed terrain. */
+function nearbySavedFloor(x: number, z: number, zone: ZoneId | null, gates: ReturnType<typeof gatesOf>): { x: number; z: number } | null {
+  if (!zone || !Number.isFinite(x) || !Number.isFinite(z)) return null;
+  for (let ring = 1; ring <= 80; ring++) {
+    const distance = ring / 10, samples = Math.ceil(Math.PI * 2 * distance / .15);
+    for (let i = 0; i < samples; i++) {
+      const angle = i / samples * Math.PI * 2;
+      const px = x + Math.cos(angle) * distance, pz = z + Math.sin(angle) * distance;
+      if (zoneAt(px, pz) === zone && isWalkable(px, pz, gates, PLAYER_R)) return { x: px, z: pz };
+    }
+  }
+  return null;
+}
+
 /** Valid floor beyond a puzzle can still be unreachable floor. Check the side
  * of every route crossing as well as collision at the saved point itself. */
 function cloudSavePositionUnlocked(a: Act3, x: number, z: number): boolean {
@@ -287,7 +303,13 @@ export function decodeSave(text: string | null): SaveData | null {
     // causeway positions there; only the removed approach requires relocation.
     const oldTrail = Math.abs(x - 76) <= 1.9 && z <= -200 && z > -242.5;
     const lowlandSave = p.act2.descended && (z < CLIFF_FOOT_Z + 1 || (!Number.isFinite(z) && p.act2.zone !== null));
-    if (lowlandSave && ((legacyForest && (oldCamp || oldTrail)) || !isWalkable(x, z, gates, PLAYER_R))) {
+    const legacyRelocation = legacyForest && (oldCamp || oldTrail);
+    const removedFloor = !lowlandWalkable(x, z, { ...gates, cleared: STAGES, solved: [...p.solved, ...ACT2_OBSTACLES] }, PLAYER_R);
+    const nearby = lowlandSave && !legacyRelocation && removedFloor && !isWalkable(x, z, gates, PLAYER_R)
+      ? nearbySavedFloor(x, z, p.act2.zone, gates) : null;
+    if (nearby) {
+      safe = nearby;
+    } else if (lowlandSave && (legacyRelocation || !isWalkable(x, z, gates, PLAYER_R))) {
       ({ x, z } = p.act2.checkpoint === "camp" ? CAMP2.rest : CLIFF_ROPE.foot);
       // These authored wake points are tested against the same gates and solids
       // as movement; projection is only a guard against future prop changes.

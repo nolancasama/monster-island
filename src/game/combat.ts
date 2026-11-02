@@ -69,6 +69,8 @@ export interface EnemyRt {
   homeZ: number;
   x: number;
   z: number;
+  /** Last real floor before forced motion entered a pond or void. */
+  lastGround: { x: number; z: number };
   yaw: number;
   /** Knock-back velocity (decays). */
   kx: number;
@@ -222,7 +224,7 @@ let worldEnemies: Partial<Record<"home" | "cloud", EnemyRt[]>> = {};
 function spawnEnemy(i: number, cloud = false): EnemyRt {
   const s = (cloud ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS)[i];
   return {
-    i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
+    i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, lastGround: { x: s.x, z: s.z }, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
     hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, flight: null, step: 0
   };
@@ -1216,6 +1218,10 @@ function startControl(e: EnemyRt, kind: Control["kind"], duration: number, owner
     pushFx("shrug", e.x, standY(e.x, e.z, getGame().progress.solved) + 0.8, e.z, 0, 0, 0, 1);
     return false;
   }
+  const progress = getGame().progress, solved = cb.world === "cloud" ? progress.act3.puzzles : progress.solved;
+  if (!hazardAt(e.x, e.z, cb.world, solved) && isWalkable(e.x, e.z, gatesOf(progress), 0)) {
+    e.lastGround.x = e.x; e.lastGround.z = e.z;
+  }
   e.control = { kind, t0: rt.time, until: rt.time + duration, peak, source: nextId++ };
   e.flight = { owner, victims: [], x: rt.player.x, z: rt.player.z, yaw: rt.player.yaw, startX: e.x, startZ: e.z };
   e.fall = null;
@@ -1263,6 +1269,9 @@ function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: (() => bool
   const progress = getGame().progress, gates = gatesOf(progress), radius = ENEMIES[e.kind].radius;
   const solved = cb.world === "cloud" ? progress.act3.puzzles : progress.solved;
   const fromX = e.x, fromZ = e.z, count = Math.max(1, Math.ceil(Math.hypot(x - fromX, z - fromZ) / 0.1));
+  if (!hazardAt(fromX, fromZ, cb.world, solved) && isWalkable(fromX, fromZ, gates, 0)) {
+    e.lastGround.x = fromX; e.lastGround.z = fromZ;
+  }
   for (let i = 1; i <= count && alive(e); i++) {
     const nx = fromX + (x - fromX) * i / count, nz = fromZ + (z - fromZ) * i / count;
     const hazard = hazardAt(nx, nz, cb.world, solved);
@@ -1270,9 +1279,10 @@ function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: (() => bool
     e.x = nx; e.z = nz;
     if (hazard) {
       pushFx("splashKo", nx, standY(nx, nz, getGame().progress.solved) + e.air, nz, 0, 0, 0, 1);
-      knockOut(e);
+      knockOut(e, e.lastGround);
       return true;
     }
+    e.lastGround.x = nx; e.lastGround.z = nz;
     if (collision === "weapon") weaponCollisions(e);
     else if (collision?.() === false) return true;
   }
@@ -1581,7 +1591,7 @@ function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number
   }
 }
 
-function knockOut(e: EnemyRt) {
+function knockOut(e: EnemyRt, rewardAt?: { x: number; z: number }) {
   const def = spawnDef(e);
   e.state = "ko";
   e.timer = 0.9;
@@ -1617,12 +1627,13 @@ function knockOut(e: EnemyRt) {
   // Rewards pop out: coins always, sometimes food or amber.
   const coins = def.coins[0] + Math.floor(Math.random() * (def.coins[1] - def.coins[0] + 1));
   const pieces = Math.min(4, Math.max(1, Math.round(coins / 3)));
-  for (let k = 0; k < pieces; k++) dropAt(e.x, e.z, "coin", Math.round(coins / pieces));
+  const rewardX = rewardAt?.x ?? e.x, rewardZ = rewardAt?.z ?? e.z;
+  for (let k = 0; k < pieces; k++) dropAt(rewardX, rewardZ, "coin", Math.round(coins / pieces), undefined, !rewardAt);
   if (Math.random() < def.foodChance) {
     const foods: FoodId[] = ["apples", "fish", "berries", "meat"];
-    dropAt(e.x, e.z, "food", 1, foods[Math.floor(Math.random() * foods.length)]);
+    dropAt(rewardX, rewardZ, "food", 1, foods[Math.floor(Math.random() * foods.length)], !rewardAt);
   }
-  if (Math.random() < def.amberChance) dropAt(e.x, e.z, "amber", 1);
+  if (Math.random() < def.amberChance) dropAt(rewardX, rewardZ, "amber", 1, undefined, !rewardAt);
   hint("coins");
 }
 
@@ -1640,9 +1651,9 @@ export function debugKillZone() {
   }
 }
 
-function dropAt(x: number, z: number, kind: Drop["kind"], value: number, food?: FoodId) {
+function dropAt(x: number, z: number, kind: Drop["kind"], value: number, food?: FoodId, scatter = true) {
   const a = Math.random() * Math.PI * 2;
-  const v = 1.2 + Math.random() * 1.4;
+  const v = scatter ? 1.2 + Math.random() * 1.4 : 0;
   cb.drops.push({ id: nextId++, kind, food, value, x, z, y: standY(x, z, getGame().progress.solved) + 0.5, vy: 4 + Math.random() * 1.5, vx: Math.cos(a) * v, vz: Math.sin(a) * v, t0: rt.time, magnet: false });
   if (cb.drops.length > 60) cb.drops.shift();
 }
@@ -1832,10 +1843,11 @@ function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | n
   if (e.slowUntil > rt.time) { nx = e.x + (nx - e.x) * 0.4; nz = e.z + (nz - e.z) * 0.4; }
   const q = moveCircle(e.x, e.z, nx, nz, ENEMIES[e.kind].radius, gatesOf(getGame().progress), false, undefined, moveOut);
   if (combatZoneAt(q.x, q.z) !== e.zone) return 0;
-  if (e.panic && hazardAt(q.x, q.z, cb.world, cb.world === "cloud" ? getGame().progress.act3.puzzles : getGame().progress.solved)) return 0;
+  if (hazardAt(q.x, q.z, cb.world, cb.world === "cloud" ? getGame().progress.act3.puzzles : getGame().progress.solved)) return 0;
   const moved = Math.hypot(q.x - e.x, q.z - e.z);
   e.x = q.x;
   e.z = q.z;
+  e.lastGround.x = e.x; e.lastGround.z = e.z;
   e.step += moved * 2.4;
   if (face !== null) {
     let d = face - e.yaw;

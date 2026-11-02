@@ -3,7 +3,7 @@ import { basicAttack, cb, combatTick, elementObjectStates, resetCombat, specialA
 import { newProgress } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
-import { ELEMENT_OBJECTS, SECRET_SITES, secretOf } from "./world/elementObjects";
+import { ELEMENT_OBJECTS, SECRET_IDS, SECRET_SITES, secretOf } from "./world/elementObjects";
 import { STAGES, zoneAt } from "./world/lowland";
 import { standY } from "./world/collision";
 import { audio } from "../audio/audio";
@@ -93,10 +93,18 @@ describe("shared move/object dispatch", () => {
     expect(state("comboFurnace")).toMatchObject({ state: "lit", remaining: 8 });
     approach("comboFurnace", "puff");
     expect(basicAttack()).toBe(true);
-    expect(getGame().progress.act2.secrets).toHaveLength(6);
+    for (const id of ["groveDryReeds", "canopyDryReeds"]) {
+      approach(id, "ember");
+      expect(basicAttack()).toBe(true);
+      expect(state(id).state).toBe("burning");
+      cb.hold = false;
+      advance(1.5);
+      expect(getGame().progress.act2.secrets).toContain(id);
+    }
+    expect(getGame().progress.act2.secrets).toHaveLength(SECRET_IDS.length);
     expect(cb.vitals.mp).toEqual({ ember: 100, bubbo: 100, leafy: 100, puff: 100 });
-    expect(rt.effects.filter(e => e.kind === "sparkle")).toHaveLength(6);
-    expect(vi.mocked(audio.play).mock.calls.filter(([name]) => name === "sparkle")).toHaveLength(6);
+    expect(rt.effects.filter(e => e.kind === "sparkle")).toHaveLength(SECRET_IDS.length);
+    expect(vi.mocked(audio.play).mock.calls.filter(([name]) => name === "sparkle")).toHaveLength(SECRET_IDS.length);
     expect(getGame().toasts.at(-1)).toMatchObject({ en: "Secret found!", ja: "ひみつを みつけた!" });
     const completed = getGame().progress.act2.secrets;
     resetCombat();

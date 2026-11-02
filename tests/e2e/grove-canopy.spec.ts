@@ -181,3 +181,34 @@ test("Bubbo carries the player over first, then only the pads rise, and the retu
   await page.screenshot({ path: `${SHOTS}/b-reloaded-pads.png` });
   expect(errors).toEqual([]);
 });
+
+test("views of the expanded stages, in budget", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 1272 });
+  await page.goto("about:blank");
+  const { readFileSync } = await import("node:fs");
+  await page.setContent(`<body style="margin:0;background:#000">${readFileSync(".tmp/maps/lowland.svg", "utf8")}</body>`);
+  await page.locator("svg").screenshot({ path: `${SHOTS}/map.png` });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  const save = JSON.parse(forestSave("puff"));
+  save.progress.solved.push("groveLilies", "canopyVines", "canopyRope");
+  save.progress.act2.cleared = ["forest1", "grove", "canopy"];
+  await page.addInitScript(s => localStorage.setItem("mi.save.v4", s), JSON.stringify(save));
+  const errors = await boot(page);
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, s => s.mode === "explore", 30_000, "loaded");
+  await hook(page, "settleAct2Unlocks");
+  const views: Array<[string, number, number, number]> = [
+    ["grove-entry", 48, -210, Math.PI], ["grove-east", 62, -222, Math.PI], ["grove-lobe", 58, -198, Math.PI], ["grove-south", 50, -236, Math.PI],
+    ["canopy-entry", 100, -207, Math.PI], ["canopy-gap", 106, -214.6, Math.PI], ["canopy-broken", 104, -220.5, Math.PI], ["canopy-ring", 92, -228, Math.PI], ["canopy-north", 106, -236, Math.PI],
+  ];
+  for (const [name, x, z, yaw] of views) {
+    await hook(page, "teleport", x, z, yaw);
+    await hook(page, "combatFixture", { enemies: [] });
+    await page.waitForTimeout(1500);
+    const s = await state(page) as unknown as { perf?: { calls: number; triangles: number }; player: { x: number; z: number } };
+    console.log(name, s.player.x.toFixed(1), s.player.z.toFixed(1), JSON.stringify(s.perf ?? null));
+    await page.screenshot({ path: `${SHOTS}/c-${name}.png` });
+  }
+  expect(errors).toEqual([]);
+});

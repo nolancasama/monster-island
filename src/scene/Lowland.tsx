@@ -36,6 +36,7 @@ import {
   lilyPadGeometry,
   updateLilyPadMatrices,
   lowlandPropsGeometry,
+  lowlandSceneryY,
   lowlandSpots,
   lowlandTerrainTiles,
   lowlandWaterGeometry,
@@ -95,7 +96,7 @@ function TiledInstances({ geometry, spots, material, far = FAR }: { geometry: TH
 
 function Tile({ geometry, spots, material, far }: { geometry: THREE.BufferGeometry; spots: Spot[]; material: THREE.Material; far: number }) {
   const ref = useRef<THREE.InstancedMesh>(null);
-  const items = useMemo(() => spots.map((s) => ({ ...s, y: groundY(s.x, s.z) - 0.05, scale: s.s })), [spots]);
+  const items = useMemo(() => spots.map((s) => ({ ...s, y: lowlandSceneryY(s.x, s.z) - 0.05, scale: s.s })), [spots]);
   const object = useMemo(() => new THREE.Object3D(), []);
   useEffect(() => {
     const m = ref.current;
@@ -395,8 +396,8 @@ function StageBarrier({ gate }: { gate: (typeof STAGE_EXITS)[number] }) {
     const m = ref.current;
     if (!m) return;
     m.visible = near(gate.x, gate.z) && open.current < 0.995;
-    m.position.y = groundY(gate.x, gate.z) - open.current * 4.3;
+    m.position.y = lowlandSceneryY(gate.x, gate.z) - open.current * 4.3;
     m.scale.y = Math.max(0.01, 1 - open.current);
   });
-  return <mesh ref={ref} geometry={geometry} material={flatMat} position={[gate.x, groundY(gate.x, gate.z), gate.z]} rotation={[0, gate.orientation === "z" ? Math.PI / 2 : 0, 0]} />;
+  return <mesh ref={ref} geometry={geometry} material={flatMat} position={[gate.x, lowlandSceneryY(gate.x, gate.z), gate.z]} rotation={[0, gate.orientation === "z" ? Math.PI / 2 : 0, 0]} />;
 }

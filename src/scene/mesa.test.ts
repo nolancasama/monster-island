@@ -1,11 +1,39 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { groundY } from "../game/world/island";
-import { inMesa, MESA_OUTLINE } from "../game/world/lowland";
-import { MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaCameraLift, mesaFloorY } from "../game/world/mesa";
+import { inMesa, MESA_BOUNDS, MESA_OUTLINE } from "../game/world/lowland";
+import { MESA_CENTER, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaCameraLift, mesaFloorY } from "../game/world/mesa";
 import { mesaGeometry } from "./models/lowland";
 
 describe("central mesa", () => {
+  it("derives its bounds from a keyhole outline star-shaped about the mesh fan centre", () => {
+    expect(MESA_BOUNDS).toEqual({
+      x0: Math.min(...MESA_OUTLINE.map(p => p[0])), x1: Math.max(...MESA_OUTLINE.map(p => p[0])),
+      z0: Math.min(...MESA_OUTLINE.map(p => p[1])), z1: Math.max(...MESA_OUTLINE.map(p => p[1])),
+    });
+    expect(MESA_BOUNDS.z0).toBe(-231);
+    const spanAt = (z: number) => {
+      const xs: number[] = [];
+      MESA_OUTLINE.forEach(([ax, az], i) => {
+        const [bx, bz] = MESA_OUTLINE[(i + 1) % MESA_OUTLINE.length];
+        if ((az > z) !== (bz > z)) xs.push(ax + (bx - ax) * (z - az) / (bz - az));
+      });
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(spanAt(-218)).toBeGreaterThanOrEqual(9);
+    expect(spanAt(-218)).toBeLessThanOrEqual(11);
+    expect(spanAt(-197)).toBeGreaterThan(spanAt(-218) * 1.8);
+    for (let i = 0; i < MESA_OUTLINE.length; i++) {
+      const [ax, az] = MESA_OUTLINE[i], [bx, bz] = MESA_OUTLINE[(i + 1) % MESA_OUTLINE.length];
+      for (let s = 0; s <= 20; s++) for (let t = 0; t <= 20; t++) {
+        const x = ax + (bx - ax) * s / 20, z = az + (bz - az) * s / 20;
+        const px = MESA_CENTER[0] + (x - MESA_CENTER[0]) * t / 20;
+        const pz = MESA_CENTER[1] + (z - MESA_CENTER[1]) * t / 20;
+        expect(inMesa(px, pz, .0001), `fan at ${px},${pz}`).toBe(true);
+      }
+    }
+  });
+
   it("merges rock, trees and ruins into one deterministic draw under six thousand triangles", () => {
     const a = mesaGeometry(), b = mesaGeometry();
     expect(a.groups).toHaveLength(0);
@@ -54,7 +82,7 @@ describe("central mesa", () => {
         expect(ray.intersectObject(mesh).length, `${x},${y},${z}`).toBeGreaterThan(0);
       }
     }
-    for (const [x, z] of [[70, -207], [82, -204], [77, -217], [77, -222]]) {
+    for (const [x, z] of [[77, -205], [77, -212], [77, -215], [76, -219]]) {
       const ray = new THREE.Raycaster(new THREE.Vector3(x, 40, z), new THREE.Vector3(0, -1, 0));
       const y = ray.intersectObject(mesh)[0].point.y;
       expect(y, `plateau at ${x},${z}`).toBeGreaterThanOrEqual(MESA_PLATEAU_Y - .29);

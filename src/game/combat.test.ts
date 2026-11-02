@@ -976,7 +976,51 @@ describe("elemental J simulation", () => {
     expect(cb.zones.defeated.grove).toContain(e.i);
     expect(getGame().progress.act2.cleared).toContain("grove");
     expect(cb.drops.some(d => d.kind === "coin")).toBe(true);
+    for (const drop of cb.drops) {
+      expect(hazardAt(drop.x, drop.z, "home", getGame().progress.solved)).toBeNull();
+      expect(isWalkable(drop.x, drop.z, gatesOf(getGame().progress), 0)).toBe(true);
+      expect(drop.x).toBeCloseTo(e.lastGround.x);
+      expect(drop.z).toBeCloseTo(e.lastGround.z);
+    }
     expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
+  });
+
+  it("a Canopy void uses the same forced-motion KO and leaves its reward on the last floor", () => {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(e => e.zone === "canopy")!;
+    Object.assign(e, { kind: "snapjaw", x: 106, z: -215.7, hp: 100, state: "recover", timer: 99 });
+    Object.assign(rt.player, { x: 106, z: -213.7, yaw: Math.PI });
+    cb.zones.current = "canopy";
+    friend("puff");
+    expect(hazardAt(e.x, e.z, "home")).toBeNull();
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.15);
+    expect(e.state).toBe("ko");
+    expect(cb.zones.defeated.canopy).toContain(e.i);
+    expect(hazardAt(e.x, e.z, "home")?.kind).toBe("fall");
+    expect(cb.drops.length).toBeGreaterThan(0);
+    for (const drop of cb.drops) {
+      expect(hazardAt(drop.x, drop.z, "home")).toBeNull();
+      expect(isWalkable(drop.x, drop.z, gatesOf(getGame().progress), 0)).toBe(true);
+      expect(Math.hypot(drop.x - e.x, drop.z - e.z)).toBeLessThan(.2);
+    }
+  });
+
+  it.each(["chase", "lunge", "return"] as const)("autonomous %s motion stops at a Canopy void", state => {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(e => e.zone === "canopy")!;
+    Object.assign(e, { kind: "snapjaw", x: 106, z: -215.3, homeX: 106, homeZ: -220.2,
+      hp: 100, state, timer: 2, dx: 0, dz: -1, kx: 0, kz: 0 });
+    Object.assign(rt.player, { x: 106, z: -220.2, yaw: 0 });
+    cb.zones.current = "canopy";
+    for (let frame = 0; frame < 30; frame++) {
+      advanceCombat(1 / 30);
+      expect(hazardAt(e.x, e.z, "home")).toBeNull();
+      expect(e.state).not.toBe("ko");
+      expect(e.z).toBeGreaterThan(-216);
+    }
   });
 });
 

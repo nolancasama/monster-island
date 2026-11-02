@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { BRIDGE, groundY } from "../game/world/island";
-import { CANOPY_GAPS, gapDeck, lowlandBridgeY } from "../game/world/lowland";
+import { CANOPY_GAPS, canopySurfaceY, gapDeck, lowlandBridgeY } from "../game/world/lowland";
 import { bridgeDeckY, isWalkable, moveCircle, PLAYER_R, standY, type Gates } from "../game/world/collision";
 import { bridgeFrameGeometry, bridgeVinesGeometry } from "./models/forest";
 import { ropeBridgeGeometry, vineBridgeGeometry } from "./models/lowland";
@@ -52,8 +52,10 @@ describe("continuous bank-to-bank bridge surfaces", () => {
           expect(Math.abs(standY(x, z, all.solved) - deck.top(x, z)), `${id}: feet at ${x},${z}`).toBeLessThan(.02);
         }
         for (const z of [deck.z0, deck.z1]) {
-          expect(standY(deck.x + dx, z, all.solved)).toBeCloseTo(groundY(deck.x + dx, z), 5);
-          expect(Math.abs(deck.top(deck.x + dx, z) - groundY(deck.x + dx, z))).toBeLessThan(.02);
+          const x = deck.x + dx, bank = id === "bridge" ? groundY(x, z) : canopySurfaceY(x, z);
+          expect(standY(x, z, all.solved)).toBeCloseTo(bank, 5);
+          expect(Math.abs(deck.top(x, z) - bank)).toBeLessThan(.02);
+          if (id !== "bridge") expect(bank - groundY(x, z)).toBeGreaterThanOrEqual(8);
         }
       }
       let z = direction > 0 ? deck.z0 - .5 : deck.z1 + .5;

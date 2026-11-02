@@ -4,13 +4,14 @@ import * as THREE from "three";
 import { cb } from "../game/combat";
 import { getGame } from "../game/store";
 import { rt } from "../game/runtime";
-import { groundY } from "../game/world/island";
+import { standY } from "../game/world/collision";
 import { ELEMENT_OBJECTS, SECRET_IDS, SECRET_SITES } from "../game/world/elementObjects";
 
-// Five draws across all six sites, including instanced autumn leaf quads.
+// Five draws across all sites, including instanced autumn leaf quads.
 // Flames share ElementEffects' existing sprite draw. Scratch storage is mount-only.
 const CAP = 1024;
 const WOOD = "#956038", DARK_WOOD = "#523824", STONE = "#999c91", DARK = "#302b27";
+const groundY = (x: number, z: number) => standY(x, z, getGame().progress.solved);
 
 function makeBatch(geometry: THREE.BufferGeometry, material: THREE.Material) {
   const mesh = new THREE.InstancedMesh(geometry, material, CAP);
@@ -134,7 +135,22 @@ export function Secrets() {
 
       // Low rims show the exact rectangular pocket extent, never hiding the reward.
       box(x, y + .015, z, hx * 2, .03, hz * 2, s.id === "comboCrateLift" ? DARK_WOOD : DARK);
-      if (s.id === "emberThicket") {
+      if (s.id === "groveDryReeds" || s.id === "canopyDryReeds") {
+        // Dry reeds fill the exact blocker footprint and withdraw as the saved
+        // burn completes. They reuse the thicket's instanced wood and cones.
+        if (shut > .002) for (let ix = 0; ix <= 6; ix++) for (let iz = 0; iz <= 8; iz++) {
+          const px = x - hx + ix * hx / 3, pz = z - hz + iz * hz / 4;
+          const base = groundY(px, pz), height = (.95 + ((ix + iz * 3) % 4) * .14) * shut;
+          box(px, base + height / 2, pz, .13 * shut, height, .13 * shut, "#b89549", 0, 0, Math.sin(ix * 2 + iz) * .12);
+          part("cone", px, base + height, pz, .16 * shut, .3 * shut, .14 * shut, "#d0b06b");
+        }
+        if (k > 0) box(x, y + .025, z, hx * 2, .05, hz * 2, "#615951");
+        for (let i = 0; i < 5; i++) {
+          const a = i * 2.39996, r = .45 * Math.sqrt((i + .5) / 5);
+          const height = (1 - k) * .9;
+          box(ox + Math.cos(a) * r, oy + height / 2, oz + Math.sin(a) * r, .13, height, .13, "#b89549");
+        }
+      } else if (s.id === "emberThicket") {
         for (let i = 0; i < 12; i++) {
           const a = i * 2.39996, r = .75 * Math.sqrt((i + .5) / 12);
           thorn(ox + Math.cos(a) * r, oz + Math.sin(a) * r, 1 - k * .86, a);

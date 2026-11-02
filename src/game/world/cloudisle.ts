@@ -4,6 +4,8 @@ import type { CompanionId } from "../data/combat";
 import type { AbilityId } from "../types";
 import type { PhraseId } from "../logic/english";
 import { nearestOnTrail, type WalkShape } from "./lowland";
+import { COAST_SEA_BRIDGE } from "./hazards";
+export { CLOUD_CHASMS, COAST_SEA_BRIDGE } from "./hazards";
 
 /** Cloud Isle is a separate world. North/up-mountain is +z. New slices append
  * zones and routes here; closed route mouths never imply playable ground. */
@@ -33,7 +35,6 @@ export const CLOUD_SPAWNS: Record<CloudArea, Vec2> = {
   ancientObservatory: { x: 0, z: 408 }, stormBeacon: { x: 0, z: 430 },
 };
 export const COAST_TRAIL: Array<[number, number]> = [[0, 12], [6, 28], [-12, 46], [-24, 65], [-16, 82], [10, 96], [28, 113], [20, 132], [2, 146], [0, 158]];
-export const COAST_SEA_BRIDGE = trail([[-38, 65], [-45, 69]], 1.6);
 export const COAST_ROCKS = [[-6, 32], [-14, 52], [-29, 76], [18, 102], [32, 126], [6, 146], [-32, 176], [-24, 188]] as const;
 export const HOLLOW_APPROACH: Array<[number, number]> = [[0, 158], [-12, 169], [-27, 177], [-29, 187], [-19, 185], [-10, 190], [-12, 193]];
 export const BACK_TUNNEL: Array<[number, number]> = [[-15, 202], [-17, 212], [-32, 223], [-29, 237], [-17, 244], [-20, 253], [-7, 261], [0, 265]];
@@ -141,10 +142,6 @@ export const CANOPY_GLIDE = { from: { x: -38, z: 353.9 }, to: { x: -38, z: 358.1
 export const CLOUD_DECKS: readonly WalkShape[] = CANOPY_GUST_SPUR;
 /** Gaps a puzzle spans (a bridge, a scripted glide): the terrain drops away
  * beneath them so they read as gaps, never as level ground. */
-export const CLOUD_CHASMS = CLOUD_PUZZLE_BARRIERS.filter(b => b.puzzle === "canopyVine" || b.puzzle === "canopyGlide")
-  .map(b => b.puzzle === "canopyGlide"
-    ? { x0: b.x0, x1: b.x1, z0: CANOPY_GLIDE.from.z + 1.1, z1: CANOPY_GLIDE.to.z - 1.1 }
-    : { x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 });
 export const CLOUD_ELECTRIC_PANELS = [
   { x: 32.5, z: 370, w: 3, d: 2, phase: 0 },
   { x: 29, z: 379, w: 3, d: 2, phase: 1.2 },

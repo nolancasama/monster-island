@@ -3,9 +3,9 @@ import { PLAYER_R, isWalkable, moveCircle, standY, type Gates } from "./collisio
 import { groundY } from "./island";
 import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
-  FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck, canopyRaise,
+  FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, lowlandSolids,
-  GROVE_CROSSING, ISLET, POND, POND_Y, LILY_PAD_R, lilyPadRise,
+  GROVE_CROSSING, ISLET, POND, POND_Y, LILY_PAD_R, lilyPadRise, CANOPY_HEIGHT, canopyDeckY,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
@@ -18,9 +18,9 @@ const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava"
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
 
 /** Flood the lowland from the foot of the rope with real collision moves (optionally keeping out of some areas). */
-function reachable(g: Gates, avoid: ZoneId[] = []) {
+function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = CLIFF_ROPE.foot) {
   const S = 0.6;
-  const start = [Math.round(CLIFF_ROPE.foot.x / S), Math.round(CLIFF_ROPE.foot.z / S)];
+  const start = [Math.round(origin.x / S), Math.round(origin.z / S)];
   const seen = new Set<string>([start.join(",")]);
   const queue = [start];
   while (queue.length) {
@@ -28,10 +28,10 @@ function reachable(g: Gates, avoid: ZoneId[] = []) {
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = i + di, nj = j + dj, key = `${ni},${nj}`;
       const x = ni * S, z = nj * S;
-      if (seen.has(key) || !isWalkable(x, z, g, PLAYER_R)) continue;
+      if (seen.has(key) || !isWalkable(x, z, g, radius)) continue;
       const zone = zoneAt(x, z);
       if (zone && avoid.includes(zone)) continue;
-      const p = moveCircle(i * S, j * S, x, z, PLAYER_R, g);
+      const p = moveCircle(i * S, j * S, x, z, radius, g);
       if (Math.hypot(p.x - x, p.z - z) > 0.05) continue;
       seen.add(key);
       queue.push([ni, nj]);
@@ -160,7 +160,7 @@ describe("the lowland below the sanctuary", () => {
 
   it("replaces forest and coast/causeway spawns without changing stage-clear totals", () => {
     expect(STAGES.map(zone => [zone, ENEMY_SPAWNS.filter(e => e.zone === zone && !e.optional).length])).toEqual([
-      ["forest1", 5], ["grove", 8], ["canopy", 5], ["causeway", 7], ["coast", 4],
+      ["forest1", 5], ["grove", 10], ["canopy", 9], ["causeway", 7], ["coast", 4],
     ]);
     for (const zone of ["forest1", "grove", "canopy"] as const) {
       const ranged = ENEMY_SPAWNS.filter(e => e.zone === zone && e.kind === "forestSpitter");
@@ -190,6 +190,23 @@ describe("the lowland below the sanctuary", () => {
 });
 
 describe("first-clear exit collision", () => {
+  it("keeps the expanded stages separate and both puzzle bridges required at walking and mounted radii", () => {
+    const open = gates(["groveLilies", "canopyVines", "canopyRope"]);
+    for (const radius of [PLAYER_R, .7]) {
+      const grove = reachable(open, ["forest1", "causeway", "coast", "port"], radius, { x: 51, z: -211 });
+      for (const key of grove.seen) {
+        const [i, j] = key.split(",").map(Number);
+        expect(zoneAt(i * .6, j * .6), `direct Grove crossing at radius ${radius}`).not.toBe("canopy");
+      }
+      expect(reachable(open, ["grove", "canopy"], radius).near(76, -249), `arm shortcut ${radius}`).toBe(false);
+      for (const solved of [[], ["canopyVines"], ["canopyRope"]] as ObstacleId[][])
+        expect(reachable(gates(solved), ["grove"], radius).near(80.5, -317.5, 2.8), `bridge bypass ${radius}: ${solved}`).toBe(false);
+      const canopy = reachable(open, ["grove"], radius);
+      expect(canopy.near(80.5, -317.5, 2.8), `Canopy route ${radius}`).toBe(true);
+      const groveRoute = reachable(gates(), ["canopy"], radius);
+      expect(groveRoute.near(80.5, -317.5, 2.8), `Grove needs no Bubbo ${radius}`).toBe(true);
+    }
+  }, 60000);
   it("blocks the forest exit with every approach, while the rope and every required enemy remain reachable", () => {
     const g={...gates(),cleared:[]};
     const reach=reachable(g);
@@ -358,7 +375,7 @@ describe("the U around the reserved mesa", () => {
     for (const id of ["canopyVines", "canopyRope"] as const) {
       const deck = gapDeck(id), gap = CANOPY_GAPS[id];
       expect(deck).toEqual({ kind: "rect", x0: 105.05, x1: 106.95, z0: gap.z0 - 1, z1: gap.z1 + 1 });
-      for (const z of [deck.z0, deck.z1]) expect(canopyRaise(gap.x, z)).toBeCloseTo(4.5);
+      for (const z of [deck.z0, deck.z1]) expect(canopyDeckY(gap.x, z) - lowlandY(gap.x, z)).toBeCloseTo(CANOPY_HEIGHT);
     }
   });
 

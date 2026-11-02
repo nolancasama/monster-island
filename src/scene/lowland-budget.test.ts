@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { groundY } from "../game/world/island";
-import { CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible } from "../game/world/lowland";
+import { blocked } from "../game/world/collision";
+import { CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible, lowlandWalkable } from "../game/world/lowland";
 import { mesaCameraLift } from "../game/world/mesa";
 import { NPCS, NPC_OF } from "../game/data/town";
 import { cameraProfileAt, DEFAULT_CAMERA } from "./cameraProfiles";
@@ -9,7 +10,7 @@ import { conformBridge } from "./models/bridge";
 import { CHEST_HINGE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import {
   cliffFaceGeometry, cliffRopeGeometry, giantFernGeometry, lilyPadGeometry,
-  lowlandPropsGeometry, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
+  lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
   mesaGeometry, npcGeometry, primevalTreeGeometry, reedGeometry, ropeBridgeGeometry,
   spatialGeometry, stageBarrierGeometry, townGeometry, treeFernGeometry, vineBridgeGeometry,
   type Spot,
@@ -45,7 +46,7 @@ function instances(name: string, geometry: THREE.BufferGeometry, spots: Spot[], 
     const bounds = new THREE.Sphere().makeEmpty();
     for (const spot of tile) {
       rotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, spot.r);
-      matrix.compose(position.set(spot.x, groundY(spot.x, spot.z) - .05, spot.z), rotation, scale.set(spot.s, spot.sy ?? spot.s, spot.s));
+      matrix.compose(position.set(spot.x, lowlandSceneryY(spot.x, spot.z) - .05, spot.z), rotation, scale.set(spot.s, spot.sy ?? spot.s, spot.s));
       bounds.union(geometry.boundingSphere!.clone().applyMatrix4(matrix));
     }
     draws.push({ name, bounds, triangles: triangles(geometry) * tile.length, far, spots: tile });
@@ -66,7 +67,7 @@ beforeAll(() => {
   instances("ferns", giantFernGeometry(), spots.ferns, 60);
   instances("reeds", reedGeometry(), spots.reeds, 50);
   for (const gate of STAGE_EXITS)
-    add("barrier", stageBarrierGeometry(gate), gate.x, groundY(gate.x, gate.z), gate.z, gate.orientation === "z" ? Math.PI / 2 : 0);
+    add("barrier", stageBarrierGeometry(gate), gate.x, lowlandSceneryY(gate.x, gate.z), gate.z, gate.orientation === "z" ? Math.PI / 2 : 0);
   const lilies = lilyPadGeometry();
   geometries.add(lilies);
   lilies.computeBoundingSphere();
@@ -80,7 +81,7 @@ beforeAll(() => {
     add("bridge", geometry, gap.x, y, (deck.z0 + deck.z1) / 2);
   }
   for (const chest of CHESTS) {
-    const y = groundY(chest.x, chest.z);
+    const y = lowlandSceneryY(chest.x, chest.z);
     add("chest", chestBaseGeometry(), chest.x, y, chest.z, chest.yaw);
     const lid = chestLidGeometry().translate(...CHEST_HINGE);
     add("chest lid", lid, chest.x, y, chest.z, chest.yaw);
@@ -93,13 +94,13 @@ beforeAll(() => {
 
 afterAll(() => { for (const geometry of geometries) geometry.dispose(); });
 
-function cameraAt(x: number, z: number) {
-  const point = { x, y: groundY(x, z), z, cloud: false, climbing: false };
+function cameraAt(x: number, z: number, width: number, height: number) {
+  const point = { x, y: lowlandSceneryY(x, z), z, cloud: false, climbing: false };
   const profile = cameraProfileAt(point), frame = profile.resolve?.(point, DEFAULT_CAMERA) ?? profile;
   const focus = typeof profile.anchor === "function" ? profile.anchor(point, frame) : profile.anchor ?? point;
-  const y = groundY(focus.x, focus.z) + 1.1, horizontal = frame.dist * Math.cos(frame.pitch);
+  const y = lowlandSceneryY(focus.x, focus.z) + 1.1, horizontal = frame.dist * Math.cos(frame.pitch);
   const target = new THREE.Vector3(focus.x - Math.sin(frame.yaw) * frame.ahead, y, focus.z - Math.cos(frame.yaw) * frame.ahead);
-  const camera = new THREE.PerspectiveCamera(profile.fov ?? 55, 16 / 9, .1, 400);
+  const camera = new THREE.PerspectiveCamera(profile.fov ?? 55, width / height, .1, 400);
   camera.position.set(focus.x + Math.sin(frame.yaw) * (horizontal - frame.ahead), y + frame.dist * Math.sin(frame.pitch), focus.z + Math.cos(frame.yaw) * (horizontal - frame.ahead));
   camera.position.y += mesaCameraLift(target, camera.position);
   camera.lookAt(target); camera.updateMatrixWorld();
@@ -111,20 +112,22 @@ describe("lowland submitted triangle budget", () => {
     ["sanctuary basin", 87, -129], ["forest base", 75.5, -176],
     ["left neck", 47, -175], ["left arm", 42, -190], ["left approach", 42, -203],
     ["right neck", 104, -174], ["right arm", 113, -189], ["right approach", 104, -200],
-    ["grove", 49, -215], ["grove north", 49, -234],
-    ["canopy", 106, -211], ["canopy north", 109, -233],
+    ["grove", 49, -215], ["grove north", 49, -234], ["grove east", 66, -217],
+    ["canopy", 106, -211], ["canopy north", 109, -233], ["canopy west", 88, -213],
+    ["canopy broken bridge", 106, -222.4], ["canopy upper root", 118, -233],
     ["causeway", 76, -251], ["coast", 70, -274], ["port", 76, -304],
   ];
-  for (const [name, x, z] of views) it(`${name} leaves twenty thousand triangles for the remaining scene`, () => {
+  for (const [width, height] of [[1366, 768], [1280, 800]])
+  for (const [name, x, z] of views) it(`${name} at ${width}×${height} leaves room for actors and effects`, () => {
     expect(lowlandRegionVisible(x, z)).toBe(true);
-    const camera = cameraAt(x, z);
+    const camera = cameraAt(x, z, width, height);
     const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const visible = draws.filter(draw => {
       if (camera.position.distanceTo(draw.bounds.center) >= draw.far + draw.bounds.radius || !frustum.intersectsSphere(draw.bounds)) return false;
       // A tile submits every instance, including ones currently scaled to
       // zero, whenever any member has grown above the renderer's threshold.
       return !draw.spots || draw.far >= FOG_FAR || draw.spots.some(spot => {
-        const d = Math.hypot(camera.position.x - spot.x, camera.position.y - groundY(spot.x, spot.z) + .05, camera.position.z - spot.z);
+        const d = Math.hypot(camera.position.x - spot.x, camera.position.y - lowlandSceneryY(spot.x, spot.z) + .05, camera.position.z - spot.z);
         const t = Math.max(0, Math.min(1, (draw.far - d) / 8));
         return spot.s * t * t * (3 - 2 * t) > .01;
       });
@@ -132,7 +135,16 @@ describe("lowland submitted triangle budget", () => {
     // Atlas signboards (10 triangles), chest sprites and secret effects fit
     // inside the remaining scene reserve alongside actors and the sanctuary.
     const count = visible.reduce((sum, draw) => sum + draw.triangles, 10);
-    expect(count, `${name}: ${count} submitted lowland triangles`).toBeLessThan(120000);
+    const expandedStage = name.startsWith("grove") || name.startsWith("canopy");
+    expect(count, `${name}: ${count} submitted lowland triangles`).toBeLessThan(expandedStage ? 150000 : 120000);
+    if (expandedStage) {
+      expect(lowlandWalkable(x, z, { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] }, .35), `${name}: gameplay floor`).toBe(true);
+      expect(blocked(x, z, .35, { act2: true, cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] }), `${name}: clear camera subject`).toBe(false);
+      // Lowland actors, effects, signs and the remaining island keep a conservative
+      // reserve of 32 draws / 20k triangles in addition to all submitted scenery.
+      expect(visible.length + 32, `${name}: scenery calls plus actor/effect reserve`).toBeLessThanOrEqual(110);
+      expect(count + 20000, `${name}: scenery triangles plus actor/effect reserve`).toBeLessThanOrEqual(170000);
+    }
     if (name === "sanctuary basin" || name === "forest base")
       expect(visible.some(draw => draw.name === "mesa"), `${name}: mesa in frustum`).toBe(true);
   });
