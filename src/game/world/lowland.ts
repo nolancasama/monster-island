@@ -198,26 +198,16 @@ export const GROVE_CROSSING = {
   friendLanding: { x: 34.6, z: -221.2 },
   swimEnd: { x: 39.6, z: -223.2 },
 };
-export const LILY_PAD_R = 1.35;
+export const LILY_PAD_R = 1.1;
 export const LILY_PADS: Vec2[] = [
-  { x: 44.6, z: -223.2 },
-  { x: 43.2, z: -223.2 },
-  { x: 41.8, z: -223.2 },
-  { x: 40.4, z: -223.2 },
-  { x: 39, z: -223.2 },
+  { x: 42.6, z: -223.4 },
+  { x: 41.4, z: -226.0 },
+  { x: 38.7, z: -227.5 },
 ];
 /** Independent, sequential rise; geometry and terrain never depend on this value. */
 export function lilyPadRise(unlock: number, index: number): number {
   return Math.max(0, Math.min(1, unlock * LILY_PADS.length - index));
 }
-const LILY_WALK = trail(
-  [
-    [GROVE_CROSSING.near.x, GROVE_CROSSING.near.z],
-    [GROVE_CROSSING.landing.x, GROVE_CROSSING.landing.z],
-  ],
-  // Matches the rendered pads, so a walker on them is never stopped by empty water.
-  1.3,
-);
 
 /** The raised root route: height profile along CANOPY_TRAIL and its two gaps. */
 export const CANOPY_HEIGHT = 10;
@@ -444,7 +434,7 @@ export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number
   for (const gate of STAGE_EXITS) if (!g.cleared?.includes(gate.id) && touches(gate.cut, x, z, m)) return false;
   for (const wall of PORT_WALL_CUTS) if (touches(wall, x, z, m)) return false;
   // Decks added by unlocks (narrower than the gaps they span).
-  if (solved.includes("groveLilies") && (inside(LILY_WALK, x, z, m) || inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m))) return true;
+  if (solved.includes("groveLilies") && (LILY_PADS.some(p => Math.hypot(x - p.x, z - p.z) <= Math.max(.25, LILY_PAD_R - Math.min(m, .35))) || inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m))) return true;
   for (const id of ["canopyVines", "canopyRope"] as const) {
     const deck = gapDeck(id);
     // Banks and bridge are one joined surface. Shrink the exposed sides;
@@ -609,7 +599,7 @@ export function lowlandDeckY(x: number, z: number, solved: readonly ObstacleId[]
     if (solved.includes(id) && Math.abs(x - g.x) <= DECK_HALF + 0.3 && z >= deck.z0 && z <= deck.z1)
       return lowlandBridgeY(id, x, z);
   }
-  if (solved.includes("groveLilies") && inside(LILY_WALK, x, z, -0.3)) return POND_Y + 0.08;
+  if (solved.includes("groveLilies") && LILY_PADS.some(p => Math.hypot(x - p.x, z - p.z) <= LILY_PAD_R)) return POND_Y + 0.1;
   for (const flight of CANOPY_FLIGHTS) if (x >= flight.x0 && x <= flight.x1 && z >= Math.min(flight.footZ, flight.topZ) && z <= Math.max(flight.footZ, flight.topZ))
     return flight.height(x, z);
   if (x >= 83 && x <= 119 && z <= -184.5 && z >= -252 && canopyUnion(x, z) &&

@@ -3,6 +3,8 @@ import { POND, POND_Y } from "./world/lowland";
 import { standY } from "./world/collision";
 import { rt, type MonsterRt } from "./runtime";
 import type { ObstacleId } from "./types";
+import { getGame } from "./store";
+import { hopPosition } from "./logic/lilyHop";
 
 /**
  * Where a monster's body stands, and where a rider sits on Bubbo. The scene
@@ -19,6 +21,9 @@ export function breathe(m: MonsterRt, t: number): number {
 /** Height of a monster's root: the ground, the water it swims in, or its hover. */
 export function monsterRootY(m: MonsterRt, solved: readonly ObstacleId[], t: number): number {
   if (rt.voyage.active) return rt.voyage.y + .75;
+  const hop = rt.player.hop;
+  if (hop && getGame().progress.active === m.id)
+    return hopPosition(hop, t, standY(hop.fromX, hop.fromZ, solved), standY(hop.toX, hop.toZ, solved)).y;
   const ground = standY(m.x, m.z, solved);
   const level = Math.hypot(m.x - POND.x, m.z - POND.z) < POND.r + 3 ? POND_Y : RIVER_Y;
   const water = m.swimming ? level - (m.id === "bubbo" ? 0.32 : 0.1) + Math.sin(t * 3) * 0.04 : -Infinity;

@@ -1,7 +1,8 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
 import { companions, gateOpen, objective } from "./logic/progress";
 import { getGame, setGame } from "./store";
-import { PICK_TIME, animate, rt, type MonsterRt } from "./runtime";
+import { PICK_TIME, animate, effect, rt, type MonsterRt } from "./runtime";
+import { hopTarget, hopPosition } from "./logic/lilyHop";
 import { keyboardMove, keys } from "../input/keyboard";
 import { isAttackHeld, releaseAllAttacks } from "../input/attackInput";
 import { gatesOf, moveCircle, isWalkable, standY, type Obstacles } from "./world/collision";
@@ -134,6 +135,7 @@ function monsterObstacles(): Obstacles[] {
 
 function movePlayer(dt: number, canMove: boolean) {
   const p = rt.player;
+  if (p.hop) { advanceLilyHop(); return; }
   if (rt.voyage.active) { p.x = rt.voyage.x; p.z = rt.voyage.z; p.y = rt.voyage.y + .75; p.vx = p.vz = p.speed = 0; return; }
   if (p.fall) {
     // Keeps its push over the edge; the scene ends it at the landing.
@@ -186,6 +188,15 @@ function movePlayer(dt: number, canMove: boolean) {
   const walk = WALK * speedScale();
   const wx = (fx * iy + rx * ix) * walk;
   const wz = (fz * iy + rz * ix) * walk;
+  const progress = getGame().progress;
+  const target = canMove && !p.riding && p.climbY === null && progress.act3.world !== "cloud"
+    ? hopTarget(p.x, p.z, wx, wz, progress.solved.includes("groveLilies"), rt.act2Unlock.groveLilies ?? 0) : null;
+  if (target) {
+    p.hop = { fromX: p.x, fromZ: p.z, toX: target.x, toZ: target.z, t0: rt.time, seconds: .38 };
+    p.yaw = Math.atan2(target.x - p.x, target.z - p.z);
+    advanceLilyHop();
+    return;
+  }
   const accel = 1 - Math.exp(-dt * 12);
   p.vx += (wx - p.vx) * accel;
   p.vz += (wz - p.vz) * accel;
@@ -238,6 +249,25 @@ function movePlayer(dt: number, canMove: boolean) {
     }
   }
   if (p.climbY !== null) p.y = p.climbY;
+}
+
+function advanceLilyHop() {
+  const p = rt.player, hop = p.hop!;
+  const solved = getGame().progress.solved;
+  const pose = hopPosition(hop, rt.time, standY(hop.fromX, hop.fromZ, solved), standY(hop.toX, hop.toZ, solved));
+  p.x = pose.x; p.z = pose.z; p.y = pose.y;
+  p.vx = p.vz = p.speed = p.teeter = 0;
+  cb.knock.x = cb.knock.z = 0;
+  if (rideK() > 0) {
+    mountPose(getGame().progress.active as MonsterId);
+    const seat = riderSeatY();
+    if (seat !== null) p.y += (seat - p.y) * rideK();
+  }
+  if (pose.done) {
+    p.hop = null;
+    effect("splash", p.x, pose.y, p.z);
+    audio.play("splash");
+  }
 }
 
 /** Only the player's own push, stopped by a flagged edge, can start a fall.
