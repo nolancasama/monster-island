@@ -1,12 +1,12 @@
 # Current State
 
 ## Live
-`main` deployed 2026-11-02 at `e3821b0`: everything below, plus the prologue, Acts 2 and 3 (Cloud Isle
+`main` deployed 2026-11-05 at `3da5dc3` (Pages run 41910496846): everything below, plus the prologue, Acts 2 and 3 (Cloud Isle
 stays locked behind the Coming Soon notice), gameplay polish and the debug menu. Save v4
 (`mi.save.v4`); v1–v3 still load and are never overwritten; `act2.forestLayout: 2` marks
 migrated saves. https://nolancasama.github.io/monster-island/
 
-## Branch `feature/seven-improvements` (pushed, not merged; merging deploys and needs approval)
+## Seven improvements (merged, deployed)
 Frozen spec `docs/SEVEN_IMPROVEMENTS.md`. Browser spec `tests/e2e/seven-improvements.spec.ts`; evidence in `.tmp/shots/seven/`; `node scripts/walkability-audit.mjs out.svg` gives the walkable mask and m² per zone.
 
 - **Maple:** the player turns to her, and she to the player, at the start of the opening talk.
