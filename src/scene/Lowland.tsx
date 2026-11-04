@@ -323,7 +323,8 @@ export function Lowland() {
       ))}
       <mesh geometry={cliff} material={flatMat} />
       <DistanceMesh geometry={canopyDecks} material={flatMat} />
-      {canopyFlights.map((geometry, i) => <DistanceMesh key={CANOPY_FLIGHTS[i].id} geometry={geometry} material={flatMat} />)}
+      {/* Near views only: from the sanctuary they would break its render budget. */}
+      {canopyFlights.map((geometry, i) => <DistanceMesh key={CANOPY_FLIGHTS[i].id} geometry={geometry} material={flatMat} far={40} />)}
       <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />

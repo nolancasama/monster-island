@@ -238,13 +238,13 @@ describe("enemy smoke reveals", () => {
     rt.player.z = 20; combatTick(0);
     expect(e.state).not.toBe("dormant");
     expect(cb.enemies).toHaveLength(count);
-    expect(rt.effects.filter(f => f.kind === "poof")).toHaveLength(0);
+    expect(rt.effects.filter(f => f.kind === "smoke")).toHaveLength(0);
     rt.player.z = 5; combatTick(0);
     cb.cloudZones.defeated.stormbreakCoast = [e.i];
     rt.playTime += 12;
     rt.player.z = 20; combatTick(0);
     expect(e.state).toBe("materialising");
-    expect(rt.effects.some(f => f.kind === "poof")).toBe(true);
+    expect(rt.effects.some(f => f.kind === "smoke")).toBe(true);
   });
 });
 

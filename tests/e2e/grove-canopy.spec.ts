@@ -163,14 +163,14 @@ test("Bubbo carries the player over first, then only the pads rise, and the retu
   const landed = await state(page);
   expect(Math.hypot(landed.player.x - 35.4, landed.player.z + 223.2)).toBeLessThan(3);
   await page.screenshot({ path: `${SHOTS}/b-island-after.png` });
-  // Real keys back over the pads to the bank; the ground height follows the pads.
-  // Over the pads with the same collision movement uses, in both directions.
+  // The pads are separate: open water stops a walker both ways. Real keys hop
+  // across in seven-improvements.spec.ts.
   await hook(page, "teleport", 37, -223.2, Math.PI / 2);
   await hook(page, "moveTo", 45.4, -223.2);
-  expect((await state(page)).player.x).toBeGreaterThan(45);
+  expect((await state(page)).player.x).toBeLessThan(40);
+  await hook(page, "teleport", 45.6, -223.2, -Math.PI / 2);
   await hook(page, "moveTo", 37, -223.2);
-  expect((await state(page)).player.x).toBeLessThan(37.5);
-  await hook(page, "moveTo", 45.4, -223.2);
+  expect((await state(page)).player.x).toBeGreaterThan(43);
   // Reload: raised, no replay.
   await page.evaluate(() => (window as unknown as { __mi: { saveNow(): void } }).__mi.saveNow());
   await page.reload();
@@ -186,12 +186,15 @@ test("Bubbo carries the player over first, then only the pads rise, and the retu
 });
 
 test("views of the expanded stages, in budget", async ({ page }) => {
-  await page.setViewportSize({ width: 760, height: 1272 });
-  await page.goto("about:blank");
-  const { readFileSync } = await import("node:fs");
-  await page.setContent(`<body style="margin:0;background:#000">${readFileSync(".tmp/maps/lowland.svg", "utf8")}</body>`);
-  await page.locator("svg").screenshot({ path: `${SHOTS}/map.png` });
-  await page.setViewportSize({ width: 1366, height: 768 });
+  // The map is optional evidence: node scripts/lowland-map.mjs writes it.
+  const { existsSync, readFileSync } = await import("node:fs");
+  if (existsSync(".tmp/maps/lowland.svg")) {
+    await page.setViewportSize({ width: 760, height: 1272 });
+    await page.goto("about:blank");
+    await page.setContent(`<body style="margin:0;background:#000">${readFileSync(".tmp/maps/lowland.svg", "utf8")}</body>`);
+    await page.locator("svg").screenshot({ path: `${SHOTS}/map.png` });
+    await page.setViewportSize({ width: 1366, height: 768 });
+  }
   const save = JSON.parse(forestSave("puff"));
   save.progress.solved.push("groveLilies", "canopyVines", "canopyRope");
   save.progress.act2.cleared = ["forest1", "grove", "canopy"];

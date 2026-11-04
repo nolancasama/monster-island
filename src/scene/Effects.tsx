@@ -94,6 +94,15 @@ const BURSTS: Record<Effect["kind"], Burst> = {
   },
   poof: {
     life: 0.6,
+    color: new THREE.Color("#ffffff"),
+    size: 0.5,
+    pos: (e, i, t, o) => {
+      const a = (i / PER) * Math.PI * 2;
+      o.set(e.x + Math.cos(a) * t * 1.6, e.y + t * 0.6, e.z + Math.sin(a) * t * 1.6);
+    }
+  },
+  smoke: {
+    life: 0.6,
     color: new THREE.Color("#eeeae2"),
     size: 0.5,
     pos: (e, i, t, o) => {
@@ -187,7 +196,7 @@ function Particles() {
       alpha.needsUpdate = true;
     };
     fill(hearts, ["hearts"]);
-    fill(glows, ["sparkle", "leaves", "splash", "notes"]);
+    fill(glows, ["sparkle", "leaves", "splash", "poof", "notes"]);
   });
   return (
     <group>
@@ -197,7 +206,7 @@ function Particles() {
   );
 }
 
-/** All poofs share one low-poly mesh draw, within the existing 12 × 14 particle cap. */
+/** Spawn and reveal smoke shares one low-poly mesh draw, only while it plays, within the 12 × 14 particle cap. */
 function Smoke() {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const batch = useMemo(() => {
@@ -206,7 +215,7 @@ function Smoke() {
     alpha.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute("alpha", alpha);
     const material = new THREE.ShaderMaterial({
-      uniforms: { color: { value: BURSTS.poof.color } },
+      uniforms: { color: { value: BURSTS.smoke.color } },
       vertexShader: `
         attribute float alpha;
         varying float vAlpha;
@@ -237,8 +246,8 @@ function Smoke() {
     if (!m) return;
     let n = 0;
     for (const e of rt.effects) {
-      if (e.kind !== "poof") continue;
-      const age = rt.time - e.t0, b = BURSTS.poof;
+      if (e.kind !== "smoke") continue;
+      const age = rt.time - e.t0, b = BURSTS.smoke;
       if (age < 0 || age >= b.life) continue;
       for (let i = 0; i < PER && n < MAX; i++, n++) {
         b.pos(e, i, age, batch.pose.position);

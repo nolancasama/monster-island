@@ -2043,3 +2043,9 @@ The area-budget test now models those same hop edges: sampled reachable Grove fl
   U-forest target of 40 m to the next-stage boundary. Accepted: the flight is
   walked as part of the climb; the left arm keeps its 40 m.
 
+- **Spawn smoke is its own `smoke` effect; `poof` stays as it was.** Sharing `poof`
+  moved every companion teleport into a separate mesh: +1 draw call and extra
+  triangles in most views, measured against `main`, and two views over budget.
+  Smoke now costs a draw only while it plays. Rejected: raising the budgets.
+- **Flights draw within 40 m of their bounds only.** From the sanctuary they
+  pushed the courtyard and garden over the 120-call and 140k-triangle budgets.

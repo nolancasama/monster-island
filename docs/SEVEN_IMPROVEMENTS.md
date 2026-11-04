@@ -139,7 +139,7 @@ no AI, no collision, not targetable, cannot be hit) and materialise when relevan
   fights must wake their target, so existing specs still work.
 
 **Look.** One instanced mesh of low-poly puffs, pale grey/off-white, expanding and
-fading, shared in one draw call (prefer extending the existing `poof` effect). A
+fading, shared in one draw call (a separate `smoke` effect; companions keep `poof`). A
 short synthesised pop in `audio.ts`. Respect the existing per-frame effect limits.
 
 ## 6. Secret chests

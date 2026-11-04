@@ -65,7 +65,7 @@ export interface CameraShot {
 
 export interface Effect {
   id: number;
-  kind: "hearts" | "sparkle" | "leaves" | "splash" | "poof" | "notes";
+  kind: "hearts" | "sparkle" | "leaves" | "splash" | "poof" | "smoke" | "notes";
   x: number;
   y: number;
   z: number;
