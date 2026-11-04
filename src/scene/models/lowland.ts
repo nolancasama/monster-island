@@ -535,7 +535,8 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     for (let j = 0; j < 4 + i * 3; j++) {
       const a = j * 2.4, x = pool.x + Math.cos(a) * (pool.rx + .35), z = pool.z + Math.sin(a) * (pool.rz + .35);
       reeds.push({ x, z, s: .65 + .08 * i, r: a, tint: .9 + .04 * i });
-      if (j % 2 === 0) ferns.push({ x: x + .5 * Math.cos(a), z: z + .5 * Math.sin(a), s: .45 + .08 * i, r: a, tint: .95 });
+      const fx = x + .5 * Math.cos(a), fz = z + .5 * Math.sin(a);
+      if (j % 2 === 0 && off(fx, fz, .7)) ferns.push({ x: fx, z: fz, s: .45 + .08 * i, r: a, tint: .95 });
     }
   }
   // Dense reed beds frame the new deep pools without putting blocking props on

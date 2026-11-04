@@ -162,7 +162,7 @@ export const COAST_TRAIL: Array<[number, number]> = [
   [76, -290.5],
 ];
 
-export const CAUSEWAY = rect(50, 112, -264.5, -242.5);
+export const CAUSEWAY = rect(50, 113, -264.5, -242.5);
 export const PORT = rect(54, 100, -322.5, -289.5);
 export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.55 };
 export const SHRINE = disc(106.5, -251.5, 4.8);
@@ -290,7 +290,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       disc(48, -232.5, 11.6),
       rect(48.5, 63.4, -207, -186),
       rect(51, 69, -240, -205),
-      rect(33, 51.5, -240, -203),
+      rect(32, 51.5, -240, -203),
       rect(51, 67.8, -205, -203),
       rect(51, 65.8, -203, -201),
       rect(33, 37.5, -206, -186),
@@ -325,9 +325,9 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     name: { en: "Coastal Path", ja: "うみべの みち" },
     hostile: true,
     walk: [
-      trail(COAST_TRAIL, 4),
-      disc(66, -272, 7),
-      disc(84, -280, 7),
+      trail(COAST_TRAIL, 5),
+      disc(66, -272, 8),
+      disc(84, -280, 8),
       trail(
         [
           [71, -267],
@@ -345,15 +345,17 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     hostile: true,
     walk: [
       trail(FOREST1_TRAIL, 4.2),
+      // Broad northern entrance to the safe alcove, short of the east gate cut.
+      rect(79, 93.2, -172, -158),
       trail([[79, -161], [88, -160]], 2.6),
       trail([[64, -174], ...FOREST_ARMS.left], 4),
       trail([[88, -170], ...FOREST_ARMS.right], 4.5),
       disc(43, -189, 4.8),
       disc(113, -187, 5),
-      disc(76.5, -168, 6.5),
-      disc(74.5, -178.5, 6),
-      disc(68, -166, 7.5),
-      disc(83, -175, 7.5),
+      disc(76.5, -168, 7.3),
+      disc(74.5, -178.5, 6.8),
+      disc(68, -166, 8.3),
+      disc(83, -175, 8.3),
       trail(
         [
           [70, -160],

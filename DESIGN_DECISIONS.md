@@ -1933,3 +1933,29 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
 - Reachable floor is pinned at Grove 1,404.5 m² (1.855 times 757, after the pad walk widened to match the rendered pads) and Canopy
   818.75 m² (2.008 times 407.75). Grove stays below the two-times target while
   exceeding the 1.7-times floor, retaining arm separation and the fixed exits.
+
+## 2026-11-04 — Slice 2: camp access and combat walkability
+
+- Added the frozen forest rectangle (79–93.2, -172…-158), opening the
+  north entrance to camp for foot and Bubbo's real 0.55 m mounted body.
+  Camp retains its safe disc and solid tent, fire and bench.
+- Primeval Forest's four base clearings gain 0.8 m of radius to admit their
+  flat shoulders; arm necks remain unchanged. Flooded Grove's western bank
+  moves from x=33 to x=32 to admit flat ground; the mesa-facing edge and
+  ridges stay fixed. Causeway's east shoulder moves from x=112 to x=113;
+  its west rim and both stage passages stay fixed. Coast's main trail gains
+  1 m of half-width and both combat pockets gain 1 m of radius. These modest
+  extensions address the flat strip before banks rise 1.2 m beyond the mask.
+- Existing walkability-audit.mjs, 0.5 m sampling at player radius, before →
+  after in m²: forest1 1367.5 → 1404.75; grove 1574.25 → 1600;
+  causeway 1275 → 1297; coast 485.75 → 547.75. Unchanged: camp 77.5,
+  canopy 1220.75, port 1204. SVGs generated at /tmp/walkability-before.svg
+  and /tmp/walkability-after.svg. The separate reachable-floor sampler gives
+  Grove 1428 m² (formerly 1404.5); its regression expectation follows that result.
+- Canopy decks, ramps, voids, water, mesa and town walls retain their geometry.
+  Flood-fill tests exercise every closed exit and its open control at both
+  body radii, with the alternate branch excluded for branch exit checks.
+- Hand-placed pool ferns now use the scatter exclusion check. Authored trees
+  share solid trunks; tests cover scatter and pool ferns. The existing debug
+  overlay now includes lowland surfaces, solids and gates, updating on Act 2
+  progress changes.

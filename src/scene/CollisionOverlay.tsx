@@ -6,6 +6,7 @@ import { useDebug } from "../game/debugState";
 import { getGame, useGame } from "../game/store";
 import { LIVE_MONSTERS, MONSTERS } from "../game/data/monsters";
 import { gatesOf, PLAYER_R, solidsFor, standY, type Gates } from "../game/world/collision";
+import { ZONES, STAGE_EXITS, lowlandSolids, gapDeck } from "../game/world/lowland";
 import {
   BRAMBLE, BRIDGE, CAVE, CAVE_PASSAGE, CLIFF_TOP, CROSSING, EMBER_SLOPE,
   FALLEN_PALM, FOREST_PATH, GATE_PILLARS, GLADE, HILLS, LAVA, PASS, PIER,
@@ -114,6 +115,14 @@ function worldGeometry(gates: Gates) {
   const fixed = new Set(STATIC_SOLIDS);
   for (const solid of solidsFor(gates)) lines.shape(solid, height, fixed.has(solid) ? SOLID : ACTIVE);
   const area = (a: Area, open = true) => lines.shape({ kind: "box", x: (a.x0 + a.x1) / 2, z: (a.z0 + a.z1) / 2, hx: (a.x1 - a.x0) / 2, hz: (a.z1 - a.z0) / 2, yaw: 0 }, height, open ? SURFACE : ACTIVE);
+  for (const solid of lowlandSolids()) lines.shape(solid, height, SOLID);
+  for (const zone of Object.values(ZONES)) for (const sh of zone.walk) {
+    if (sh.kind === "rect") area(sh);
+    else if (sh.kind === "disc") lines.arc(sh.x, sh.z, sh.r, 0, Math.PI * 2, height, SURFACE);
+    else for (let i = 1; i < sh.pts.length; i++) lines.shape({ kind: "capsule", ax: sh.pts[i - 1][0], az: sh.pts[i - 1][1], bx: sh.pts[i][0], bz: sh.pts[i][1], r: sh.w }, height, SURFACE);
+  }
+  for (const exit of STAGE_EXITS) area(exit.cut, gates.cleared?.includes(exit.id));
+  for (const id of ["canopyVines", "canopyRope"] as const) area(gapDeck(id), gates.solved.includes(id));
 
   // Draw the shoreline instead of a rectangle that would imply walkable sea.
   for (const [x0, x1] of [[X_WEST, RIDGE.x0], [RIDGE.x1, RIVER.x0], [RIVER.x1, X_EAST]]) {
@@ -155,7 +164,8 @@ function VisibleOverlay() {
   // These are the only progress fields that change collision geometry.
   const solved = useGame((s) => s.progress.solved);
   const endings = useGame((s) => s.progress.endings);
-  const geometry = useMemo(() => worldGeometry(gatesOf({ solved, endings })), [solved, endings]);
+  const act2 = useGame((s) => s.progress.act2);
+  const geometry = useMemo(() => worldGeometry(gatesOf({ solved, endings, act2 })), [solved, endings, act2]);
   const liveGeometry = useMemo(dynamicGeometry, []);
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => liveGeometry.dispose(), [liveGeometry]);

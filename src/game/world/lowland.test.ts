@@ -13,6 +13,8 @@ import { cameraProfileAt, DEFAULT_CAMERA } from "../../scene/cameraProfiles";
 import { SECRET_SITES } from "./elementObjects";
 import { hazardAt } from "../logic/elements";
 import { rt } from "../runtime";
+import { MONSTERS } from "../data/monsters";
+import { lowlandSpots } from "../../scene/models/lowland";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
@@ -48,6 +50,37 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
 }
 
 describe("the lowland below the sanctuary", () => {
+  it("fits the real mounted body on the widened flat combat shoulders", () => {
+    for (const [x, z] of [[60.5, -166], [32.6, -210], [112, -251], [91, -280]]) {
+      for (const radius of [PLAYER_R, MONSTERS.bubbo.radius])
+        expect(isWalkable(x, z, gates(), radius), `${x},${z} radius ${radius}`).toBe(true);
+    }
+  });
+  it("enters and leaves camp from the north on foot and mounted, keeping props solid and the alcove safe", () => {
+    for (const radius of [PLAYER_R, MONSTERS.bubbo.radius]) {
+      for (const [from, to] of [[-170, -160], [-160, -170]]) {
+        let p = { x: 85, z: from };
+        for (let i = 1; i <= 100; i++) {
+          const z = from + (to - from) * i / 100;
+          p = moveCircle(p.x, p.z, 85, z, radius, gates());
+          expect(p.z).toBeCloseTo(z);
+        }
+      }
+      for (const prop of [CAMP2.tent, CAMP2.fire, CAMP2.bench])
+        expect(isWalkable(prop.x, prop.z, gates(), radius)).toBe(false);
+    }
+    expect(zoneAt(85, -160)).toBe("camp");
+    expect(ZONES.camp.hostile).toBe(false);
+    expect(zoneAt(85, -170)).toBe("forest1");
+  });
+
+  it("keeps scattered trees and all ferns off walking ground unless a solid trunk covers them", () => {
+    const spots = lowlandSpots(), solids = lowlandSolids();
+    for (const p of [...spots.trees, ...spots.ferns, ...spots.fernTrees]) {
+      if (!lowlandWalkable(p.x, p.z, gates(["groveLilies", "canopyVines", "canopyRope"]), 0)) continue;
+      expect(solids.some(s => s.kind === "circle" && Math.hypot(s.x - p.x, s.z - p.z) < s.r), `${p.x},${p.z}`).toBe(true);
+    }
+  });
   it("is closed until Act 2 begins (only the rope leads down)", () => {
     expect(isWalkable(CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, { ...gates(), act2: false }, PLAYER_R)).toBe(false);
     expect(isWalkable(CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, gates(), PLAYER_R)).toBe(true);
@@ -190,6 +223,23 @@ describe("the lowland below the sanctuary", () => {
 });
 
 describe("first-clear exit collision", () => {
+  it("cannot route around any uncleared exit, including either forest neck", () => {
+    for (const radius of [PLAYER_R, MONSTERS.bubbo.radius]) {
+      for (const exit of STAGE_EXITS) {
+        const forest = exit.id === "forest1", left = exit.x < 76;
+        const origin = forest ? CLIFF_ROPE.foot : exit.id === "grove" ? { x: 51, z: -237 }
+          : exit.id === "canopy" ? { x: 102, z: -237 } : { x: 76, z: exit.z + 4 };
+        const target = forest ? { x: left ? 47 : 104, z: -175 } : exit.id === "grove" ? { x: 61, z: -248 }
+          : exit.id === "canopy" ? { x: 93, z: -248 }
+          // The boulder at (76.5, -269.5), r=2.2, blocks the straight-ahead target.
+          : exit.id === "causeway" ? { x: 72, z: -267 } : { x: 76, z: exit.z - 4 };
+        const avoid: ZoneId[] = exit.id === "grove" ? ["canopy"] : exit.id === "canopy" ? ["grove"] : [];
+        const g = { ...gates(["canopyVines", "canopyRope", "groveLilies"]), cleared: STAGES.filter(id => id !== exit.id) };
+        expect(reachable(g, avoid, radius, origin).near(target.x, target.z, 1), `${exit.id} ${exit.x} radius ${radius}`).toBe(false);
+        expect(reachable({ ...g, cleared: [...STAGES] }, avoid, radius, origin).near(target.x, target.z, 1), `open ${exit.id} ${exit.x} radius ${radius}`).toBe(true);
+      }
+    }
+  }, 60000);
   it("keeps the expanded stages separate and both puzzle bridges required at walking and mounted radii", () => {
     const open = gates(["groveLilies", "canopyVines", "canopyRope"]);
     for (const radius of [PLAYER_R, .7]) {
