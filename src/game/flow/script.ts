@@ -88,6 +88,19 @@ export function facePlayer(p: Vec2) {
   rt.player.yaw = Math.atan2(p.x - rt.player.x, p.z - rt.player.z);
 }
 
+/** Turn the player toward a point over a moment, so the turn is seen. */
+export async function turnPlayerTo(p: Vec2, ms = 300) {
+  const from = rt.player.yaw;
+  const want = Math.atan2(p.x - rt.player.x, p.z - rt.player.z);
+  const d = Math.atan2(Math.sin(want - from), Math.cos(want - from));
+  const steps = Math.max(1, Math.round(ms / 30));
+  for (let i = 1; i < steps; i++) {
+    rt.player.yaw = from + d * (i / steps);
+    await debugWait(30);
+  }
+  facePlayer(p);
+}
+
 /** Fade the screen to black and back around a scene change. */
 export async function fadeThrough(during: () => void | Promise<void>, ms = 450) {
   const fast = new URLSearchParams(location.search).get("fast") === "1";

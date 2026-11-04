@@ -8,7 +8,7 @@ import { animate, effect, resetRuntime, rt } from "../runtime";
 import { BRAMBLE, CLIFF_TOP_SPOT, CROSSING, MAPLE, MONSTER_STONE, ROPE, SPAWN, VOLCANO, groundY } from "../world/island";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { say, wait } from "./ask";
-import { fadeThrough, frameTwo, run, shot } from "./script";
+import { fadeThrough, frameTwo, run, shot, turnPlayerTo } from "./script";
 import { poofTo, besidePlayer } from "./companion";
 import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
@@ -192,8 +192,10 @@ async function intro() {
   await run(async () => {
     setGame({ fade: 0 });
     const m = rt.maple;
+    m.yaw = Math.atan2(rt.player.x - m.x, rt.player.z - m.z);
     frameTwo(rt.player, m, 0.95);
     m.wave = rt.time;
+    await turnPlayerTo(m);
     await wait(700);
     m.talking = true;
     await say("maple", "Welcome to Monster Island!", "モンスターアイランドへ ようこそ!");
