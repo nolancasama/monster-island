@@ -17,6 +17,8 @@ Frozen spec `docs/SEVEN_IMPROVEMENTS.md`. Browser spec `tests/e2e/seven-improvem
 - **Secret chests:** drawn, solid and focusable only after discovery.
 - **Causeway:** 14 enemies, all required.
 
+Verified at `7cb00a8`: tsc, 760 unit tests, build, and the full Playwright suite end to end, 97/97 in 59.8 min (`MI_LONG_TIMEOUT=3600000`). Not tested on a real Chromebook. Browser crossing and stairs ran mounted on Bubbo; on foot and the 0.55 m mounted radius are unit-tested. Open polish: Bubbo's cage shows an empty dark floor before it is solved.
+
 ## Blue Inferno, Puff anchor, full swing, Grove crossing, expanded stages (merged, deployed)
 Frozen spec `docs/GROVE_CANOPY_EXPANSION.md`.
 
