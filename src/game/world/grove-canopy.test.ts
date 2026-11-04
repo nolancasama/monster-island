@@ -55,7 +55,8 @@ it("keeps existing enemy indices stable and appends the expanded stage encounter
     ["grove", "gloomlet", 37.8, -233.8], ["grove", "snapjaw", 56, -239.5],
     ["canopy", "gloomlet", 97, -203.3], ["canopy", "snapjaw", 106, -208.6], ["canopy", "forestSpitter", 105.2, -230.6],
     ["canopy", "snapjaw", 112, -235], ["causeway", "raiderShooter", 62, -248.2], ["causeway", "shellback", 61.4, -258.4],
-    ["causeway", "raiderShooter", 85, -247.4], ["causeway", "shellback", 91.6, -260.1], ["causeway", "gloomlet", 95, -249.6],
+    // Same persistent gloomlet index; its former home is on the exit stairs.
+    ["causeway", "raiderShooter", 85, -247.4], ["causeway", "shellback", 91.6, -260.1], ["causeway", "gloomlet", 103, -247.5],
     ["causeway", "shellback", 103.4, -251.8], ["causeway", "snapjaw", 107.4, -249.2], ["coast", "gloomlet", 65.4, -272.4],
     ["coast", "gloomlet", 85.2, -280.4], ["coast", "raiderShooter", 77.4, -284.6], ["coast", "gloomlet", 64, -278],
     ["canopy", "gloomlet", 98, -207], ["forest1", "gloomlet", 49, -175], ["forest1", "snapjaw", 42, -186],

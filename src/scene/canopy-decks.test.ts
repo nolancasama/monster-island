@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { standY } from "../game/world/collision";
-import { CANOPY_DECKS, lowlandDeckY, lowlandWalkable, lowlandY, STAGES, ZONES } from "../game/world/lowland";
+import { CANOPY_DECKS, CANOPY_FLIGHTS, lowlandDeckY, lowlandWalkable, lowlandY, STAGES, ZONES } from "../game/world/lowland";
 import { canopyDeckGeometry, lowlandSceneryY, streamRibbonGeometry } from "./models/lowland";
 
 const solved = ["groveLilies", "canopyVines", "canopyRope"] as const;
@@ -27,9 +27,8 @@ describe("authored Canopy decks", () => {
       expect(Math.abs(hit.point.y - standY(x, z, solved)), `stand at ${x},${z}`).toBeLessThanOrEqual(.15);
       samples++;
     };
-    // Terrain draws the arm's ramp itself; check it agrees instead of raycasting a deck.
-    for (let x = 92.5; x < 108; x += 1.1) for (let z = -203.9; z < -200.5; z += .7)
-      expect(Math.abs(lowlandY(x, z) - lowlandDeckY(x, z, solved)), `ramp at ${x},${z}`).toBeLessThanOrEqual(.15);
+    // The arm approach is now elevated; its mesh and the new flights belong
+    // to the rendering slice. Continue checking every existing platform mesh.
     for (const { id, walk } of CANOPY_DECKS) {
       if (id === "armApproach") continue;
       for (let x = walk.x0 + .04; x < walk.x1; x += .91)
@@ -37,7 +36,6 @@ describe("authored Canopy decks", () => {
       for (let x = walk.x0 + .04; x < walk.x1; x += .73) { check(x, walk.z0 + .04); check(x, walk.z1 - .04); }
       for (let z = walk.z0 + .04; z < walk.z1; z += .73) { check(walk.x0 + .04, z); check(walk.x1 - .04, z); }
     }
-    for (let x = 92; x < 105; x += .45) for (let z = -244.5; z < -237; z += .45) check(x, z);
     expect(samples).toBeGreaterThan(1000);
     geometry.dispose(); material.dispose();
   });
@@ -55,7 +53,8 @@ describe("authored Canopy decks", () => {
       }
     }
     expect(walls).toBeGreaterThan(200);
-    expect(ZONES.canopy.walk.some(shape => shape.kind === "trail")).toBe(true);
+    for (const f of CANOPY_FLIGHTS)
+      expect(ZONES.canopy.walk).toContainEqual({ kind: "rect", x0: f.x0, x1: f.x1, z0: Math.min(f.footZ, f.topZ), z1: Math.max(f.footZ, f.topZ) });
     geometry.dispose();
   });
 

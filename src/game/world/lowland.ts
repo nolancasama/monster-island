@@ -138,7 +138,8 @@ export const FOREST1_TRAIL: Array<[number, number]> = [
 /** Each route starts at its first-clear neck and joins its next stage directly. */
 export const FOREST_ARMS: Record<"left" | "right", Array<[number, number]>> = {
   left: [[58, -172], [47, -175], [42, -185], [42, -197], [42, -204], [45.5, -207]],
-  right: [[94, -170], [104, -174], [113, -184], [113, -194], [102, -201]],
+  // Approach the open foot from the south, clear of the side-rim end caps.
+  right: [[94, -170], [104, -174], [113, -184], [113, -183], [108.6, -183], [107.5, -184.5]],
 };
 export const GROVE_TRAIL: Array<[number, number]> = [
   [51, -211],
@@ -150,8 +151,8 @@ export const CANOPY_TRAIL: Array<[number, number]> = [
   [102, -205],
   [106, -212],
   [106, -232],
-  [100, -238],
-  [94, -245],
+  [96, -238],
+  [96, -252],
 ];
 export const COAST_TRAIL: Array<[number, number]> = [
   [76, -263.5],
@@ -223,14 +224,24 @@ export const CANOPY_HEIGHT = 10;
 /** Gaps in the root walk (x is the trail's straight north-south stretch). */
 export const DECK_HALF = 0.95;
 
+/** Deck flights have continuous collision; the ~0.3 m risers are cosmetic. */
+export const CANOPY_FLIGHTS = [
+  { id: "entrance", x0: 104, x1: 111, footZ: -184.5, topZ: -200.5, ease: .3, steps: 36, height: canopyEntranceY },
+  { id: "exit", x0: 92, x1: 100, footZ: -252, topZ: -239, ease: .15, steps: 36, height: canopyExitY },
+] as const;
+export type CanopyFlight = (typeof CANOPY_FLIGHTS)[number];
+export const CANOPY_RIM_R = .22;
+export const CANOPY_FLIGHT_RIMS = CANOPY_FLIGHTS.flatMap(flight => [flight.x0 + CANOPY_RIM_R, flight.x1 - CANOPY_RIM_R].map(x => ({
+  kind: "capsule" as const, ax: x, az: flight.footZ, bx: x, bz: flight.topZ, r: CANOPY_RIM_R,
+})));
+
 /** Rectangular authored polygons are kept separate at each void edge. The mesh
  * and walking footprints are derived from the same vertices, never a heightfield. */
 const canopyDeck = (id: string, x0: number, x1: number, z0: number, z1: number) => ({
   id, walk: rect(x0, x1, z0, z1), pts: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]] as Array<[number, number]>,
 });
 export const CANOPY_DECKS = [
-  // The ramp itself is terrain up to the first platform; this is only its footprint.
-  canopyDeck("armApproach", 92, 108, -204, -200.5),
+  canopyDeck("armApproach", 92, 111, -204, -200.5),
   canopyDeck("cliffsideClearingSouth", 85, 119, -209, -204),
   canopyDeck("cliffsideClearing", 83, 119, -216, -209),
   canopyDeck("brokenBridgeSouth", 83, 119, -221.2, -219.5),
@@ -242,6 +253,7 @@ export const CANOPY_DECKS = [
   canopyDeck("upperRootSouth", 110, 119, -232.5, -230),
   canopyDeck("upperRootEast", 117, 119, -234, -232.5),
   canopyDeck("upperRootNorth", 83, 119, -237.1, -234),
+  canopyDeck("exitLanding", 92, 100, -239, -237.1),
 ];
 export const CANOPY_ENCOUNTERS = [
   { name: "Cliffside Clearing", x: 89, z: -213 },
@@ -275,7 +287,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     id: "canopy",
     name: { en: "Ancient Canopy", ja: "こだいの きのうえ" },
     hostile: true,
-    walk: [...CANOPY_DECKS.map(deck => deck.walk), trail([[102, -235.5], [100, -238], [94, -245]], 2.2)],
+    walk: [...CANOPY_DECKS.map(deck => deck.walk), ...CANOPY_FLIGHTS.map(f => rect(f.x0, f.x1, Math.min(f.footZ, f.topZ), Math.max(f.footZ, f.topZ)))],
   },
   grove: {
     id: "grove",
@@ -352,6 +364,9 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       trail([[88, -170], ...FOREST_ARMS.right], 4.5),
       disc(43, -189, 4.8),
       disc(113, -187, 5),
+      // Retain the optional enemy's ground pocket beside the new entrance,
+      // without retaining the old diagonal ascent into the Canopy.
+      rect(111, 117.5, -196, -184),
       disc(76.5, -168, 7.3),
       disc(74.5, -178.5, 6.8),
       disc(68, -166, 8.3),
@@ -441,7 +456,7 @@ export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number
     if (h.safe?.some(s => (!h.safeWhen || solved.includes(h.safeWhen as ObstacleId)) && inside(s, x, z, m))) continue;
     return false;
   }
-  if (x >= 83 && x <= 119 && z <= -201 && z >= -246 && canopyUnion(x, z)) {
+  if (x >= 83 && x <= 119 && z <= -184.5 && z >= -252 && canopyUnion(x, z)) {
     // Adjacent deck polygons share edges; shrink the union rather than each
     // tile, so an authored seam cannot become an invisible collision crack.
     if (m === 0 || CIRCLE_PROBES.every(([dx, dz]) => canopyUnion(x + dx * m, z + dz * m))) return true;
@@ -473,20 +488,34 @@ export function basinFraction(x: number, z: number): number {
 const base = (_x: number, z: number) => 2.4 + 0.0066 * (z + 152);
 const bumps = (x: number, z: number) => 0.18 * Math.sin(x * 0.21 + z * 0.13) + 0.12 * Math.sin(x * 0.37 - z * 0.29);
 
-/** Raised root walk above the forest floor along CANOPY_TRAIL (0 off it). */
-export function canopyRaise(x: number, z: number): number {
-  if (x < 92 || x > 119 || z > -193 || z < -204) return 0;
-  // The arm climbs gradually before joining the authored deck; no heightfield
-  // is raised beneath the elevated platforms or their voids.
-  return CANOPY_HEIGHT * smooth((-193 - z) / 11);
+/** Stairs are authored decks; the heightfield stays on the forest floor. */
+export const canopyRaise = (_x: number, _z: number): number => 0;
+
+/** Integral of a unit-speed line with short, quadratic eased ends. Its peak
+ * slope is rise / (run - ease), rather than smoothstep's 1.5 * rise / run. */
+function flightFraction(distance: number, run: number, ease: number): number {
+  const d = Math.max(0, Math.min(run, distance));
+  const integral = d < ease ? d * d / (2 * ease)
+    : d > run - ease ? run - ease - (run - d) ** 2 / (2 * ease) : d - ease / 2;
+  return integral / (run - ease);
+}
+
+export function canopyEntranceY(x: number, z: number): number {
+  const k = flightFraction(-184.5 - z, 16, .3);
+  const foot = lowlandY(x, -184.5), top = canopyDeckY(x, -200.5);
+  return foot + (top - foot) * k;
+}
+
+export function canopyExitY(_x: number, z: number): number {
+  return base(96, -252) + CANOPY_HEIGHT * flightFraction(z + 252, 13, .15);
 }
 
 /** Absolute authored top, shared by rendered vertices, bridges and standY. */
 export function canopyDeckY(x: number, z: number): number {
   const y = base(x, z) + bumps(x, z);
-  if (z > -204) return y + CANOPY_HEIGHT * smooth((-193 - z) / 11);
-  if (z < -235) return y + CANOPY_HEIGHT * smooth((z + 245) / 10);
-  return y + CANOPY_HEIGHT;
+  // Level exit landing, gently joined to the existing upper-root platform.
+  const landing = base(96, -252) + CANOPY_HEIGHT;
+  return (y + CANOPY_HEIGHT) * smooth((z + 237.1) / 3.1) + landing * (1 - smooth((z + 237.1) / 3.1));
 }
 export const canopySurfaceY = canopyDeckY;
 
@@ -528,7 +557,6 @@ export function lowlandY(x: number, z: number): number {
   let y = base(x, z);
   const flat = Math.max(rectMask(CAUSEWAY, x, z, 2), rectMask(PORT, x, z, 3));
   y += bumps(x, z) * (1 - flat);
-  y += canopyRaise(x, z);
   y += forestBankY(x, z);
   // The pond (its islet stands up out of it) and the stream channels.
   const pr = Math.hypot(x - POND.x, z - POND.z);
@@ -582,7 +610,9 @@ export function lowlandDeckY(x: number, z: number, solved: readonly ObstacleId[]
       return lowlandBridgeY(id, x, z);
   }
   if (solved.includes("groveLilies") && inside(LILY_WALK, x, z, -0.3)) return POND_Y + 0.08;
-  if (x >= 83 && x <= 119 && z <= -201 && z >= -246 && ZONES.canopy.walk.some(sh => inside(sh, x, z, 0)) &&
+  for (const flight of CANOPY_FLIGHTS) if (x >= flight.x0 && x <= flight.x1 && z >= Math.min(flight.footZ, flight.topZ) && z <= Math.max(flight.footZ, flight.topZ))
+    return flight.height(x, z);
+  if (x >= 83 && x <= 119 && z <= -184.5 && z >= -252 && canopyUnion(x, z) &&
       !CANOPY_VOIDS.some(h => touches(h.shape, x, z, 0))) return canopyDeckY(x, z);
   return -Infinity;
 }
@@ -697,8 +727,8 @@ export const RIGHT_ARM_ROOTS = [
   { ax: 101, az: -195, bx: 100.6, bz: -192.5, r: .45 },
 ];
 export const RIGHT_ARM_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
-  { x: 108.5, z: -188, r: .7, h: .9 },
-  { x: 108.5, z: -202, r: 1, h: 1.35 },
+  { x: 115.5, z: -198, r: .7, h: .9 },
+  { x: 115, z: -201, r: 1, h: 1.35 },
 ];
 /** Covers the rendered buttresses and the boulder builder's maximum radial jitter. */
 export const RIGHT_ARM_SOLIDS: SolidShape[] = [
@@ -762,7 +792,7 @@ export const RUIN_PILLARS: Vec2[] = (() => {
     if (Math.abs(x - 76) < 4) continue;
     // The western pillar formerly sat on the passage centreline and sealed
     // the 1.85m crossing for the largest mounted body. Keep it beside the road.
-    out.push(x === 58 ? { x: 55.5, z: -244.8 } : { x, z: -243.6 }, { x: x + 3.2, z: -255.4 });
+    out.push(x === 58 ? { x: 55.5, z: -244.8 } : x > 96 ? { x: 103, z: -244 } : { x, z: -243.6 }, { x: x + 3.2, z: -255.4 });
   }
   out.push({x:52.5,z:-259.5},{x:109,z:-260.5},{x:45.2,z:-251},{x:45.2,z:-256},
     {x:56,z:-191},{x:59,z:-193},{x:64,z:-227});
@@ -807,7 +837,7 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "causeway", kind: "shellback", x: 61.4, z: -258.4 },
   { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 85, z: -247.4 },
   { zone: "causeway", kind: "shellback", x: 91.6, z: -260.1 },
-  { zone: "causeway", kind: "gloomlet", x: 95, z: -249.6 },
+  { zone: "causeway", kind: "gloomlet", x: 103, z: -247.5 },
   { zone: "causeway", kind: "shellback", x: 103.4, z: -251.8 },
   { zone: "causeway", kind: "snapjaw", x: 107.4, z: -249.2 },
   // The coast: a lighter last stretch.
@@ -880,6 +910,7 @@ export function lowlandSolids(): SolidShape[] {
   for (const t of GIANT_TREES) if (!RIGHT_ARM_TREES.some(arm => arm === t)) circle(t.x, t.z, t.r);
   for (const b of MOSSY_BOULDERS) if (!RIGHT_ARM_BOULDERS.includes(b)) circle(b.x, b.z, b.r * 0.9);
   out.push(...RIGHT_ARM_SOLIDS);
+  out.push(...CANOPY_FLIGHT_RIMS);
   for (const l of LOGS) out.push({ kind: "capsule", ...l });
   for (const ridge of LOWLAND_RIDGES) out.push({ kind: "capsule", ...ridge });
   for (const p of RUIN_PILLARS) circle(p.x, p.z, 0.6);
@@ -902,7 +933,7 @@ export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
   forest1: { x: 47, z: -175 },
   camp: { x: 94, z: -170 },
   grove: { x: 58, z: -244 },
-  canopy: { x: 95, z: -244.5 },
+  canopy: { x: 96, z: -238 },
   causeway: { x: 76, z: -256 },
   coast: { x: 76, z: -290 },
   port: { x: SERVICES.harbor.keeper.x, z: SERVICES.harbor.keeper.z },
@@ -920,7 +951,7 @@ export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: numbe
   { id: "forest1", x: 58, z: -172, half: 9, orientation: "z", kind: "roots", cut: rect(57.6, 58.4, -184, -160) },
   { id: "forest1", x: 94, z: -170, half: 9, orientation: "z", kind: "roots", cut: rect(93.6, 94.4, -182, -158) },
   { id: "grove", x: 56, z: -241.4, half: 5.8, orientation: "x", kind: "reeds", cut: rect(19, 70, -241.8, -241) },
-  { id: "canopy", x: 97, z: -241.4, half: 6, orientation: "x", kind: "roots", cut: rect(82, 135, -241.8, -241) },
+  { id: "canopy", x: 96, z: -238, half: 6, orientation: "x", kind: "roots", cut: rect(82, 135, -238.4, -237.6) },
   { id: "causeway", x: 76, z: -264, half: 5, orientation: "x", kind: "stone", cut: rect(19, 135, -264.4, -263.6) },
   { id: "coast", x: 76, z: -288, half: 3.4, orientation: "x", kind: "wood", cut: rect(72.6, 79.4, -288.4, -287.6) },
 ];
@@ -975,17 +1006,11 @@ export const STAGE_PASSAGES = [
   {
     x0: 82,
     x1: 135,
-    z0: -246,
-    z1: -237,
-    walk: trail(
-      [
-        [102, -237],
-        [98, -239],
-        [98, -242],
-        [93, -246],
-      ],
-      1.85,
-    ),
+    z0: -242.5,
+    z1: -237.1,
+    // Restrict the bank above the Causeway only. Below -242.5 its own
+    // floor applies, including the encounter pockets beside the flight.
+    walk: rect(92, 100, -253, -236),
   },
 ];
 const inPassageBand = (t: (typeof STAGE_PASSAGES)[number], x: number, z: number) => x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1;

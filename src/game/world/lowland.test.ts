@@ -228,7 +228,7 @@ describe("first-clear exit collision", () => {
       for (const exit of STAGE_EXITS) {
         const forest = exit.id === "forest1", left = exit.x < 76;
         const origin = forest ? CLIFF_ROPE.foot : exit.id === "grove" ? { x: 51, z: -237 }
-          : exit.id === "canopy" ? { x: 102, z: -237 } : { x: 76, z: exit.z + 4 };
+          : exit.id === "canopy" ? { x: 96, z: -236.7 } : { x: 76, z: exit.z + 4 };
         const target = forest ? { x: left ? 47 : 104, z: -175 } : exit.id === "grove" ? { x: 61, z: -248 }
           : exit.id === "canopy" ? { x: 93, z: -248 }
           // The boulder at (76.5, -269.5), r=2.2, blocks the straight-ahead target.
@@ -366,7 +366,7 @@ describe("the U around the reserved mesa", () => {
     }
   });
 
-  it("has two independent first-clear necks and at least forty metres before either next-stage boundary", () => {
+  it("has two independent first-clear necks leading to the Grove and the new Canopy stair foot", () => {
     expect(STAGE_EXITS.filter(gate => gate.id === "forest1").map(gate => gate.orientation)).toEqual(["z", "z"]);
     for (const side of ["left", "right"] as const) {
       const pts = FOREST_ARMS[side], next = side === "left" ? "grove" : "canopy";
@@ -375,8 +375,11 @@ describe("the U around the reserved mesa", () => {
         const p = trailPoint(pts, boundary);
         if (zoneAt(p.x, p.z) === next) break;
       }
-      expect(boundary, side).toBeGreaterThanOrEqual(40);
-      expect(boundary, side).toBeLessThan(trailLength(pts));
+      // The right arm now stops at the stair foot, sixteen metres before
+      // the deck. The left arm retains its original forty-metre approach.
+      expect(boundary, side).toBeGreaterThanOrEqual(side === "left" ? 40 : 28);
+      expect(boundary, side).toBeLessThan(trailLength(pts) + .05);
+      if (side === "right") expect(trailPoint(pts, trailLength(pts))).toEqual({ x: 107.5, z: -184.5 });
     }
     expect(routeMarker("forest1", 58)).toEqual({ x: 47, z: -175 });
     expect(routeMarker("forest1", 94)).toEqual({ x: 104, z: -174 });
@@ -438,7 +441,11 @@ describe("the U around the reserved mesa", () => {
       expect(optional).toHaveLength(3);
       for (const e of optional) {
         expect(e.zone).toBe("forest1");
-        expect(nearestOnTrail(FOREST_ARMS[side], e.x, e.z).d).toBeLessThan(2);
+        // The last right-arm enemy retains its identity in the ground
+        // pocket beside the stairs after the old diagonal trail is removed.
+        if (side === "right" && e.z < -184.5)
+          expect(isWalkable(e.x, e.z, gates(), ENEMIES[e.kind].radius)).toBe(true);
+        else expect(nearestOnTrail(FOREST_ARMS[side], e.x, e.z).d).toBeLessThan(2);
       }
     }
     const reach = reachable(gates());

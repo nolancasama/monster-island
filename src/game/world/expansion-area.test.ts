@@ -41,7 +41,8 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
   // Slice 2 widens the western bank; measured with scripts/measure-areas.mjs.
   // Only reachable floor with every puzzle open counts.
   expect(a.grove).toBe(1428);
-  expect(a.canopy).toBe(818.75);
+  // Slice 3: broad entrance/exit flights replace the old narrow ramps.
+  expect(a.canopy).toBe(976);
   expect(a.grove).toBeGreaterThanOrEqual(757 * 1.7);
   expect(a.canopy).toBeGreaterThanOrEqual(407.75 * 1.7);
   for (const zone of ["forest1", "causeway", "coast"] as const) {

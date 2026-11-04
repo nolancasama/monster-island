@@ -205,6 +205,21 @@ describe("forest layout save migration", () => {
     return decodeSave(JSON.stringify({ v: 4, progress: { ...p, act2, solved: [...p.solved, ...(shortcut ? ["causewayGate"] : [])] }, player: { ...position, yaw: .7 }, seconds: 87 }))!;
   }
 
+  it("decodes old Canopy ramp positions onto valid ground without losing progress", () => {
+    for (const position of [{ x: 100, z: -198 }, { x: 94, z: -244.5 }]) {
+      const p = chapter();
+      p.active = "leafy";
+      p.act2.zone = "canopy";
+      p.act2.cleared = [...STAGES];
+      const back = decodeSave(encodeSave(p, { ...position, yaw: .7 }, 87))!;
+      expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
+      expect(Math.hypot(back.player.x - position.x, back.player.z - position.z)).toBeLessThan(8);
+      expect(back.progress).toEqual(p);
+      expect(back.player.yaw).toBe(.7);
+      expect(back.seconds).toBe(87);
+    }
+  });
+
   it("recovers an unsolved swim or island save at the near bank, and preserves solved dismount saves", () => {
     for (const position of [POND, GROVE_CROSSING.swimEnd, GROVE_CROSSING.friendLanding, GROVE_CROSSING.landing]) {
       const p = chapter();

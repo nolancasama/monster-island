@@ -1959,3 +1959,35 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
   share solid trunks; tests cover scatter and pool ferns. The existing debug
   overlay now includes lowland surfaces, solids and gates, updating on Act 2
   progress changes.
+
+## 2026-11-04 — Slice 3: Canopy stair world logic
+
+- Retained and completed the partial stair implementation: entrance x=104–111,
+  z=-184.5…-200.5; exit x=92–100, z=-239…-252, with a flat top landing.
+  CANOPY_FLIGHTS exports step counts and continuous height functions for the
+  next rendering slice. Quadratically eased ends keep the peak exit slope at
+  atan(10 / 12.85), about 37.89 degrees; the entrance is shallower.
+- The flights are deck surfaces, with no heightfield ramp or per-step collision.
+  Capsule side rims have 0.22 m radius, leaving 6.12 m and 7.12 m of inner
+  clearance. The right arm approaches south of the rim end caps and turns into
+  the open foot while retaining clearance from the existing trees and roots.
+  Its optional enemy keeps the forest-floor pocket beside the entrance.
+- Moved the Canopy clear gate and route marker to (96, -238). Retained the
+  gloomlet's array index while moving its home to (103, -247.5); moved the
+  obstructing pillar and entrance boulders off the flights. Enemy order and
+  count stay fixed. Encounters and camera profiles need no coordinate changes.
+- The exit passage restriction ends at z=-242.5, where Causeway paving starts,
+  rather than at the flight foot. This restores the four adjacent enemy homes
+  and the east-west Causeway floor while the rims contain stair walkers.
+  The flagged void list and fallAhead behavior are unchanged.
+- Reachable Canopy floor measures 976 m² with the existing 0.5 m flood sampler
+  (formerly 818.75 m²); its pin now accounts for the broader stair footprints.
+  Geometry-dependent tests now start the gate traversal on the new landing,
+  expect the shorter right arm to end at the foot, keep its last optional enemy
+  in the side pocket, and expect the relocated gloomlet at the same index.
+  Scene tests retain platform mesh checks but remove the old terrain-ramp and
+  diagonal-exit mesh assumptions; stair/approach rendering is a separate order.
+- Added movement tests at 30/60 Hz for both directions and body radii, numerical
+  slope and join checks, side containment and clear-width checks, gate/spawn
+  regressions, fixed void geometry/fall checks, and old-ramp save recovery tests.
+  Existing save projection handles the changed floor without a format change.
