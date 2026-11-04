@@ -51,8 +51,9 @@ export function secretOf(o: ElementObject): SecretId {
 }
 
 export function secretSolids(secrets: readonly string[] = []): SolidShape[] {
-  return SECRET_IDS.filter(id => !secrets.includes(id)).flatMap(id => {
+  return SECRET_IDS.flatMap(id => {
     const site = SECRET_SITES[id], o = ELEMENT_OBJECTS.find(o => o.id === id)!;
+    if (secrets.includes(id)) return [{ kind: "box", ...site.chest, hx: .5, hz: .36, yaw: 0 } as SolidShape];
     return site.solidTarget ? [site.blocker, { kind: "circle", x: o.x, z: o.z, r: o.r } as SolidShape] : [site.blocker];
   });
 }

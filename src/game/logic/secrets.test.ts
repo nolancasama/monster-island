@@ -6,6 +6,11 @@ import { secretEvent, tickSecrets, type SecretProgress } from "./secrets";
 import { ELEMENT_OBJECTS, SECRET_IDS, SECRET_SITES, type ElementEvent, type SecretId } from "../world/elementObjects";
 import { CHESTS, ENEMY_SPAWNS, STAGES, zoneAt } from "../world/lowland";
 import { PLAYER_R, gatesOf, isWalkable, moveCircle } from "../world/collision";
+import { secretSolids } from "../world/elementObjects";
+import { lowlandSolids } from "../world/lowland";
+import { findFocus } from "../flow/focus";
+import { setGame } from "../store";
+import { resetRuntime, rt } from "../runtime";
 
 function ready(): Progress {
   const p = newProgress();
@@ -126,6 +131,32 @@ describe("optional secrets", () => {
 });
 
 describe("secret placement and collision", () => {
+  it.each(SECRET_IDS)("%s swaps its blocker for its chest and gates focus", id => {
+    const p = ready(), chest = CHESTS.find(c => c.secret === id)!;
+    const box = { kind: "box", x: chest.x, z: chest.z, hx: .5, hz: .36, yaw: chest.yaw };
+    expect(lowlandSolids()).not.toContainEqual(box);
+    expect(secretSolids()).not.toContainEqual(box);
+    expect(secretSolids()).toContainEqual(SECRET_SITES[id].blocker);
+    expect(secretSolids([id])).toContainEqual(box);
+    expect(secretSolids([id])).not.toContainEqual(SECRET_SITES[id].blocker);
+    rt.player.x = chest.x; rt.player.z = chest.z; rt.player.yaw = 0;
+    setGame({ progress: p });
+    expect(findFocus()?.id).not.toBe(chest.id);
+    setGame({ progress: { ...p, act2: { ...p.act2, secrets: [id] } } });
+    expect(findFocus()?.id).toBe(chest.id);
+    resetRuntime();
+    setGame({ progress: newProgress() });
+  });
+
+  it("keeps an ordinary chest solid and focusable", () => {
+    const p = ready(), chest = CHESTS.find(c => c.id === "forestChest")!;
+    expect(lowlandSolids()).toContainEqual({ kind: "box", x: chest.x, z: chest.z, hx: .5, hz: .36, yaw: chest.yaw });
+    rt.player.x = chest.x; rt.player.z = chest.z; rt.player.yaw = 0;
+    setGame({ progress: p });
+    expect(findFocus()?.id).toBe(chest.id);
+    resetRuntime();
+    setGame({ progress: newProgress() });
+  });
   it.each([
     { id: "groveDryReeds", from: { x: 62.5, z: -219.6 }, to: { x: 67.5, z: -219.6 } },
     { id: "canopyDryReeds", from: { x: 112.5, z: -210 }, to: { x: 117.5, z: -210 } },

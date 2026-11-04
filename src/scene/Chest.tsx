@@ -2,15 +2,18 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
-import { getGame } from "../game/store";
+import { getGame, useGame } from "../game/store";
 import { CHESTS } from "../game/world/lowland";
 import { standY } from "../game/world/collision";
+import { revealSmoke } from "../game/smoke";
 import { additiveSprite, flatMat } from "./materials";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 
 /** A treasure chest. Whether it is drawn at all is decided by the lowland's visibility rules (`visible`). */
 export function Chest({ id, visible }: { id: string; visible: (x: number, z: number) => boolean }) {
   const c = CHESTS.find((x) => x.id === id)!;
+  const discovered = () => !c.secret || getGame().progress.act2.secrets.includes(c.secret);
+  const revealed = useGame(s => !c.secret || s.progress.act2.secrets.includes(c.secret));
   const base = useMemo(chestBaseGeometry, []);
   const lid = useMemo(chestLidGeometry, []);
   const lidRef = useRef<THREE.Group>(null);
@@ -22,8 +25,15 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
   const openingSeen = useRef(previousLid.current > 0 || getGame().progress.act2.chests.includes(id));
   const openingAge = useRef(1);
   const root = useRef<THREE.Group>(null);
+  const wasDiscovered = useRef(discovered());
+  // The scene stays mounted behind the title: Continue must not puff saved discoveries.
+  const wasPlaying = useRef(false);
   useFrame((_, dt) => {
-    if (root.current) root.current.visible = visible(c.x, c.z);
+    const revealed = discovered();
+    if (revealed && !wasDiscovered.current && wasPlaying.current) revealSmoke(c.x, standY(c.x, c.z, getGame().progress.solved) + .4, c.z);
+    wasDiscovered.current = revealed;
+    wasPlaying.current = getGame().screen === "game";
+    if (root.current) root.current.visible = revealed && visible(c.x, c.z);
     const k = THREE.MathUtils.clamp(rt.chestLid.get(id) ?? 0, 0, 1);
     const open = getGame().progress.act2.chests.includes(id);
     if (!openingSeen.current && previousLid.current === 0 && k > 0) {
@@ -46,8 +56,9 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
     }
   });
   const y = standY(c.x, c.z, getGame().progress.solved);
+  if (!revealed) return null;
   return (
-    <group ref={root} position={[c.x, y, c.z]} rotation={[0, c.yaw, 0]}>
+    <group ref={root} visible={discovered() && visible(c.x, c.z)} position={[c.x, y, c.z]} rotation={[0, c.yaw, 0]}>
       <mesh geometry={base} material={flatMat} />
       <group ref={lidRef} position={CHEST_HINGE}>
         <mesh geometry={lid} material={flatMat} />

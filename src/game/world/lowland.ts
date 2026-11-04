@@ -923,7 +923,7 @@ export function lowlandSolids(): SolidShape[] {
   for (const ridge of LOWLAND_RIDGES) out.push({ kind: "capsule", ...ridge });
   for (const p of RUIN_PILLARS) circle(p.x, p.z, 0.6);
   circle(FORK_SIGN.x, FORK_SIGN.z, 0.12);
-  for (const c of CHESTS) box(c.x, c.z, 0.5, 0.36, c.yaw);
+  for (const c of CHESTS) if (!c.secret) box(c.x, c.z, 0.5, 0.36, c.yaw);
   for (const s of Object.values(SERVICES)) {
     box(s.house.x, s.house.z, s.house.w / 2, s.house.d / 2, s.house.yaw);
     circle(s.keeper.x, s.keeper.z, 0.4);

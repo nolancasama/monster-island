@@ -2003,3 +2003,7 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
   slope and join checks, side containment and clear-width checks, gate/spawn
   regressions, fixed void geometry/fall checks, and old-ramp save recovery tests.
   Existing save projection handles the changed floor without a format change.
+
+### 2026-11-04 — Secret chest reveals
+
+Secret chest groups stay hidden until their saved secret is discovered. The pocket blocker then gives way to the chest collision box, and a live reveal produces one smoke puff; loading an already discovered secret does not.
