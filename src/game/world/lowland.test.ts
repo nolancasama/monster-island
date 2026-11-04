@@ -227,9 +227,10 @@ describe("the lowland below the sanctuary", () => {
   });
 
   it("preserves every pre-existing spawn index, including the first seven Causeway enemies", () => {
+    // Index 21 moved aside for the exit stairs; with its old point this hashes to ac5f4ffe….
     const original = ENEMY_SPAWNS.slice(0, 41);
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
-      .toBe("ac5f4ffee6642a215b7ef34600d8a0c357639c63c3067fe7d49487495a4361ac");
+      .toBe("18654bf281508a56bd02a112c48e294fa1c0c0b75a4a13de8f74ed7662868d28");
   });
 
   it("fights happen in the forests, causeway and coast; the camp and town are safe", () => {
