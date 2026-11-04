@@ -2028,3 +2028,18 @@ Secret chest groups stay hidden until their saved secret is discovered. The pock
 Kept the frozen 1.1 m pad radius and all three frozen centres; neighbouring rim gaps are 0.66 m and 0.89 m. Removed the continuous water walk strip. Directional input at an unlocked route rim starts a 0.38 s hop with a 0.55 m arc, protected from damage and knockback. The bank launch is the existing near point (45.6, -223.2); the islet launch (37.04, -225.34) faces the last pad and fits both body radii. Scripted crossing points, sequential rise and static land heights stay fixed. Saving an active hop stores its destination. Notches, veins, varied yaw and flower proportions distinguish the three instances; settled standing height matches their tops within 7 mm. Reachability tests model hop edges without adding walk shapes over water.
 
 The area-budget test now models those same hop edges: sampled reachable Grove floor is 1423 m² (formerly 1428 m² with the continuous strip).
+
+## 2026-11-04 — Seven improvements: decisions made during acceptance
+
+- **The thorn thicket fills its pocket.** With the chest hidden, the hedge was a
+  ring around a bare dark rectangle, which looked unfinished and marked the
+  spot. Rejected: leaving it, since the brief asks for a bush covering the place.
+- **Causeway paving stops under the exit flight.** Slabs take the highest surface
+  at their point, so slabs inside the footprint floated across the steps.
+- **Reveal smoke needs the game already running on the previous frame.** The
+  scene stays mounted behind the title, so Continue would have puffed every
+  discovered chest at once.
+- **The right arm is 28 m to the stair foot** (44 m with the flight), under the
+  U-forest target of 40 m to the next-stage boundary. Accepted: the flight is
+  walked as part of the climb; the left arm keeps its 40 m.
+

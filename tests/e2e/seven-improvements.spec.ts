@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { MAPLE } from "../../src/game/world/island";
+import { SECRET_IDS, SECRET_SITES } from "../../src/game/world/elementObjects";
 
 const SHOTS = ".tmp/shots/seven";
 
@@ -110,5 +111,90 @@ test("exit stairs close views", async ({ page }) => {
     await hook(page, "look", [...pos], [...at]);
     await page.waitForTimeout(1000);
     await page.screenshot({ path: `${SHOTS}/exit-${name}.png` });
+  }
+});
+
+test("three separate pads rise, and normal movement hops across and back", async ({ page }) => {
+  const errors = await enter(page, 46, -223.2);
+  await hook(page, "combatFixture", { enemies: [] });
+  await hook(page, "teleport", 45.8, -223.3, -Math.PI / 2);
+  await page.waitForTimeout(1200);
+  await hook(page, "look", [41, 11, -214], [40.5, 2, -225]);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${SHOTS}/lily-pads.png` });
+  await page.evaluate(() => (window as unknown as { __mi: { followCamera?: () => void } }).__mi.followCamera?.());
+  await hook(page, "teleport", 45.8, -223.3, -Math.PI / 2);
+  await page.waitForTimeout(800);
+  const near = (x: number, z: number) => (px: number, pz: number) => Math.hypot(px - x, pz - z) < .9;
+  const legs: Array<[string, (x: number, z: number) => boolean]> = [
+    ["KeyA", near(42.6, -223.4)], ["KeyW", near(41.4, -226)], ["KeyA", near(38.7, -227.5)], ["KeyS", near(37.04, -225.34)],
+    ["KeyW", near(38.7, -227.5)], ["KeyD", near(41.4, -226)], ["KeyS", near(42.6, -223.4)], ["KeyD", near(45.6, -223.2)],
+  ];
+  for (const [i, [key, done]] of legs.entries()) {
+    const leg = await walk(page, key, done, 20_000);
+    console.log("hop", i, key, JSON.stringify(leg));
+    expect(leg.arrived, `leg ${i} ${key} stopped at ${leg.x},${leg.z}`).toBe(true);
+    await page.waitForTimeout(600); // the hop lands at the node's centre
+    if (i === 1) await page.screenshot({ path: `${SHOTS}/lily-on-pad.png` });
+  }
+  expect(errors).toEqual([]);
+});
+
+test("the Causeway holds 14 enemies, materialising in smoke by encounter pocket", async ({ page }) => {
+  const errors = await enter(page, 60, -252, p => { p.act2.cleared = ["forest1", "grove", "canopy"]; p.act2.zone = "causeway"; });
+  const causeway = async () => (await state(page)).act2.enemies.filter(e => e.zone === "causeway");
+  expect((await causeway()).length).toBe(14);
+  await waitFor(page, s => s.act2.enemies.some(e => e.zone === "causeway" && e.state === "materialising"), 30_000, "first smoke");
+  await hook(page, "timeScale", .15);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/smoke-spawn.png` });
+  const first = await causeway();
+  console.log("states", first.map(e => e.state).join(","));
+  expect(first.filter(e => e.state === "dormant").length, "the far pockets are still dormant").toBeGreaterThan(3);
+  expect(first.every(e => e.state !== "gone"), "dormant never reads as defeated").toBe(true);
+  await hook(page, "timeScale", 1);
+  expect(errors).toEqual([]);
+});
+
+test("a secret chest is hidden and unfocusable before discovery", async ({ page }) => {
+  const errors = await enter(page, 87, -172.5);
+  await hook(page, "combatFixture", { enemies: [] });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${SHOTS}/chest-hidden.png` });
+  expect((await state(page)).focus?.id ?? "").not.toContain("emberThicketChest");
+  expect(errors).toEqual([]);
+});
+
+test("a discovered secret chest stays revealed after loading, and can be opened", async ({ page }) => {
+  const errors = await enter(page, 87.4, -176, p => { p.act2.secrets = ["emberThicket"]; });
+  await hook(page, "combatFixture", { enemies: [] });
+  await waitFor(page, s => s.focus?.id === "emberThicketChest", 15_000, "focus on the revealed chest");
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${SHOTS}/chest-revealed.png` });
+  expect(errors).toEqual([]);
+});
+
+test("every secret conceals its chest before discovery", async ({ page }) => {
+  const errors = await enter(page, 87, -172.5);
+  await hook(page, "combatFixture", { enemies: [] });
+  for (const id of SECRET_IDS) {
+    const { approach, chest } = SECRET_SITES[id];
+    await hook(page, "teleport", approach.x, approach.z, Math.PI);
+    await hook(page, "combatFixture", { enemies: [] });
+    await hook(page, "look", [approach.x + (approach.x - chest.x) * .6 + 1.5, 16, approach.z + (approach.z - chest.z) * .6 + 3], [chest.x, 2, chest.z]);
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: `${SHOTS}/secret-before-${id}.png` });
+  }
+  expect(errors).toEqual([]);
+});
+
+test("smoke close-up, at quarter speed", async ({ page }) => {
+  await enter(page, 80, -258, p => { p.act2.cleared = ["forest1", "grove", "canopy"]; p.act2.zone = "causeway"; });
+  await hook(page, "timeScale", .25);
+  await hook(page, "look", [84, 6.5, -253], [78, 2.6, -259]);
+  await waitFor(page, s => s.act2.enemies.some(e => e.state === "materialising" && Math.hypot(e.x - 78, e.z + 259) < .1), 30_000, "smoke at the shellback");
+  for (let i = 0; i < 4; i++) {
+    await page.screenshot({ path: `${SHOTS}/smoke-${i}.png` });
+    await page.waitForTimeout(350);
   }
 });

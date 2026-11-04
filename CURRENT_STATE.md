@@ -6,6 +6,17 @@ stays locked behind the Coming Soon notice), gameplay polish and the debug menu.
 (`mi.save.v4`); v1–v3 still load and are never overwritten; `act2.forestLayout: 2` marks
 migrated saves. https://nolancasama.github.io/monster-island/
 
+## Branch `feature/seven-improvements` (pushed, not merged; merging deploys and needs approval)
+Frozen spec `docs/SEVEN_IMPROVEMENTS.md`. Browser spec `tests/e2e/seven-improvements.spec.ts`; evidence in `.tmp/shots/seven/`; `node scripts/walkability-audit.mjs out.svg` gives the walkable mask and m² per zone.
+
+- **Maple:** the player turns to her, and she to the player, at the start of the opening talk.
+- **Walkability:** Forest Camp opens to the north; wider Forest, Grove, Causeway and Coast floors. The debug overlay covers the lowland.
+- **Canopy stairs:** straight flights replace the ~54° ramps (`CANOPY_FLIGHTS`, ≤ 38°, 7–8 m wide); the Canopy gate is at the top landing. Exit flight stands in the Causeway.
+- **Lily pads:** three pads on a curved route (a straight line does not fit), each its own walking disc; `logic/lilyHop.ts` hops on directional input.
+- **Smoke spawns:** enemies are `dormant`, then `materialising` within 20 m in their zone (`combat.ts`). Save rule: append to `ENEMY_SPAWNS`, never reorder.
+- **Secret chests:** drawn, solid and focusable only after discovery.
+- **Causeway:** 14 enemies, all required.
+
 ## Blue Inferno, Puff anchor, full swing, Grove crossing, expanded stages (merged, deployed)
 Frozen spec `docs/GROVE_CANOPY_EXPANSION.md`.
 

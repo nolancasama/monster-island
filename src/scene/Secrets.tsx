@@ -165,6 +165,9 @@ export function Secrets() {
             thorn(x + hx, z - hz + t * hz * 2, shut, i + 6);
           }
         }
+        // The bush covers the whole pocket: no bare floor gives the hiding place away.
+        if (shut > .002) for (let ix = 1; ix < 4; ix++) for (let iz = 1; iz < 5; iz++)
+          thorn(x - hx + ix * hx / 2, z - hz + iz * hz * .4, shut * 1.2, ix * 3 + iz);
         if (k > 0) part("stone", ox, oy + .035, oz, .85 * k, .055, .8 * k, "#615951");
       } else if (s.id === "bubboLedgeKey") {
         const postX = x - hx - .32, postZ = z + hz;
