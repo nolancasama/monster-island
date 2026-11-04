@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { isWalkable, moveCircle, PLAYER_R } from "./collision";
 import { CLIFF_ROPE, STAGES, STAGE_EXITS, zoneAt } from "./lowland";
 import { SECRET_IDS } from "./elementObjects";
+import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
 
 /** Baseline measured on d820c80 with this exact 0.5 m collision sampling.
  * Measures traversable floor, excluding solid props, ponds and unresolved
@@ -15,6 +16,15 @@ export function measureAreas() {
   const reachable = new Set<string>([start.join(",")]), queue = [start];
   while (queue.length) {
     const [i, j] = queue.pop()!;
+    // The optional islet uses explicit hop edges, never a water walk shape.
+    for (const node of LILY_ROUTE) {
+      const target = hopTarget(i / 2, j / 2, node.x - i / 2, node.z - j / 2, true, 1);
+      if (!target) continue;
+      const ni = Math.round(target.x * 2), nj = Math.round(target.z * 2), key = `${ni},${nj}`;
+      if (!reachable.has(key) && isWalkable(ni / 2, nj / 2, gates, PLAYER_R)) {
+        reachable.add(key); queue.push([ni, nj]);
+      }
+    }
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = i + di, nj = j + dj, key = `${ni},${nj}`, x = ni / 2, z = nj / 2;
       if (reachable.has(key) || x < 20 || x >= 134 || z < -338 || z >= -153.6 || !isWalkable(x, z, gates, PLAYER_R)) continue;
@@ -38,9 +48,9 @@ export function measureAreas() {
 }
 it("preserves the base and downstream floor budgets, accounting for the removed branch approaches and new arms", () => {
   const a = measureAreas();
-  // Slice 2 widens the western bank; measured with scripts/measure-areas.mjs.
-  // Only reachable floor with every puzzle open counts.
-  expect(a.grove).toBe(1428);
+  // Slice 4 removes the continuous water strip; hop edges retain the islet.
+  // Only reachable floor with every puzzle open counts (0.5 m sampling).
+  expect(a.grove).toBe(1423);
   // Slice 3: broad entrance/exit flights replace the old narrow ramps.
   expect(a.canopy).toBe(976);
   expect(a.grove).toBeGreaterThanOrEqual(757 * 1.7);

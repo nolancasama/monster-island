@@ -121,6 +121,7 @@ export const rt = {
     step: 0,
     /** A cutscene owns the player (no input movement). */
     frozen: false,
+    hop: null as import("./logic/lilyHop").LilyHop | null,
     /** Riding Bubbo across the river (the simulation keeps the player on the saddle). */
     riding: false,
     /** While riding: 0 = standing at rideFrom, 1 = seated on Bubbo (the hop on and off). */
@@ -234,6 +235,7 @@ export function resetRuntime() {
   p.yaw = SPAWN.yaw;
   p.vx = p.vz = p.speed = 0;
   p.frozen = false;
+  p.hop = null;
   p.riding = false;
   p.seat = 0;
   p.climbY = null;

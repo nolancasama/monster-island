@@ -5,7 +5,7 @@ import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, lowlandSolids,
-  GROVE_CROSSING, ISLET, POND, POND_Y, LILY_PAD_R, lilyPadRise, CANOPY_HEIGHT, canopyDeckY,
+  GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
@@ -18,6 +18,7 @@ import { lowlandSpots } from "../../scene/models/lowland";
 import { clearStage, remainingEnemies } from "../logic/act2";
 import { newProgress } from "../logic/progress";
 import { createHash } from "node:crypto";
+import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
@@ -30,6 +31,13 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
   const queue = [start];
   while (queue.length) {
     const [i, j] = queue.pop()!;
+    if (g.solved.includes("groveLilies")) for (const node of LILY_ROUTE) {
+      const dx = node.x - i * S, dz = node.z - j * S;
+      const target = hopTarget(i * S, j * S, dx, dz, true, 1);
+      if (!target) continue;
+      const ni = Math.round(target.x / S), nj = Math.round(target.z / S), key = `${ni},${nj}`;
+      if (!seen.has(key) && isWalkable(ni * S, nj * S, g, radius)) { seen.add(key); queue.push([ni, nj]); }
+    }
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = i + di, nj = j + dj, key = `${ni},${nj}`;
       const x = ni * S, z = nj * S;
@@ -140,27 +148,15 @@ describe("the lowland below the sanctuary", () => {
     }
   });
 
-  it("fits both dismounted bodies safely inland and walks the raised pads both ways at either radius", () => {
+  it("fits both dismounted bodies safely inland and each hop landing at either radius", () => {
     expect(ISLET.r).toBeGreaterThanOrEqual(3);
     for (const [p, radius] of [[GROVE_CROSSING.landing, PLAYER_R], [GROVE_CROSSING.friendLanding, .55]] as const)
       expect(ISLET.r - Math.hypot(p.x - ISLET.x, p.z - ISLET.z) - radius).toBeGreaterThanOrEqual(1.2);
     expect(Math.hypot(GROVE_CROSSING.near.x - POND.x, GROVE_CROSSING.near.z - POND.z) - POND.r).toBeGreaterThanOrEqual(1.2);
-    expect(LILY_PADS.length).toBeGreaterThanOrEqual(5);
-    for (const radius of [PLAYER_R, .7]) {
-      for (const [start, end] of [[GROVE_CROSSING.near, GROVE_CROSSING.landing], [GROVE_CROSSING.landing, GROVE_CROSSING.near]]) {
-        let p = { ...start };
-        for (let i = 1; i <= 160; i++) {
-          const t = i / 160, x = start.x + (end.x - start.x) * t, z = start.z + (end.z - start.z) * t;
-          expect(isWalkable(x, z, gates(["groveLilies"]), radius), `${radius}: ${x},${z}`).toBe(true);
-          p = moveCircle(p.x, p.z, x, z, radius, gates(["groveLilies"]));
-          expect(Math.hypot(p.x - x, p.z - z)).toBeLessThan(.001);
-          // Physical discs overlap by enough for either body, including the seam midpoint.
-          if (x < POND.x + POND.r && x > ISLET.x + ISLET.r)
-            expect(LILY_PADS.some(pad => Math.hypot(x - pad.x, z - pad.z) <= LILY_PAD_R)).toBe(true);
-        }
-        expect(p.x).toBeCloseTo(end.x);
-      }
-    }
+    expect(LILY_PADS).toHaveLength(3);
+    for (const radius of [PLAYER_R, .55])
+      for (const point of [...LILY_ROUTE, GROVE_CROSSING.landing, GROVE_CROSSING.friendLanding])
+        expect(isWalkable(point.x, point.z, gates(["groveLilies"]), radius), JSON.stringify(point)).toBe(true);
   });
 
   it("keeps water, terrain and island standing heights fixed throughout the sequential rise", () => {

@@ -881,6 +881,10 @@ export function lilyPadGeometry(): THREE.BufferGeometry {
   // One pad in local space. The notch points away from the walking centreline.
   b.add(new THREE.CylinderGeometry(LILY_PAD_R, LILY_PAD_R, 0.08, 16, 1, false, -0.3, Math.PI * 1.8), "#5fae4f", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   b.sphere(0.12, 0.25, 0.08, -0.2, "#ff8fb8", [1, 0.7, 1], 6);
+  for (let i = 1; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    between(b, [.08 * Math.sin(a), .043, .08 * Math.cos(a)], [.94 * Math.sin(a), .043, .94 * Math.cos(a)], .012, .006, "#87c86a", 3);
+  }
   return b.build();
 }
 
@@ -892,7 +896,10 @@ export function updateLilyPadMatrices(mesh: THREE.InstancedMesh, unlock: number,
     if (values[i] === rise) continue;
     values[i] = rise;
     const pad = LILY_PADS[i];
-    matrix.makeTranslation(pad.x, POND_Y - 0.6 + rise * 0.66, pad.z);
+    matrix.makeRotationY(i * 1.73 + .4);
+    // Slightly varied outlines and flowers, with the standing surface at +.10.
+    matrix.scale(new THREE.Vector3(1 - i * .025, 1 + i * .08, 1));
+    matrix.setPosition(pad.x, POND_Y - .6 + rise * .66, pad.z);
     mesh.setMatrixAt(i, matrix);
     changed = true;
   }

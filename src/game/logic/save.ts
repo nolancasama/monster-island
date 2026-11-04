@@ -10,6 +10,7 @@ import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/
 import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
+import { rt } from "../runtime";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
@@ -42,6 +43,8 @@ export interface SaveData {
 }
 
 export function encodeSave(progress: Progress, player: SaveData["player"], seconds: number): string {
+  if (rt.player.hop && player.x === rt.player.x && player.z === rt.player.z)
+    player = { x: rt.player.hop.toX, z: rt.player.hop.toZ, yaw: player.yaw };
   const data: SaveData = { v: VERSION, progress, player, seconds };
   return JSON.stringify(data);
 }

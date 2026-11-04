@@ -39,9 +39,8 @@ describe("the Grove's pad-only animated draw", () => {
       expect(position.x).toBeCloseTo(LILY_PADS[i].x);
       expect(position.z).toBeCloseTo(LILY_PADS[i].z);
       expect(position.y).toBeCloseTo(POND_Y + .06);
-      expect(read.elements[0]).toBe(1);
-      expect(read.elements[5]).toBe(1);
-      expect(read.elements[10]).toBe(1);
+      expect(read.elements[0]).toBeCloseTo(Math.cos(i * 1.73 + .4) * (1 - i * .025));
+      expect(read.elements[5]).toBeCloseTo(1 + i * .08);
     }
     const settledVersion = mesh.instanceMatrix.version;
     expect(updateLilyPadMatrices(mesh, 1, values, scratch)).toBe(false);

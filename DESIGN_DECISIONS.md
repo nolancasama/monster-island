@@ -2019,3 +2019,12 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
   surface and ground-reaching bark faces. The existing gate renderer uses the
   authored (96, -238) landing position and deck height. Removed the obsolete
   exit-ramp mesh path and raised-heightfield colouring; world logic is unchanged.
+### 2026-11-04 — Secret chest reveals
+
+Secret chest groups stay hidden until their saved secret is discovered. The pocket blocker then gives way to the chest collision box, and a live reveal produces one smoke puff; loading an already discovered secret does not.
+
+### 2026-11-04 — Three separate Grove lily pads (slice 4)
+
+Kept the frozen 1.1 m pad radius and all three frozen centres; neighbouring rim gaps are 0.66 m and 0.89 m. Removed the continuous water walk strip. Directional input at an unlocked route rim starts a 0.38 s hop with a 0.55 m arc, protected from damage and knockback. The bank launch is the existing near point (45.6, -223.2); the islet launch (37.04, -225.34) faces the last pad and fits both body radii. Scripted crossing points, sequential rise and static land heights stay fixed. Saving an active hop stores its destination. Notches, veins, varied yaw and flower proportions distinguish the three instances; settled standing height matches their tops within 7 mm. Reachability tests model hop edges without adding walk shapes over water.
+
+The area-budget test now models those same hop edges: sampled reachable Grove floor is 1423 m² (formerly 1428 m² with the continuous strip).

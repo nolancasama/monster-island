@@ -2178,7 +2178,7 @@ function separate() {
 
 function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
   if (debugEnabled && useDebug.getState().invincible) return;
-  if (rt.time < cb.safeUntil || cb.knockedOut) return;
+  if (rt.player.hop || rt.time < cb.safeUntil || cb.knockedOut) return;
   cb.vitals = hurt(cb.vitals, n);
   cb.safeUntil = rt.time + 1.1;
   cb.hurtT = rt.time;
