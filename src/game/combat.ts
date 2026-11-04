@@ -23,6 +23,7 @@ import { fireDamage } from "./logic/elements";
 import { hpAfterFall } from "./logic/falls";
 import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
 import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, type Swing } from "./logic/swing";
+import { revealSmoke } from "./smoke";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -42,7 +43,7 @@ import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, ty
  * - One HP pool (the player's, also while riding) and each friend's own MP.
  */
 
-export type EnemyState = "idle" | "alert" | "chase" | "windup" | "lunge" | "recover" | "stun" | "ko" | "gone" | "return";
+export type EnemyState = "dormant" | "materialising" | "idle" | "alert" | "chase" | "windup" | "lunge" | "recover" | "stun" | "ko" | "gone" | "return";
 export type CombatZone = ZoneId | CloudAreaId;
 interface CloudZoneMemory {
   current: CloudAreaId | null;
@@ -78,6 +79,8 @@ export interface EnemyRt {
   kz: number;
   hp: number;
   state: EnemyState;
+  /** Smoke start; materialising is harmless in both directions for 0.5 s. */
+  spawnT: number | null;
   /** A hit can stun a sleeping enemy without occupying a fifth attack slot. */
   waiting: boolean;
   /** Seconds left in the current state (counts down only while the fight runs). */
@@ -228,7 +231,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   const s = (cloud ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS)[i];
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, lastGround: { x: s.x, z: s.z }, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
-    hp: ENEMIES[s.replaces ?? s.kind].hp, state: "idle", waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
+    hp: ENEMIES[s.replaces ?? s.kind].hp, state: "dormant", spawnT: null, waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
     hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, step: 0
   };
 }
@@ -243,6 +246,7 @@ export const cb = {
   zones: newZoneMemory() as ZoneMemory,
   cloudZones: { current: null, defeated: {}, leftAt: {} } as CloudZoneMemory,
   world: "home" as "home" | "cloud",
+  nextActivation: {} as Partial<Record<CombatZone, number>>,
   shots: [] as Shot[],
   cyclone: null as Cyclone | null,
   inferno: null as null | { age: number; tick: number },
@@ -296,6 +300,7 @@ export function resetCombat() {
   cb.zones = newZoneMemory();
   cb.cloudZones = { current: null, defeated: {}, leftAt: {} };
   cb.world = onCloudIsle() ? "cloud" : "home";
+  cb.nextActivation = {};
   cb.elementObjects = {};
   cb.shots = [];
   cb.drops = [];
@@ -328,8 +333,11 @@ export function travelCombat() {
   if (cb.world === "cloud") cb.cloudZones.current = null;
   else cb.zones.current = null;
   worldEnemies[cb.world] = cb.enemies;
+  // World travel may replay reveals, but preserves defeated encounter memory.
+  for (const e of cb.enemies) if (undefeated(e)) { e.state = "dormant"; e.spawnT = null; }
   cb.enemies = worldEnemies[next] ?? activeSpawns().map((_, i) => spawnEnemy(i, next === "cloud"));
   cb.world = next;
+  cb.nextActivation = {};
   clearSpecials();
   cb.shots = [];
   cb.drops = [];
@@ -564,7 +572,36 @@ export function canFight(): boolean {
 
 const freeBeaconMoves = () => cb.beacon.active && onCloudIsle() && combatZoneAt(rt.player.x, rt.player.z) === "stormBeacon";
 
-const alive = (e: EnemyRt) => e.state !== "ko" && e.state !== "gone";
+const undefeated = (e: EnemyRt) => e.state !== "ko" && e.state !== "gone";
+/** Combat participation, shared by targeting, hits, controls and separation. */
+const alive = (e: EnemyRt) => undefeated(e) && e.state !== "dormant" && e.state !== "materialising";
+
+/** Fight fixtures bypass the reveal without pretending an unseen enemy is defeated. */
+export function wakeEnemy(e: EnemyRt) {
+  if (e.state === "dormant" || e.state === "materialising") e.state = "idle";
+  e.spawnT = null;
+}
+
+export function enemyRevealScale(e: EnemyRt): number {
+  if (e.state === "dormant" || e.state === "gone") return 0;
+  return e.state === "materialising" ? Math.max(0, Math.min(1, (rt.time - e.spawnT! - .18) / .32)) : 1;
+}
+
+function materialise(e: EnemyRt) {
+  e.state = "materialising";
+  e.spawnT = rt.time;
+  revealSmoke(e.homeX, standY(e.homeX, e.homeZ, getGame().progress.solved) + .4, e.homeZ);
+}
+
+function activateEnemies(zone: CombatZone | null) {
+  if (!zone || !canFight()) return;
+  for (const e of cb.enemies) {
+    if (e.zone !== zone || e.state !== "dormant" || Math.hypot(rt.player.x - e.homeX, rt.player.z - e.homeZ) > 20) continue;
+    if (rt.time + 1e-9 < (cb.nextActivation[zone] ?? -Infinity)) break;
+    materialise(e);
+    cb.nextActivation[zone] = rt.time + .12;
+  }
+}
 const awakeEnemies = (zone: CombatZone) => {
   let count = 0;
   for (const e of cb.enemies) if (e.zone === zone && alive(e) && e.state !== "idle" && e.state !== "return") count++;
@@ -1576,6 +1613,7 @@ function updateBeaconFight(dt: number, live: boolean, zone: CombatZone | null) {
       const x = BEACON_ARENA.x + (i === 0 ? -5 : 5), z = BEACON_ARENA.z + 5;
       Object.assign(sprite, { i: 10000 + i, zone: "stormBeacon", x, z, homeX: x, homeZ: z, state: "alert", timer: 1.2, alertT: rt.time });
       cb.enemies.push(sprite);
+      materialise(sprite);
     }
     audio.play("alert");
   }
@@ -1672,7 +1710,7 @@ function knockOut(e: EnemyRt, rewardAt?: { x: number; z: number }) {
 export function debugKillZone() {
   if (!debugEnabled) return;
   const zone = combatZoneAt(rt.player.x, rt.player.z);
-  for (const e of cb.enemies) if (e.zone === zone && alive(e)) knockOut(e);
+  for (const e of cb.enemies) if (e.zone === zone && undefeated(e)) knockOut(e);
   if (onCloudIsle() && zone === "stormBeacon" && !getGame().progress.act3.beaconDefeated) {
     cb.beacon.power = 0;
     cb.beacon.active = false;
@@ -1806,6 +1844,7 @@ export function combatTick(dt: number) {
     return;
   }
   if (!cb.knockedOut) cb.vitals = regenMp(cb.vitals, dt);
+  activateEnemies(zone);
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack({ repeat: true });
   const live = canFight();
@@ -1838,7 +1877,8 @@ export function combatTick(dt: number) {
 
 function sendHome(zone: CombatZone) {
   for (const e of cb.enemies) {
-    if (e.zone !== zone || !alive(e)) continue;
+    if (e.zone !== zone || !undefeated(e) || e.state === "dormant") continue;
+    const revealing = e.state === "materialising";
     e.x = e.homeX;
     e.z = e.homeZ;
     e.kx = e.kz = 0;
@@ -1851,7 +1891,7 @@ function sendHome(zone: CombatZone) {
     e.resistUntil = 0;
     e.slowUntil = 0;
     e.wander = null;
-    e.state = "idle";
+    if (!revealing) e.state = "idle";
     e.waiting = false;
     e.hp = spawnDef(e).hp;
   }
@@ -1859,6 +1899,7 @@ function sendHome(zone: CombatZone) {
 
 /** A fresh crowd in an area: everyone back at home, full health, patrols reset. */
 function respawnZone(zone: CombatZone) {
+  delete cb.nextActivation[zone];
   for (const e of cb.enemies) if (e.zone === zone && e.i < 10000) Object.assign(e, spawnEnemy(e.i, onCloudIsle()));
 }
 
@@ -1958,6 +1999,7 @@ function updateRanged(e: EnemyRt, dt: number, distance: number) {
 }
 
 function pauseElements(e: EnemyRt, dt: number) {
+  if (e.state === "materialising" && e.spawnT !== null) e.spawnT += dt;
   if (e.panic) { e.panic.t0 += dt; e.panic.until += dt; e.panic.turnAt += dt; }
   if (e.panicResistUntil > 0) e.panicResistUntil += dt;
   e.lastFireT += dt;
@@ -1970,7 +2012,12 @@ function pauseElements(e: EnemyRt, dt: number) {
 }
 
 function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
-  if (e.state === "gone") return;
+  if (e.state === "gone" || e.state === "dormant") return;
+  if (e.state === "materialising") {
+    if (!live) pauseElements(e, dt);
+    else if (rt.time - e.spawnT! >= .5 - 1e-9) { e.state = e.i >= 10000 ? "alert" : "idle"; e.spawnT = null; }
+    return;
+  }
   const def = ENEMIES[e.kind];
   const p = rt.player;
   if (e.state === "ko") {
@@ -2315,7 +2362,7 @@ export function stageStatus() {
   const zone = currentZone();
   if (!zone || !ZONES[zone].hostile || getGame().progress.act2.cleared.includes(zone as StageId)) return null;
   const remaining = remainingEnemies(zone, cb.zones.defeated[zone] ?? []);
-  const last = remaining === 1 ? cb.enemies.find((e) => e.zone === zone && alive(e)) : null;
+  const last = remaining === 1 ? cb.enemies.find((e) => e.zone === zone && undefeated(e) && !ENEMY_SPAWNS[e.i]?.optional) : null;
   return { zone, remaining, last };
 }
 
@@ -2324,6 +2371,6 @@ export function cloudStageStatus() {
   if (!onCloudIsle() || !zone || !CLOUD_STAGES.includes(zone as CloudStageId) || getGame().progress.act3.cleared.includes(zone as CloudStageId)) return null;
   const defeated = cb.cloudZones.defeated[zone] ?? [];
   const remaining = CLOUD_ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !defeated.includes(i)), 0);
-  const last = remaining === 1 ? cb.enemies.find((e) => e.zone === zone && alive(e)) : null;
+  const last = remaining === 1 ? cb.enemies.find((e) => e.zone === zone && undefeated(e)) : null;
   return { zone, remaining, last };
 }

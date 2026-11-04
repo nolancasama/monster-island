@@ -36,6 +36,7 @@ export type SfxName =
   | "sparkle"
   | "stone"
   | "poof"
+  | "spawnPop"
   | "switch"
   | "bump"
   | "whoosh"
@@ -274,6 +275,10 @@ class AudioEngine {
     if (!this.ready()) return;
     const t = this.now;
     switch (name) {
+      case "spawnPop":
+        this.tone(480, t, { to: 130, peak: .08, attack: .003, decay: .075, type: "sine" });
+        this.noiseBurst(t, { filter: "lowpass", freq: 1600, peak: .045, attack: .002, decay: .055 });
+        break;
       case "crackle":
         for (let i = 0; i < 4; i++) this.noiseBurst(t + i * .045, { filter: "highpass", freq: 2900, peak: .045, attack: .002, decay: .025 });
         this.tone(1300, t, { to: 700, peak: .025, decay: .15, type: "sawtooth" });

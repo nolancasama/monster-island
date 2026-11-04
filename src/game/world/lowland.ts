@@ -858,6 +858,14 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "canopy", kind: "snapjaw", x: 99.5, z: -222.5 },
   { zone: "canopy", kind: "gloomlet", x: 93, z: -232 },
   { zone: "canopy", kind: "shellback", x: 101, z: -232 },
+  // Ruined Causeway encounter pockets; appended to preserve saved spawn indices.
+  { zone: "causeway", kind: "gloomlet", x: 88, z: -248 },
+  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 96, z: -257 },
+  { zone: "causeway", kind: "snapjaw", x: 73, z: -247.5 },
+  { zone: "causeway", kind: "shellback", x: 78, z: -259 },
+  { zone: "causeway", kind: "gloomlet", x: 68, z: -261 },
+  { zone: "causeway", kind: "snapjaw", x: 54, z: -252 },
+  { zone: "causeway", kind: "gloomlet", x: 101, z: -259 },
 ];
 
 /** Town props (scenery placements shared by the scene and collision). */

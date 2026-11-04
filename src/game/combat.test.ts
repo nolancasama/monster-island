@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { basicAttack, cb, combatTick, crabDamage, hooks, isRanged, pickTarget, resetBeaconFight, resetCombat, specialAttack, speedScale, travelCombat, wakeUp, type Shot } from "./combat";
+import { basicAttack, cb, combatTick, crabDamage, enemyRevealScale, hooks, isRanged, pickTarget, resetBeaconFight, resetCombat, specialAttack, speedScale, travelCombat, wakeUp, type Shot } from "./combat";
 import { newProgress } from "./logic/progress";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
@@ -196,6 +196,57 @@ function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
   Object.assign(e, { kind, zone: "stormbreakCoast", x, z, homeX: x, homeZ: z, hp: 100, state: "recover", timer: 99, kx: 0, kz: 0 });
   return e;
 }
+
+describe("enemy smoke reveals", () => {
+  it("activates only nearby enemies in the current zone, staggered by .12 seconds", () => {
+    for (const e of cb.enemies) e.state = "gone";
+    const [a, b, far, other] = cb.enemies;
+    for (const e of [a, b, far, other]) Object.assign(e, { state: "dormant", zone: "stormbreakCoast", homeX: 0, homeZ: 21, x: 0, z: 21 });
+    far.homeZ = 40.01; other.zone = "thunderGrotto";
+    combatTick(0);
+    expect(a.state).toBe("materialising");
+    expect([b.state, far.state, other.state]).toEqual(["dormant", "dormant", "dormant"]);
+    rt.time += .119; combatTick(.119); expect(b.state).toBe("dormant");
+    rt.time += .001; combatTick(.001); expect(b.state).toBe("materialising");
+  });
+
+  it.each(["dormant", "materialising"] as const)("%s cannot participate in combat or separation", state => {
+    const e = loneEnemy("snapjaw", 0, 20.5);
+    e.state = state; e.spawnT = rt.time; e.homeZ = 40.01;
+    const hp = e.hp, playerHp = cb.vitals.hp, z = e.z;
+    expect(pickTarget(10)).toBeNull();
+    basicAttack();
+    rt.time += .15; combatTick(.15);
+    expect(e.hp).toBe(hp); expect(cb.vitals.hp).toBe(playerHp); expect(e.z).toBe(z);
+    expect(enemyRevealScale(e)).toBe(0);
+    if (state === "materialising") {
+      rt.time += .03; expect(enemyRevealScale(e)).toBe(0);
+      rt.time += .01; expect(enemyRevealScale(e)).toBeGreaterThan(0);
+      rt.time += .30; combatTick(.34);
+      expect(e.state).toBe("materialising"); expect(e.hp).toBe(hp);
+      rt.time += .01; combatTick(.01); expect(e.state).toBe("idle");
+    }
+  });
+
+  it("does not replay smoke on a boundary crossing, but does on a real respawn", () => {
+    for (const e of cb.enemies) e.state = "gone";
+    const e = cb.enemies[0];
+    Object.assign(e, { state: "idle", zone: "stormbreakCoast", x: 0, z: 21, homeX: 0, homeZ: 21 });
+    rt.effects = []; vi.mocked(audio.play).mockClear();
+    const count = cb.enemies.length;
+    rt.player.z = 5; combatTick(0);
+    rt.player.z = 20; combatTick(0);
+    expect(e.state).not.toBe("dormant");
+    expect(cb.enemies).toHaveLength(count);
+    expect(rt.effects.filter(f => f.kind === "poof")).toHaveLength(0);
+    rt.player.z = 5; combatTick(0);
+    cb.cloudZones.defeated.stormbreakCoast = [e.i];
+    rt.playTime += 12;
+    rt.player.z = 20; combatTick(0);
+    expect(e.state).toBe("materialising");
+    expect(rt.effects.some(f => f.kind === "poof")).toBe(true);
+  });
+});
 
 describe("Leafy's snap-timed whip", () => {
   afterEach(() => setGame({ line: null }));
@@ -1294,7 +1345,7 @@ describe("Cloud Isle combat", () => {
     changeWorld("home");
     resetCombat();
     changeWorld("cloud");
-    expect(cb.enemies[0].state).toBe("idle");
+    expect(cb.enemies[0].state).toBe("dormant");
     expect(cb.cloudZones.defeated.stormbreakCoast).toBeUndefined();
   });
 
@@ -1642,6 +1693,16 @@ describe("Storm Beacon world combat integration", () => {
       combatTick(1 / 60);
     }
   }
+
+  it("returns reinforcements to alert after their smoke", () => {
+    enterArena(); cb.beacon.power = 1;
+    combatTick(0);
+    const sprites = cb.enemies.filter(e => e.i >= 10000);
+    expect(sprites).toHaveLength(2);
+    expect(sprites.every(e => e.state === "materialising")).toBe(true);
+    advance(.5);
+    expect(sprites.every(e => e.state === "alert")).toBe(true);
+  });
 
   it("Bubbo's real bubble is blocked by a shield, shorts charging early, then breaks the exposed pylon", () => {
     enterArena();

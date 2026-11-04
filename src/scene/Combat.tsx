@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame, useGame } from "../game/store";
-import { cb, combatZoneAt, currentCombatZone, type EnemyRt, type Fx } from "../game/combat";
+import { cb, combatZoneAt, currentCombatZone, enemyRevealScale, type EnemyRt, type Fx } from "../game/combat";
 import { ENEMIES, type CloudEnemyKind, type EnemyKind } from "../game/data/combat";
 import { ENEMY_SPAWNS, type EnemyKind as LowlandEnemyKind } from "../game/world/lowland";
 import { CLOUD_ENEMY_SPAWNS } from "../game/world/cloudisle";
@@ -71,8 +71,10 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     if (!g || !m) return;
     const p = rt.player;
     const near = Math.hypot(p.x - e.x, p.z - e.z) < VIEW;
-    g.visible = e.zone === currentCombatZone() && e.state !== "gone" && near && getGame().progress.act2.started;
+    const reveal = enemyRevealScale(e);
+    g.visible = e.zone === currentCombatZone() && reveal > 0 && near && getGame().progress.act2.started;
     if (!g.visible) return;
+    g.scale.setScalar(reveal);
     const t = rt.time;
     // A plunge keeps its own height: the ground under the void is far below the lip.
     const y = e.plunge ? plungeY(e.plunge, t) : standY(e.x, e.z, getGame().progress.solved);
@@ -113,7 +115,7 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
   });
   const top = e.kind === "gloomlet" ? 1.05 : e.kind === "snapjaw" ? 1.3 : 1.35;
   return (
-    <group ref={root}>
+    <group ref={root} visible={false}>
       <mesh ref={body} geometry={geo} material={mat} />
       {(ring || kind === "raiderDrone" || kind === "stormCrab") && (
         <mesh ref={tell} geometry={tellGeo} position={[0, 0.06, 0]} visible={false}>
@@ -136,6 +138,7 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
 function Enemies() {
   const world = useGame((g) => g.progress.act3.world);
   const spawns = world === "cloud" ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
+  // Bodies have one slot per spawn, so the 14-enemy Causeway has no instance cap.
   // cb.enemies is replaced on reset: render by spawn index and look the live record up each frame.
   return (
     <>

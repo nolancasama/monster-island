@@ -354,7 +354,7 @@ export function ElementEffects() {
       let panicCount = 0, speechCount = 0;
       for (let enemyIndex = 0; enemyIndex < cb.enemies.length; enemyIndex++) {
         const e = cb.enemies[enemyIndex];
-        if (e.zone !== zone || e.state === "gone" || Math.hypot(e.x - rt.player.x, e.z - rt.player.z) > 48) continue;
+        if (e.zone !== zone || e.state === "gone" || e.state === "dormant" || e.state === "materialising" || Math.hypot(e.x - rt.player.x, e.z - rt.player.z) > 48) continue;
         if (e.plunge) continue;
         const ground = standY(e.x, e.z, game.progress.solved);
         const y = ground + e.air, radius = ENEMIES[e.kind].radius;
@@ -530,7 +530,7 @@ export function ElementEffects() {
           draw.sprite(streamBase.x, streamBase.y, streamBase.z, .68, .68, "#126dff", .35 * streamFade);
           // Only recent real hits sparkle, so scenery cannot imply damage through a wall.
           for (const e of cb.enemies) {
-            if (e.zone !== zone || e.state === "gone" || t - e.lastFireT > .16) continue;
+            if (e.zone !== zone || e.state === "gone" || e.state === "dormant" || e.state === "materialising" || t - e.lastFireT > .16) continue;
             for (let i = 0; i < 3; i++) {
               const a = t * 23 + i * TAU / 3;
               draw.sprite(e.x + Math.sin(a) * .45, standY(e.x, e.z, game.progress.solved) + e.air + .65 + Math.cos(a) * .3,

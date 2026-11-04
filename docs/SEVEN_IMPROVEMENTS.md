@@ -170,7 +170,7 @@ Append exactly these seven at the **end** of `ENEMY_SPAWNS`:
 | --- | --- | --- | --- |
 | gloomlet | 88 | -248 | Canopy stairs, west side |
 | raiderShooter (replaces snapjaw) | 96 | -257 | foot of Canopy stairs |
-| snapjaw | 72 | -250 | central pillars |
+| snapjaw | 73 | -247.5 | central pillars (moved from 72, -250: statues need 4 m clearance) |
 | shellback | 78 | -259 | central Causeway |
 | gloomlet | 68 | -261 | route to the Coast |
 | snapjaw | 54 | -252 | Grove entrance |

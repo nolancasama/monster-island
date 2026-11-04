@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt, type Effect } from "../game/runtime";
@@ -94,11 +94,12 @@ const BURSTS: Record<Effect["kind"], Burst> = {
   },
   poof: {
     life: 0.6,
-    color: new THREE.Color("#ffffff"),
+    color: new THREE.Color("#eeeae2"),
     size: 0.5,
     pos: (e, i, t, o) => {
       const a = (i / PER) * Math.PI * 2;
-      o.set(e.x + Math.cos(a) * t * 1.6, e.y + t * 0.6, e.z + Math.sin(a) * t * 1.6);
+      const r = .12 + t * (1.2 + rnd(i) * .8);
+      o.set(e.x + Math.cos(a) * r, e.y + rnd(i * 7) * .45 + t * .7, e.z + Math.sin(a) * r);
     }
   },
   notes: {
@@ -186,7 +187,7 @@ function Particles() {
       alpha.needsUpdate = true;
     };
     fill(hearts, ["hearts"]);
-    fill(glows, ["sparkle", "leaves", "splash", "poof", "notes"]);
+    fill(glows, ["sparkle", "leaves", "splash", "notes"]);
   });
   return (
     <group>
@@ -194,6 +195,65 @@ function Particles() {
       <points geometry={glows.g} material={glows.m} frustumCulled={false} />
     </group>
   );
+}
+
+/** All poofs share one low-poly mesh draw, within the existing 12 × 14 particle cap. */
+function Smoke() {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const batch = useMemo(() => {
+    const geometry = new THREE.IcosahedronGeometry(1, 0);
+    const alpha = new THREE.InstancedBufferAttribute(new Float32Array(MAX), 1);
+    alpha.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute("alpha", alpha);
+    const material = new THREE.ShaderMaterial({
+      uniforms: { color: { value: BURSTS.poof.color } },
+      vertexShader: `
+        attribute float alpha;
+        varying float vAlpha;
+        varying float vLight;
+        void main() {
+          vAlpha = alpha;
+          vec3 n = normalize(normalMatrix * mat3(instanceMatrix) * normal);
+          vLight = .72 + .28 * max(0., dot(n, normalize(vec3(-.4, .8, .6))));
+          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.);
+        }`,
+      fragmentShader: `
+        uniform vec3 color;
+        varying float vAlpha;
+        varying float vLight;
+        void main() {
+          gl_FragColor = vec4(color * vLight, vAlpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+      transparent: true,
+      depthWrite: false
+    });
+    return { geometry, material, alpha, pose: new THREE.Object3D() };
+  }, []);
+  useEffect(() => () => { batch.geometry.dispose(); batch.material.dispose(); }, [batch]);
+  useFrame(() => {
+    const m = mesh.current;
+    if (!m) return;
+    let n = 0;
+    for (const e of rt.effects) {
+      if (e.kind !== "poof") continue;
+      const age = rt.time - e.t0, b = BURSTS.poof;
+      if (age < 0 || age >= b.life) continue;
+      for (let i = 0; i < PER && n < MAX; i++, n++) {
+        b.pos(e, i, age, batch.pose.position);
+        batch.pose.scale.setScalar((.18 + age * 1.1) * (.8 + rnd(i * 3) * .4));
+        batch.pose.rotation.set(i * .7, i * 2.4, age * .4);
+        batch.pose.updateMatrix();
+        m.setMatrixAt(n, batch.pose.matrix);
+        batch.alpha.setX(n, .85 * Math.pow(1 - age / b.life, 1.5));
+      }
+    }
+    m.count = n;
+    m.instanceMatrix.needsUpdate = true;
+    batch.alpha.needsUpdate = true;
+  });
+  return <instancedMesh ref={mesh} args={[batch.geometry, batch.material, MAX]} count={0} frustumCulled={false} />;
 }
 
 // ------------------------------------------------------------ markers
@@ -390,6 +450,7 @@ export function Effects() {
   return (
     <group>
       <Particles />
+      <Smoke />
       <StarMarker />
       <FocusRing />
       <MonsterBubbles />
