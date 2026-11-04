@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { cb } from "../game/combat";
+import { cb, enemyRevealScale } from "../game/combat";
 import { BEACON_ARENA, BEACON_PYLONS } from "../game/logic/beacon";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
@@ -161,11 +161,12 @@ export function StormBeacon() {
     spriteRefs.current.forEach((mesh, i) => {
       if (!mesh) return;
       const e = cb.enemies.find(enemy => enemy.i === 10000 + i);
-      mesh.visible = !!e && b.active && e.state !== "gone";
+      const reveal = e ? enemyRevealScale(e) : 0;
+      mesh.visible = !!e && b.active && reveal > 0;
       if (!e) return;
       mesh.position.set(e.x, 37.5 + Math.sin(rt.time * 4 + i) * .15, e.z);
       mesh.rotation.y = e.yaw;
-      mesh.scale.setScalar(e.state === "ko" ? Math.max(.1, e.timer) : 1);
+      mesh.scale.setScalar(reveal * (e.state === "ko" ? Math.max(.1, e.timer) : 1));
       spriteMats[i].emissive.set(e.state === "windup" ? "#805745" : rt.time - e.hitT < .18 ? "#b3d3ce" : "#000000");
     });
   });

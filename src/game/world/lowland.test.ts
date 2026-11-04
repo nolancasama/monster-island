@@ -15,6 +15,9 @@ import { hazardAt } from "../logic/elements";
 import { rt } from "../runtime";
 import { MONSTERS } from "../data/monsters";
 import { lowlandSpots } from "../../scene/models/lowland";
+import { clearStage, remainingEnemies } from "../logic/act2";
+import { newProgress } from "../logic/progress";
+import { createHash } from "node:crypto";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
@@ -193,7 +196,7 @@ describe("the lowland below the sanctuary", () => {
 
   it("replaces forest and coast/causeway spawns without changing stage-clear totals", () => {
     expect(STAGES.map(zone => [zone, ENEMY_SPAWNS.filter(e => e.zone === zone && !e.optional).length])).toEqual([
-      ["forest1", 5], ["grove", 10], ["canopy", 9], ["causeway", 7], ["coast", 4],
+      ["forest1", 5], ["grove", 10], ["canopy", 9], ["causeway", 14], ["coast", 4],
     ]);
     for (const zone of ["forest1", "grove", "canopy"] as const) {
       const ranged = ENEMY_SPAWNS.filter(e => e.zone === zone && e.kind === "forestSpitter");
@@ -205,6 +208,28 @@ describe("the lowland below the sanctuary", () => {
       expect(ranged.length, zone).toBeGreaterThan(0);
       expect(ranged.every(e => e.replaces === "snapjaw"), zone).toBe(true);
     }
+  });
+
+  it("requires all fourteen Causeway enemies and keeps their homes walkable", () => {
+    const ids = ENEMY_SPAWNS.flatMap((e, i) => e.zone === "causeway" ? [i] : []);
+    expect(ids).toHaveLength(14);
+    const progress = newProgress(); progress.act2.started = true;
+    for (const i of ids) {
+      const e = ENEMY_SPAWNS[i];
+      expect(e.optional).toBeUndefined();
+      expect(isWalkable(e.x, e.z, gates(["canopyVines", "canopyRope", "groveLilies"]), ENEMIES[e.kind].radius), `${i}`).toBe(true);
+      expect(e.x >= 92 && e.x <= 100 && e.z >= -252 && e.z <= -239 && i >= ENEMY_SPAWNS.length - 7).toBe(false);
+      const defeated = ids.filter(id => id !== i);
+      expect(remainingEnemies("causeway", defeated)).toBe(1);
+      expect(clearStage(progress, "causeway", defeated).act2.cleared).not.toContain("causeway");
+    }
+    expect(clearStage(progress, "causeway", ids).act2.cleared).toContain("causeway");
+  });
+
+  it("preserves every pre-existing spawn index, including the first seven Causeway enemies", () => {
+    const original = ENEMY_SPAWNS.slice(0, 41);
+    expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
+      .toBe("ac5f4ffee6642a215b7ef34600d8a0c357639c63c3067fe7d49487495a4361ac");
   });
 
   it("fights happen in the forests, causeway and coast; the camp and town are safe", () => {

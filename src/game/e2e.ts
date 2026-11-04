@@ -12,7 +12,7 @@ import { cameraRef } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
-import { cb, companionVisible, elementObjectStates, stageStatus, type EnemyState } from "./combat";
+import { cb, companionVisible, elementObjectStates, stageStatus, wakeEnemy, type EnemyState } from "./combat";
 import { ELEMENT_OBJECTS, SECRET_SITES, secretOf } from "./world/elementObjects";
 import { ENEMIES } from "./data/combat";
 import { travelCombat } from "./combat";
@@ -223,6 +223,7 @@ export function installE2eHook(seed: number) {
     /** Act 2: stand near an enemy (by spawn index), facing it. */
     nearEnemy(i: number, dist = 3) {
       const e = cb.enemies[i];
+      wakeEnemy(e);
       const a = Math.atan2(rt.player.x - e.x, rt.player.z - e.z);
       return placePlayer(e.x + Math.sin(a) * dist, e.z + Math.cos(a) * dist, e.x, e.z);
     },
@@ -234,6 +235,7 @@ export function installE2eHook(seed: number) {
         e.air = e.resistUntil = e.slowUntil = 0; e.burn = e.control = e.flight = e.fall = null;
         e.panic = null; e.panicResistUntil = e.fireTicks = e.infernoBlueUntil = 0; e.lastFireT = -10;
         if (!f) continue;
+        wakeEnemy(e);
         e.x = e.homeX = f.x; e.z = e.homeZ = f.z;
         e.hp = ENEMIES[e.kind].hp; e.timer = f.timer ?? 0;
         e.yaw = f.yaw ?? 0; e.kx = e.kz = 0; e.waiting = false;

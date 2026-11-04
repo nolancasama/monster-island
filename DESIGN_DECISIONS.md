@@ -1934,6 +1934,18 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
   818.75 m² (2.008 times 407.75). Grove stays below the two-times target while
   exceeding the 1.7-times floor, retaining arm separation and the fixed exits.
 
+## 2026-11-04 — Smoke spawns and the Causeway
+
+- Enemies begin dormant and reveal within 20 m in their own zone, with a
+  0.12-second per-zone stagger. Smoke precedes visibility at 0.18 seconds;
+  combat begins after 0.5 seconds. Ordinary boundary crossings retain awake
+  enemies, while actual respawns reveal them again. Beacon reinforcements
+  reveal immediately and resume their scripted alert state.
+- Seven required Causeway enemies are appended, keeping existing spawn indices
+  and first-clear accounting. The central spawn moved from the spec's
+  (72, -250) to (73, -247.5): it stood 2 m from the east statue, and secret
+  statues keep a 4 m clearance.
+
 ## 2026-11-04 — Slice 2: camp access and combat walkability
 
 - Added the frozen forest rectangle (79–93.2, -172…-158), opening the
