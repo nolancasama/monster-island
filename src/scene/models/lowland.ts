@@ -16,6 +16,7 @@ import {
   BASIN,
   CAMP2,
   CANOPY_DECKS,
+  CANOPY_FLIGHTS,
   CANOPY_FLIGHT_RIMS,
   CANOPY_GAPS,
   CANOPY_TRAIL,
@@ -683,13 +684,16 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   for (let x = CAUSEWAY.x0 + 1; x < CAUSEWAY.x1; x += 2.1) {
     for (let z = CAUSEWAY.z0 + 1.6; z < CAUSEWAY.z1 - 0.6; z += 2.1) {
       if (rand() < 0.18) continue;
+      const dx = (rand() - 0.5) * 0.15, dz = (rand() - 0.5) * 0.15, turn = (rand() - 0.5) * 0.08, tone = rand();
+      // A slab under the exit flight would take the flight's height and float across its steps.
+      if (CANOPY_FLIGHTS.some(f => x >= f.x0 && x <= f.x1 && z >= Math.min(f.footZ, f.topZ) && z <= Math.max(f.footZ, f.topZ))) continue;
       b.boxAt(
         1.9,
         0.12,
         1.9,
-        [x + (rand() - 0.5) * 0.15, gy(x, z) + 0.02, z + (rand() - 0.5) * 0.15],
-        [0, (rand() - 0.5) * 0.08, 0],
-        rand() < 0.5 ? "#b9b1a3" : "#a49c8f",
+        [x + dx, gy(x, z) + 0.02, z + dz],
+        [0, turn, 0],
+        tone < 0.5 ? "#b9b1a3" : "#a49c8f",
       );
     }
   }
