@@ -16,6 +16,7 @@ import {
   BASIN,
   CAMP2,
   CANOPY_DECKS,
+  CANOPY_FLIGHT_RIMS,
   CANOPY_GAPS,
   CANOPY_TRAIL,
   CAUSEWAY,
@@ -51,7 +52,6 @@ import {
   ZONE_ORDER,
   ZONES,
   zoneAt,
-  canopyRaise,
   canopySurfaceY,
   lowlandDeckY,
   lowlandY,
@@ -60,6 +60,7 @@ import {
   nearestOnTrail,
   streamY,
   type EnemyKind,
+  type CanopyFlight,
 } from "../../game/world/lowland";
 import type { NpcDef } from "../../game/data/town";
 
@@ -85,7 +86,6 @@ const DIRT = new THREE.Color("#b38f5c");
 const STONE = new THREE.Color("#a7a196");
 const COBBLE = new THREE.Color("#c9b99c");
 const MUD = new THREE.Color("#6f5a3e");
-const BARK = new THREE.Color("#7a5534");
 const SAND = new THREE.Color("#d9c08c");
 const SEABED = new THREE.Color("#8d8268");
 const ROCK = new THREE.Color("#7f7064");
@@ -177,8 +177,7 @@ function surface(x: number, z: number): number {
 export const lowlandSceneryY = (x: number, z: number) => Math.max(groundY(x, z), lowlandDeckY(x, z, ["groveLilies", "canopyVines", "canopyRope"]));
 const canopyTrunk = (x: number, z: number) => x >= 83 && x <= 119 && z <= -201 && z >= -237.2 && Number.isFinite(lowlandDeckY(x, z, []));
 
-/** The same polygons as collision, with explicit bark sides down to the basin floor.
- * Submetre cells also conform the two entrance ramps to their shared height rule. */
+/** The same polygons as collision, with explicit bark sides down to the basin floor. */
 const onCanopyDeck = (x: number, z: number) => CANOPY_DECKS.some(({ walk }) => x >= walk.x0 && x <= walk.x1 && z >= walk.z0 && z <= walk.z1);
 
 /** A low root rim wherever a platform ends without a drop you can fall into, so
@@ -187,7 +186,6 @@ function canopyRim(b: PartBuilder) {
   const blockedEdge = (x: number, z: number) => !onCanopyDeck(x, z) && zoneAt(x, z) === null
     && !CANOPY_VOIDS.some(h => h.shape.kind === "rect" && x >= h.shape.x0 && x <= h.shape.x1 && z >= h.shape.z0 && z <= h.shape.z1);
   for (const deck of CANOPY_DECKS) {
-    if (deck.id === "armApproach") continue;
     for (let i = 0; i < deck.pts.length; i++) {
       const [ax, az] = deck.pts[i], [bx, bz] = deck.pts[(i + 1) % deck.pts.length];
       const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
@@ -209,8 +207,6 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     for (const p of [a, b, c]) { positions.push(...p); colors.push(color.r, color.g, color.b); }
   };
   for (const deck of CANOPY_DECKS) {
-    // Terrain already draws the ramp; a second skin here would z-fight it.
-    if (deck.id === "armApproach") continue;
     const { x0, x1, z0, z1 } = deck.walk;
     const nx = Math.ceil((x1 - x0) / 1.5), nz = Math.ceil((z1 - z0) / 1.5);
     const vertex = (i: number, j: number) => {
@@ -273,35 +269,79 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
       for (let i = 1; i + 1 < vertices.length; i++) triangle(vertices[0], vertices[i], vertices[i + 1], color);
     }
   }
-  // The original north exit is still a sloping root. Polygonal capsule ends
-  // follow its collision trail to within five centimetres at the rounded lip.
-  const exit = ZONES.canopy.walk.find(shape => shape.kind === "trail");
-  if (exit?.kind === "trail") for (let segment = 1; segment < exit.pts.length; segment++) {
-    const geometry = streamRibbonGeometry([exit.pts[segment - 1], exit.pts[segment]], exit.w * 2, canopySurfaceY);
-    const p = geometry.getAttribute("position"), boundaries = new Map<string, { a: number[]; b: number[]; count: number }>();
-    const point = (i: number) => [p.getX(i), p.getY(i), p.getZ(i)];
-    const key = (v: number[]) => `${v[0].toFixed(4)},${v[2].toFixed(4)}`;
-    for (let i = 0; i < p.count; i += 3) {
-      const vertices = [point(i), point(i + 1), point(i + 2)];
-      triangle(vertices[0], vertices[1], vertices[2], bark);
-      for (let edge = 0; edge < 3; edge++) {
-        const a = vertices[edge], b = vertices[(edge + 1) % 3], id = [key(a), key(b)].sort().join("/");
-        const existing = boundaries.get(id);
-        if (existing) existing.count++; else boundaries.set(id, { a, b, count: 1 });
-      }
-    }
-    for (const { a, b, count } of boundaries.values()) if (count === 1) {
-      const c = [b[0], lowlandY(b[0], b[2]) - .12, b[2]], d = [a[0], lowlandY(a[0], a[2]) - .12, a[2]];
-      triangle(b, a, d, dark); triangle(b, d, c, dark);
-    }
-    geometry.dispose();
-  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(positions.length / 3 * 2), 2));
   geometry.computeVertexNormals(); geometry.computeBoundingSphere();
   return geometry;
+}
+
+/** One solid draw per flight, including its retaining rims. Averaging endpoint
+ * heights keeps both nosings within half a riser, including the eased ends. */
+export function canopyFlightGeometry(flight: CanopyFlight): THREE.BufferGeometry {
+  const b = new PartBuilder(), { x0, x1, footZ, topZ, steps } = flight;
+  const dz = (topZ - footZ) / steps, width = x1 - x0;
+  const rims = CANOPY_FLIGHT_RIMS.filter(r => r.az === footZ && r.bz === topZ);
+  const treadY = (x: number, i: number) => (flight.height(x, footZ + dz * i) + flight.height(x, footZ + dz * (i + 1))) / 2;
+  for (let i = 0; i < steps; i++) {
+    const za = footZ + dz * i, zb = za + dz, z = (za + zb) / 2;
+    const lo = Math.min(za, zb), hi = Math.max(za, zb);
+    // Full-depth stone prisms close retaining walls and the ground join.
+    const vertices: number[] = [];
+    const quad = (a: number[], c: number[], d: number[], e: number[]) => vertices.push(...a, ...c, ...d, ...a, ...d, ...e);
+    const across = Math.ceil(width);
+    for (let j = 0; j < across; j++) {
+      const a = x0 + width * j / across, c = x0 + width * (j + 1) / across;
+      quad([a, treadY(a, i), lo], [a, treadY(a, i), hi], [c, treadY(c, i), hi], [c, treadY(c, i), lo]);
+      // Only the visible riser is needed between adjacent solid stone courses.
+      const lower = (x: number) => i === 0 ? lowlandY(x, za) - .18 : treadY(x, i - 1);
+      const face = [[a, treadY(a, i), za], [c, treadY(c, i), za], [c, lower(c), za], [a, lower(a), za]];
+      if (dz < 0) quad(face[3], face[2], face[1], face[0]);
+      else quad(face[0], face[1], face[2], face[3]);
+      if (i === steps - 1) {
+        const back = [[a, treadY(a, i), zb], [c, treadY(c, i), zb], [c, lowlandY(c, zb) - .18, zb], [a, lowlandY(a, zb) - .18, zb]];
+        if (dz < 0) quad(back[0], back[1], back[2], back[3]);
+        else quad(back[3], back[2], back[1], back[0]);
+      }
+    }
+    for (const x of [x0, x1]) {
+      const side = [[x, treadY(x, i), hi], [x, treadY(x, i), lo], [x, lowlandY(x, lo) - .18, lo], [x, lowlandY(x, hi) - .18, hi]];
+      if (x === x0) quad(side[0], side[1], side[2], side[3]);
+      else quad(side[3], side[2], side[1], side[0]);
+    }
+    const stone = new THREE.BufferGeometry();
+    stone.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    stone.computeVertexNormals();
+    b.add(stone, i % 3 === 0 ? "#898675" : "#777b6c", [0, 0, 0]);
+    if (i % 2 === 0) for (const rim of rims) {
+      const end = footZ + dz * Math.min(i + 2, steps);
+      between(b, [rim.ax, flight.height(rim.ax, za) + .23, za],
+        [rim.ax, flight.height(rim.ax, end) + .23, end], .22, .22,
+        i % 4 === 0 ? "#7c8068" : "#65482e", 5);
+    }
+    // Timber ends project from the stone beneath the upper third.
+    if (i >= steps * 2 / 3 && i % 2 === 0) {
+      const y = treadY((x0 + x1) / 2, i);
+      b.box(width + .12, .22, .25, (x0 + x1) / 2, y - .55, z, "#503a28");
+      for (const x of [x0 + .18, x1 - .18])
+        b.box(.48, .32, Math.abs(dz) * 1.8, x, treadY(x, i) - .87, z, "#765134");
+    }
+    if (i % 8 === 3) {
+      // Broad exposed roots sink into selected stone treads.
+      for (let j = 0; j < 3; j++) {
+        const a = x0 + .5 + (width - 1) * j / 3, c = x0 + .5 + (width - 1) * (j + 1) / 3;
+        between(b, [a, treadY(a, i) - .05, z], [c, treadY(c, i) - .05, z + .04], .17, .13, "#715032", 5);
+      }
+    }
+    if (i % 4 === 1) for (const x of [x0 + .55, x1 - .55]) {
+      const y = treadY(x, i);
+      b.box(.44, .025, Math.abs(dz) * .65, x, y + .006, z, "#5c803e");
+      for (const lean of [-.5, .5])
+        b.add(new THREE.ConeGeometry(.1, .3, 3), "#71964b", [x, y + .15, z], [0, 0, lean]);
+    }
+  }
+  return b.build();
 }
 
 function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Color) {
@@ -324,9 +364,6 @@ function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Co
   if (Math.hypot(x - CAMP2.fire.x, z - CAMP2.fire.z) < 6) c.lerp(DIRT, 0.45);
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.6 && Math.hypot(x - ISLET.x, z - ISLET.z) > ISLET.r) c.lerp(MUD, 0.85);
   if (x < 70 && z < -200 && z > -246) for (const s of STREAMS) if (nearestOnTrail(s, x, z).d < 1.6) c.lerp(MUD, 0.6);
-  // The raised root walk: bark-brown sides, a mossy top.
-  const raise = canopyRaise(x, z);
-  if (raise > 0.4 && raise < 4.2) c.lerp(BARK, 0.75);
   c.lerp(ROCK, steep);
   if (y < SEA_Y + 0.9) c.lerp(SAND, (1 - steep) * 0.85);
   if (y < SEA_Y - 0.3) c.lerp(SEABED, 0.7);

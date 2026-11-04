@@ -2003,3 +2003,19 @@ out, and enemy knock-back cannot cause one (rejected: instant falls, unfair for 
   slope and join checks, side containment and clear-width checks, gate/spawn
   regressions, fixed void geometry/fall checks, and old-ramp save recovery tests.
   Existing save projection handles the changed floor without a format change.
+
+## 2026-11-04 — Canopy staircase rendering
+
+- Each authored flight is one merged PartBuilder mesh: broad stone courses,
+  exposed crossing roots, upper-third timber cribbing, ground-reaching rock
+  walls, moss and small plants. Capsule-aligned root rims explain both solid
+  sides while leaving the top and foot open. Entrance: 2,834 triangles; exit:
+  2,980 triangles, included in the existing lowland view budget test.
+- Treads average their endpoint heights to stay within half a local riser of
+  the walking profile, including eased ends. One-metre divisions across each
+  tread follow the entrance's varying cross-flight height. Hidden internal
+  stone faces are omitted to retain the triangle budget.
+- Rendered the elevated arm approach and exit landing with the existing deck
+  surface and ground-reaching bark faces. The existing gate renderer uses the
+  authored (96, -238) landing position and deck height. Removed the obsolete
+  exit-ramp mesh path and raised-heightfield colouring; world logic is unchanged.

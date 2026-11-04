@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { groundY } from "../game/world/island";
 import { blocked } from "../game/world/collision";
-import { CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible, lowlandWalkable } from "../game/world/lowland";
+import { CANOPY_FLIGHTS, CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible, lowlandWalkable } from "../game/world/lowland";
 import { mesaCameraLift } from "../game/world/mesa";
 import { NPCS, NPC_OF } from "../game/data/town";
 import { cameraProfileAt, DEFAULT_CAMERA } from "./cameraProfiles";
@@ -10,7 +10,7 @@ import { conformBridge } from "./models/bridge";
 import { CHEST_HINGE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import {
   cliffFaceGeometry, cliffRopeGeometry, giantFernGeometry, lilyPadGeometry,
-  canopyDeckGeometry, lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
+  canopyDeckGeometry, canopyFlightGeometry, lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
   mesaGeometry, npcGeometry, primevalTreeGeometry, reedGeometry, ropeBridgeGeometry,
   spatialGeometry, stageBarrierGeometry, townGeometry, treeFernGeometry, vineBridgeGeometry,
   type Spot,
@@ -57,6 +57,7 @@ beforeAll(() => {
   for (const geometry of lowlandTerrainTiles(TILE)) add("terrain", geometry);
   for (const geometry of spatialGeometry(lowlandPropsGeometry(), TILE)) add("props", geometry);
   add("canopyDecks", canopyDeckGeometry());
+  for (const flight of CANOPY_FLIGHTS) add(`canopy ${flight.id} stairs`, canopyFlightGeometry(flight));
   for (const geometry of spatialGeometry(lowlandWaterGeometry(), TILE)) add("water", geometry);
   add("cliff", cliffFaceGeometry(), 0, 0, 0, 0, Infinity);
   add("rope", cliffRopeGeometry(), 0, 0, 0, 0, Infinity);

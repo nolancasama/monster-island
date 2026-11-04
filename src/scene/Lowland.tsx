@@ -13,6 +13,7 @@ import {
   gapDeck,
   lowlandBridgeY,
   CANOPY_GAPS,
+  CANOPY_FLIGHTS,
   CHESTS,
   LILY_PADS,
   POND,
@@ -34,6 +35,7 @@ import {
   cliffRopeGeometry,
   giantFernGeometry,
   canopyDeckGeometry,
+  canopyFlightGeometry,
   lilyPadGeometry,
   updateLilyPadMatrices,
   lowlandPropsGeometry,
@@ -297,6 +299,7 @@ export function Lowland() {
   const props = useMemo(() => spatialGeometry(lowlandPropsGeometry(), TILE), []);
   // Solid: walking surfaces must not dither away under the player like props do.
   const canopyDecks = useMemo(canopyDeckGeometry, []);
+  const canopyFlights = useMemo(() => CANOPY_FLIGHTS.map(canopyFlightGeometry), []);
   const cliff = useMemo(cliffFaceGeometry, []);
   const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
@@ -320,6 +323,7 @@ export function Lowland() {
       ))}
       <mesh geometry={cliff} material={flatMat} />
       <DistanceMesh geometry={canopyDecks} material={flatMat} />
+      {canopyFlights.map((geometry, i) => <DistanceMesh key={CANOPY_FLIGHTS[i].id} geometry={geometry} material={flatMat} />)}
       <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />
