@@ -1,5 +1,6 @@
 import { getGame, setGame } from "../store";
 import { rt } from "../runtime";
+import { standY } from "../world/collision";
 import { groundY } from "../world/island";
 import type { Vec2 } from "../types";
 import { DebugScriptCancelled, debugScriptEpoch, debugWait } from "../debugLifecycle";
@@ -38,10 +39,21 @@ export async function run(fn: () => Promise<void>): Promise<void> {
   }
 }
 
-/** Hold a fixed camera shot. */
+/** The current walking surface, including solved crossings and raised decks. */
+export function walkY(p: Vec2): number {
+  return standY(p.x, p.z, getGame().progress.solved);
+}
+
+/** Hold a fixed camera shot, clear of the lens and subject's walking surfaces. */
 export function shot(pos: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }) {
   rt.camera.mode = "shot";
-  rt.camera.shot = { pos, target };
+  const cameraY = walkY(pos);
+  const subjectY = walkY(target);
+  const raised = cameraY > groundY(pos.x, pos.z) || subjectY > groundY(target.x, target.z);
+  // Subject height is its walking base, not the look-at height: authored sky
+  // reveals can deliberately look above the lens. Ordinary terrain retains
+  // its authored framing and the rig's existing terrain clearance.
+  rt.camera.shot = { pos: { ...pos, y: raised ? Math.max(pos.y, cameraY + 1.2, subjectY + 1) : pos.y }, target };
 }
 
 export function follow() {
@@ -76,9 +88,9 @@ export function frameTwo(a: Vec2, b: Vec2, zoom = 1) {
   rt.followSide = -sign;
   const back = (2.2 + len * 0.5) * zoom;
   const side = (3 + len * 0.35) * zoom;
-  const gy = groundY(a.x, a.z);
+  const gy = walkY(a);
   shot(
-    { x: a.x - ux * back + px * side, y: gy + 2.2 * zoom, z: a.z - uz * back + pz * side },
+    { x: a.x - ux * back + px * side, y: Math.max(gy + 2.2 * zoom, gy + 1), z: a.z - uz * back + pz * side },
     { x: a.x + ux * len * 0.62, y: gy + 0.55, z: a.z + uz * len * 0.62 }
   );
 }

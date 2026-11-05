@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
+import { standY } from "../game/world/collision";
 import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from "../game/world/island";
 
 import { CLIFF_ROPE, MOSSY_BOULDERS } from "../game/world/lowland";
@@ -55,7 +56,7 @@ export function CameraRig() {
       // passage itself is open space a camera may look through.
       const cover = tunnelCoverY(probe.x, probe.z);
       const open = cover !== null && inTunnel(probe.x, probe.z, 0.4) && lineY0 < tunnelRoof - 0.4;
-      let floor = (cover !== null && !open ? cover : groundY(probe.x, probe.z)) + 0.7;
+      let floor = (cover !== null && !open ? cover : standY(probe.x, probe.z, getGame().progress.solved)) + 0.7;
       floor = Math.max(floor, mesaFloorY(probe.x, probe.z) + .7);
       for (const b of (rt.player.z < -153.6 ? MOSSY_BOULDERS : BOULDERS)) {
         const d = Math.hypot(probe.x - b.x, probe.z - b.z);
@@ -203,7 +204,7 @@ export function CameraRig() {
       }
     }
     if (!rope && !lowland && !rt.voyage.active) {
-      const floor = Math.max(groundY(want.current.x, want.current.z), -0.4) + 0.7;
+      const floor = Math.max(standY(want.current.x, want.current.z, g.progress.solved), -0.4) + 0.7;
       if (want.current.y < floor) want.current.y = floor;
     }
     if (!ready.current || rt.voyage.active || c.snap && !rope && !leavingRope) {
@@ -223,7 +224,13 @@ export function CameraRig() {
     } else {
       pos.current.lerp(want.current, k);
       look.current.lerp(wantLook.current, k);
-      if (!lowland && !rt.voyage.active) pos.current.y = Math.max(pos.current.y, groundY(pos.current.x, pos.current.z) + 0.7);
+      if (!rt.voyage.active) {
+        const floor = standY(pos.current.x, pos.current.z, g.progress.solved);
+        // Lowland bank framing keeps its bounded lift, but a raised deck is
+        // solid even while smoothing from the previous camera position.
+        if (!lowland || floor > groundY(pos.current.x, pos.current.z))
+          pos.current.y = Math.max(pos.current.y, floor + 0.7);
+      }
       c.settled = blendAge.current === CAMERA_BLEND_SECONDS && pos.current.distanceTo(want.current) < 0.08 && look.current.distanceTo(wantLook.current) < 0.08;
     }
     if (!cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && inTunnel(pos.current.x, pos.current.z, -.2)) {

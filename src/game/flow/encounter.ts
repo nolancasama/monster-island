@@ -20,10 +20,9 @@ import {
 import { getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { ask, say, wait } from "./ask";
-import { facePlayer, frameTwo, run, shot } from "./script";
+import { facePlayer, frameTwo, run, shot, walkY } from "./script";
 import { switchTo } from "./companion";
 import { nearestWalkable, gatesOf } from "../world/collision";
-import { groundY } from "../world/island";
 import { audio } from "../../audio/audio";
 import type { MonsterId } from "../types";
 
@@ -125,10 +124,10 @@ async function callDown(id: MonsterId): Promise<boolean> {
   const dx = perch.x - p.x;
   const dz = perch.z - p.z;
   const len = Math.hypot(dx, dz) || 1;
-  const gy = groundY(p.x, p.z);
+  const gy = walkY(p);
   shot(
     { x: p.x - (dx / len) * 3.6 + (dz / len) * 1.6, y: gy + 1.5, z: p.z - (dz / len) * 3.6 - (dx / len) * 1.6 },
-    { x: perch.x, y: groundY(perch.x, perch.z) + perch.y * 0.75, z: perch.z }
+    { x: perch.x, y: walkY(perch) + perch.y * 0.75, z: perch.z }
   );
   m.mode = "script";
   m.look = { x: p.x, z: p.z };
@@ -298,7 +297,7 @@ async function askLikes(id: MonsterId): Promise<boolean> {
     if (ans.yes) {
       animate(id, "spin");
       audio.voice(id, "excited");
-      effect("hearts", m.x, 1.2, m.z);
+      effect("hearts", m.x, walkY(m) + 1.2, m.z);
     } else {
       animate(id, "no");
       audio.voice(id, "sad");
@@ -340,7 +339,7 @@ async function feed(id: MonsterId) {
   await wait(1300);
   animate(id, "spin");
   audio.voice(id, "excited");
-  effect("hearts", m.x, 1.2, m.z);
+  effect("hearts", m.x, walkY(m) + 1.2, m.z);
   await wait(700);
   // The monster asks back: the student produces the answer pattern.
   const back = await ask({
@@ -365,8 +364,8 @@ async function feed(id: MonsterId) {
   updateProgress((p) => befriend(p, id));
   animate(id, "friend");
   audio.play("friend");
-  effect("hearts", m.x, 1.4, m.z);
-  effect("sparkle", m.x, 1, m.z);
+  effect("hearts", m.x, walkY(m) + 1.4, m.z);
+  effect("sparkle", m.x, walkY(m) + 1, m.z);
   setGame({ friendCard: id, journalPulse: true });
   await say("game", `${def.name} is your friend!`, `${def.name}と ともだちに なった!`);
   setGame({ friendCard: null });
@@ -425,7 +424,7 @@ async function lumoFriendship() {
   updateProgress((p) => befriendLumo(p, back));
   animate("lumo", "friend");
   audio.play("friend");
-  effect("hearts", m.x, 1.8, m.z);
+  effect("hearts", m.x, walkY(m) + 1.8, m.z);
   setGame({ friendCard: "lumo", journalPulse: true });
   await say("game", "Lumo is your friend!", "Lumoと ともだちに なった!");
   setGame({ friendCard: null });

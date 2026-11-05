@@ -6,7 +6,7 @@ import { animate, effect, rt, type MonsterRt } from "../runtime";
 import { BRIDGE, CAVE, CLIFF_Z, CROSSING, FALLEN_PALM, GATE_PILLARS, LAVA, ROPE, SANCTUARY_GATE, groundY } from "../world/island";
 import { ROPE_FOOT, ROPE_TOP, climbPath, ropeFlightPath } from "../world/rope";
 import { ask, say, wait } from "./ask";
-import { facePlayer, fadeThrough, frameTwo, run, shot } from "./script";
+import { facePlayer, fadeThrough, frameTwo, run, shot, walkY } from "./script";
 import { companionSpot, poofTo } from "./companion";
 import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
@@ -298,7 +298,7 @@ async function thanks(id: MonsterId) {
   m.talking = true;
   animate(id, "spin");
   audio.voice(id, "excited");
-  effect("hearts", m.x, 1.2 + m.air, m.z);
+  effect("hearts", m.x, walkY(m) + 1.2 + m.air, m.z);
   await say(id, "You're welcome!", "どういたしまして!", { tone: "yes" });
   m.talking = false;
 }
@@ -361,7 +361,7 @@ async function flyRope(id: MonsterId) {
   animate(id, "power");
   audio.play("whoosh");
   // ...flies it up well clear of the face and over the edge to the stake...
-  const path = ropeFlightPath({ x: m.x, y: groundY(m.x, m.z) + m.air, z: m.z }, baseY, MONSTERS[id].radius);
+  const path = ropeFlightPath({ x: m.x, y: walkY(m) + m.air, z: m.z }, baseY, MONSTERS[id].radius);
   await flyThrough(id, path, 3.2);
   // ...ties it, and the rope unrolls down the cliff.
   rt.ropeCarried = false;
@@ -389,7 +389,7 @@ async function flyRope(id: MonsterId) {
  */
 async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z: number }>, seconds: number) {
   const m = rt.monsters[id];
-  const start = { x: m.x, y: groundY(m.x, m.z) + m.air, z: m.z };
+  const start = { x: m.x, y: walkY(m) + m.air, z: m.z };
   const pts = [start, ...points];
   const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y, p.z - pts[i].z));
   const total = lens.reduce((a, b) => a + b, 0) || 1;
@@ -403,7 +403,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
     const u = lens[i] ? Math.min(1, d / lens[i]) : 1;
     m.x = a.x + (b.x - a.x) * u;
     m.z = a.z + (b.z - a.z) * u;
-    m.air = m.airTarget = a.y + (b.y - a.y) * u - groundY(m.x, m.z);
+    m.air = m.airTarget = a.y + (b.y - a.y) * u - walkY(m);
     if (Math.hypot(b.x - a.x, b.z - a.z) > 0.2) m.yaw = Math.atan2(b.x - a.x, b.z - a.z);
     else m.yaw = Math.PI;
     if (k >= 1) return;
@@ -420,13 +420,15 @@ async function act2Power(id: Exclude<Act2Obstacle, "groveLilies">, monster: Mons
   const place = A2[id];
   const target = place.face;
   const m = rt.monsters[monster];
-  const gy = groundY(target.x, target.z);
+  // The focus is in an unsolved gap: use the approach deck's surface.
+  const gy = walkY(place);
   m.mode = "script";
   m.look = target;
   // Beside the player, toward the obstacle; the camera frames both from the side.
   const side = { x: 1.4, z: 0.3 };
   m.x = place.x + side.x;
   m.z = place.z + side.z;
+  m.air = m.airTarget = 0;
   m.yaw = Math.atan2(target.x - m.x, target.z - m.z);
   const camSide = { x: -6.5, z: 2.5 };
   shot({ x: target.x + camSide.x, y: gy + 3.6, z: target.z + camSide.z }, { x: target.x, y: gy + 0.6, z: target.z });
@@ -459,8 +461,8 @@ async function act2Power(id: Exclude<Act2Obstacle, "groveLilies">, monster: Mons
 
 async function glide(id: MonsterId, to: Vec2, air: number, seconds: number) {
   const m = rt.monsters[id];
-  const from = { x: m.x, z: m.z, y: groundY(m.x, m.z) + m.air };
-  const toY = groundY(to.x, to.z) + air;
+  const from = { x: m.x, z: m.z, y: walkY(m) + m.air };
+  const toY = walkY(to) + air;
   const t0 = rt.time;
   for (;;) {
     const k = Math.min(1, (rt.time - t0) / seconds);
@@ -468,7 +470,7 @@ async function glide(id: MonsterId, to: Vec2, air: number, seconds: number) {
     m.x = from.x + (to.x - from.x) * s;
     m.z = from.z + (to.z - from.z) * s;
     // Height is kept absolute while the ground under it changes (the cliff edge).
-    m.air = m.airTarget = from.y + (toY - from.y) * s - groundY(m.x, m.z);
+    m.air = m.airTarget = from.y + (toY - from.y) * s - walkY(m);
     if (Math.abs(to.x - from.x) + Math.abs(to.z - from.z) > 0.1) m.yaw = Math.atan2(to.x - from.x, to.z - from.z);
     if (k >= 1) return;
     await wait(30);

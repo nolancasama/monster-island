@@ -2094,3 +2094,20 @@ The area-budget test now models those same hop edges: sampled reachable Grove fl
   stones and existing arches. Low non-solid edge rubble and paving grass share
   the existing props batch. All 14 Causeway enemies retain their spawn indices.
 - Canopy stairs, decks, ask/obstacle flows and camera code are unchanged.
+
+## 2026-11-05 — Raised-ground scripted cameras (slice 3)
+
+- Exported `walkY` reads `standY` with the current solved obstacles. Conversation
+  framing, chest sparkles and mobile encounter effects use the walking surface.
+  Canopy power shots and bursts use the approach deck because their focus lies
+  inside an unsolved gap.
+- Shots involving raised surfaces clear the lens walking surface by 1.2 m and
+  the subject's walking base by 1 m. Ordinary sloped terrain retains its authored
+  shots and existing rig clearance. The subject base is separate from the look-at point so
+  authored upward prologue shots keep their original framing. Ordinary-ground
+  conversation offsets remain unchanged. Camera occlusion and smoothed floor
+  clearance now see deck surfaces; `run` retains its follow-camera reset.
+- Monsters already render at `standY + air`. Flight helpers now use that same
+  base for absolute-height conversion, including across open gaps. Canopy helpers
+  start on the deck with zero air; Puff's flight and return keep their intended
+  deck-relative heights. Stairs, deck geometry and rope mechanics are unchanged.

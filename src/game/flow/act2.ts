@@ -13,7 +13,7 @@ import { CHESTS, CLIFF_ROPE, MAPLE_PORT, SERVICES, ZONES, type ServiceId, type Z
 import { LEDGE, groundY } from "../world/island";
 import { PLAYER_R, gatesOf, nearestWalkable, standY } from "../world/collision";
 import { ask, fastMode, lastHeard, say, wait } from "./ask";
-import { fadeThrough, frameTwo, run, shot } from "./script";
+import { fadeThrough, frameTwo, run, shot, walkY } from "./script";
 import { poofTo } from "./companion";
 import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
@@ -218,7 +218,7 @@ export async function kidnapScene(fromFinale: boolean) {
     cage.z = ship.z;
     lumo.x = cage.x;
     lumo.z = cage.z;
-    lumo.air = lumo.airTarget = cage.y - groundY(lumo.x, lumo.z) + 0.2;
+    lumo.air = lumo.airTarget = cage.y - walkY(lumo) + 0.2;
     if (k > 0.3) rt.act2Scene = "reveal";
     // From the garden out over the lip of the lookout, then down and north over the forest.
     const c = ease(Math.min(1, k / 0.75));
@@ -343,7 +343,7 @@ export function openChestScene(id: string): Promise<void> {
     rt.player.yaw = Math.atan2(c.x - rt.player.x, c.z - rt.player.z);
     audio.play("chest");
     await over(0.6, (k) => rt.chestLid.set(id, ease(k)));
-    effect("sparkle", c.x, groundY(c.x, c.z) + 0.9, c.z);
+    effect("sparkle", c.x, walkY(c) + 0.9, c.z);
     rt.player.action = { kind: "cheer", t0: rt.time };
     const overflow = chestFoodOverflow(getGame().progress, id);
     updateProgress((p) => openChest(p, id));
@@ -591,7 +591,7 @@ function kitchen(): Promise<void> {
     updateProgress((pr) => craft(pr, friend));
     audio.play("craft");
     const s = SERVICES.kitchen.house;
-    effect("sparkle", s.x - 2, groundY(s.x, s.z) + 1.2, s.z);
+    effect("sparkle", s.x - 2, walkY(s) + 1.2, s.z);
     await wait(600);
     await say("cook", `Here you are! ${r.treat.en}!`, `はい、どうぞ! ${r.treat.ja}!`);
     // The friend eats it and learns its upgrade, there and then.
@@ -604,7 +604,7 @@ function kitchen(): Promise<void> {
     await wait(1300);
     animate(friend, "friend");
     audio.voice(friend, "excited");
-    effect("sparkle", m.x, groundY(m.x, m.z) + 1.2, m.z);
+    effect("sparkle", m.x, walkY(m) + 1.2, m.z);
     const up = COMBAT[friend].upgrade.name;
     const upgradeHint = { leafy: "Grab two enemies and bash them together!", bubbo: "Trap bigger enemies in bubbles!", puff: "Blow enemies away with wider wind!", ember: "Breathe farther and burn longer!" };
     banner({ title: `${MONSTERS[friend].name} learned ${up.en}!`, sub: upgradeHint[friend], ja: `${MONSTERS[friend].name}は ${up.ja}を おぼえた!`, tone: "clear" }, 3600);
