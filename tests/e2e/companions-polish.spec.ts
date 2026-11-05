@@ -3,16 +3,12 @@ import { mkdir } from "node:fs/promises";
 import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { COAST_GATE, HOLLOW_APPROACH } from "../../src/game/world/cloudisle";
-import { CAMP2, CAMP_SITE } from "../../src/game/world/lowland";
 
 const friends = ["leafy", "bubbo", "puff", "ember"] as const;
 const folder = ".tmp/shots/polish2/companions";
 type Point = readonly [number, number];
 type CompanionState = MiState & { act3: { zone: string } };
 const destinations = [
-  { name: "forest-camp", zone: "camp", hostile: "forest1", cloud: false,
-    start: [CAMP_SITE.x - CAMP_SITE.r - 1.5, CAMP_SITE.z] as Point,
-    entrance: [CAMP2.rest.x - 3.5, CAMP2.rest.z] as Point, onward: [CAMP2.rest.x - 1, CAMP2.rest.z + 3.6] as Point },
   { name: "port-town", zone: "port", hostile: "coast", cloud: false, start: [76, -287] as Point, entrance: [76, -293] as Point, onward: [76, -300] as Point },
   { name: "hidden-hollow", zone: "hiddenHollow", hostile: "stormbreakCoast", cloud: true, start: [COAST_GATE.x, COAST_GATE.z - 5] as Point, entrance: [-6, COAST_GATE.z + 5.5] as Point, onward: HOLLOW_APPROACH[1] as Point }
 ] as const;
@@ -28,6 +24,27 @@ function progressedSave(friend: typeof friends[number], destination: typeof dest
   if (destination.cloud) p.act3 = { ...p.act3, voyageDone: true, world: "cloud", area: "stormbreakCoast", hollowFound: true,
     cleared: ["stormbreakCoast"], family: { met: true, trusted: true, drawingSeen: true, tunnelOpen: true, aftermathSeen: false } };
   return JSON.stringify({ v: 4, progress: p, player: { x: destination.start[0], z: destination.start[1], yaw: destination.cloud ? 0 : Math.PI }, seconds: 3000 });
+}
+
+for (const friend of friends) {
+  test(`${friend} keeps its forest combat stance across the former camp`, async ({ page }) => {
+    await page.addInitScript(save => localStorage.setItem("mi.save.v4", save), progressedSave(friend, destinations[0]));
+    const errors = await boot(page);
+    await chooseMode(page, "tap");
+    await page.getByTestId("btn-continue").click();
+    await waitFor(page, s => s.mode === "explore", 30_000, "loaded forest travel fixture");
+    await hook(page, "teleport", 81, -160, Math.PI);
+    await hook(page, "combatFixture", { enemies: [] });
+    await waitFor(page, s => s.act2.zone === "forest1" && s.act2.stance.friend === friend && s.act2.stance.k > .99, 30_000, "forest combat stance ready");
+    const at = await hook(page, "moveTo", 88, -160) as { x: number; z: number };
+    expect(Math.hypot(at.x - 88, at.z + 160), "former camp floor remains walkable").toBeLessThan(.1);
+    await hook(page, "renderFrames", 3);
+    const s = await state(page);
+    expect(s.act2.zone).toBe("forest1");
+    expect(s.act2.stance.friend).toBe(friend);
+    expect(s.monsters[friend].mode).toBe("script");
+    expect(errors).toEqual([]);
+  });
 }
 
 for (const destination of destinations) for (const friend of friends) {

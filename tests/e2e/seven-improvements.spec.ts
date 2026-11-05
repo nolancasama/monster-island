@@ -12,7 +12,7 @@ function lowlandSave(x: number, z: number, edit: (p: ReturnType<typeof newProgre
     p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true } as (typeof p.monsters)[typeof id];
   p.active = "bubbo"; p.metMaple = true; p.endings = 3;
   p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope"];
-  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true, zone: "forest1", checkpoint: "camp",
+  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true, zone: "forest1", checkpoint: "cliff",
     cleared: ["forest1", "grove", "canopy", "causeway", "coast"], tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   edit(p);
   return JSON.stringify({ v: 4, progress: p, player: { x, z, yaw: Math.PI }, seconds: 3000 });
@@ -58,16 +58,17 @@ test("the player and Maple face each other through the opening conversation", as
   expect(errors).toEqual([]);
 });
 
-test("Forest Camp opens to the north, in and out", async ({ page }) => {
+test("former camp forest floor stays open to the north, in and out", async ({ page }) => {
   const errors = await enter(page, 86, -170);
   await hook(page, "combatFixture", { enemies: [] });
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${SHOTS}/camp-north-approach.png` });
+  await page.screenshot({ path: `${SHOTS}/former-camp-north-approach.png` });
   const into = await walk(page, "KeyS", (_x, z) => z > -163.5);
-  expect(into.arrived, `reached the camp from the north, stopped at ${into.x},${into.z}`).toBe(true);
-  await page.screenshot({ path: `${SHOTS}/camp-inside.png` });
+  expect(into.arrived, `reached the forest floor from the north, stopped at ${into.x},${into.z}`).toBe(true);
+  expect((await state(page)).act2.zone).toBe("forest1");
+  await page.screenshot({ path: `${SHOTS}/former-camp-forest.png` });
   const out = await walk(page, "KeyW", (_x, z) => z < -170);
-  expect(out.arrived, `left the camp to the north, stopped at ${out.x},${out.z}`).toBe(true);
+  expect(out.arrived, `left the former camp floor to the north, stopped at ${out.x},${out.z}`).toBe(true);
   expect(errors).toEqual([]);
 });
 

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, waitFor, speak, tap, type MiState } from "./helpers";
 import { BRIDGE, CAMP, TUNNEL, groundY } from "../../src/game/world/island";
-import { CAMP2, CANOPY_GAPS, CLIFF_ROPE } from "../../src/game/world/lowland";
+import { CANOPY_GAPS, CLIFF_ROPE } from "../../src/game/world/lowland";
 
 const directory = ".tmp/shots/polish";
 const phase = process.env.POLISH_PHASE === "before" ? "before" : "after";
@@ -169,19 +169,17 @@ for (const mode of ["tap", "speak"] as const) test(`paid inn: no, insufficient c
   expect(errors).toEqual([]);
 });
 
-test("Forest Camp arrival sets the compatible wake point without healing or a rest interaction", async ({ page }) => {
+test("former camp stays forest without healing or a rest interaction", async ({ page }) => {
   test.skip(phase === "before", "Baseline visual capture precedes implementation");
   test.setTimeout(180000);
   const errors = await start(page, { portFound: false, zone: "forest1" }, "tap", { ...CLIFF_ROPE.foot, yaw: Math.PI });
   await hook(page, "setHp", 37);
-  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
-  const crossing = await waitFor(page, s => s.act2.zone === "camp" && s.progress.act2.checkpoint === "camp" && s.act2.stance.friend === null, 60000, "Forest Camp arrival and safe party formation");
-  expect(crossing.act2.hp).toBe(37);
-  expect(crossing.progress.act2.tutorial).toContain("rest");
-  expect(crossing.act2.stance.friend).toBeNull();
-  expect(crossing.act2.enemies.filter(enemy => enemy.zone === "camp")).toEqual([]);
-  expect(crossing.focus?.id).not.toBe("campRest");
-  await expect(page.getByTestId("toast").filter({ hasText: "Forest Camp" }).first()).toBeVisible();
+  await hook(page, "teleport", 88, -160, Math.PI);
+  const forest = await waitFor(page, s => s.act2.zone === "forest1" && s.progress.act2.checkpoint === "cliff" && s.act2.stance.friend === "leafy", 60000, "former camp remains forest combat ground");
+  expect(forest.act2.hp).toBe(37);
+  expect(forest.progress.act2.tutorial).not.toContain("rest");
+  expect(forest.focus?.id).not.toBe("campRest");
+  await expect(page.getByTestId("toast").filter({ hasText: "Forest Camp" })).toHaveCount(0);
   await page.keyboard.press("KeyE");
   await hook(page, "renderFrames", 5);
   const after = await state(page);
@@ -195,17 +193,18 @@ test("legacy camp checkpoint survives reload and knock-out without charging or l
   test.skip(phase === "before", "Baseline visual capture precedes implementation");
   test.setTimeout(180000);
   const errors = await start(page, { checkpoint: "camp", zone: "grove", hp: 20 }, "tap", { x: 49, z: -231, yaw: Math.PI });
-  expect((await state(page)).progress.act2.checkpoint).toBe("camp");
+  expect((await state(page)).progress.act2.checkpoint).toBe("cliff");
   await hook(page, "nearEnemy", 0, 1);
   await hook(page, "setHp", 1);
-  const awake = await waitFor(page, s => !s.act2.knockedOut && s.mode === "explore" && s.act2.zone === "camp", 90000, "wake at Forest Camp checkpoint");
+  await waitFor(page, s => s.act2.knockedOut, 30000, "legacy checkpoint player knocked out");
+  const awake = await waitFor(page, s => !s.act2.knockedOut && s.mode === "explore" && s.act2.zone === "forest1", 90000, "wake at forest entrance checkpoint");
   expect(awake.act2.hp).toBeGreaterThanOrEqual(60);
   expect(awake.progress.act2.coins).toBe(25);
-  expect(Math.hypot(awake.player.x - CAMP2.rest.x, awake.player.z - CAMP2.rest.z)).toBeLessThan(1);
+  expect(Math.hypot(awake.player.x - CLIFF_ROPE.foot.x, awake.player.z - CLIFF_ROPE.foot.z)).toBeLessThan(1);
   const time = awake.playTime;
   const stable = await waitFor(page, s => s.playTime > time + 2, 30000, "wake point stays safe");
   expect(stable.act2.knockedOut).toBe(false);
-  expect(stable.act2.zone).toBe("camp");
+  expect(stable.act2.zone).toBe("forest1");
   expect(stable.act2.hp).toBeGreaterThanOrEqual(60);
   expect(errors).toEqual([]);
 });

@@ -3,7 +3,8 @@ import { cb, combatTick, hooks, resetCombat } from "../combat";
 import { newProgress } from "../logic/progress";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, setGame } from "../store";
-import { CAMP2, CHESTS } from "../world/lowland";
+import { CHESTS, CLIFF_ROPE, zoneAt } from "../world/lowland";
+import { PLAYER_R, gatesOf, isWalkable } from "../world/collision";
 import { findFocus } from "./focus";
 import { openChestScene, talkToKeeper } from "./act2";
 import { ask, say } from "./ask";
@@ -91,18 +92,19 @@ it("chest food overflow has an explicit coin toast and preserves the chest's oth
   expect(getGame().toasts.some((t) => t.en === "Bag full! +2 coins")).toBe(true);
 });
 
-it("Forest Camp arrival records a safe wake point without healing or offering a rest", () => {
-  rt.player.x = CAMP2.rest.x;
-  rt.player.z = CAMP2.rest.z;
-  hooks.enterZone!("camp");
-  expect(getGame().progress.act2).toMatchObject({ checkpoint: "camp", tutorial: ["rest"] });
+it("entering the former camp's forest floor preserves vitals, checkpoint and tutorials", () => {
+  rt.player.x = 88;
+  rt.player.z = -160;
+  const before = getGame().progress.act2;
+  hooks.enterZone!("forest1");
+  expect(getGame().progress.act2).toMatchObject({ hp: before.hp, mp: before.mp, checkpoint: before.checkpoint, tutorial: before.tutorial });
   expect(cb.vitals).toEqual({ hp: 12, mp: { leafy: 1, bubbo: 2, puff: 3, ember: 4 } });
   expect(findFocus()?.id).not.toBe("campRest");
   expect(findFocus()?.verb).not.toBe("Rest");
 });
 
-it("a knock-out wakes at the compatible camp checkpoint for free and can resume safely", async () => {
-  setGame((g) => ({ progress: { ...g.progress, act2: { ...g.progress.act2, checkpoint: "camp" } } }));
+it("a knocked-out player wakes on walkable forest ground at the rope foot for free", async () => {
+  setGame((g) => ({ progress: { ...g.progress, act2: { ...g.progress.act2, checkpoint: "cliff" } } }));
   rt.player.x = 44;
   rt.player.z = -220;
   cb.vitals.hp = 0;
@@ -111,11 +113,13 @@ it("a knock-out wakes at the compatible camp checkpoint for free and can resume 
   await vi.waitFor(() => expect(getGame().mode).toBe("explore"));
   expect(cb.knockedOut).toBe(false);
   expect(cb.vitals.hp).toBeGreaterThanOrEqual(60);
-  expect(rt.player.x).toBeCloseTo(CAMP2.rest.x);
-  expect(rt.player.z).toBeCloseTo(CAMP2.rest.z - 0.4);
+  expect(rt.player.x).toBeCloseTo(CLIFF_ROPE.foot.x);
+  expect(rt.player.z).toBeCloseTo(CLIFF_ROPE.foot.z);
+  expect(isWalkable(rt.player.x, rt.player.z, gatesOf(getGame().progress), PLAYER_R)).toBe(true);
+  expect(zoneAt(rt.player.x, rt.player.z)).toBe("forest1");
   expect(getGame().progress.act2.coins).toBe(25);
   combatTick(0);
-  expect(cb.zones.current).toBe("camp");
+  expect(cb.zones.current).toBe("forest1");
   expect(cb.knockedOut).toBe(false);
   expect(cb.vitals.hp).toBeGreaterThanOrEqual(60);
 });
@@ -124,7 +128,7 @@ it("food drops remain on the floor at 99 past their lifetime and can be collecte
   setGame((g) => ({ progress: { ...g.progress, bag: { fish: 99 } } }));
   rt.player.x = 75.6;
   rt.player.z = -190;
-  cb.zones.current = "camp";
+  cb.zones.current = "forest1";
   cb.drops = [{ id: 123, kind: "food", food: "fish", value: 1, x: rt.player.x, z: rt.player.z, y: 1, vx: 0, vz: 0, vy: 0, t0: 0, magnet: true }];
   rt.time = 61;
   combatTick(0);

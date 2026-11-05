@@ -9,7 +9,7 @@ import { ACT2_PLACE, PHASE3_PLACE } from "./obstacles";
 import { lumoHidden } from "./act2";
 import { cloudCandidates } from "./act3";
 import { CLOUD_SPAWNS, HOLLOW } from "../world/cloudisle";
-import { CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
+import { CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
 import { obstacleAvailable } from "../logic/progress";
 import type { ObstacleId } from "../types";
 
@@ -173,8 +173,6 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       const c = CHESTS.find((x) => x.id === "forestChest")!;
       return { x: c.x, z: c.z, y: 1.5 };
     }
-    case "crossing":
-      return { x: CAMP2.rest.x, z: CAMP2.rest.z, y: 1.8 };
     case "reachPort": {
       const zone = zoneAt(rt.player.x, rt.player.z);
       const t = zone ? routeMarker(zone, rt.player.x) : CLIFF_ROPE.top;

@@ -7,7 +7,7 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CAMP2, CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
+import { CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { rt } from "../runtime";
@@ -93,10 +93,10 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   a.portFound = a.descended && raw.portFound === true;
   a.bought = a.portFound && raw.bought === true;
   a.harbor = a.portFound && raw.harbor === true;
-  const checkpoints: Checkpoint[] = ["cliff", "camp", "port"];
+  const checkpoints: Checkpoint[] = ["cliff", "port"];
   const cp = raw.checkpoint as Checkpoint;
-  a.checkpoint = checkpoints.includes(cp) && (cp !== "port" || a.portFound) && (cp !== "camp" || a.descended) ? cp : "cliff";
-  a.zone = raw.zone === "oldTrail" ? "forest1" : typeof raw.zone === "string" && raw.zone in ZONES ? (raw.zone as ZoneId) : null;
+  a.checkpoint = checkpoints.includes(cp) && (cp !== "port" || a.portFound) ? cp : "cliff";
+  a.zone = raw.zone === "oldTrail" || raw.zone === "camp" ? "forest1" : typeof raw.zone === "string" && raw.zone in ZONES ? (raw.zone as ZoneId) : null;
   a.cleared = list(raw.cleared, STAGES);
   // Pre-expansion v4 has no clear flags. Honour already-reached places without
   // guessing which branch was taken; never replay the prologue or kidnapping.
@@ -104,7 +104,7 @@ function readAct2(raw: unknown, p: Progress): Act2 {
     if (a.portFound || a.zone === "port") a.cleared = [...STAGES];
     else if (a.zone === "coast") a.cleared = ["forest1", "grove", "canopy", "causeway"];
     else if (a.zone === "causeway") a.cleared = ["forest1", "grove", "canopy"];
-    else if (a.checkpoint === "camp" || raw.zone === "oldTrail" || (a.zone && ["camp", "grove", "canopy"].includes(a.zone))) a.cleared = ["forest1"];
+    else if (raw.checkpoint === "camp" || raw.zone === "camp" || raw.zone === "oldTrail" || (a.zone && ["grove", "canopy"].includes(a.zone))) a.cleared = ["forest1"];
   }
   if (a.portFound) a.cleared = [...STAGES];
   return a;
@@ -313,11 +313,11 @@ export function decodeSave(text: string | null): SaveData | null {
     if (nearby) {
       safe = nearby;
     } else if (lowlandSave && (legacyRelocation || !isWalkable(x, z, gates, PLAYER_R))) {
-      ({ x, z } = p.act2.checkpoint === "camp" ? CAMP2.rest : CLIFF_ROPE.foot);
+      ({ x, z } = CLIFF_ROPE.foot);
       // These authored wake points are tested against the same gates and solids
       // as movement; projection is only a guard against future prop changes.
       safe = isWalkable(x, z, gates, PLAYER_R) ? { x, z } : nearestWalkable(x, z, PLAYER_R, gates, false, true);
-      p.act2.zone = p.act2.checkpoint === "camp" ? "camp" : "forest1";
+      p.act2.zone = "forest1";
     } else {
       safe = nearestWalkable(x, z, PLAYER_R, gates, false, true);
     }

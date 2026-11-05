@@ -53,6 +53,8 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
   expect(a.grove).toBe(1423);
   // Slice 3: broad entrance/exit flights replace the old narrow ramps.
   expect(a.canopy).toBe(976);
+  // Slice 2 rezones the full former camp disc and removes its prop solids.
+  expect(a.forestBase).toBe(778);
   expect(a.grove).toBeGreaterThanOrEqual(757 * 1.7);
   expect(a.canopy).toBeGreaterThanOrEqual(407.75 * 1.7);
   for (const zone of ["forest1", "causeway", "coast"] as const) {
@@ -60,8 +62,8 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
     expect(area / BASELINE_AREA[zone], zone).toBeGreaterThanOrEqual(1.8);
     // Open secret pockets add floor in the forest base; the frozen baseline
     // was measured before those pockets were opened for this flood fill. The
-    // camp's open north side (docs/SEVEN_IMPROVEMENTS.md section 2) adds more.
-    expect(area / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(zone === "forest1" ? 2.5 : 2.2);
+    // forest's open north side (docs/SEVEN_IMPROVEMENTS.md section 2) adds more.
+    expect(area / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(zone === "forest1" ? 2.75 : 2.2);
   }
   expect(a.forestLeftArm).toBeGreaterThan(200);
   expect(a.forestRightArm).toBeGreaterThan(200);

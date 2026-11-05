@@ -5,7 +5,7 @@ import { SPAWN, VOLCANO_PATH, BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOO
 import { LIVE_MONSTERS } from "./data/monsters";
 import { ACT2_PLACE, PHASE3_PLACE } from "./flow/obstacles";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
-import { ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
+import { ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
 export const placePlayer = (x: number, z: number, faceX: number, faceZ: number) => {
@@ -48,7 +48,7 @@ export const travelTarget = (name: string): { x: number; z: number } | null => {
     if (name in ACT2_PLACE) return ACT2_PLACE[name as keyof typeof ACT2_PLACE];
     if (name === "cliffDown") return { x: CLIFF_ROPE.top.x, z: CLIFF_ROPE.top.z - 0.5 };
     if (name === "cliffUp") return { x: CLIFF_ROPE.foot.x, z: CLIFF_ROPE.foot.z + 0.6 };
-    if (name === "campRest") return CAMP2.rest;
+    if (name === "forestEntrance") return CLIFF_ROPE.foot;
     if (name === "forkSign") return FORK_SIGN;
     if (name in SERVICES) return SERVICES[name as ServiceId].keeper;
     if (name.startsWith("zone:")) return routeMarker(name.slice(5) as ZoneId, rt.player.x) ?? null;

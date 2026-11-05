@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, type MiState } from "./helpers";
-import { CAMP2, CAMP_SITE, CLIFF_ROPE, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
+import { CLIFF_ROPE, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
 
 type Vec = { x: number; y: number; z: number };
 type ViewState = MiState & {
@@ -75,7 +75,7 @@ const connections = [
     const direction = g.x < CLIFF_ROPE.foot.x ? -1 : 1;
     return { name: direction < 0 ? "left-neck" : "right-neck", from: [g.x - direction * 3, g.z], to: [g.x + direction * 3, g.z] };
   }),
-  { name: "forest-camp", from: [CAMP_SITE.x - CAMP_SITE.r - 1.5, CAMP_SITE.z], to: [CAMP2.rest.x, CAMP2.rest.z] },
+  { name: "former-camp-forest", from: [81, -160], to: [88, -160] },
   { name: "left-arm-grove", from: FOREST_ARMS.left[3], to: FOREST_ARMS.left.at(-1)! },
   { name: "right-arm-canopy", from: FOREST_ARMS.right[3], to: FOREST_ARMS.right.at(-1)! },
   { name: "grove-causeway", from: [56, -239], to: [61, -246], gate: "grove" },
@@ -84,7 +84,7 @@ const connections = [
   { name: "coast-port", from: [76, -285], to: [76, -292], gate: "coast" }
 ] as const;
 const vistas = [
-  ["primeval", 68, -168], ["camp", CAMP2.rest.x, CAMP2.rest.z], ["grove", 49, -231], ["canopy", 109, -234],
+  ["primeval", 68, -168], ["former-camp-forest", 88, -160], ["grove", 49, -231], ["canopy", 109, -234],
   ["left-arm", ...FOREST_ARMS.left[3]], ["right-arm", ...FOREST_ARMS.right[3]],
   ["causeway", 83, -255], ["coast", 66, -275], ["town-arrival", 76, -293], ["town", 74, -307]
 ] as const;
@@ -111,8 +111,8 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
     writeReport();
   };
 
-  // Real keyboard movement crosses two boundaries; pointer and wheel cannot change the lowland framing.
-  await stand(page, CAMP_SITE.x - CAMP_SITE.r - 1.5, CAMP_SITE.z);
+  // Real keyboard movement crosses the former camp floor; pointer and wheel cannot change the lowland framing.
+  await stand(page, 81, -160);
   await hook(page, "set", { mode: "explore" });
   await precondition(page, "starting in Primeval", s => s.act2.zone === "forest1" && s.camera.framing === "lowland");
   const fixed = (await read(page)).camera;
@@ -126,14 +126,15 @@ test("continuous geography, fixed lowland camera, stable rope and Chromebook ren
   expect(afterInput.yaw).toBe(0);
   expect(afterInput.pitch).toBe(fixed.pitch);
   expect(afterInput.dist).toBe(fixed.dist);
-  for (const [key, zone] of [["KeyD", "camp"], ["KeyA", "forest1"]]) {
+  for (const [key, targetX] of [["KeyD", 87], ["KeyA", 81]] as const) {
     await page.keyboard.down(key);
     try {
-      const s = await precondition(page, `walking into ${zone}`, s => {
+      const s = await precondition(page, `walking across forest to x=${targetX}`, s => {
         expect(s.camera.yaw, "heading stays fixed while walking").toBe(0);
-        return s.act2.zone === zone;
+        expect(s.act2.zone, "former camp remains forest").toBe("forest1");
+        return key === "KeyD" ? s.player.x >= targetX : s.player.x <= targetX;
       }, 45000);
-      expect(s.camera.yaw, `${zone} fixed heading`).toBe(0);
+      expect(s.camera.yaw, "forest fixed heading").toBe(0);
       expect(s.camera.framing).toBe("lowland");
     } finally {
       await page.keyboard.up(key);

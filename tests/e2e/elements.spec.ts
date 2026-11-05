@@ -11,7 +11,7 @@ function forestSave(friend: CompanionId) {
   p.active = friend; p.metMaple = true; p.endings = 3;
   p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
   p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true,
-    zone: "forest1", checkpoint: "camp", tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
+    zone: "forest1", checkpoint: "cliff", tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   return JSON.stringify({ v: 4, progress: p, player: { x: 75, z: -171, yaw: Math.PI }, seconds: 3000 });
 }
 

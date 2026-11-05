@@ -11,7 +11,7 @@ export { CANOPY_GAPS, ISLET, POND } from "./hazards";
  *
  *            LUMO'S SANCTUARY (ledge, rope)
  *                     |
- *        PRIMEVAL FOREST BASE ── FOREST CAMP (safe alcove)
+ *        PRIMEVAL FOREST BASE
  *           /                    \
  *     LEFT ARM      MESA       RIGHT ARM
  *           |    (inaccessible)   |
@@ -32,7 +32,7 @@ export { CANOPY_GAPS, ISLET, POND } from "./hazards";
 export const STAGES = ["forest1", "grove", "canopy", "causeway", "coast"] as const;
 export type StageId = (typeof STAGES)[number];
 
-export type ZoneId = "forest1" | "camp" | "grove" | "canopy" | "causeway" | "coast" | "port";
+export type ZoneId = "forest1" | "grove" | "canopy" | "causeway" | "coast" | "port";
 
 type Rect = { kind: "rect"; x0: number; x1: number; z0: number; z1: number };
 type Trail = { kind: "trail"; pts: Array<[number, number]>; w: number };
@@ -167,7 +167,6 @@ export const CAUSEWAY = rect(50, 113, -264.5, -242.5);
 export const PORT = rect(54, 100, -322.5, -289.5);
 export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.55 };
 export const SHRINE = disc(106.5, -251.5, 4.8);
-export const CAMP_SITE = { x: 88, z: -160, r: 5.5 };
 
 /** Central rock footprint shared by the landmark and collision. Never add walk shapes here. */
 export const MESA_OUTLINE: Array<[number, number]> = [
@@ -261,12 +260,6 @@ export interface ZoneDef {
 }
 
 export const ZONES: Record<ZoneId, ZoneDef> = {
-  camp: {
-    id: "camp",
-    name: { en: "Forest Camp", ja: "もりの キャンプ" },
-    hostile: false,
-    walk: [disc(CAMP_SITE.x, CAMP_SITE.z, CAMP_SITE.r)],
-  },
   port: {
     id: "port",
     name: { en: "Port Town", ja: "みなとまち" },
@@ -347,7 +340,8 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     hostile: true,
     walk: [
       trail(FOREST1_TRAIL, 4.2),
-      // Broad northern entrance to the safe alcove, short of the east gate cut.
+      // Forest floor and its broad northern opening, short of the east gate cut.
+      disc(88, -160, 5.5),
       rect(79, 93.2, -172, -158),
       trail([[79, -161], [88, -160]], 2.6),
       trail([[64, -174], ...FOREST_ARMS.left], 4),
@@ -382,8 +376,8 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     ],
   },
 };
-/** Overlaps are decided in this order (the camp before the forest round it, the town before the coast). */
-export const ZONE_ORDER: ZoneId[] = ["camp", "port", "canopy", "grove", "causeway", "coast", "forest1"];
+/** Overlaps are decided in this order (the town before the coast). */
+export const ZONE_ORDER: ZoneId[] = ["port", "canopy", "grove", "causeway", "coast", "forest1"];
 
 type Bounds = { x0: number; x1: number; z0: number; z1: number };
 function shapeBounds(sh: WalkShape): Bounds {
@@ -609,12 +603,6 @@ export function lowlandDeckY(x: number, z: number, solved: readonly ObstacleId[]
 
 // ------------------------------------------------------------------ places
 
-export const CAMP2 = {
-  tent: { x: 90.5, z: -158, yaw: 0.9 },
-  fire: { x: 87, z: -162 },
-  bench: { x: 89.5, z: -162.5, yaw: -0.5 },
-  rest: { x: 88, z: -160 },
-};
 export const FORK_SIGN = { x: 76.5, z: -175, yaw: 0 };
 
 export interface ChestDef {
@@ -775,19 +763,8 @@ export const LOWLAND_RIDGES = [
   { ax: 33, az: -240, bx: 52.8, bz: -240, r: .45 },
   { ax: 59.2, az: -240, bx: 69, bz: -240, r: .45 },
 ];
-/** Ruined pillars lining the causeway. */
-export const RUIN_PILLARS: Vec2[] = (() => {
-  const out: Vec2[] = [];
-  for (let x = 58; x <= 96; x += 6.4) {
-    if (Math.abs(x - 76) < 4) continue;
-    // The western pillar formerly sat on the passage centreline and sealed
-    // the 1.85m crossing for the largest mounted body. Keep it beside the road.
-    out.push(x === 58 ? { x: 55.5, z: -244.8 } : x > 96 ? { x: 103, z: -244 } : { x, z: -243.6 }, { x: x + 3.2, z: -255.4 });
-  }
-  out.push({x:52.5,z:-259.5},{x:109,z:-260.5},{x:45.2,z:-251},{x:45.2,z:-256},
-    {x:56,z:-191},{x:59,z:-193},{x:64,z:-227});
-  return out;
-})();
+/** Half-sunk stones off the forest and Grove fights. The Causeway stays open. */
+export const RUIN_PILLARS: Vec2[] = [{ x: 56, z: -191 }, { x: 59, z: -193 }, { x: 64, z: -227 }];
 
 /** One normal enemy: its type and where it lives in its zone. */
 export type EnemyKind = "gloomlet" | "snapjaw" | "shellback" | "forestSpitter" | "raiderShooter";
@@ -902,9 +879,6 @@ export function lowlandSolids(): SolidShape[] {
     }
     if (xs.length === 2) box((xs[0] + xs[1]) / 2, z, Math.abs(xs[1] - xs[0]) / 2, 0.55);
   }
-  box(CAMP2.tent.x, CAMP2.tent.z, 1.6, 1.25, CAMP2.tent.yaw);
-  circle(CAMP2.fire.x, CAMP2.fire.z, 0.65);
-  box(CAMP2.bench.x, CAMP2.bench.z, 1, 0.2, CAMP2.bench.yaw);
   for (const t of GIANT_TREES) if (!RIGHT_ARM_TREES.some(arm => arm === t)) circle(t.x, t.z, t.r);
   for (const b of MOSSY_BOULDERS) if (!RIGHT_ARM_BOULDERS.includes(b)) circle(b.x, b.z, b.r * 0.9);
   out.push(...RIGHT_ARM_SOLIDS);
@@ -929,7 +903,6 @@ export function lowlandSolids(): SolidShape[] {
 /** Waypoints for the ★ marker on the way to the town (either route). */
 export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
   forest1: { x: 47, z: -175 },
-  camp: { x: 94, z: -170 },
   grove: { x: 58, z: -244 },
   canopy: { x: 96, z: -238 },
   causeway: { x: 76, z: -256 },
@@ -937,9 +910,9 @@ export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
   port: { x: SERVICES.harbor.keeper.x, z: SERVICES.harbor.keeper.z },
 };
 
-/** The base and camp point toward the nearest arm rather than the closed mesa. */
+/** The forest base points toward the nearest arm rather than the closed mesa. */
 export function routeMarker(zone: ZoneId, playerX: number): Vec2 {
-  if (zone === "forest1" || zone === "camp") return playerX < 76 ? { x: 47, z: -175 } : { x: 104, z: -174 };
+  if (zone === "forest1") return playerX < 76 ? { x: 47, z: -175 } : { x: 104, z: -174 };
   return ROUTE_MARKERS[zone];
 }
 

@@ -2071,3 +2071,26 @@ The area-budget test now models those same hop edges: sampled reachable Grove fl
   coexist after a friend switch; both owners pause independently. Instant spends
   without an owned active special state, basics and free beacon moves block no
   regeneration. Rates, caps and saved values remain unchanged.
+
+## 2026-11-05 — Forest Camp removal (slice 2)
+
+- The former camp disc and its north opening remain forest1 floor. Removed the
+  tent, fire, bench, dirt tint, solids, labels and welcome flow; small non-solid
+  rocks and plants continue the forest ground. The home island camps stay intact.
+- The rope foot is the forest checkpoint. Legacy camp checkpoints become cliff,
+  camp zones become forest1, and clear inference still reads the raw legacy
+  identifiers. Valid former camp positions and saved rest lesson tokens remain.
+  Opening the forest chest now leads directly to reachPort. The debug destination
+  becomes Forest entrance, retaining its previous forest-clear access.
+- The sampled reachable forest base is now 778 m², including the former camp
+  floor and removed prop footprints. Its area assertion reflects that rezone;
+  the Causeway rendering budget remains unchanged.
+
+## 2026-11-05 — Secret pocket floors and Causeway (slice 2)
+
+- Secret pockets and Bubbo's cage no longer draw dark floor rectangles. Opened
+  mechanical pockets have low stone or wood framing; discovery rules stay intact.
+- Removed all Causeway pillars and their solids, retaining the three forest/Grove
+  stones and existing arches. Low non-solid edge rubble and paving grass share
+  the existing props batch. All 14 Causeway enemies retain their spawn indices.
+- Canopy stairs, decks, ask/obstacle flows and camera code are unchanged.

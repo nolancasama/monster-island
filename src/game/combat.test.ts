@@ -7,7 +7,7 @@ import { region } from "./world/region";
 import { COMBAT, ENEMIES, MP_REGEN, type CompanionId, type EnemyKind } from "./data/combat";
 import { BEACON_PYLONS } from "./logic/beacon";
 import { BEACON, CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
-import { CAMP2, ENEMY_SPAWNS, POND } from "./world/lowland";
+import { ENEMY_SPAWNS, POND } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/collision";
 import { run } from "./flow/script";
@@ -457,10 +457,25 @@ describe("Leafy's snap-timed whip", () => {
 
 describe("companions leaving combat", () => {
   const destinations = [
-    { name: "Forest Camp", world: "home", hostile: [76, -168], safe: [CAMP2.rest.x, CAMP2.rest.z] },
     { name: "Port Town", world: "home", hostile: [76, -287], safe: [76, -293] },
     { name: "Hidden Hollow", world: "cloud", hostile: [0, 151], safe: [-10, 190] }
   ] as const;
+
+  for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
+    it(`${friend} stays in combat stance on the former camp's forest floor`, () => {
+      changeWorld("home");
+      setGame(g => ({ progress: { ...g.progress, active: friend, act2: { ...g.progress.act2, cleared: ["forest1"] } } }));
+      for (const e of cb.enemies) e.state = "gone";
+      Object.assign(rt.player, { x: 76, z: -168 });
+      advanceCombat(.6);
+      expect(cb.stance.friend).toBe(friend);
+      Object.assign(rt.player, { x: 88, z: -160 });
+      combatTick(.01);
+      expect(cb.zones.current).toBe("forest1");
+      expect(cb.stance.friend).toBe(friend);
+      expect(rt.monsters[friend].mode).toBe("script");
+    });
+  }
 
   for (const destination of destinations) for (const friend of ["leafy", "bubbo", "puff", "ember"] as const) {
     it(`${friend} releases its combat script on entering ${destination.name}`, () => {

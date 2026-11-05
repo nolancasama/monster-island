@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { newProgress, objective, type Progress } from "./progress";
 import {
   clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, eatHelps, findPort, hearLead,
-  hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, reachCrossing, regenMp, rested, spendMp, stayAtInn, startAct2, addFood, chestFoodOverflow, afterKnockout
+  hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, regenMp, rested, spendMp, stayAtInn, startAct2, addFood, chestFoodOverflow, afterKnockout
 } from "./act2";
 import { decodeSave, encodeSave } from "./save";
 import { PHRASES, heardQuantity } from "./english";
 import { judgeSpeech } from "./speechMatch";
-import { STAGES, ENEMY_SPAWNS, CHESTS, CAMP2, ZONES, zoneAt } from "../world/lowland";
+import { STAGES, ENEMY_SPAWNS, CHESTS, CLIFF_ROPE, ZONES, zoneAt } from "../world/lowland";
 import { PLAYER_R, gatesOf, isWalkable } from "../world/collision";
 import { FOODS } from "../data/foods";
 import { FOOD_RESTORE, KO_HP, MAX_HP } from "../data/combat";
@@ -42,8 +42,6 @@ describe("Act 2 story", () => {
     p = markDescended(p);
     expect(objective(p)).toEqual({ id: "openChest" });
     p = openChest(p, "forestChest");
-    expect(objective(p)).toEqual({ id: "crossing" });
-    p = reachCrossing(p);
     expect(objective(p)).toEqual({ id: "reachPort" });
     expect(hearLead(p)).toBe(p);
     p = findPort(p);
@@ -231,7 +229,7 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
   });
 });
 
-describe("paid inn and Forest Camp", () => {
+describe("paid inn and forest checkpoint", () => {
   it("only yes with 10 coins buys a room; no and insufficient funds change nothing", () => {
     for (const coins of [0, 9, 10, 25]) {
       const p = findPort(addCoins(markDescended(startAct2(done())), coins));
@@ -247,23 +245,21 @@ describe("paid inn and Forest Camp", () => {
     }
   });
 
-  it("reaching the safe camp records the compatible wake point without healing", () => {
+  it("the forest entrance remains a walkable checkpoint without healing", () => {
     const p = markDescended(startAct2(done()));
     p.act2.hp = 12;
     p.act2.mp = v(12, 8).mp;
     p.act2.coins = 9;
-    const reached = reachCrossing(p);
-    expect(reached.act2).toMatchObject({ checkpoint: "camp", hp: 12, mp: v(12, 8).mp, coins: 9, tutorial: ["rest"] });
-    expect(reachCrossing(reached)).toBe(reached);
-    expect(zoneAt(CAMP2.rest.x, CAMP2.rest.z)).toBe("camp");
-    expect(ZONES.camp).toMatchObject({ name: { en: "Forest Camp", ja: "もりの キャンプ" }, hostile: false });
-    const loaded = decodeSave(encodeSave(reached, { ...CAMP2.rest, yaw: Math.PI }, 50))!;
-    expect(loaded.progress.act2.checkpoint).toBe("camp");
+    expect(p.act2).toMatchObject({ checkpoint: "cliff", hp: 12, mp: v(12, 8).mp, coins: 9, tutorial: [] });
+    expect(zoneAt(CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z)).toBe("forest1");
+    expect(ZONES.forest1.hostile).toBe(true);
+    const loaded = decodeSave(encodeSave(p, { ...CLIFF_ROPE.foot, yaw: Math.PI }, 50))!;
+    expect(loaded.progress.act2.checkpoint).toBe("cliff");
     expect(isWalkable(loaded.player.x, loaded.player.z, gatesOf(loaded.progress), PLAYER_R)).toBe(true);
-    const recovered = afterKnockout({ hp: 0, mp: reached.act2.mp });
+    const recovered = afterKnockout({ hp: 0, mp: p.act2.mp });
     expect(recovered.hp).toBeGreaterThanOrEqual(60);
-    expect(recovered.mp).toEqual(reached.act2.mp);
-    expect(reached.act2.coins).toBe(9);
+    expect(recovered.mp).toEqual(p.act2.mp);
+    expect(p.act2.coins).toBe(9);
   });
 });
 
@@ -273,15 +269,15 @@ describe("areas: enemies come back only after a real absence", () => {
     mem = noteDefeat(mem, "forest1", 0);
     mem = noteDefeat(mem, "forest1", 1);
     // Out and straight back in over the border: no fresh crowd.
-    let r = changeZone(mem, "camp", 10);
+    let r = changeZone(mem, "port", 10);
     r = changeZone(r.mem, "forest1", 11);
     expect(r.respawn).toBeNull();
     expect(r.mem.defeated.forest1).toEqual([0, 1]);
     // Back and forth for a while never adds up: each absence counts on its own.
-    for (let t = 12; t < 40; t += 2) r = changeZone(changeZone(r.mem, "camp", t).mem, "forest1", t + 1);
+    for (let t = 12; t < 40; t += 2) r = changeZone(changeZone(r.mem, "port", t).mem, "forest1", t + 1);
     expect(r.mem.defeated.forest1).toEqual([0, 1]);
     // A real absence (another area for RESPAWN_AWAY seconds): they are back.
-    r = changeZone(changeZone(r.mem, "camp", 50).mem, "forest1", 50 + RESPAWN_AWAY);
+    r = changeZone(changeZone(r.mem, "port", 50).mem, "forest1", 50 + RESPAWN_AWAY);
     expect(r.respawn).toBe("forest1");
     expect(r.mem.defeated.forest1).toEqual([]);
   });
@@ -377,7 +373,7 @@ describe("persistent stage clears and pre-expansion saves",()=>{
       expect(clearStage(cleared,zone,[])).toBe(cleared);
       let memory=changeZone(newZoneMemory(),zone,0).mem;
       memory=noteDefeat(memory,zone,ids[0]);
-      memory=changeZone(memory,"camp",1).mem;
+      memory=changeZone(memory,"port",1).mem;
       const respawn=changeZone(memory,zone,14);
       expect(respawn.respawn).toBe(zone);
       expect(cleared.act2.cleared).toEqual([zone]);
@@ -385,7 +381,7 @@ describe("persistent stage clears and pre-expansion saves",()=>{
       expect(loaded.progress.act2.cleared).toEqual([zone]);
     }
   });
-  it("optional arm enemies do not count, and clearing the base sets a wake point without healing",()=>{
+  it("optional arm enemies do not count, and clearing the base retains the cliff checkpoint without healing",()=>{
     const p=startAct2(done());p.act2.hp=12;p.act2.mp=v(12,8).mp;
     const required=ENEMY_SPAWNS.flatMap((e,i)=>e.zone==="forest1"&&!e.optional?[i]:[]);
     const optional=ENEMY_SPAWNS.flatMap((e,i)=>e.zone==="forest1"&&e.optional?[i]:[]);
@@ -394,7 +390,7 @@ describe("persistent stage clears and pre-expansion saves",()=>{
     expect(remainingEnemies("forest1",optional)).toBe(5);
     expect(remainingEnemies("forest1",required)).toBe(0);
     const cleared=clearStage(p,"forest1",required);
-    expect(cleared.act2).toMatchObject({cleared:["forest1"],checkpoint:"camp",hp:12,mp:v(12,8).mp,tutorial:[]});
+    expect(cleared.act2).toMatchObject({cleared:["forest1"],checkpoint:"cliff",hp:12,mp:v(12,8).mp,tutorial:[]});
     const atPort={...p,act2:{...p.act2,checkpoint:"port" as const}};
     expect(clearStage(atPort,"forest1",required).act2.checkpoint).toBe("port");
   });
@@ -413,8 +409,8 @@ describe("persistent stage clears and pre-expansion saves",()=>{
     }
   });
   it("new in-progress saves do not acquire unlocks merely by loading or resting",()=>{
-    const p=startAct2(done());p.act2.descended=true;p.act2.zone="camp";p.act2.checkpoint="camp";
-    const loaded=decodeSave(encodeSave(p,{...CAMP2.rest,yaw:0},10))!;
+    const p=startAct2(done());p.act2.descended=true;p.act2.zone="forest1";p.act2.checkpoint="cliff";
+    const loaded=decodeSave(encodeSave(p,{...CLIFF_ROPE.foot,yaw:0},10))!;
     expect(loaded.progress.act2.cleared).toEqual([]);
   });
 });

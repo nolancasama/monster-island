@@ -10,7 +10,7 @@ async function atCoast(page: Page, cleared: string[], portFound = false) {
     p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true };
   p.active = "ember"; p.metMaple = true; p.endings = 3;
   p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
-  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound, harbor: portFound, zone: "coast", checkpoint: "camp",
+  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound, harbor: portFound, zone: "coast", checkpoint: "cliff",
     cleared: cleared as typeof p.act2.cleared, tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   await page.addInitScript(save => localStorage.setItem("mi.save.v4", save),
     JSON.stringify({ v: 4, progress: p, player: { x: 76, z: -279, yaw: Math.PI }, seconds: 3000 }));

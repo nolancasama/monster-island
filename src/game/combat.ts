@@ -31,8 +31,8 @@ import { waterAt } from "./logic/water";
  *
  * - Areas: the lowland is split into zones (world/lowland.ts). Entering a
  *   hostile zone puts the active friend in its combat position (on the
- *   backpack, on a shoulder, or carrying the player); a safe zone (the camp,
- *   the town) puts everyone back to following. The position depends on the
+ *   backpack, on a shoulder, or carrying the player); a safe zone (the
+ *   town) puts everyone back to following. The position depends on the
  *   zone only, never on how near an enemy is, so it never flickers.
  * - Attacks happen only when the player presses J (basic) or K (special):
  *   friends never attack by themselves. Projectiles follow the firing facing;

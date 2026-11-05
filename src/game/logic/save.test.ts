@@ -3,7 +3,7 @@ import { SAVE_KEY, SAVE_KEY_V1, SAVE_KEY_V2, SAVE_KEY_V3, decodeSave, encodeSave
 import { befriend, describeLine, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { CAMP, CLIFF_TOP_SPOT, SPAWN } from "../world/island";
-import { CAMP2, CLIFF_ROPE, GROVE_CROSSING, POND, STAGES, STAGE_EXITS, zoneAt } from "../world/lowland";
+import { CLIFF_ROPE, GROVE_CROSSING, POND, STAGES, STAGE_EXITS, zoneAt } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { startAct2, markDescended } from "./act2";
 import type { MonsterId } from "../types";
@@ -205,6 +205,28 @@ describe("forest layout save migration", () => {
     return decodeSave(JSON.stringify({ v: 4, progress: { ...p, act2, solved: [...p.solved, ...(shortcut ? ["causewayGate"] : [])] }, player: { ...position, yaw: .7 }, seconds: 87 }))!;
   }
 
+  it.each([
+    { checkpoint: "camp", zone: "forest1" },
+    { checkpoint: "cliff", zone: "camp" },
+    { checkpoint: "camp", zone: "camp" },
+  ])("migrates raw camp identifiers and infers legacy clears: %j", (fields) => {
+    const position = { x: 88, z: -160 };
+    const back = load(position, { ...fields, cleared: undefined, tutorial: ["rest"], chests: ["forestChest"], secrets: [SECRET_IDS[0]], coins: 73 });
+    expect(back.v).toBe(4);
+    expect(back.player).toEqual({ ...position, yaw: .7 });
+    expect(back.progress.act2).toMatchObject({ checkpoint: "cliff", zone: "forest1", cleared: ["forest1"], tutorial: ["rest"], chests: ["forestChest"], secrets: [SECRET_IDS[0]], coins: 73 });
+    expect(isWalkable(position.x, position.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
+    expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
+  });
+
+  it("preserves explicit clear flags and positions throughout the former camp", () => {
+    for (const position of [{ x: 88, z: -160 }, { x: 85.4, z: -159.6 }, { x: 89, z: -164.5 }, { x: 88, z: -155.5 }]) {
+      const back = load(position, { checkpoint: "camp", zone: "camp", cleared: [] }, false);
+      expect(back.player).toEqual({ ...position, yaw: .7 });
+      expect(back.progress.act2).toMatchObject({ checkpoint: "cliff", zone: "forest1", cleared: [] });
+    }
+  });
+
   it("decodes old Canopy ramp positions onto valid ground without losing progress", () => {
     for (const position of [{ x: 100, z: -198 }, { x: 94, z: -244.5 }]) {
       const p = chapter();
@@ -243,8 +265,8 @@ describe("forest layout save migration", () => {
   ])("moves $label to the valid checkpoint, with no heal or lost progress", ({ position, zone }) => {
     for (const checkpoint of ["camp", "cliff"] as const) {
       const back = load(position, { zone, checkpoint, hp: 43, mp: { leafy: 27 }, cleared: ["forest1"] });
-      expect(back.player).toEqual({ ...(checkpoint === "camp" ? CAMP2.rest : CLIFF_ROPE.foot), yaw: .7 });
-      expect(back.progress.act2).toMatchObject({ forestLayout: 2, checkpoint, hp: 43 });
+      expect(back.player).toEqual({ ...CLIFF_ROPE.foot, yaw: .7 });
+      expect(back.progress.act2).toMatchObject({ forestLayout: 2, checkpoint: "cliff", hp: 43 });
       expect(back.progress.act2.mp.leafy).toBe(27);
       expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
       expect(back.seconds).toBe(87);
@@ -272,7 +294,7 @@ describe("forest layout save migration", () => {
     const back = load({ x, z }, { zone, checkpoint: "camp", cleared: [...STAGES] });
     expect(back.player).toEqual({ x, z, yaw: .7 });
     expect(back.progress.act2.zone).toBe(zone);
-    expect(back.progress.act2.checkpoint).toBe("camp");
+    expect(back.progress.act2.checkpoint).toBe("cliff");
   });
 
   it("restores all port access even when an old explicit clear list is incomplete", () => {
@@ -307,14 +329,14 @@ describe("forest layout save migration", () => {
   it("uses the checkpoint when the saved zone has no ground within eight metres", () => {
     const position = { x: 78, z: -220 };
     const back = load(position, { zone: "grove", checkpoint: "camp", cleared: [...STAGES] }, false);
-    expect(back.player).toEqual({ ...CAMP2.rest, yaw: .7 });
-    expect(back.progress.act2.zone).toBe("camp");
+    expect(back.player).toEqual({ ...CLIFF_ROPE.foot, yaw: .7 });
+    expect(back.progress.act2.zone).toBe("forest1");
   });
 
   it("validates a saved barrier position with its own clear flags", () => {
     const gate = STAGE_EXITS.find(g => g.id === "forest1")!;
     const blocked = load(gate, { zone: "forest1", cleared: [], checkpoint: "camp" });
-    expect(blocked.player).toEqual({ ...CAMP2.rest, yaw: .7 });
+    expect(blocked.player).toEqual({ ...CLIFF_ROPE.foot, yaw: .7 });
     const open = load(gate, { zone: "forest1", cleared: ["forest1"] }, false);
     expect(open.player).toEqual({ x: gate.x, z: gate.z, yaw: .7 });
   });

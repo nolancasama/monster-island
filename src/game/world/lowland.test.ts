@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { PLAYER_R, isWalkable, moveCircle, standY, type Gates } from "./collision";
 import { groundY } from "./island";
 import {
-  lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CAMP2, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
+  lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
-  RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, lowlandSolids,
+  RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, RUIN_PILLARS, lowlandSolids,
   GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY,
 } from "./lowland";
 import type { ObstacleId } from "../types";
@@ -67,7 +67,7 @@ describe("the lowland below the sanctuary", () => {
         expect(isWalkable(x, z, gates(), radius), `${x},${z} radius ${radius}`).toBe(true);
     }
   });
-  it("enters and leaves camp from the north on foot and mounted, keeping props solid and the alcove safe", () => {
+  it("keeps the former camp and its north opening walkable forest on foot and mounted, without camp solids", () => {
     for (const radius of [PLAYER_R, MONSTERS.bubbo.radius]) {
       for (const [from, to] of [[-170, -160], [-160, -170]]) {
         let p = { x: 85, z: from };
@@ -77,11 +77,17 @@ describe("the lowland below the sanctuary", () => {
           expect(p.z).toBeCloseTo(z);
         }
       }
-      for (const prop of [CAMP2.tent, CAMP2.fire, CAMP2.bench])
-        expect(isWalkable(prop.x, prop.z, gates(), radius)).toBe(false);
+      for (const [x, z] of [[90.5, -158], [87, -162], [89.5, -162.5], [88, -160]]) {
+        expect(isWalkable(x, z, gates(), radius), `${x},${z}`).toBe(true);
+        expect(zoneAt(x, z)).toBe("forest1");
+        expect(lowlandSolids().some(s => s.kind !== "capsule" && s.x === x && s.z === z)).toBe(false);
+      }
     }
-    expect(zoneAt(85, -160)).toBe("camp");
-    expect(ZONES.camp.hostile).toBe(false);
+    for (let x = 82.5; x <= 93.5; x += .5) for (let z = -165.5; z <= -154.5; z += .5) {
+      if (Math.hypot(x - 88, z + 160) > 5.5) continue;
+      expect(zoneAt(x, z)).toBe("forest1");
+      expect(lowlandWalkable(x, z, gates(), 0)).toBe(true);
+    }
     expect(zoneAt(85, -170)).toBe("forest1");
   });
 
@@ -98,11 +104,11 @@ describe("the lowland below the sanctuary", () => {
     expect(isWalkable(CLIFF_ROPE.top.x, CLIFF_ROPE.top.z, gates(), PLAYER_R)).toBe(true);
   });
 
-  it("from the foot of the rope: the chest, the camp, both route entrances, the causeway, the coast and every keeper", () => {
+  it("from the foot of the rope: the chest, the northern forest, both route entrances, the causeway, the coast and every keeper", () => {
     const { near } = reachable(gates());
     const forestChest = CHESTS.find((c) => c.id === "forestChest")!;
     expect(near(forestChest.x, forestChest.z)).toBe(true);
-    expect(near(CAMP2.rest.x, CAMP2.rest.z)).toBe(true);
+    expect(near(88, -160)).toBe(true);
     for (const s of Object.values(SERVICES)) expect(near(s.keeper.x, s.keeper.z, 2.8), s.id).toBe(true);
     expect(near(PIER2.x, PIER2.z0 + 1)).toBe(true);
   });
@@ -208,7 +214,7 @@ describe("the lowland below the sanctuary", () => {
 
   it("requires all fourteen Causeway enemies and keeps their homes walkable", () => {
     const ids = ENEMY_SPAWNS.flatMap((e, i) => e.zone === "causeway" ? [i] : []);
-    expect(ids).toHaveLength(14);
+    expect(ids).toEqual([17, 18, 19, 20, 21, 22, 23, 41, 42, 43, 44, 45, 46, 47]);
     const progress = newProgress(); progress.act2.started = true;
     for (const i of ids) {
       const e = ENEMY_SPAWNS[i];
@@ -222,6 +228,16 @@ describe("the lowland below the sanctuary", () => {
     expect(clearStage(progress, "causeway", ids).act2.cleared).toContain("causeway");
   });
 
+  it("removes every Causeway pillar collision while retaining the three off-route forest and Grove stones", () => {
+    expect(RUIN_PILLARS).toEqual([{ x: 56, z: -191 }, { x: 59, z: -193 }, { x: 64, z: -227 }]);
+    const solids = lowlandSolids();
+    expect(solids.filter(s => s.kind === "circle" && s.r === .6 && s.z < -240)).toEqual([]);
+    for (const p of RUIN_PILLARS)
+      expect(solids).toContainEqual({ kind: "circle", ...p, r: .6 });
+    for (const [x, z] of [[61.2, -255.4], [52.5, -259.5], [109, -260.5]])
+      expect(isWalkable(x, z, gates(), PLAYER_R), `${x},${z}`).toBe(true);
+  });
+
   it("preserves every pre-existing spawn index, including the first seven Causeway enemies", () => {
     // Index 21 moved aside for the exit stairs; with its old point this hashes to ac5f4ffe….
     const original = ENEMY_SPAWNS.slice(0, 41);
@@ -229,10 +245,10 @@ describe("the lowland below the sanctuary", () => {
       .toBe("18654bf281508a56bd02a112c48e294fa1c0c0b75a4a13de8f74ed7662868d28");
   });
 
-  it("fights happen in the forests, causeway and coast; the camp and town are safe", () => {
+  it("fights happen in the forests, causeway and coast; the town is safe", () => {
     const hostile = (Object.keys(ZONES) as ZoneId[]).filter((z) => ZONES[z].hostile).sort();
     expect(hostile).toEqual(["canopy", "causeway", "coast", "forest1", "grove"]);
-    expect(zoneAt(CAMP2.rest.x, CAMP2.rest.z)).toBe("camp");
+    expect(zoneAt(88, -160)).toBe("forest1");
     expect(zoneAt(SERVICES.market.keeper.x + 2, SERVICES.market.keeper.z)).toBe("port");
     expect(zoneAt(CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z)).toBe("forest1");
   });
@@ -282,7 +298,7 @@ describe("first-clear exit collision", () => {
   it("blocks the forest exit with every approach, while the rope and every required enemy remain reachable", () => {
     const g={...gates(),cleared:[]};
     const reach=reachable(g);
-    expect(reach.near(CAMP2.rest.x,CAMP2.rest.z)).toBe(true);
+    expect(reach.near(88,-160)).toBe(true);
     expect(reach.near(CLIFF_ROPE.foot.x,CLIFF_ROPE.foot.z,1)).toBe(true);
     for(const e of ENEMY_SPAWNS.filter(e=>e.zone==="forest1" && !e.optional))expect(reach.near(e.x,e.z,1.5),`${e.x},${e.z}`).toBe(true);
     for(const e of ENEMY_SPAWNS.filter(e=>e.optional))expect(reach.near(e.x,e.z,1.5),`${e.x},${e.z}`).toBe(false);
@@ -405,7 +421,7 @@ describe("the U around the reserved mesa", () => {
     }
     expect(routeMarker("forest1", 58)).toEqual({ x: 47, z: -175 });
     expect(routeMarker("forest1", 94)).toEqual({ x: 104, z: -174 });
-    expect(routeMarker("camp", CAMP2.rest.x)).toEqual(routeMarker("forest1", CAMP2.rest.x));
+    expect(routeMarker("forest1", 88)).toEqual({ x: 104, z: -174 });
   });
 
   it("leaves no raw walk shape within 1.5 metres of the mesa footprint", () => {
@@ -437,7 +453,7 @@ describe("the U around the reserved mesa", () => {
     }
   });
 
-  it("has continuous terrain through every forest, camp and stage boundary and keeps both root decks in place", () => {
+  it("has continuous terrain through every forest and stage boundary and keeps both root decks in place", () => {
     const g = gates(["canopyVines", "canopyRope", "groveLilies"]);
     for (let x = 33; x <= 119; x += .4) for (let z = -247; z <= -154; z += .4) {
       if (!lowlandWalkable(x, z, g, PLAYER_R)) continue;

@@ -72,7 +72,7 @@ test("fresh debug coordinates open the earliest story point for lowland ground",
   await menu.getByLabel("z", { exact: true }).fill(String(forestNeck.z));
   await menu.getByRole("button", { name: "Go", exact: true }).click();
 
-  await expect(menu.locator(".debug-message")).toContainText("Story set to Forest Camp to reach this spot");
+  await expect(menu.locator(".debug-message")).toContainText("Story set to Forest entrance to reach this spot");
   const lowland = await state(page);
   expect(lowland.progress.act2.started).toBe(true);
   expect(lowland.progress.act2.cleared).toContain("forest1");

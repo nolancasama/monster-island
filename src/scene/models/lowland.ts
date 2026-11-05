@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PartBuilder } from "../partBuilder";
 import { bridgeDeck } from "./bridge";
-import { tentGeometry } from "./tent";
 import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
 import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Outfit } from "./people";
@@ -15,7 +14,6 @@ import {
   STAGES,
   STAGE_EXITS,
   BASIN,
-  CAMP2,
   CANOPY_DECKS,
   CANOPY_FLIGHTS,
   CANOPY_FLIGHT_RIMS,
@@ -363,7 +361,6 @@ function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Co
   const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, pad: number) => x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad;
   if (inRect({x0:44,x1:52,z0:-257,z1:-250},0) || inRect(CAUSEWAY, 0) || Math.hypot(x - SHRINE.x, z - SHRINE.z) < SHRINE.r) c.lerp(STONE, 0.9);
   if (inRect(PORT, 0)) c.lerp(COBBLE, 0.92);
-  if (Math.hypot(x - CAMP2.fire.x, z - CAMP2.fire.z) < 6) c.lerp(DIRT, 0.45);
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.6 && Math.hypot(x - ISLET.x, z - ISLET.z) > ISLET.r) c.lerp(MUD, 0.85);
   if (x < 70 && z < -200 && z > -246) for (const s of STREAMS) if (nearestOnTrail(s, x, z).d < 1.6) c.lerp(MUD, 0.6);
   c.lerp(ROCK, steep);
@@ -596,7 +593,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
   return { trees: kept, ferns, fernTrees, reeds };
 }
 
-// ------------------------------------------------------------------ the cliff, ruins, the grove, the canopy, the camp
+// ------------------------------------------------------------------ the cliff, ruins, the grove, the canopy
 
 /** The rock face under the sanctuary's lookout (flat behind the rope) and boulders along the shelf. */
 export function cliffFaceGeometry(): THREE.BufferGeometry {
@@ -667,7 +664,7 @@ export function cliffRopeGeometry(): THREE.BufferGeometry {
   return b.build();
 }
 
-/** Causeway paving, ruined pillars and arches, the shrine, the camp, logs, boulders. */
+/** Causeway paving, edge rubble and arches, the shrine, forest plants, logs, boulders. */
 export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
   const rand = makeRng(31);
@@ -706,6 +703,19 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     if (h > 3) b.box(1.2, 0.28, 1.2, p.x, gy(p.x, p.z) - 0.1 + h, p.z, "#c4b9a6");
     b.sphere(0.35, p.x + 0.3, gy(p.x, p.z) + h * 0.4, p.z + 0.4, "#6aa04a", [1, 0.5, 0.8], 6);
   }
+  // Low, non-solid rubble stays at the outer edges, leaving the fight open.
+  for (let i = 0; i < 16; i++) {
+    const x = 52 + i * 3.8;
+    for (const z of [-263.3, -243.1])
+      b.boxAt(.65, .18 + (i % 3) * .04, .45, [x, gy(x, z), z], [0, i * .7, 0], "#9d9384");
+  }
+  // Small grass blades emerge through the paving in the same merged batch.
+  for (let i = 0; i < 35; i++) {
+    const x = 52.8 + (i * 7.1) % 58, z = -262 + (i * 3.7) % 17;
+    if (CANOPY_FLIGHTS.some(f => x >= f.x0 && x <= f.x1 && z >= Math.min(f.footZ, f.topZ) && z <= Math.max(f.footZ, f.topZ))) continue;
+    for (const yaw of [0, Math.PI / 2])
+      b.boxAt(.035, .24, .18, [x, gy(x, z) + .12, z], [0, yaw + i, 0], "#5f9a44");
+  }
   // A broken arch where the grove joins the causeway, another at the shrine.
   for (const [x, z] of [
     [58, -243],
@@ -730,15 +740,13 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     b.sphere(0.12, x - 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
     b.sphere(0.12, x + 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
   }
-  // The forest base points left and right; the safe camp is an alcove off it.
-  const fire = CAMP2.fire, bench = CAMP2.bench;
-  for (let i = 0; i < 9; i++) {
-    const a = i / 9 * Math.PI * 2, x = fire.x + Math.cos(a) * .6, z = fire.z + Math.sin(a) * .6;
-    b.add(rockGeometry(.2, .15, i + 3, 0), "#8f8a84", [x, gy(x, z) + .06, z]);
+  // Scattered small rocks and undergrowth continue the forest floor here.
+  for (const [i, [x, z]] of [[84.4, -158.5], [90.8, -157.2], [91.4, -163.6]].entries())
+    b.add(rockGeometry(.3, .2, 1900 + i, 0), "#7d786a", [x, gy(x, z), z]);
+  for (const [x, z] of [[86.2, -156.7], [89.7, -160.8], [85.8, -163.8], [92, -160.2]]) {
+    b.sphere(.28, x, gy(x, z) + .16, z, "#5f9a44", [1.3, .65, 1], 6);
+    b.cone(.16, .4, x + .15, gy(x, z), z + .1, "#447943", 5);
   }
-  for (const yaw of [.5, -.7]) b.cylAt(.08, .9, [fire.x, gy(fire.x, fire.z) + .15, fire.z], [0, yaw, Math.PI / 2], "#8a6238", 7);
-  b.cone(.22, .55, fire.x, gy(fire.x, fire.z) + .2, fire.z, "#ffb340", 6);
-  b.cylAt(.18, 2, [bench.x, gy(bench.x, bench.z) + .22, bench.z], [0, bench.yaw, Math.PI / 2], "#8a6238", 8);
   // The base's signpost with two arrow boards.
   const s = FORK_SIGN;
   const fy = gy(s.x, s.z);
@@ -790,9 +798,8 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     ])
       b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
   }
-  const tent = tentGeometry().rotateY(CAMP2.tent.yaw).translate(CAMP2.tent.x, gy(CAMP2.tent.x, CAMP2.tent.z), CAMP2.tent.z);
   canopyRim(b);
-  return mergeGeometries([b.build(), tent]);
+  return b.build();
 }
 
 /** A joined channel ribbon: shared banks at bends and tapered, rounded ends. */

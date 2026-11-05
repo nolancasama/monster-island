@@ -133,8 +133,16 @@ export function Secrets() {
       const ox = s.object.x, oz = s.object.z, oy = groundY(ox, oz);
       const k = s.open, shut = 1 - k;
 
-      // Low rims show the exact rectangular pocket extent, never hiding the reward.
-      box(x, y + .015, z, hx * 2, .03, hz * 2, s.id === "comboCrateLift" ? DARK_WOOD : DARK);
+      // Open chambers have a low structural rim; their centres remain terrain.
+      // Closed pockets and the shell cage never add a floor over the ground.
+      if (k > 0 && (s.id === "leafyStatues" || s.id === "puffLeaves"
+        || s.id === "comboCrateLift" || s.id === "comboFurnace")) {
+        const tint = s.id === "puffLeaves" || s.id === "comboCrateLift" ? WOOD : STONE;
+        for (const side of [-1, 1]) {
+          box(x + side * (hx - .09), y + .09 * k, z, .18, .18 * k, hz * 2, tint);
+          box(x, y + .09 * k, z + side * (hz - .09), hx * 2 - .36, .18 * k, .18, tint);
+        }
+      }
       if (s.id === "groveDryReeds" || s.id === "canopyDryReeds") {
         // Dry reeds fill the exact blocker footprint and withdraw as the saved
         // burn completes. They reuse the thicket's instanced wood and cones.
@@ -144,7 +152,6 @@ export function Secrets() {
           box(px, base + height / 2, pz, .13 * shut, height, .13 * shut, "#b89549", 0, 0, Math.sin(ix * 2 + iz) * .12);
           part("cone", px, base + height, pz, .16 * shut, .3 * shut, .14 * shut, "#d0b06b");
         }
-        if (k > 0) box(x, y + .025, z, hx * 2, .05, hz * 2, "#615951");
         for (let i = 0; i < 5; i++) {
           const a = i * 2.39996, r = .45 * Math.sqrt((i + .5) / 5);
           const height = (1 - k) * .9;
@@ -239,7 +246,7 @@ export function Secrets() {
         box(cx, cy, cz + .6, .12, 1.25, .065, "#d4a76a", 0, 0, -.76);
         // Timber enclosure matches the entire blocker; the hinged bridge drops
         // from its far edge onto the landing as the enclosure retracts.
-        box(x, y + .61 * shut + .045, z, hx * 2, 1.22 * shut + .06, hz * 2, DARK_WOOD);
+        box(x, y + .64 * shut, z, hx * 2, 1.28 * shut, hz * 2, DARK_WOOD);
         const angle = shut * Math.PI / 2;
         for (let i = 0; i < 8; i++) {
           const d = (i + .5) * hz / 4;
@@ -263,7 +270,7 @@ export function Secrets() {
         part("ring", ox - .81, oy + .85, oz + .05, .4, .4, .4, "#5b635f", 0, Math.PI / 2);
         for (let i = 0; i < 3; i++) box(ox - .83, oy + .65 + i * .18, oz + .05, .06, .05, .65, "#b4b4a0");
         // The reward chamber is a stone furnace extension, with a full footprint lid.
-        box(x, y + .62 * shut + .06, z, hx * 2, 1.24 * shut + .08, hz * 2, "#777e77");
+        box(x, y + .66 * shut, z, hx * 2, 1.32 * shut, hz * 2, "#777e77");
         box(x - k * (hx * 2 + .1), y + .75 * shut + .08, z + hz - .07,
           hx * 2, 1.5 * shut + .1, .16, "#454c48");
         for (let i = 0; i < 5; i++) {

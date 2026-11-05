@@ -11,7 +11,7 @@ async function enterForest(page: Page) {
     p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true };
   p.active = "ember"; p.metMaple = true; p.endings = 3;
   p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
-  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, zone: "forest1", checkpoint: "camp", cleared: [...STAGES],
+  p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, zone: "forest1", checkpoint: "cliff", cleared: [...STAGES],
     tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   await page.addInitScript(save => localStorage.setItem("mi.save.v4", save),
     JSON.stringify({ v: 4, progress: p, player: { x: 75, z: -160, yaw: Math.PI }, seconds: 3000 }));
@@ -32,7 +32,7 @@ test("the U from the base and along both arms, in budget", async ({ page }) => {
     ["u-right-start", ...(FOREST_ARMS.right[1] as [number, number])],
     ["u-right-mid", ...(FOREST_ARMS.right[2] as [number, number])],
     ["u-right-end", ...(FOREST_ARMS.right[3] as [number, number])],
-    ["u-camp", 88, -160],
+    ["u-former-camp-forest", 88, -160],
   ];
   for (const [name, x, z] of views) {
     await hook(page, "teleport", x, z, Math.PI);

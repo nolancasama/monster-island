@@ -131,8 +131,8 @@ test("first forest clear, active-only companions, retreat, re-entry and save per
   await clear(page, "forest1");
   expect((await state(page)).act2.enemies.filter(e => e.zone === "forest1" && ENEMY_SPAWNS[e.i].optional).every(e => e.hp > 0)).toBe(true);
   await probe(page, "forest1", true);
-  await hook(page, "goTo", "campRest", 1.4);
-  await waitFor(page, (s) => s.act2.zone === "camp");
+  await hook(page, "teleport", CLIFF_ROPE.top.x, CLIFF_ROPE.top.z, Math.PI);
+  await waitFor(page, (s) => s.act2.zone === null && s.act2.stance.friend === null);
   await page.waitForTimeout(700);
   expect(Object.values((await state(page)).monsters).filter((m) => m.visible)).toHaveLength(4);
   const t = (await state(page)).playTime;

@@ -13,8 +13,8 @@ import { CHESTS, ENEMY_SPAWNS, STAGES, type StageId, type ZoneId } from "../worl
 
 export type TutorialStep = "attack" | "coins" | "special" | "eat" | "rest" | "switch";
 export const TUTORIAL_STEPS: TutorialStep[] = ["attack", "coins", "special", "eat", "rest", "switch"];
-/** Where a knocked-out player wakes up: the foot of the rope, the camp, or the town's inn. */
-export type Checkpoint = "cliff" | "camp" | "port";
+/** Where a knocked-out player wakes up: the foot of the rope or the town's inn. */
+export type Checkpoint = "cliff" | "port";
 
 export interface Act2 {
   /** Walkability version for the U-shaped forest save migration. */
@@ -90,11 +90,6 @@ export function markDescended(p: Progress): Progress {
 
 export function findPort(p: Progress): Progress {
   return p.act2.portFound || !p.act2.started ? p : withAct2(p, { portFound: true });
-}
-
-/** Keep the saved lesson token `rest`; the lesson records reaching Forest Camp. */
-export function reachCrossing(p: Progress): Progress {
-  return !p.act2.started ? p : setCheckpoint(markTutorial(p, "rest"), "camp");
 }
 
 export type InnResult = { outcome: "rest" | "declined" | "coins"; progress: Progress };
@@ -291,7 +286,6 @@ export type Act2Objective =
   | { id: "act2Start" }
   | { id: "descend" }
   | { id: "openChest" }
-  | { id: "crossing" }
   | { id: "reachPort" }
   | { id: "market" }
   | { id: "kitchen" }
@@ -306,7 +300,6 @@ export function act2Objective(p: Progress): Act2Objective {
   if (!a.portFound) {
     if (!a.descended) return { id: "descend" };
     if (!a.chests.includes("forestChest")) return { id: "openChest" };
-    if (!a.tutorial.includes("rest")) return { id: "crossing" };
     return { id: "reachPort" };
   }
   if (a.harbor) return { id: "act2Done" };
@@ -324,5 +317,5 @@ export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): num
 }
 export function clearStage(p: Progress, zone: ZoneId, defeated: readonly number[]): Progress {
   if (!p.act2.started || !STAGES.includes(zone as StageId) || p.act2.cleared.includes(zone as StageId) || remainingEnemies(zone, defeated) !== 0) return p;
-  return withAct2(p, { cleared: [...p.act2.cleared, zone as StageId], ...(zone === "forest1" && p.act2.checkpoint === "cliff" ? { checkpoint: "camp" } : {}) });
+  return withAct2(p, { cleared: [...p.act2.cleared, zone as StageId] });
 }

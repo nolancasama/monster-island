@@ -13,7 +13,7 @@ describe("debug teleport story selection", () => {
     expect(isWalkable(SPAWN.x, SPAWN.z, gates, PLAYER_R)).toBe(true);
     expect(destinationForDebugPoint(SPAWN.x, SPAWN.z, "home", gates)).toBeUndefined();
 
-    const later = gatesOf(progressForDestination("forestCamp"));
+    const later = gatesOf(progressForDestination("forestEntrance"));
     const [x, z] = FOREST_ARMS.left[1];
     expect(destinationForDebugPoint(x, z, "home", later)).toBeUndefined();
   });
@@ -37,7 +37,7 @@ describe("debug teleport story selection", () => {
     // A gate at each neck opens with the first clear, regardless of the chosen arm.
     const neck = STAGE_EXITS.find(gate => gate.id === "forest1")!;
     expect(isWalkable(neck.x, neck.z, gatesOf(progressForDestination("ropeFoot")), PLAYER_R)).toBe(false);
-    expect(destinationForDebugPoint(neck.x, neck.z, "home", gates)?.id).toBe("forestCamp");
+    expect(destinationForDebugPoint(neck.x, neck.z, "home", gates)?.id).toBe("forestEntrance");
   });
 
   it("selects a cloud destination that opens the summit gates", () => {

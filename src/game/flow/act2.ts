@@ -3,13 +3,13 @@ import { FOODS } from "../data/foods";
 import { COMBAT, PRICES, RECIPES, COMPANION_IDS, type CompanionId } from "../data/combat";
 import { NPCS, type NpcId } from "../data/town";
 import { NUMBER_PHRASE, WANT_PHRASE, heardQuantity, type PhraseId } from "../logic/english";
-import { buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDescended, openChest, practise, reachCrossing, rested, stayAtInn, startAct2, addCoins, type Checkpoint } from "../logic/act2";
+import { buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDescended, openChest, practise, rested, stayAtInn, startAct2, addCoins, type Checkpoint } from "../logic/act2";
 import { companions } from "../logic/progress";
 import { banner, getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { cb, fallHurt, hint, hooks, learn, resetCombat, wakeUp } from "../combat";
 import { FALL_SECONDS, fallLanding } from "../logic/falls";
-import { CAMP2, CHESTS, CLIFF_ROPE, MAPLE_PORT, SERVICES, ZONES, type ServiceId, type ZoneId } from "../world/lowland";
+import { CHESTS, CLIFF_ROPE, MAPLE_PORT, SERVICES, ZONES, type ServiceId, type ZoneId } from "../world/lowland";
 import { LEDGE, groundY } from "../world/island";
 import { PLAYER_R, gatesOf, nearestWalkable, standY } from "../world/collision";
 import { ask, fastMode, lastHeard, say, wait } from "./ask";
@@ -383,7 +383,6 @@ export function readForkSign(): Promise<void> {
 
 const CHECKPOINT_SPOT: Record<Checkpoint, { x: number; z: number; yaw: number }> = {
   cliff: { ...CLIFF_ROPE.foot, yaw: Math.PI },
-  camp: { x: CAMP2.rest.x, z: CAMP2.rest.z - 0.4, yaw: Math.PI },
   port: { x: SERVICES.inn.keeper.x - 2, z: SERVICES.inn.keeper.z, yaw: -Math.PI / 2 }
 };
 
@@ -445,14 +444,6 @@ hooks.enterZone = (zone: ZoneId) => {
   if (lastZoneToast !== zone) {
     lastZoneToast = zone;
     toast({ en: z.name.en, ja: z.name.ja, icon: z.hostile ? "star" : "heart", tone: "info" }, 2200);
-  }
-  if (zone === "camp") {
-    const first = !getGame().progress.act2.tutorial.includes("rest");
-    updateProgress(reachCrossing);
-    if (first) {
-      toast({ en: "Forest Camp is a wake point. Take the left or right forest path to the port!", ja: "もりの キャンプだよ。たおれても ここに もどれるよ。ひだりか みぎの みちで みなとへ!", icon: "heart", tone: "info" }, 5000);
-      hint("switch");
-    }
   }
   if (zone === "port" && !getGame().progress.act2.portFound) void arriveAtPort();
 };

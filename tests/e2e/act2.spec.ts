@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, waitFor } from "./helpers";
-import { CAMP2, CLIFF_ROPE, ENEMY_SPAWNS } from "../../src/game/world/lowland";
+import { CLIFF_ROPE, ENEMY_SPAWNS } from "../../src/game/world/lowland";
 
 /**
  * Act 2, The Hunt for Lumo: the real UI (keys, taps, clicks) in tap mode
@@ -30,7 +30,7 @@ function townSave(extra: Record<string, unknown> = {}) {
       act2: {
         started: true, lumoTaken: true, descended: true, hp: 100, mp: { leafy: 100, bubbo: 100, puff: 100, ember: 100 }, coins: 100,
         items: { amber: 1 }, upgrades: [], chests: ["forestChest"], tutorial: ["attack", "coins", "special", "eat", "rest", "switch"],
-        checkpoint: "camp", portFound: true, bought: false, harbor: false, trained: [], zone: "port", ...extra
+        checkpoint: "cliff", portFound: true, bought: false, harbor: false, trained: [], zone: "port", ...extra
       }
     },
     player: { x: 77, z: -300, yaw: Math.PI }, seconds: 3000
@@ -135,7 +135,7 @@ test("a finished adventure starts Act 2 once: Lumo is taken, the save keeps ever
   expect(errors).toEqual([]);
 });
 
-test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, the chest, food and the camp", async ({ page }) => {
+test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, the chest, food and forest floor", async ({ page }) => {
   test.setTimeout(240_000);
   await seed(page, DONE_V3, "mi.save.v3");
   const errors = await boot(page);
@@ -188,7 +188,7 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.chests.includes("forestChest"), 30_000, "chest opened");
   expect(s.progress.act2.items.amber).toBe(1);
   expect(s.progress.bag.apples).toBe(2);
-  expect(s.objective).toEqual({ id: "crossing" });
+  expect(s.objective).toEqual({ id: "reachPort" });
   await hook(page, "setHp", 50);
   await hook(page, "setMp", "leafy", 10);
   await page.keyboard.press("KeyF");
@@ -200,17 +200,15 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   // Only the five base enemies are required; either arm opens after this clear.
   for (const e of (await state(page)).act2.enemies.filter(e => e.zone === "forest1" && !ENEMY_SPAWNS[e.i].optional)) await defeat(page,e.i);
   expect((await state(page)).progress.act2.cleared).toContain("forest1");
-  expect((await state(page)).progress.act2.checkpoint).toBe("camp");
+  expect((await state(page)).progress.act2.checkpoint).toBe("cliff");
 
-  // Forest Camp is safe and records the rest tutorial without healing.
-  const hpBeforeCrossing = (await state(page)).act2.hp;
-  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
-  s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.tutorial.includes("rest"), 30_000, "reached Forest Camp");
-  expect(s.act2.hp).toBe(hpBeforeCrossing);
-  expect(s.focus?.id).not.toBe("campRest");
-  expect(s.act2.zone).toBe("camp");
-  expect(s.act2.stance.friend).toBeNull();
-  expect(s.progress.act2.checkpoint).toBe("camp");
+  // The former camp is ordinary forest, with no healing or rest tutorial.
+  const hpBefore = (await state(page)).act2.hp;
+  await hook(page, "teleport", 88, -160, Math.PI);
+  s = await waitFor(page, (x) => x.mode === "explore" && x.act2.zone === "forest1" && x.act2.stance.friend === "leafy", 30_000, "reached former camp forest floor");
+  expect(s.act2.hp).toBe(hpBefore);
+  expect(s.progress.act2.tutorial).not.toContain("rest");
+  expect(s.progress.act2.checkpoint).toBe("cliff");
   expect(s.objective).toEqual({ id: "reachPort" });
 
   // And back up the cliff.
@@ -232,14 +230,14 @@ test("enemies return only after a real absence; both routes' puzzles; the town i
   // Knock out the first enemy, step out and straight back: still gone. After 12 s away: back.
   await defeat(page, 0);
   await waitFor(page, (x) => x.act2.enemies[0].state === "gone", 5_000, "enemy gone");
-  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
-  await waitFor(page, (x) => x.act2.zone === "camp", 5_000, "in the camp");
+  await hook(page, "teleport", CLIFF_ROPE.top.x, CLIFF_ROPE.top.z, Math.PI);
+  await waitFor(page, (x) => x.act2.zone === null, 5_000, "on the cliff ledge");
   await hook(page, "teleport", CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, Math.PI);
   let s = await waitFor(page, (x) => x.act2.zone === "forest1", 5_000, "back in the forest");
   expect(s.act2.enemies[0].state).toBe("gone");
-  await hook(page, "teleport", CAMP2.rest.x, CAMP2.rest.z, Math.PI);
+  await hook(page, "teleport", CLIFF_ROPE.top.x, CLIFF_ROPE.top.z, Math.PI);
   // 12 s of play away (the clock is play time, which a slow software renderer stretches).
-  const away = (await waitFor(page, (x) => x.act2.zone === "camp", 5_000, "away in the camp")).playTime;
+  const away = (await waitFor(page, (x) => x.act2.zone === null, 5_000, "away on the cliff ledge")).playTime;
   await waitFor(page, (x) => x.playTime > away + 12.5, 60_000, "12 s of play away");
   await hook(page, "teleport", CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, Math.PI);
   s = await waitFor(page, (x) => x.act2.zone === "forest1" && x.act2.enemies[0].state === "idle", 5_000, "respawned");
@@ -266,7 +264,7 @@ test("enemies return only after a real absence; both routes' puzzles; the town i
   expect(s.act2.zone).toBe("port");
   expect(s.act2.stance.friend).toBeNull();
   expect(s.objective).toEqual({ id: "market" });
-  expect(s.progress.act2.checkpoint).toBe("camp");
+  expect(s.progress.act2.checkpoint).toBe("cliff");
   expect(errors).toEqual([]);
 });
 
