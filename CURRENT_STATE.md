@@ -7,7 +7,7 @@ stays locked behind the Coming Soon notice), gameplay polish and the debug menu.
 migrated saves. https://nolancasama.github.io/monster-island/
 
 ## Water, MP, camp removal, Canopy ropes (merged, deployed 2026-11-05)
-Frozen spec `docs/WATER_MP_CANOPY_ROPES.md`. Deployed on the user's request while the last full browser run was still going. Where it differs from older sections below, this section is the truth.
+Frozen spec `docs/WATER_MP_CANOPY_ROPES.md`. Deployed at `ce16002`. Verified there: tsc, 828 unit tests, build, and the full Playwright suite, 106/106 in 1.5 h (`MI_LONG_TIMEOUT=3600000`). Not tested on a real Chromebook. Where it differs from older sections below, this section is the truth.
 
 - **Water:** `logic/water.ts`. Streams and a 1.1 m pond rim put out a burning enemy; deep ponds stay a knock-out hazard. Only panicking enemies wade the rim.
 - **MP:** `regenMp` pauses only for the friend whose paid special is active.
