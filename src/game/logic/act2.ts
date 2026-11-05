@@ -146,10 +146,10 @@ export function spendMp(v: Vitals, friend: CompanionId, cost: number): Vitals | 
   return { ...v, mp: { ...v.mp, [friend]: clampMp(v.mp[friend] - cost) } };
 }
 
-/** Every friend's MP comes back slowly, also while another friend is out. */
-export function regenMp(v: Vitals, dt: number): Vitals {
+/** Every friend's MP comes back slowly unless their paid special is active. */
+export function regenMp(v: Vitals, dt: number, consuming?: CompanionId | null): Vitals {
   const mp = { ...v.mp };
-  for (const id of COMPANION_IDS) mp[id] = clampMp(mp[id] + MP_REGEN * dt);
+  for (const id of COMPANION_IDS) if (id !== consuming) mp[id] = clampMp(mp[id] + MP_REGEN * dt);
   return { ...v, mp };
 }
 

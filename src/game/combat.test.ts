@@ -14,8 +14,10 @@ import { run } from "./flow/script";
 import { audio } from "../audio/audio";
 import { pressAttack, releaseAttack } from "../input/attackInput";
 import { hazardAt } from "./logic/elements";
+import { waterAt } from "./logic/water";
+import { startPanic } from "./logic/panic";
 
-vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn() } }));
+vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn(), cancelPanic: vi.fn() } }));
 
 beforeEach(() => {
   const progress = newProgress();
@@ -196,6 +198,129 @@ function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
   Object.assign(e, { kind, zone: "stormbreakCoast", x, z, homeX: x, homeZ: z, hp: 100, state: "recover", timer: 99, kx: 0, kz: 0 });
   return e;
 }
+
+describe("water extinguishing", () => {
+  function pondEnemy(offset: number) {
+    changeWorld("home");
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(enemy => enemy.zone === "grove")!;
+    const x = POND.x + POND.r + offset, z = POND.z;
+    Object.assign(e, { kind: "snapjaw", x, z, homeX: x, homeZ: z, lastGround: { x, z }, hp: 100,
+      state: "recover", timer: 99, burn: { until: rt.time + 10, tick: rt.time + 1 },
+      panic: startPanic("medium", rt.time), infernoBlueUntil: rt.time + 1 });
+    Object.assign(rt.player, { x: POND.x + POND.r + 3, z, yaw: -Math.PI / 2 });
+    cb.zones.current = "grove";
+    vi.mocked(audio.play).mockClear();
+    vi.mocked(audio.cancelPanic).mockClear();
+    return e;
+  }
+
+  it("clears grounded fire, panic, blue flame and bark once, with recovery and resistance", () => {
+    const e = pondEnemy(-.3);
+    combatTick(0);
+    expect(e.burn).toBeNull(); expect(e.panic).toBeNull();
+    expect(e.infernoBlueUntil).toBe(0); expect(e.state).toBe("recover");
+    expect(e.panicResistUntil).toBeCloseTo(rt.time + 4);
+    expect(cb.fx.filter(f => f.kind === "steam")).toHaveLength(1);
+    expect(audio.cancelPanic).toHaveBeenCalledOnce();
+    combatTick(0);
+    expect(vi.mocked(audio.play).mock.calls.filter(([s]) => s === "sizzle")).toHaveLength(1);
+    advanceCombat(.4);
+    expect(e.state).not.toBe("recover");
+  });
+
+  it.each(["air", "grabbed", "trapped", "carried"] as const)("waits for landing/release from %s", kind => {
+    const e = pondEnemy(-.3);
+    e.air = kind === "air" ? .5 : 0;
+    if (kind !== "air") e.control = { kind, t0: rt.time, until: rt.time + 10 };
+    combatTick(0);
+    expect(e.burn).not.toBeNull();
+    e.control = null;
+    e.air = .2;
+    combatTick(0);
+    expect(e.burn).toBeNull();
+  });
+
+  it("allows only the panic rim step and walks straight back over half a second", () => {
+    const e = pondEnemy(.05), startX = e.x;
+    Object.assign(e.panic!, { hx: -1, hz: 0, turnAt: rt.time + 10 });
+    rt.time += .1; combatTick(.1);
+    expect(e.x).toBeLessThan(POND.x + POND.r);
+    expect(e.state).not.toBe("ko"); expect(e.burn).toBeNull();
+    expect(e.wade).not.toBeNull();
+    const targetX = e.wade!.x, wetX = e.x;
+    rt.time += .25; combatTick(.25);
+    expect(e.x).toBeCloseTo((wetX + targetX) / 2);
+    rt.time += .25; combatTick(.25);
+    expect(e.wade).toBeNull(); expect(e.x).toBeCloseTo(targetX);
+    expect(e.x).toBeLessThanOrEqual(startX);
+    expect(hazardAt(e.x, e.z, "home")).toBeNull();
+    expect(cb.drops).toHaveLength(0);
+  });
+
+  it("reaches the rim from normal body clearance in short panic steps", () => {
+    const e = pondEnemy(ENEMIES.snapjaw.radius + .2);
+    Object.assign(e.panic!, { hx: -1, hz: 0, turnAt: rt.time + 10 });
+    for (let i = 0; i < 60 && !e.wade; i++) {
+      rt.time += 1 / 60; combatTick(1 / 60);
+    }
+    expect(e.wade).not.toBeNull();
+    expect(e.burn).toBeNull(); expect(e.state).not.toBe("ko");
+  });
+
+  it("keeps ordinary chase steps out of the pond", () => {
+    const e = pondEnemy(ENEMIES.snapjaw.radius + .2);
+    e.burn = e.panic = null;
+    e.state = "chase";
+    // Put the target across the pond; the existing chase collision must stop it.
+    rt.player.x = POND.x - POND.r - 1;
+    advanceCombat(.5);
+    expect(hazardAt(e.x, e.z, "home")).toBeNull();
+    expect(e.wade).toBeNull();
+  });
+
+  it("keeps forced splash KOs and rewards, adding one steam and sizzle", () => {
+    const e = pondEnemy(.2);
+    e.kx = -12;
+    rt.time += .1; combatTick(.1);
+    expect(e.state).toBe("ko");
+    expect(cb.zones.defeated.grove).toContain(e.i);
+    expect(cb.drops.some(d => d.kind === "coin")).toBe(true);
+    expect(cb.fx.filter(f => f.kind === "steam")).toHaveLength(1);
+    expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
+  });
+
+  it("blocks both fire ignitions in walkable stream water while preserving direct damage", () => {
+    changeWorld("home");
+    // A submerged point on the first rendered stream, still ordinary walkable ground.
+    let wet: { x: number; z: number } | undefined;
+    for (let t = 0; t <= 1; t += .05) {
+      const point = { x: 36 + 6 * t, z: -212 - t };
+      if (waterAt(point.x, point.z, "home") === "shallow") { wet = point; break; }
+    }
+    expect(wet).toBeDefined();
+    for (const enemy of cb.enemies) enemy.state = "gone";
+    const e = cb.enemies.find(enemy => enemy.zone === "grove")!;
+    Object.assign(e, { ...wet!, homeX: wet!.x, homeZ: wet!.z, kind: "snapjaw", state: "recover", timer: 99, hp: 1000 });
+    Object.assign(rt.player, { x: e.x, z: e.z + 2, yaw: Math.PI });
+    cb.zones.current = "grove";
+    setGame(g => ({ progress: { ...g.progress, active: "ember" } }));
+    cb.stance.friend = "ember"; cb.stance.k = 1;
+    for (let i = 0; i < 3; i++) { cb.ready.basic = 0; expect(basicAttack()).toBe(true); }
+    expect(e.hp).toBeLessThan(1000);
+    expect(e.burn).toBeNull(); expect(e.panic).toBeNull();
+    const hp = e.hp;
+    expect(specialAttack()).toBe(true);
+    expect(e.hp).toBeLessThan(hp);
+    expect(e.burn).toBeNull(); expect(e.panic).toBeNull(); expect(e.infernoBlueUntil).toBe(0);
+    expect(cb.fx.some(f => f.kind === "steam")).toBe(false);
+    // The same attacks ignite normally once back on dry ground.
+    e.x = rt.player.x; e.z = rt.player.z - .9;
+    expect(waterAt(e.x, e.z, "home")).toBe("none");
+    cb.ready.special = 0; cb.inferno = null; specialAttack();
+    expect(e.burn).not.toBeNull();
+  });
+});
 
 describe("enemy smoke reveals", () => {
   it("activates only nearby enemies in the current zone, staggered by .12 seconds", () => {
@@ -1418,6 +1543,53 @@ describe("elemental K simulation and shared combinations", () => {
     combatTick(.001);
   }
 
+  it("pauses only Inferno's owner through the frame it expires, then resumes regen", () => {
+    loneEnemy(); friend("ember");
+    cb.vitals.mp = { leafy: 40, bubbo: 40, puff: 40, ember: 40 };
+    expect(specialAttack()).toBe(true);
+    rt.time += 1.2;
+    combatTick(1.2);
+    expect(cb.inferno).toBeNull();
+    expect(cb.vitals.mp).toEqual({ leafy: 42.4, bubbo: 42.4, puff: 42.4, ember: 25 });
+    advanceCombat(.25);
+    expect(cb.vitals.mp.ember).toBeCloseTo(25 + MP_REGEN * .25);
+  });
+
+  it("pauses Cyclone's owner after switching friends, including alongside paid Inferno", () => {
+    loneEnemy(); friend("puff");
+    cb.vitals.mp = { leafy: 40, bubbo: 40, puff: 40, ember: 40 };
+    expect(specialAttack()).toBe(true);
+    const puffMp = cb.vitals.mp.puff;
+    friend("leafy");
+    advanceCombat(.25);
+    expect(cb.vitals.mp.puff).toBe(puffMp);
+    expect(cb.vitals.mp.leafy).toBeCloseTo(40 + MP_REGEN * .25);
+    friend("ember");
+    expect(specialAttack()).toBe(true);
+    const emberMp = cb.vitals.mp.ember;
+    advanceCombat(.25);
+    expect(cb.cyclone).not.toBeNull();
+    expect(cb.inferno).not.toBeNull();
+    expect(cb.vitals.mp.puff).toBe(puffMp);
+    expect(cb.vitals.mp.ember).toBe(emberMp);
+    expect(cb.vitals.mp.leafy).toBeCloseTo(40 + MP_REGEN * .5);
+  });
+
+  it("instant Bubble Bomb and free basic attacks leave every friend's regen running", () => {
+    loneEnemy(); friend("bubbo");
+    cb.vitals.mp = { leafy: 40, bubbo: 40, puff: 40, ember: 40 };
+    expect(specialAttack()).toBe(true);
+    const spent = cb.vitals.mp.bubbo;
+    friend("ember");
+    cb.hold = true;
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.25);
+    expect(cb.vitals.mp.bubbo).toBeCloseTo(spent + MP_REGEN * .25);
+    expect(cb.vitals.mp.ember).toBeCloseTo(40 + MP_REGEN * .25);
+    expect(cb.vitals.mp.leafy).toBeCloseTo(40 + MP_REGEN * .25);
+    expect(cb.vitals.mp.puff).toBeCloseTo(40 + MP_REGEN * .25);
+  });
+
   it("Inferno tap lasts 1.2 seconds, ticks every quarter second and halves walking speed", () => {
     const e = loneEnemy("snapjaw", 0, 23);
     e.panicResistUntil = Infinity;
@@ -1453,7 +1625,7 @@ describe("elemental K simulation and shared combinations", () => {
     expect(a.hp).toBe(hp - 2); // burn continues outside the cone
     advanceCombat(3.25);
     expect(cb.inferno?.age).toBeCloseTo(4);
-    expect(cb.vitals.mp.ember).toBeCloseTo(100 - 15 - 48 + MP_REGEN * 4);
+    expect(cb.vitals.mp.ember).toBeCloseTo(100 - 15 - 48);
     const heldHp = b.hp;
     advanceCombat(.25);
     expect(b.hp).toBeLessThan(heldHp); // flame ticks continue after the old cap
@@ -1481,7 +1653,7 @@ describe("elemental K simulation and shared combinations", () => {
     expect(specialAttack()).toBe(true);
     advanceCombat(1.5);
     expect(cb.inferno).not.toBeNull();
-    advanceCombat(.75);
+    advanceCombat(.25);
     expect(cb.inferno).toBeNull();
     expect(cb.vitals.mp.ember).toBeLessThan(1);
     advanceCombat(.5);

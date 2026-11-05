@@ -24,6 +24,7 @@ import { hpAfterFall } from "./logic/falls";
 import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
 import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, type Swing } from "./logic/swing";
 import { revealSmoke } from "./smoke";
+import { waterAt } from "./logic/water";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -100,6 +101,8 @@ export interface EnemyRt {
   infernoBlueUntil: number;
   panic: Panic | null;
   panicResistUntil: number;
+  /** Retrace the one allowed panic wade over half a second. */
+  wade: { x: number; z: number; fromX: number; fromZ: number; age: number } | null;
   fireTicks: number;
   lastFireT: number;
   control: Control | null;
@@ -197,7 +200,7 @@ const whipCloudGates: NonNullable<Gates["cloud"]> = { cleared: [], solved: [], t
 /** Short-lived attack shapes for the scene (vines, jets, gusts, bursts, hits). */
 export interface Fx {
   id: number;
-  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo";
+  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo" | "steam";
   x: number;
   y: number;
   z: number;
@@ -232,7 +235,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
   return {
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, lastGround: { x: s.x, z: s.z }, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: "dormant", spawnT: null, waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, wade: null, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, step: 0
   };
 }
 
@@ -1057,7 +1060,39 @@ function fireObjectCone(o: ElementObject): boolean {
   return true;
 }
 
+function enemyWater(e: EnemyRt) {
+  const p = getGame().progress;
+  return waterAt(e.x, e.z, cb.world, cb.world === "cloud" ? p.act3.puzzles : p.solved);
+}
+
+function endEnemyPanic(e: EnemyRt) {
+  e.panic = null;
+  e.panicResistUntil = rt.time + 4;
+  e.state = currentCombatZone() === e.zone ? "chase" : "return";
+  e.timer = 0;
+}
+
+/** One transition owns the sound and steam, so wet fire cannot spam either. */
+export function extinguish(e: EnemyRt) {
+  if (!e.burn && !e.panic) return;
+  e.burn = null;
+  e.infernoBlueUntil = 0;
+  e.fireTicks = 0;
+  endEnemyPanic(e);
+  e.state = "recover";
+  e.timer = .35;
+  pushFx("steam", e.x, standY(e.x, e.z, getGame().progress.solved) + .4, e.z, 0, 0, 0, .6);
+  audio.play("sizzle");
+  audio.cancelPanic?.();
+}
+
+function extinguishInWater(e: EnemyRt) {
+  if (alive(e) && (e.burn || e.panic) && e.air < .3
+    && !["grabbed", "carried", "trapped"].includes(e.control?.kind ?? "") && enemyWater(e) !== "none") extinguish(e);
+}
+
 function igniteEnemy(e: EnemyRt, now: number) {
+  if (enemyWater(e) !== "none") return;
   if (e.burn) {
     if (e.burn.until < now) e.burn.tick = now + 1 / 3;
     e.burn.until = now + 2.5;
@@ -1087,7 +1122,7 @@ function fireTick(inferno: boolean, now: number) {
     e.fireTicks++;
     e.lastFireT = now;
     // Start panic before this tick's damage so ignition itself respects the floor.
-    if (inferno && (!e.burn || e.burn.until < now)) e.infernoBlueUntil = now + .6;
+    if (inferno && enemyWater(e) === "none" && (!e.burn || e.burn.until < now)) e.infernoBlueUntil = now + .6;
     if (inferno || e.fireTicks >= 3) igniteEnemy(e, now);
     fireHit(e, move.damage, ux, uz, !inferno, now);
   }
@@ -1318,6 +1353,7 @@ function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: (() => bool
     if (blocked(nx, nz, radius, gates) || (!hazard && !isWalkable(nx, nz, gates, 0))) return false;
     e.x = nx; e.z = nz;
     if (hazard) {
+      if (hazard.kind === "splash") extinguish(e);
       const plunges = hazard.kind === "fall" && cb.world === "home";
       const lip = standY(e.lastGround.x, e.lastGround.z, progress.solved) + e.air;
       const d = Math.hypot(nx - e.lastGround.x, nz - e.lastGround.z) || 1;
@@ -1668,6 +1704,7 @@ function knockOut(e: EnemyRt, rewardAt?: { x: number; z: number }) {
   e.control = null;
   e.burn = null;
   e.panic = null;
+  e.wade = null;
   e.panicResistUntil = e.fireTicks = 0;
   e.lastFireT = -10;
   e.flight = null;
@@ -1843,7 +1880,14 @@ export function combatTick(dt: number) {
     for (const e of cb.enemies) pauseElements(e, dt);
     return;
   }
-  if (!cb.knockedOut) cb.vitals = regenMp(cb.vitals, dt);
+  if (!cb.knockedOut) {
+    const paid = !freeBeaconMoves();
+    const consuming = paid && cb.inferno ? "ember" : paid && cb.cyclone ? "puff" : null;
+    const before = cb.vitals;
+    cb.vitals = regenMp(before, dt, consuming);
+    // A cyclone can keep running after switching to Ember and starting Inferno.
+    if (paid && cb.inferno && cb.cyclone) cb.vitals.mp.puff = before.mp.puff;
+  }
   activateEnemies(zone);
   // Held J repeats the basic attack.
   if (cb.hold) basicAttack({ repeat: true });
@@ -1867,6 +1911,7 @@ export function combatTick(dt: number) {
   }
   separate();
   if (live) updateShots(dt);
+  if (live) for (const e of cb.enemies) extinguishInWater(e);
   updateDrops(dt);
   // Player knock-back decays.
   cb.knock.x *= Math.exp(-dt * 7);
@@ -1886,6 +1931,7 @@ function sendHome(zone: CombatZone) {
     e.burn = e.control = e.flight = e.fall = null;
     e.infernoBlueUntil = 0;
     e.panic = null;
+    e.wade = null;
     e.panicResistUntil = e.fireTicks = 0;
     e.lastFireT = -10;
     e.resistUntil = 0;
@@ -1912,6 +1958,54 @@ function moveEnemy(e: EnemyRt, tx: number, tz: number, speed: number, dt: number
 }
 
 const moveOut = { x: 0, z: 0 };
+/** Only panic may cross a pond lip; validate the entire step without sliding. */
+function panicWade(e: EnemyRt, nx: number, nz: number): number | null {
+  const p = getGame().progress, gates = gatesOf(p);
+  const solved = cb.world === "cloud" ? p.act3.puzzles : p.solved;
+  const target = hazardAt(nx, nz, cb.world, solved);
+  const radius = ENEMIES[e.kind].radius;
+  const shallowRim = (x: number, z: number) => hazardAt(x, z, cb.world, solved)?.kind === "splash"
+    && waterAt(x, z, cb.world, solved) === "shallow";
+  // Normal circle movement stops one body radius before the lip. Let panic
+  // approach across that margin, otherwise a short frame can never wade in.
+  let nearRim = false;
+  for (let j = 0; j < 8; j++) {
+    const angle = j * Math.PI / 4;
+    if (shallowRim(nx + Math.sin(angle) * radius, nz + Math.cos(angle) * radius)) nearRim = true;
+  }
+  if (!target && !nearRim) return null;
+  if (e.air >= .3 || ["grabbed", "carried", "trapped"].includes(e.control?.kind ?? "")) return 0;
+  if (target && !shallowRim(nx, nz)) return 0;
+  const distance = Math.hypot(nx - e.x, nz - e.z), count = Math.max(1, Math.ceil(distance / .05));
+  let lastX = e.lastGround.x, lastZ = e.lastGround.z;
+  for (let i = 1; i <= count; i++) {
+    const x = e.x + (nx - e.x) * i / count, z = e.z + (nz - e.z) * i / count;
+    if (blocked(x, z, ENEMIES[e.kind].radius, gates)) return 0;
+    // Only water may relax the usual body clearance, never dry banks or voids.
+    for (let j = 0; j < 8; j++) {
+      const angle = j * Math.PI / 4;
+      const bx = x + Math.sin(angle) * radius, bz = z + Math.cos(angle) * radius;
+      if (!isWalkable(bx, bz, gates, 0) && !shallowRim(bx, bz)) return 0;
+    }
+    const hazard = hazardAt(x, z, cb.world, solved);
+    if (hazard) {
+      if (hazard.kind !== "splash" || waterAt(x, z, cb.world, solved) !== "shallow") return 0;
+    } else {
+      if (!isWalkable(x, z, gates, 0) || combatZoneAt(x, z) !== e.zone) return 0;
+      lastX = x; lastZ = z;
+    }
+  }
+  e.x = nx; e.z = nz;
+  e.lastGround.x = lastX; e.lastGround.z = lastZ;
+  e.step += distance * 2.4;
+  if (target) {
+    e.wade = { x: lastX, z: lastZ, fromX: nx, fromZ: nz, age: 0 };
+    e.kx = e.kz = 0;
+    extinguish(e);
+  }
+  return distance;
+}
+
 function stepTo(e: EnemyRt, nx: number, nz: number, dt: number, face: number | null): number {
   if (e.slowUntil > rt.time) { nx = e.x + (nx - e.x) * 0.4; nz = e.z + (nz - e.z) * 0.4; }
   const q = moveCircle(e.x, e.z, nx, nz, ENEMIES[e.kind].radius, gatesOf(getGame().progress), false, undefined, moveOut);
@@ -2037,12 +2131,22 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
     return;
   }
   if (!live) { pauseElements(e, dt); return; }
+  if (e.wade) {
+    const w = e.wade, x = e.x, z = e.z;
+    w.age = Math.min(.5, w.age + dt);
+    const k = w.age / .5;
+    e.x = w.fromX + (w.x - w.fromX) * k;
+    e.z = w.fromZ + (w.z - w.fromZ) * k;
+    e.yaw = Math.atan2(w.x - w.fromX, w.z - w.fromZ);
+    e.step += Math.hypot(e.x - x, e.z - z) * 2.4;
+    if (k >= 1) { e.wade = null; endEnemyPanic(e); }
+    return;
+  }
+  extinguishInWater(e);
   const controlled = updateElements(e, dt);
+  extinguishInWater(e);
   if (e.panic && rt.time >= e.panic.until - 1e-9) {
-    e.panic = null;
-    e.panicResistUntil = rt.time + 4;
-    e.state = currentCombatZone() === e.zone ? "chase" : "return";
-    e.timer = 0;
+    endEnemyPanic(e);
   }
   if (controlled) return;
   if (e.panic) {
@@ -2050,8 +2154,8 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
     updatePanicHeading(panic, e.kind, e.i, rt.time, e.x, e.z, e.homeX, e.homeZ, p.x, p.z, def.leash);
     const expected = def.speed * panicSpeedScale(def.weightClass) * dt;
     const nx = e.x + panic.hx * expected, nz = e.z + panic.hz * expected;
-    const moved = hazardAt(nx, nz, cb.world, cb.world === "cloud" ? getGame().progress.act3.puzzles : getGame().progress.solved) ? 0
-      : stepTo(e, nx, nz, dt, Math.atan2(panic.hx, panic.hz) + (e.kind === "stormCrab" ? Math.PI / 2 : 0));
+    const moved = panicWade(e, nx, nz) ?? stepTo(e, nx, nz, dt, Math.atan2(panic.hx, panic.hz) + (e.kind === "stormCrab" ? Math.PI / 2 : 0));
+    extinguishInWater(e);
     recordPanicStep(panic, moved, expected, rt.time);
     return;
   }
@@ -2156,14 +2260,14 @@ function separate() {
   const list = cb.enemies.filter((e) => alive(e) && e.zone === currentCombatZone());
   for (let a = 0; a < list.length; a++) {
     const e = list[a];
-    if (e.control || e.fall) continue;
+    if (e.control || e.fall || e.wade) continue;
     const r = ENEMIES[e.kind].radius;
     const dx = e.x - p.x, dz = e.z - p.z;
     const d = Math.hypot(dx, dz);
     if (d < r + pr && d > 1e-4) stepTo(e, p.x + (dx / d) * (r + pr), p.z + (dz / d) * (r + pr), 0.016, null);
     for (let b = a + 1; b < list.length; b++) {
       const o = list[b];
-      if (o.control || o.fall) continue;
+      if (o.control || o.fall || o.wade) continue;
       const rr = r + ENEMIES[o.kind].radius;
       const ox = o.x - e.x, oz = o.z - e.z;
       const od = Math.hypot(ox, oz);

@@ -59,7 +59,8 @@ export type SfxName =
   | "rest"
   | "rumble"
   | "cage"
-  | "crackle";
+  | "crackle"
+  | "sizzle";
 
 /** Monster moods for vocalisations (the English itself is TTS). */
 export type Mood = "hello" | "happy" | "sad" | "excited" | "sleepy" | "surprised";
@@ -215,7 +216,11 @@ class AudioEngine {
     const g = getGame();
     if (!barkReady(now, this.lastBark, tts.isSpeaking(), g.mode === "explore", Boolean(g.line), this.listening || g.prompt?.status === "listening", tts.available)) return;
     this.lastBark = now;
-    void tts.speak("I'm on fire!", { pitch: 1.7, rate: 1.25, transient: true });
+    void tts.speak("I am hot!", { pitch: 1.7, rate: 1.25, transient: true });
+  }
+
+  cancelPanic() {
+    tts.cancelBark();
   }
 
   // ------------------------------------------------------------------ helpers
@@ -278,6 +283,9 @@ class AudioEngine {
       case "spawnPop":
         this.tone(480, t, { to: 130, peak: .08, attack: .003, decay: .075, type: "sine" });
         this.noiseBurst(t, { filter: "lowpass", freq: 1600, peak: .045, attack: .002, decay: .055 });
+        break;
+      case "sizzle":
+        this.noiseBurst(t, { filter: "highpass", freq: 2800, to: 900, peak: .075, attack: .008, decay: .22 });
         break;
       case "crackle":
         for (let i = 0; i < 4; i++) this.noiseBurst(t + i * .045, { filter: "highpass", freq: 2900, peak: .045, attack: .002, decay: .025 });

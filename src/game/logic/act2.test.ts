@@ -115,6 +115,19 @@ describe("HP and MP", () => {
     expect(back.hp).toBe(50);
   });
 
+  it("pauses only the consuming friend's regen and resumes when no special is active", () => {
+    const before = { hp: 50, mp: { leafy: 0, bubbo: 99, puff: 50, ember: 25 } };
+    for (const consuming of ["leafy", "bubbo", "puff", "ember"] as const) {
+      const after = regenMp(before, 1, consuming);
+      for (const id of ["leafy", "bubbo", "puff", "ember"] as const) {
+        expect(after.mp[id]).toBe(id === consuming ? before.mp[id] : Math.min(100, before.mp[id] + 2));
+      }
+      expect(after.hp).toBe(before.hp);
+      expect(regenMp(after, 1, null).mp[consuming]).toBe(Math.min(100, before.mp[consuming] + 2));
+    }
+    expect(before.mp).toEqual({ leafy: 0, bubbo: 99, puff: 50, ember: 25 });
+  });
+
   it("food restores HP and the MP of the friend who loves it, clamped to the maximum", () => {
     const low = { hp: 50, mp: { leafy: 10, bubbo: 10, puff: 10, ember: 90 } };
     expect(eatEffect(low, "apples")).toEqual({ hp: 65, mp: { leafy: 40, bubbo: 10, puff: 10, ember: 90 } });

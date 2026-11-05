@@ -2049,3 +2049,25 @@ The area-budget test now models those same hop edges: sampled reachable Grove fl
   Smoke now costs a draw only while it plays. Rejected: raising the budgets.
 - **Flights draw within 40 m of their bounds only.** From the sanctuary they
   pushed the courtyard and garden over the 120-call and 140k-triangle budgets.
+
+## 2026-11-05 — Water and per-friend MP (slice 1)
+
+- Panic speech now says “I am hot!” in the bubble and incidental TTS, preserving
+  the existing global bark/yelp cooldowns. Extinguishing cancels only incidental
+  speech through the existing TTS bark cancellation API.
+- Stream width and joined banks are shared by rendering and the pure water
+  classifier. Classification includes the rendered rounded end caps and checks
+  terrain below `streamY`; `lowlandY` keeps this independent of the mutable active
+  world because all authored streams are inside the full lowland blend.
+- The 1.1 m wade is measured inward from splash hazard edges, excluding their
+  safe shapes. Panic alone may relax water body clearance to reach the rim in
+  short frames; sampled steps still reject solids, voids and dry unwalkable ground.
+  After extinguishing, the enemy retraces the step to its last walkable centre
+  over 0.5 seconds. Other extinguishes use a 0.35 second recovery and the existing
+  four-second panic resistance. Forced splash motion keeps its KO and rewards,
+  with a single steam/sizzle transition when burning or panicking.
+- Paid special owners are captured before the frame's special updates, so the
+  expiry/drain frame cannot also regenerate their MP. Inferno and Cyclone can
+  coexist after a friend switch; both owners pause independently. Instant spends
+  without an owned active special state, basics and free beacon moves block no
+  regeneration. Rates, caps and saved values remain unchanged.

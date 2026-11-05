@@ -10,6 +10,7 @@ import { makeRng } from "../../game/logic/rng";
 import { MESA_CENTER, MESA_FOOT, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaRimY } from "../../game/world/mesa";
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import { CANOPY_VOIDS, HAZARDS } from "../../game/world/hazards";
+import { STREAM_WIDTH, streamBanks } from "../../game/world/streams";
 import {
   STAGES,
   STAGE_EXITS,
@@ -796,13 +797,7 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
 
 /** A joined channel ribbon: shared banks at bends and tapered, rounded ends. */
 export function streamRibbonGeometry(points: Array<[number, number]>, width: number, height: (x: number, z: number) => number): THREE.BufferGeometry {
-  const banks: Array<[number, number, number, number]> = [];
-  for (let i = 0; i < points.length; i++) {
-    const previous = points[Math.max(0, i - 1)], next = points[Math.min(points.length - 1, i + 1)];
-    const dx = next[0] - previous[0], dz = next[1] - previous[1], length = Math.hypot(dx, dz);
-    banks.push([points[i][0] - dz / length * width / 2, points[i][1] + dx / length * width / 2,
-      points[i][0] + dz / length * width / 2, points[i][1] - dx / length * width / 2]);
-  }
+  const banks = streamBanks(points, width);
   const positions: number[] = [];
   const vertex = (x: number, z: number) => positions.push(x, height(x, z), z);
   for (let i = 1; i < banks.length; i++) {
@@ -849,7 +844,7 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
     b.add(new THREE.CircleGeometry(pond.r, 16).rotateX(-Math.PI / 2), "#358f9b", [pond.x, streamY(pond.x, pond.z) - .12, pond.z], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
   for (const s of STREAMS) {
-    b.add(streamRibbonGeometry(s, 1.6, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+    b.add(streamRibbonGeometry(s, STREAM_WIDTH, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
   // Conform visual water to the rendered 2 m terrain triangles. This shares
   // water's existing tiled draw and never cuts a channel into walking ground.

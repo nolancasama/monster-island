@@ -184,7 +184,7 @@ function panicSpeechMaterial() {
   ctx.fill(); ctx.stroke();
   ctx.font = "bold 72px 'Comic Sans MS', 'Chalkboard SE', sans-serif"; ctx.fillStyle = "#c2360f";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("I'm on fire!", 256, 80);
+  ctx.fillText("I am hot!", 256, 80);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const material = fadedMaterial("#ffffff", 1);
@@ -608,6 +608,14 @@ export function ElementEffects() {
         } else if (f.kind === "bomb" || f.kind === "trap" || f.kind === "splashKo") {
           if (f.kind === "bomb") draw.ring(f.x, f.y, f.z, .3 + f.size * k, "#9eeaff", 1 - k);
           draw.splash(f.x, f.y, f.z, f.id, age, fade, f.kind === "splashKo");
+        } else if (f.kind === "steam") {
+          for (let i = 0; i < 5; i++) {
+            const angle = i * TAU / 5 + f.id;
+            const spread = .08 + k * .22;
+            const size = (.25 + k * .36) * f.size;
+            draw.sprite(f.x + Math.cos(angle) * spread, f.y + age * .9 + (i % 2) * .12,
+              f.z + Math.sin(angle) * spread, size, size * 1.2, "#ffffff", (1 - k) * .65);
+          }
         } else if (f.kind === "snare") {
           draw.ring(f.x, standY(f.x, f.z, game.progress.solved) + .04, f.z, f.size * Math.min(1, k * 4), "#8ec15a", (1 - k) * .65);
         } else if (f.kind === "shrug") {

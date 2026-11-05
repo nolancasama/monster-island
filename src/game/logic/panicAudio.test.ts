@@ -42,7 +42,7 @@ describe("incidental speech cancellation", () => {
 
   it("preempts a bark when dialogue starts, even without browser end events", async () => {
     const { tts } = await import("../../audio/tts");
-    const bark = tts.speak("I'm on fire!", { pitch: 1.7, rate: 1.25, transient: true });
+    const bark = tts.speak("I am hot!", { pitch: 1.7, rate: 1.25, transient: true });
     const dialogue = tts.speak("Hello!");
     await bark;
     expect(synth.cancel).toHaveBeenCalledOnce();
@@ -55,7 +55,7 @@ describe("incidental speech cancellation", () => {
 
   it("releases microphone and ducking state immediately on cancellation", async () => {
     const { tts } = await import("../../audio/tts");
-    const bark = tts.speak("I'm on fire!", { transient: true });
+    const bark = tts.speak("I am hot!", { transient: true });
     tts.cancelBark();
     expect(tts.isSpeaking()).toBe(false);
     await bark;
@@ -64,7 +64,7 @@ describe("incidental speech cancellation", () => {
 
   it("cuts off a stalled bark after its short deadline", async () => {
     const { tts } = await import("../../audio/tts");
-    const bark = tts.speak("I'm on fire!", { transient: true });
+    const bark = tts.speak("I am hot!", { transient: true });
     vi.advanceTimersByTime(1800);
     await bark;
     expect(synth.cancel).toHaveBeenCalledOnce();
