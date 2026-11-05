@@ -492,7 +492,8 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
           if (near) {
             if (id === "grove" && rand() < 0.45) reeds.push({ x, z, s: 0.9 + rand() * 0.5, r: rand() * 6.28, tint: 0.9 + rand() * 0.2 });
             else ferns.push({ x, z, s: 0.8 + rand() * 0.7, r: rand() * 6.28, tint: 0.85 + rand() * 0.3 });
-          } else if (rand() < 0.42) trees.push({ x, z, s: 0.75 + rand() * 0.55, r: rand() * 6.28, tint: 0.85 + rand() * 0.25 });
+            // The forest's longer edge after the camp went keeps its old tree count and the sanctuary's budget.
+          } else if (rand() < (id === "forest1" ? 0.3 : 0.42)) trees.push({ x, z, s: 0.75 + rand() * 0.55, r: rand() * 6.28, tint: 0.85 + rand() * 0.25 });
           else if (rand() < 0.5) fernTrees.push({ x, z, s: 0.8 + rand() * 0.6, r: rand() * 6.28, tint: 0.85 + rand() * 0.25 });
         }
       }

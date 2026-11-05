@@ -277,6 +277,9 @@ function CliffRope() {
   return <mesh ref={ref} geometry={geo} material={flatMat} />;
 }
 
+/** Near views only: from the sanctuary these ropes would break its render budget. */
+const CANOPY_ROPE_FAR = 40;
+
 /** The entrance coil pays out continuously to Puff, then becomes the permanent rope. */
 function CanopyRopes() {
   const anchors = useMemo(canopyRopeAnchorsGeometry, []);
@@ -293,9 +296,10 @@ function CanopyRopes() {
     const solved = getGame().progress.solved.includes("canopyAscentRope");
     const flight = rt.canopyAscentRope;
     const hanging = solved || flight.tied > 0;
-    if (hangRef.current) hangRef.current.visible = hanging;
+    const c = rt.camera.pos, near = Math.hypot(c.x - r.x, c.z - r.faceZ) < CANOPY_ROPE_FAR + 8;
+    if (hangRef.current) hangRef.current.visible = hanging && near;
     if (coilRef.current) {
-      coilRef.current.visible = !hanging;
+      coilRef.current.visible = !hanging && near;
       coilRef.current.scale.setScalar(Math.max(.03, 1 - flight.payout));
     }
     if (payingRef.current) {
@@ -308,9 +312,9 @@ function CanopyRopes() {
     }
   });
   return <group>
-    <DistanceMesh geometry={anchors} material={flatMat} />
+    <DistanceMesh geometry={anchors} material={flatMat} far={CANOPY_ROPE_FAR} />
     <mesh ref={hangRef} geometry={entrance} material={flatMat} />
-    <DistanceMesh geometry={exit} material={flatMat} />
+    <DistanceMesh geometry={exit} material={flatMat} far={CANOPY_ROPE_FAR} />
     <mesh ref={coilRef} geometry={coil} material={smoothMat} position={[coilX, groundY(coilX, coilZ), coilZ]} />
     <mesh ref={payingRef} geometry={paying} material={payingMat} frustumCulled={false} />
   </group>;

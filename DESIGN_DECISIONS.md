@@ -2149,3 +2149,15 @@ default follow camera inside the exit landing at the exit rope's foot. Two narro
 `canopy-entrance-rope` mirrors the sanctuary climb framing, and `causeway-exit-rope` looks south at
 the wall within about 11 m of the foot. Rejected: raising the lens over the deck, which is 10 m up
 and would lose the player in a top-down view.
+
+## 2026-11-05: Repairs after the first full browser run
+
+- **Ropes are culled at 40 m**, as the stairs were; without it the Sanctuary rose to 122 draw calls.
+- **Forest tree odds 0.3, others 0.42.** Removing the camp and stairs moved the scatter from 49 to 61
+  giant trees and pushed the Sanctuary garden to 145k triangles. Rejected: raising the 140k limit.
+- **`causeway-exit-rope` pitch 0.8, not 0.5.** At 0.5 it looked across the whole Canopy at 172k
+  triangles; 0.8 gives 115k and still shows the player, rope and wall. Rejected: 1.05 (85k), steeper
+  than the view needs.
+- **Plank floor in the crate-lift chamber only.** The old dark floor had been hiding a stream, so
+  removing it left the chest in running water. Rejected: moving the chest, which would move a tested
+  secret's reachable spot.

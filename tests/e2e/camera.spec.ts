@@ -6,7 +6,7 @@ import { BACK_TUNNEL, BEACON, CLOUD_CHESTS, CLOUD_PUZZLES, CLOUD_SPAWNS, CLOUD_S
 import { CAMERA_PROFILES } from "../../src/scene/cameraProfiles";
 import { BEACON_ARENA } from "../../src/game/logic/beacon";
 import { GATE_PILLARS, groundY } from "../../src/game/world/island";
-import { FOREST_ARMS } from "../../src/game/world/lowland";
+import { CANOPY_ROPES, FOREST_ARMS } from "../../src/game/world/lowland";
 
 type Vec = { x: number; y: number; z: number };
 type CameraState = MiState & { camera: MiState["camera"] & {
@@ -44,7 +44,8 @@ const HOME: Sample[] = [
   { profile: "ancient-canopy", x: 100, z: -212 },
   { profile: "lowland", x: 76, z: -256 },
   { profile: "port-gate", x: 76, z: -285 },
-  { profile: "lowland-rope-foot", x: 75.5, z: -157.5 }
+  { profile: "lowland-rope-foot", x: 75.5, z: -157.5 },
+  { profile: "causeway-exit-rope", x: 96, z: -245 }
 ];
 const CLOUD: Sample[] = [
   { profile: "cloud", x: 0, z: 1 },
@@ -316,6 +317,23 @@ test("Every camera profile has matched visual evidence and stays within the rend
       await hook(page, "timeScale", 1);
       await waitFor(page, s => !s.player.climbing && s.mode === "explore", 60000, `${name} complete`);
     }
+    // The Canopy entrance rope has its own climb framing on the forest side of the wall.
+    await hook(page, "timeScale", 1);
+    await hook(page, "set", { mode: "explore" });
+    await hook(page, "teleport", CANOPY_ROPES.entrance.foot.x, CANOPY_ROPES.entrance.foot.z, CANOPY_ROPES.entrance.facing);
+    await waitFor(page, s => s.focus?.id === "canopyEntranceUp" && s.mode === "explore", 60000, "canopyEntranceUp");
+    await hook(page, "timeScale", .25);
+    await page.keyboard.press("KeyE");
+    await page.waitForFunction(() => {
+      const api = (window as unknown as { __mi: { state(): CameraState; timeScale(k: number): void } }).__mi;
+      const s = api.state();
+      if (s.player.climbing && s.camera.profile === "canopy-entrance-rope" && s.camera.settled && s.player.y > 3.5 && s.player.y < 11) { api.timeScale(0); return true; }
+      return false;
+    }, undefined, { polling: "raf", timeout: 120000 });
+    await noCameraInput(page, "canopy-entrance-rope");
+    await capture("canopy-entrance-rope");
+    await hook(page, "timeScale", 1);
+    await waitFor(page, s => !s.player.climbing && s.mode === "explore", 60000, "canopy-entrance-rope complete");
     await page.evaluate(() => history.replaceState(null, "", "?e2e=1&fast=1"));
     await hook(page, "setAct3", { world: "cloud" });
     for (const sample of CLOUD) {

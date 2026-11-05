@@ -6,6 +6,19 @@ stays locked behind the Coming Soon notice), gameplay polish and the debug menu.
 (`mi.save.v4`); v1–v3 still load and are never overwritten; `act2.forestLayout: 2` marks
 migrated saves. https://nolancasama.github.io/monster-island/
 
+## Water, MP, camp removal, Canopy ropes (merged, deployed 2026-11-05)
+Frozen spec `docs/WATER_MP_CANOPY_ROPES.md`. Deployed on the user's request while the last full browser run was still going. Where it differs from older sections below, this section is the truth.
+
+- **Water:** `logic/water.ts`. Streams and a 1.1 m pond rim put out a burning enemy; deep ponds stay a knock-out hazard. Only panicking enemies wade the rim.
+- **MP:** `regenMp` pauses only for the friend whose paid special is active.
+- **Forest Camp gone:** floor is `forest1`; the checkpoint is `"cliff" | "port"`, so everyone wakes at the rope foot. Old saves migrate.
+- **Ropes replace both Canopy stairs:** `CANOPY_ROPES`, `climbRope`. Puff's "Can you fly?" puzzle sets the permanent `canopyAscentRope`; saves that already reached the Canopy get it free. The exit rope going up is refused until `canopy` is cleared.
+- **Cameras:** scripted cameras use `walkY`, the real deck height. Profiles `canopy-entrance-rope` and `causeway-exit-rope`.
+- **Causeway:** pillars removed, 14 enemies kept. **Secrets:** flat dark floors removed; opened chambers have rims, and the crate lift has a plank floor because a stream runs through it.
+- **"I am hot!"** replaces "I'm on fire!".
+
+Open: enemy 0 is about 8 m from the rope-foot wake point and can chase a player who has just woken, so an idle player keeps losing HP. Steam has not been seen on camera. The sizzle and "I am hot!" have not been heard.
+
 ## Seven improvements (merged, deployed)
 Frozen spec `docs/SEVEN_IMPROVEMENTS.md`. Browser spec `tests/e2e/seven-improvements.spec.ts`; evidence in `.tmp/shots/seven/`; `node scripts/walkability-audit.mjs out.svg` gives the walkable mask and m² per zone.
 
@@ -147,10 +160,9 @@ the expansion; the full suite has not been run end to end on this machine.
   aim; these views are not in the asserted budget, and the new scenery adds only about 8.5k.
 - **Ember lost its only Act 2 "Can you…?" unlock** with the shortcut (user's request).
 - **Secret pockets look plain:** the closed reward pockets for Puff's
-  trapdoor, the crate lift and the furnace render as plain large boxes;
-  Ember's opened nook is a flat dark patch. Functional and readable, not
-  yet attractive. Combat balance (e.g. a full-height Bubble Trap knocks out
-  a 20 HP gloomlet) is untested with children.
+  trapdoor, the crate lift and the furnace render as plain large boxes.
+  Functional and readable, not yet attractive. Combat balance (e.g. a
+  full-height Bubble Trap knocks out a 20 HP gloomlet) is untested with children.
 - **CI browser job does not finish:** `test.yml` limits Playwright to 60
   minutes and runs 41266499516 and 41302604485 ended cancelled; the full suite
   takes 43 min on this machine with nothing else running. Deploys run only unit

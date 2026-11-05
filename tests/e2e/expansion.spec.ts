@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { boot, chooseMode, hook, state, waitFor } from "./helpers";
-import { CLIFF_ROPE, ENEMY_SPAWNS, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
+import { CANOPY_ROPES, CLIFF_ROPE, ENEMY_SPAWNS, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
 
 const friends = Object.fromEntries(
   ["leafy", "bubbo", "puff", "ember", "lumo"].map((id) => [
@@ -161,6 +161,15 @@ for (const branch of ["grove", "canopy"])
       await hook(page, "setHp", 100);
       const at = await hook(page, "moveTo", x, z) as { x: number; z: number };
       expect(Math.hypot(at.x - x, at.z - z), `${branch} arm waypoint`).toBeLessThan(.1);
+    }
+    if (branch === "canopy") {
+      // The right arm ends on the forest floor; only the rope reaches the deck.
+      const rope = CANOPY_ROPES.entrance;
+      await hook(page, "moveTo", rope.foot.x, rope.foot.z);
+      await hook(page, "teleport", rope.foot.x, rope.foot.z, rope.facing);
+      await waitFor(page, s => s.focus?.id === "canopyEntranceUp", 15000, "entrance rope prompt");
+      await page.keyboard.press("KeyE");
+      await waitFor(page, s => s.mode === "explore" && !s.player.climbing && s.player.z < rope.faceZ, 60000, "climbed to the deck");
     }
     await waitFor(page, s => s.act2.zone === branch, 10000, `${branch} reached by its arm`);
     for (const zone of [branch, "causeway", "coast"]) {

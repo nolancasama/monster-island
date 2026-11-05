@@ -142,6 +142,8 @@ export function Secrets() {
           box(x + side * (hx - .09), y + .09 * k, z, .18, .18 * k, hz * 2, tint);
           box(x, y + .09 * k, z + side * (hz - .09), hx * 2 - .36, .18 * k, .18, tint);
         }
+        // A stream runs through this one chamber: planks keep the chest out of the water.
+        if (s.id === "comboCrateLift") box(x, y + .13 * k, z, hx * 2 - .2, .1 * k, hz * 2 - .2, WOOD);
       }
       if (s.id === "groveDryReeds" || s.id === "canopyDryReeds") {
         // Dry reeds fill the exact blocker footprint and withdraw as the saved

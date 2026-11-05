@@ -71,7 +71,7 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55,
     contains: p => !p.cloud && zoneAt(p.x, p.z) === "grove" },
   // South of here the default lens would sit inside the exit landing's solid mass.
-  { ...DEFAULT_CAMERA, id: "causeway-exit-rope", kind: "lowland", yaw: Math.PI, pitch: .5, dist: 9, ahead: 1,
+  { ...DEFAULT_CAMERA, id: "causeway-exit-rope", kind: "lowland", yaw: Math.PI, pitch: .8, dist: 9, ahead: 1,
     contains: (p, m) => !p.cloud && p.x > 88 - m && p.x < 104 + m && p.z > -251.5 - m && p.z < -240 && zoneAt(p.x, p.z) === "causeway" },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,

@@ -196,8 +196,8 @@ test("legacy camp checkpoint survives reload and knock-out without charging or l
   expect((await state(page)).progress.act2.checkpoint).toBe("cliff");
   await hook(page, "nearEnemy", 0, 1);
   await hook(page, "setHp", 1);
-  await waitFor(page, s => s.act2.knockedOut, 30000, "legacy checkpoint player knocked out");
-  const awake = await waitFor(page, s => !s.act2.knockedOut && s.mode === "explore" && s.act2.zone === "forest1", 90000, "wake at forest entrance checkpoint");
+  // The knock-out flag can clear between polls; HP back from 1 proves the whole cycle ran.
+  const awake = await waitFor(page, s => !s.act2.knockedOut && s.mode === "explore" && s.act2.zone === "forest1" && s.act2.hp >= 60, 90000, "wake at forest entrance checkpoint");
   expect(awake.act2.hp).toBeGreaterThanOrEqual(60);
   expect(awake.progress.act2.coins).toBe(25);
   expect(Math.hypot(awake.player.x - CLIFF_ROPE.foot.x, awake.player.z - CLIFF_ROPE.foot.z)).toBeLessThan(1);

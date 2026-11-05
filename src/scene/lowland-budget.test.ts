@@ -58,14 +58,14 @@ beforeAll(() => {
   for (const geometry of lowlandTerrainTiles(TILE)) add("terrain", geometry);
   for (const geometry of spatialGeometry(lowlandPropsGeometry(), TILE)) add("props", geometry);
   add("canopyDecks", canopyDeckGeometry());
-  add("canopy rope anchors", canopyRopeAnchorsGeometry());
-  for (const [id, rope] of Object.entries(CANOPY_ROPES)) add(`canopy ${id} rope`, canopyRopeGeometry(rope));
+  add("canopy rope anchors", canopyRopeAnchorsGeometry(), 0, 0, 0, 0, 40);
+  for (const [id, rope] of Object.entries(CANOPY_ROPES)) add(`canopy ${id} rope`, canopyRopeGeometry(rope), 0, 0, 0, 0, 40);
   const entrance = CANOPY_ROPES.entrance, coilX = entrance.x + .9, coilZ = entrance.foot.z - .3;
-  add("canopy rope coil", ropeCoilGeometry(), coilX, groundY(coilX, coilZ), coilZ);
+  add("canopy rope coil", ropeCoilGeometry(), coilX, groundY(coilX, coilZ), coilZ, 0, 40);
   // Conservatively count the carried tube alongside the solved rope and coil.
   const paying = new THREE.BufferGeometry();
   updateCanopyPayingRope(paying, new THREE.Vector3(entrance.x, lowlandSceneryY(entrance.top.x, entrance.top.z) + 2, entrance.stakeZ));
-  add("canopy paying rope", paying);
+  add("canopy paying rope", paying, 0, 0, 0, 0, 40);
   for (const geometry of spatialGeometry(lowlandWaterGeometry(), TILE)) add("water", geometry);
   add("cliff", cliffFaceGeometry(), 0, 0, 0, 0, Infinity);
   add("rope", cliffRopeGeometry(), 0, 0, 0, 0, Infinity);
