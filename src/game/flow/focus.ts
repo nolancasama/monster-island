@@ -9,7 +9,7 @@ import { ACT2_PLACE, PHASE3_PLACE } from "./obstacles";
 import { lumoHidden } from "./act2";
 import { cloudCandidates } from "./act3";
 import { CLOUD_SPAWNS, HOLLOW } from "../world/cloudisle";
-import { CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
+import { CANOPY_ROPES, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
 import { obstacleAvailable } from "../logic/progress";
 import type { ObstacleId } from "../types";
 
@@ -21,7 +21,7 @@ const SERVICE_FOCUS: Record<ServiceId, { verb: string; noun: string }> = {
   inn: { verb: "Rest at", noun: "the inn" },
   harbor: { verb: "Ask about", noun: "the ship" }
 };
-const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap" };
+const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap", canopyAscentRope: "the rope coil" };
 
 /**
  * What E (or the touch action button) would use right now: the nearest usable
@@ -89,6 +89,14 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
   }
   // Nothing else is near the sanctuary; the rest is down in the lowland.
   if (rt.player.z > -152) return;
+  for (const [id, rope] of Object.entries(CANOPY_ROPES)) {
+    if (id === "entrance" && !isSolved(p, "canopyAscentRope")) continue;
+    // The two stands are only a few metres apart horizontally. The face
+    // separates them, so only offer the stand on the player's current level.
+    const down = id === "entrance" ? rt.player.z < rope.faceZ : rt.player.z > rope.faceZ;
+    const spot = down ? rope.top : rope.foot;
+    add({ id: `canopy${id === "entrance" ? "Entrance" : "Exit"}${down ? "Down" : "Up"}`, kind: "cliffRope", verb: down ? "Climb down" : "Climb", noun: "the rope", x: spot.x, z: spot.z }, 2.2);
+  }
   for (const c of CHESTS) if (!p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret))) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {

@@ -1,4 +1,5 @@
 import { ROPE, ROPE_STAKE, groundY } from "./island";
+import type { ClimbRope } from "./lowland";
 
 /**
  * The cliff rope's line in the plane x = ROPE.x, ordered from the knot on the
@@ -186,7 +187,24 @@ export function climbPath(k: number, ground: (x: number, z: number) => number = 
  * furthest point bounds every bulge), over the edge above the highest rock
  * the rope crosses, and down to the stake. `body` is the flier's radius.
  */
-export function ropeFlightPath(coil: { x: number; y: number; z: number }, bottomY: number, body: number): Array<{ x: number; y: number; z: number }> {
+export function ropeFlightPath(coil: { x: number; y: number; z: number }, bottomY: number, body: number, rope?: ClimbRope, deckY = bottomY): Array<{ x: number; y: number; z: number }> {
+  if (rope) {
+    const outward = rope.foot.z > rope.faceZ ? 1 : -1;
+    const clearZ = rope.hangZ + outward * (body + 0.55);
+    const highY = deckY + 1.2 + body + 0.8;
+    const knotY = deckY + 1.55;
+    return [
+      coil,
+      { x: rope.x + 0.45, y: bottomY + 1.4, z: clearZ },
+      { x: rope.x + 0.45, y: highY, z: clearZ },
+      { x: rope.x + 0.4, y: highY, z: rope.stakeZ },
+      // A short loop round the visible anchor before tying the end.
+      { x: rope.x + 0.4, y: knotY, z: rope.stakeZ - 0.4 },
+      { x: rope.x - 0.4, y: knotY, z: rope.stakeZ - 0.4 },
+      { x: rope.x - 0.4, y: knotY, z: rope.stakeZ + 0.4 },
+      { x: rope.x + 0.15, y: knotY, z: rope.stakeZ + 0.25 }
+    ];
+  }
   const lip = ropeLip();
   let outZ = lip.z;
   for (let i = lipIndex; i < drawn.length; i++) if (drawn[i].y > bottomY + 0.3) outZ = Math.max(outZ, drawn[i].z);

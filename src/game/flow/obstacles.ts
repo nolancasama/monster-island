@@ -11,12 +11,13 @@ import { companionSpot, poofTo } from "./companion";
 import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
 import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
-import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, GROVE_CROSSING, LILY_PADS, POND_Y } from "../world/lowland";
+import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, CANOPY_ROPES, GROVE_CROSSING, LILY_PADS, POND_Y, type ClimbRope } from "../world/lowland";
 
 type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
 const A2 = ACT2_OBSTACLE_PLACE;
 /** Act 2's unlocks: where to stand, and what is said when no friend can help. */
 export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
+  canopyAscentRope: { x: A2.canopyAscentRope.x, z: A2.canopyAscentRope.z, alone: { en: "The deck is too high! Who can fly the rope up?", ja: "こずえは たかいね！ とべる ともだちに きこう" } },
   groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
   canopyVines: { x: A2.canopyVines.x, z: A2.canopyVines.z, alone: { en: "The gap is too wide!", ja: "すきまが ひろすぎる! しょくぶつを そだてる ともだちに きこう" } },
   canopyRope: { x: A2.canopyRope.x, z: A2.canopyRope.z, alone: { en: "The rope bridge is on the other side!", ja: "つりばしが むこうがわに まいてある! とべる ともだちに きこう" } }
@@ -90,7 +91,7 @@ const FRAME: Record<ObstacleId, Vec2> = {
 };
 
 /** From Phase 2 on the student thanks the monster after its power has worked. */
-const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope"]);
+const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope", "canopyAscentRope"]);
 
 /** How the hint names an ability ("Who can help?", "とべる モンスター"). */
 const NEED_WORD: Partial<Record<AbilityId, { en: string; ja: string }>> = {
@@ -220,8 +221,9 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   else if (id === "river") await ferry(monster);
   else if (id === "bridge") await weaveBridge(monster);
   else if (id === "cliff") await flyRope(monster);
+  else if (id === "canopyAscentRope") await flyRope(monster, CANOPY_ROPES.entrance);
   else if (id === "groveLilies") await groveCrossing(monster);
-  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies">, monster);
+  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope">, monster);
   else await phase3Power(id, monster);
 }
 
@@ -341,53 +343,69 @@ async function weaveBridge(id: MonsterId) {
 
 // ------------------------------------------------------------ Puff's rope
 
-async function flyRope(id: MonsterId) {
+async function flyRope(id: MonsterId, rope?: ClimbRope) {
   const m = rt.monsters[id];
   m.mode = "script";
-  const baseY = groundY(ROPE.x, ROPE.z);
-  // Wide enough to keep the coil, the whole face and the top edge in view.
-  shot({ x: ROPE.x + 7.5, y: baseY + 3, z: ROPE.z + 11.5 }, { x: ROPE.x, y: baseY + 4.3, z: ROPE.z - 0.5 });
-  // Picks up the rope end at the coil...
-  const coil = { x: ROPE.x + 0.9, z: ROPE.z + 0.4 };
-  await glide(id, coil, 0.5, 0.8);
-  animate(id, "hop");
-  audio.play("pick");
-  await wait(300);
-  // ...the coil vanishes in a puff of smoke as Puff lifts it (one rope only:
-  // the carried coil under Puff until it is tied)...
-  rt.ropeCarried = true;
-  effect("poof", coil.x, baseY + 0.3, coil.z);
-  audio.play("poof");
-  animate(id, "power");
-  audio.play("whoosh");
-  // ...flies it up well clear of the face and over the edge to the stake...
-  const path = ropeFlightPath({ x: m.x, y: walkY(m) + m.air, z: m.z }, baseY, MONSTERS[id].radius);
-  await flyThrough(id, path, 3.2);
-  // ...ties it, and the rope unrolls down the cliff.
-  rt.ropeCarried = false;
-  animate(id, "spin");
-  audio.play("stones");
-  const t0 = rt.time;
-  while (rt.rope < 1) {
-    rt.rope = Math.min(1, (rt.time - t0) / 1.2);
-    await wait(30);
+  const x = rope?.x ?? ROPE.x;
+  const z = rope?.faceZ ?? ROPE.z;
+  const baseY = rope ? walkY(rope.foot) : groundY(ROPE.x, ROPE.z);
+  const obstacle = rope ? "canopyAscentRope" : "cliff";
+  const flight = rt.canopyAscentRope;
+  try {
+    // Wide enough to keep the coil, the whole face and the top edge in view.
+    shot({ x: x + 7.5, y: baseY + 3, z: z + 11.5 }, { x, y: baseY + 4.3, z: z - 0.5 });
+    const coil = { x: x + 0.9, z: rope ? rope.foot.z - 0.3 : ROPE.z + 0.4 };
+    await glide(id, coil, 0.5, 0.8);
+    animate(id, "hop");
+    audio.play("pick");
+    await wait(300);
+    if (rope) flight.carried = true;
+    else {
+      // The prologue keeps its original carried coil and poof.
+      rt.ropeCarried = true;
+      effect("poof", coil.x, baseY + 0.3, coil.z);
+      audio.play("poof");
+    }
+    animate(id, "power");
+    audio.play("whoosh");
+    const path = ropeFlightPath({ x: m.x, y: walkY(m) + m.air, z: m.z }, baseY, MONSTERS[id].radius, rope, rope ? walkY(rope.top) : undefined);
+    await flyThrough(id, path, 3.2, rope ? k => { flight.payout = k; } : undefined);
+    if (rope) {
+      effect("poof", x, walkY(rope.top) + 1.2, rope.stakeZ);
+      effect("sparkle", x, walkY(rope.top) + 1.2, rope.stakeZ);
+      audio.play("poof");
+      flight.tied = 1;
+      flight.carried = false;
+    } else rt.ropeCarried = false;
+    animate(id, "spin");
+    audio.play("stones");
+    const t0 = rt.time;
+    while (!rope && rt.rope < 1) {
+      rt.rope = Math.min(1, (rt.time - t0) / 1.2);
+      await wait(30);
+    }
+    updateProgress((p) => solve(p, obstacle));
+    await wait(400);
+    // Back down the same clear line, beside the new rope.
+    await flyThrough(id, [...path.slice(1).reverse(), { x: x + 1, y: baseY + 0.35, z: rope ? rope.foot.z + 0.4 : ROPE.z + 0.8 }], 2.4);
+    m.look = { x: rt.player.x, z: rt.player.z };
+    animate(id, "friend");
+    audio.voice(id, "excited");
+    effect("sparkle", m.x, rope ? walkY(m) + 1 : 1, m.z);
+    toast({ en: "The rope is up!", ja: "ロープが かかった!", icon: "path", tone: "good" });
+  } finally {
+    if (rope) {
+      flight.carried = false;
+      if (!isSolved(getGame().progress, obstacle)) flight.payout = flight.tied = 0;
+    }
   }
-  updateProgress((p) => solve(p, "cliff"));
-  await wait(400);
-  // Back down the same clear line, beside the new rope.
-  await flyThrough(id, [...path.slice(1).reverse(), { x: ROPE.x + 1, y: baseY + 0.35, z: ROPE.z + 0.8 }], 2.4);
-  m.look = { x: rt.player.x, z: rt.player.z };
-  animate(id, "friend");
-  audio.voice(id, "excited");
-  effect("sparkle", m.x, 1, m.z);
-  toast({ en: "The rope is up!", ja: "ロープが かかった!", icon: "path", tone: "good" });
 }
 
 /**
  * Fly a monster through absolute points at an even pace (eased at the ends),
  * facing where it travels; straight up or down it keeps its heading.
  */
-async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z: number }>, seconds: number) {
+async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z: number }>, seconds: number, onFrame?: (k: number) => void) {
   const m = rt.monsters[id];
   const start = { x: m.x, y: walkY(m) + m.air, z: m.z };
   const pts = [start, ...points];
@@ -404,6 +422,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
     m.x = a.x + (b.x - a.x) * u;
     m.z = a.z + (b.z - a.z) * u;
     m.air = m.airTarget = a.y + (b.y - a.y) * u - walkY(m);
+    onFrame?.(k);
     if (Math.hypot(b.x - a.x, b.z - a.z) > 0.2) m.yaw = Math.atan2(b.x - a.x, b.z - a.z);
     else m.yaw = Math.PI;
     if (k >= 1) return;
@@ -416,7 +435,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
  * Act 2's powers, each a visible permanent change: Bubbo raises lily pads to
  * the islet, Leafy weaves a vine bridge, Puff flies the rolled-up rope bridge across.
  */
-async function act2Power(id: Exclude<Act2Obstacle, "groveLilies">, monster: MonsterId) {
+async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope">, monster: MonsterId) {
   const place = A2[id];
   const target = place.face;
   const m = rt.monsters[monster];

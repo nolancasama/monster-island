@@ -227,6 +227,7 @@ export const OBSTACLES: Record<ObstacleId, ObstacleDef> = {
   gateFlame: { id: "gateFlame", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: ["cave"] },
   // Act 2: the grove's lily pads (optional treasure) and the canopy's two gaps.
   groveLilies: { id: "groveLilies", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: [] },
+  canopyAscentRope: { id: "canopyAscentRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: [] },
   canopyVines: { id: "canopyVines", needs: "grow", question: "canHelp", others: ["canSwim", "canFire"], after: [] },
   canopyRope: { id: "canopyRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: ["canopyVines"] }
 };

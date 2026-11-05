@@ -3,7 +3,7 @@ import { SAVE_KEY, SAVE_KEY_V1, SAVE_KEY_V2, SAVE_KEY_V3, decodeSave, encodeSave
 import { befriend, describeLine, discover, newProgress, noteSaid, pickUp, recordLike, solve } from "./progress";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { CAMP, CLIFF_TOP_SPOT, SPAWN } from "../world/island";
-import { CLIFF_ROPE, GROVE_CROSSING, POND, STAGES, STAGE_EXITS, zoneAt } from "../world/lowland";
+import { CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, GROVE_CROSSING, POND, STAGES, STAGE_EXITS, zoneAt } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { startAct2, markDescended } from "./act2";
 import type { MonsterId } from "../types";
@@ -205,6 +205,89 @@ describe("forest layout save migration", () => {
     return decodeSave(JSON.stringify({ v: 4, progress: { ...p, act2, solved: [...p.solved, ...(shortcut ? ["causewayGate"] : [])] }, player: { ...position, yaw: .7 }, seconds: 87 }))!;
   }
 
+  function ropeSave(position: { x: number; z: number }, edit: (p: ReturnType<typeof chapter>) => void = () => {}, legacy = false) {
+    const p = chapter();
+    p.act2.cleared = ["forest1"];
+    p.act2.zone = "forest1";
+    p.act2.chests = ["forestChest"];
+    p.act2.secrets = [SECRET_IDS[0]];
+    edit(p);
+    const act2: Record<string, unknown> = { ...p.act2 };
+    if (legacy) delete act2.canopyLayout;
+    return { p, back: decodeSave(JSON.stringify({ v: 4, progress: { ...p, act2 }, player: { ...position, yaw: .7 }, seconds: 87 }))! };
+  }
+
+  it.each(["cleared", "vines", "bridge", "zone", "deck", "port"])("grants the permanent ascent rope for prior Canopy progress: %s", reason => {
+    const position = reason === "deck" ? { x: 100, z: -212 } : CLIFF_ROPE.foot;
+    const { p, back } = ropeSave(position, p => {
+      if (reason === "cleared") p.act2.cleared.push("canopy");
+      if (reason === "vines") p.solved.push("canopyVines");
+      if (reason === "bridge") p.solved.push("canopyVines", "canopyRope");
+      if (reason === "zone") p.act2.zone = "canopy";
+      if (reason === "port") p.act2.portFound = true;
+    }, true);
+    expect(back.progress.solved).toContain("canopyAscentRope");
+    expect(back.progress.act2.chests).toEqual(p.act2.chests);
+    expect(back.progress.act2.secrets).toEqual(p.act2.secrets);
+    expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
+  });
+
+  it("recognizes every authored deck without requiring a saved Canopy zone", () => {
+    for (const { walk } of CANOPY_DECKS) {
+      const { back } = ropeSave({ x: (walk.x0 + walk.x1) / 2, z: (walk.z0 + walk.z1) / 2 });
+      expect(back.progress.solved).toContain("canopyAscentRope");
+    }
+  });
+
+  it.each([
+    { position: { x: 107.5, z: -185 }, destination: "foot" },
+    { position: { x: 107.5, z: -191 }, destination: "foot" },
+    { position: { x: 107.5, z: -192.5 }, destination: "top" },
+    { position: { x: 107.5, z: -199 }, destination: "top" },
+  ] as const)("migrates legacy entrance stairs at $position.z to the $destination once", ({ position, destination }) => {
+    const { p, back } = ropeSave(position, () => {}, true);
+    expect(back.player).toEqual({ ...CANOPY_ROPES.entrance[destination], yaw: .7 });
+    expect(back.progress.act2.zone).toBe(destination === "top" ? "canopy" : "forest1");
+    expect(back.progress.solved).toEqual([...p.solved, "canopyAscentRope"]);
+    expect(back.progress.act2.cleared).toEqual(p.act2.cleared);
+    expect(back.progress.act2.chests).toEqual(p.act2.chests);
+    expect(back.progress.act2.secrets).toEqual(p.act2.secrets);
+    expect(back.progress.act2.canopyLayout).toBe(1);
+    expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
+  });
+
+  it.each([-251, -245.5, -239.5])("migrates cleared legacy exit stairs at %s to the Causeway foot", z => {
+    const { p, back } = ropeSave({ x: 96, z }, p => { p.act2.cleared.push("canopy"); }, true);
+    expect(back.player).toEqual({ ...CANOPY_ROPES.exit.foot, yaw: .7 });
+    expect(back.progress.act2.zone).toBe("causeway");
+    expect(back.progress.act2.cleared).toEqual(p.act2.cleared);
+    expect(back.progress.solved).toContain("canopyAscentRope");
+    expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
+  });
+
+  it("keeps the puzzle for Grove-only players and new saves at its unsolved foot", () => {
+    for (const position of [{ x: 49, z: -235 }, CANOPY_ROPES.entrance.foot]) {
+      const { back } = ropeSave(position, p => { p.act2.cleared.push("grove"); p.act2.zone = "grove"; });
+      expect(back.progress.solved).not.toContain("canopyAscentRope");
+      expect(back.player).toEqual({ ...position, yaw: .7 });
+    }
+  });
+
+  it("returns an uncleared legacy exit-stair save to the Canopy side of its gate", () => {
+    const { p, back } = ropeSave({ x: 96, z: -246 }, () => {}, true);
+    const gate = STAGE_EXITS.find(gate => gate.id === "canopy")!;
+    expect(back.player.z).toBeGreaterThan(gate.z);
+    expect(back.progress.act2.zone).toBe("canopy");
+    expect(back.progress.act2.cleared).toEqual(p.act2.cleared);
+    expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), .55)).toBe(true);
+  });
+
+  it("retains an explicitly solved entrance rope and its current foot on reload", () => {
+    const { back } = ropeSave(CANOPY_ROPES.entrance.foot, p => { p.solved.push("canopyAscentRope"); });
+    expect(back.progress.solved).toContain("canopyAscentRope");
+    expect(back.player).toEqual({ ...CANOPY_ROPES.entrance.foot, yaw: .7 });
+  });
+
   it.each([
     { checkpoint: "camp", zone: "forest1" },
     { checkpoint: "cliff", zone: "camp" },
@@ -236,7 +319,7 @@ describe("forest layout save migration", () => {
       const back = decodeSave(encodeSave(p, { ...position, yaw: .7 }, 87))!;
       expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
       expect(Math.hypot(back.player.x - position.x, back.player.z - position.z)).toBeLessThan(8);
-      expect(back.progress).toEqual(p);
+      expect(back.progress).toEqual(solve(p, "canopyAscentRope"));
       expect(back.player.yaw).toBe(.7);
       expect(back.seconds).toBe(87);
     }
@@ -322,7 +405,7 @@ describe("forest layout save migration", () => {
     expect(back.progress.act2.zone).toBe(zone);
     expect(back.progress.act2.secrets).toEqual(p.act2.secrets);
     expect(back.progress.act2.chests).toEqual(p.act2.chests);
-    expect(back.progress.solved).toEqual(p.solved);
+    expect(back.progress.solved).toEqual([...p.solved, "canopyAscentRope"]);
     expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
   });
 

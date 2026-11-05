@@ -41,6 +41,16 @@ describe("debug destination progress", () => {
     for (const d of DEBUG_DESTINATIONS) expect(progressForDestination(d.id).act3.world).toBe(d.world);
     expect(() => progressForDestination("missing")).toThrow();
   });
+  it("offers the unsolved entrance puzzle while raised and later destinations retain the rope", () => {
+    const puzzle = progressForDestination("canopyAscentRope");
+    expect(puzzle.act2.started).toBe(true);
+    expect(puzzle.act2.cleared).toEqual(["forest1"]);
+    expect(puzzle.solved).not.toContain("canopyAscentRope");
+    expect(progressForDestination("zone:grove").solved).not.toContain("canopyAscentRope");
+    for (const zone of ["canopy", "causeway", "coast", "port"]) {
+      expect(progressForDestination(`zone:${zone}`).solved).toContain("canopyAscentRope");
+    }
+  });
   it("retains every destination's story prerequisites through save validation", () => {
     const before = region.world;
     try {

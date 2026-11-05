@@ -7,7 +7,7 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
-import { CLIFF_FOOT_Z, CLIFF_ROPE, CHESTS, ZONES, STAGES, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
+import { CLIFF_FOOT_Z, CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, CHESTS, ZONES, STAGES, STAGE_EXITS, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { rt } from "../runtime";
@@ -268,6 +268,15 @@ export function decodeSave(text: string | null): SaveData | null {
       : zone === "coast" && z < -287.6 ? "coast" : null;
     if (passed && !p.act2.cleared.includes(passed)) p.act2.cleared.push(passed);
   }
+  const savedX = num(pl.x, NaN), savedZ = num(pl.z, NaN);
+  const legacyCanopy = isObj(src.act2) && src.act2.canopyLayout !== 1;
+  const entranceStair = legacyCanopy && savedX >= 104 && savedX <= 111 && savedZ >= -200.5 && savedZ <= -184.5;
+  const exitStair = legacyCanopy && savedX >= 92 && savedX <= 100 && savedZ >= -252 && savedZ <= -239;
+  const onDeck = CANOPY_DECKS.some(({ walk }) => savedX >= walk.x0 && savedX <= walk.x1 && savedZ >= walk.z0 && savedZ <= walk.z1);
+  if (p.act2.started && (p.act2.cleared.includes("canopy") || p.solved.includes("canopyVines") || p.solved.includes("canopyRope")
+    || p.act2.zone === "canopy" || onDeck || entranceStair || exitStair) && !p.solved.includes("canopyAscentRope")) {
+    p.solved.push("canopyAscentRope");
+  }
   // Validate position after migration and progression sanitization, against the
   // same solids and gates movement uses. Progress and the v3 format stay intact.
   let safe;
@@ -292,6 +301,14 @@ export function decodeSave(text: string | null): SaveData | null {
     p.act3.area = cloudZoneAt(safe.x, safe.z) ?? "cloudDock";
   } else {
     let x = num(pl.x, NaN), z = num(pl.z, NaN);
+    if (p.act2.started && (entranceStair || exitStair)) {
+      const canopyGate = STAGE_EXITS.find(gate => gate.id === "canopy")!;
+      const destination = entranceStair
+        ? (z <= (-184.5 - 200.5) / 2 ? CANOPY_ROPES.entrance.top : CANOPY_ROPES.entrance.foot)
+        : (p.act2.cleared.includes("canopy") ? CANOPY_ROPES.exit.foot : { x: canopyGate.x, z: canopyGate.z + 1.4 });
+      ({ x, z } = destination);
+      p.act2.zone = zoneAt(x, z);
+    }
     // A ride has no permanent bridge until dismount. Recover every unsolved
     // pond/island position on the near shore, including a save during the hop.
     if (p.act2.descended && !p.solved.includes("groveLilies") && Math.hypot(x - POND.x, z - POND.z) < POND.r + 1) {

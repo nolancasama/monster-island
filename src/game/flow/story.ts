@@ -38,8 +38,8 @@ export function saveNow() {
   if (rt.voyage.active && rt.world === "home") return;
   const p = rt.player;
   // Never save mid-ride or mid-climb: resume at the bank or the foot of the rope instead.
-  // The cliff rope below the sanctuary resumes on its ledge.
-  const climbAt = p.z < -140 ? CLIFF_ROPE.top : { x: ROPE.x, z: ROPE.z + 1.4 };
+  // Canopy climbs retain their starting stand. The sanctuary keeps its ledge.
+  const climbAt = p.z < -180 && p.safeGround ? p.safeGround : p.z < -140 ? CLIFF_ROPE.top : { x: ROPE.x, z: ROPE.z + 1.4 };
   const at = p.fall ? p.fall.land : p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
   // Act 2's live HP and MP are written in with the rest of the progress.
   const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: g.progress.act3.world === "cloud" ? g.progress.act2.zone : zoneAt(at.x, at.z) },

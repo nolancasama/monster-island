@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newProgress, objective, type Progress } from "./progress";
+import { askAtObstacle, newProgress, objective, OBSTACLES, solve, type Progress } from "./progress";
 import {
   clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, eatHelps, findPort, hearLead,
   hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, regenMp, rested, spendMp, stayAtInn, startAct2, addFood, chestFoodOverflow, afterKnockout
@@ -332,6 +332,27 @@ describe("Act 2 saves", () => {
 
 describe("Act 2 English", () => {
   const judge = (text: string, ids: Array<keyof typeof PHRASES>) => judgeSpeech([text], ids.map((id) => PHRASES[id]));
+
+  it("asks Puff to fly at the entrance and keeps the two bridge puzzles independently solvable", () => {
+    let p = markDescended(startAct2(done()));
+    expect(OBSTACLES.canopyAscentRope).toEqual({ id: "canopyAscentRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: [] });
+    expect(askAtObstacle(p, "canopyAscentRope", "fly")).toMatchObject({ yes: false, solves: false });
+    p.active = "puff";
+    expect(askAtObstacle(p, "canopyAscentRope", "jump")).toMatchObject({ solves: false });
+    expect(askAtObstacle(p, "canopyAscentRope", "swim")).toMatchObject({ solves: false });
+    expect(askAtObstacle(p, "canopyAscentRope", "fly")).toMatchObject({ yes: true, solves: true });
+    p = solve(p, "canopyAscentRope");
+    expect(askAtObstacle(p, "canopyAscentRope", "fly")).toMatchObject({ yes: true, solves: false });
+    p.active = "leafy";
+    expect(askAtObstacle(p, "canopyVines", "help")).toMatchObject({ solves: true });
+    p = solve(p, "canopyVines");
+    p.active = "puff";
+    expect(askAtObstacle(p, "canopyRope", "fly")).toMatchObject({ solves: true });
+    expect(solve(p, "canopyRope").solved).toEqual(expect.arrayContaining(["canopyAscentRope", "canopyVines", "canopyRope"]));
+    // The entrance is independent of the existing optional gaps' prerequisites.
+    p = markDescended(startAct2(done())); p.active = "leafy";
+    expect(askAtObstacle(p, "canopyVines", "help")).toMatchObject({ solves: true });
+  });
 
   it("the inn's polite answers tolerate beginner recognition without confusing no and yes", () => {
     expect(PHRASES.yesPlease.en).toBe("Yes, please.");

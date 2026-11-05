@@ -126,6 +126,31 @@ export const CLIFF_ROPE = {
 /** Walkable lowland never reaches further south than this (the foot of the cliff). */
 export const CLIFF_FOOT_Z = -153.6;
 
+export interface ClimbRope {
+  x: number;
+  stakeZ: number;
+  lipZ: number;
+  faceZ: number;
+  hangZ: number;
+  bodyZ: number;
+  foot: Vec2;
+  top: Vec2;
+  /** Player yaw toward the face; the sanctuary rope keeps its existing zero. */
+  facing?: number;
+}
+
+/** Separate floor and deck stands: a rope is the only way across each face. */
+export const CANOPY_ROPES = {
+  entrance: {
+    x: 107.5, stakeZ: -201.5, lipZ: -200.5, faceZ: -200.5, hangZ: -200.18, bodyZ: -199.85,
+    foot: { x: 107.5, z: -198.9 }, top: { x: 107.5, z: -202.2 }, facing: Math.PI,
+  },
+  exit: {
+    x: 96, stakeZ: -240.3, lipZ: -241, faceZ: -241, hangZ: -241.32, bodyZ: -241.65,
+    foot: { x: 96, z: -242.8 }, top: { x: 96, z: -239.8 }, facing: 0,
+  },
+} satisfies Record<"entrance" | "exit", ClimbRope>;
+
 // ------------------------------------------------------------------ zones
 
 export const FOREST1_TRAIL: Array<[number, number]> = [
@@ -138,7 +163,7 @@ export const FOREST1_TRAIL: Array<[number, number]> = [
 /** Each route starts at its first-clear neck and joins its next stage directly. */
 export const FOREST_ARMS: Record<"left" | "right", Array<[number, number]>> = {
   left: [[58, -172], [47, -175], [42, -185], [42, -197], [42, -204], [45.5, -207]],
-  // Approach the open foot from the south, clear of the side-rim end caps.
+  // Approach the entrance rope through the ordinary forest floor.
   right: [[94, -170], [104, -174], [113, -184], [113, -183], [108.6, -183], [107.5, -184.5]],
 };
 export const GROVE_TRAIL: Array<[number, number]> = [
@@ -213,17 +238,6 @@ export const CANOPY_HEIGHT = 10;
 /** Gaps in the root walk (x is the trail's straight north-south stretch). */
 export const DECK_HALF = 0.95;
 
-/** Deck flights have continuous collision; the ~0.3 m risers are cosmetic. */
-export const CANOPY_FLIGHTS = [
-  { id: "entrance", x0: 104, x1: 111, footZ: -184.5, topZ: -200.5, ease: .3, steps: 36, height: canopyEntranceY },
-  { id: "exit", x0: 92, x1: 100, footZ: -252, topZ: -239, ease: .15, steps: 36, height: canopyExitY },
-] as const;
-export type CanopyFlight = (typeof CANOPY_FLIGHTS)[number];
-export const CANOPY_RIM_R = .22;
-export const CANOPY_FLIGHT_RIMS = CANOPY_FLIGHTS.flatMap(flight => [flight.x0 + CANOPY_RIM_R, flight.x1 - CANOPY_RIM_R].map(x => ({
-  kind: "capsule" as const, ax: x, az: flight.footZ, bx: x, bz: flight.topZ, r: CANOPY_RIM_R,
-})));
-
 /** Rectangular authored polygons are kept separate at each void edge. The mesh
  * and walking footprints are derived from the same vertices, never a heightfield. */
 const canopyDeck = (id: string, x0: number, x1: number, z0: number, z1: number) => ({
@@ -242,7 +256,7 @@ export const CANOPY_DECKS = [
   canopyDeck("upperRootSouth", 110, 119, -232.5, -230),
   canopyDeck("upperRootEast", 117, 119, -234, -232.5),
   canopyDeck("upperRootNorth", 83, 119, -237.1, -234),
-  canopyDeck("exitLanding", 92, 100, -239, -237.1),
+  canopyDeck("exitLanding", 92, 100, -241, -237.1),
 ];
 export const CANOPY_ENCOUNTERS = [
   { name: "Cliffside Clearing", x: 89, z: -213 },
@@ -270,7 +284,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     id: "canopy",
     name: { en: "Ancient Canopy", ja: "こだいの きのうえ" },
     hostile: true,
-    walk: [...CANOPY_DECKS.map(deck => deck.walk), ...CANOPY_FLIGHTS.map(f => rect(f.x0, f.x1, Math.min(f.footZ, f.topZ), Math.max(f.footZ, f.topZ)))],
+    walk: CANOPY_DECKS.map(deck => deck.walk),
   },
   grove: {
     id: "grove",
@@ -313,7 +327,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
     id: "causeway",
     name: { en: "Ruined Causeway", ja: "いせきの いしみち" },
     hostile: true,
-    walk: [CAUSEWAY, rect(44, 52, -257, -250), SHRINE, rect(99, 104, -254, -249)],
+    walk: [CAUSEWAY, rect(92, 100, -244, -241), rect(44, 52, -257, -250), SHRINE, rect(99, 104, -254, -249)],
   },
   coast: {
     id: "coast",
@@ -351,6 +365,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       // Retain the optional enemy's ground pocket beside the new entrance,
       // without retaining the old diagonal ascent into the Canopy.
       rect(111, 117.5, -196, -184),
+      rect(104, 111, -200.5, -184.5),
       disc(76.5, -168, 7.3),
       disc(74.5, -178.5, 6.8),
       disc(68, -166, 8.3),
@@ -414,6 +429,8 @@ export function gapDeck(id: keyof typeof CANOPY_GAPS): Rect {
 }
 /** The town wall's footprint on each side of the gate, always shut. */
 const PORT_WALL_CUTS = [rect(19, 72.6, -289.2, -287.6), rect(79.4, 135, -289.2, -287.6)];
+/** Closed, visible deck faces: these cuts apply to every kind of walker. */
+export const CANOPY_ROPE_CUTS = [rect(91.8, 111.2, -200.62, -200.38), rect(91.8, 100.2, -241.12, -240.88)];
 
 /** True when a circle of radius m fits the lowland's open land (solid scenery is checked separately). */
 export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number): boolean {
@@ -427,6 +444,7 @@ export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number
     }
   for (const gate of STAGE_EXITS) if (!g.cleared?.includes(gate.id) && touches(gate.cut, x, z, m)) return false;
   for (const wall of PORT_WALL_CUTS) if (touches(wall, x, z, m)) return false;
+  for (const face of CANOPY_ROPE_CUTS) if (touches(face, x, z, m)) return false;
   // Decks added by unlocks (narrower than the gaps they span).
   if (solved.includes("groveLilies") && (LILY_PADS.some(p => Math.hypot(x - p.x, z - p.z) <= Math.max(.25, LILY_PAD_R - Math.min(m, .35))) || inside(disc(ISLET.x, ISLET.z, ISLET.r), x, z, m))) return true;
   for (const id of ["canopyVines", "canopyRope"] as const) {
@@ -472,27 +490,8 @@ export function basinFraction(x: number, z: number): number {
 const base = (_x: number, z: number) => 2.4 + 0.0066 * (z + 152);
 const bumps = (x: number, z: number) => 0.18 * Math.sin(x * 0.21 + z * 0.13) + 0.12 * Math.sin(x * 0.37 - z * 0.29);
 
-/** Stairs are authored decks; the heightfield stays on the forest floor. */
+/** The raised route is an authored deck; the heightfield stays on the forest floor. */
 export const canopyRaise = (_x: number, _z: number): number => 0;
-
-/** Integral of a unit-speed line with short, quadratic eased ends. Its peak
- * slope is rise / (run - ease), rather than smoothstep's 1.5 * rise / run. */
-function flightFraction(distance: number, run: number, ease: number): number {
-  const d = Math.max(0, Math.min(run, distance));
-  const integral = d < ease ? d * d / (2 * ease)
-    : d > run - ease ? run - ease - (run - d) ** 2 / (2 * ease) : d - ease / 2;
-  return integral / (run - ease);
-}
-
-export function canopyEntranceY(x: number, z: number): number {
-  const k = flightFraction(-184.5 - z, 16, .3);
-  const foot = lowlandY(x, -184.5), top = canopyDeckY(x, -200.5);
-  return foot + (top - foot) * k;
-}
-
-export function canopyExitY(_x: number, z: number): number {
-  return base(96, -252) + CANOPY_HEIGHT * flightFraction(z + 252, 13, .15);
-}
 
 /** Absolute authored top, shared by rendered vertices, bridges and standY. */
 export function canopyDeckY(x: number, z: number): number {
@@ -566,7 +565,7 @@ export function lowlandY(x: number, z: number): number {
   const sea = Math.max(26 - x, x - 124, -323 - z, 0);
   y -= sea * 2.4;
   // Keep the visible forest floor well below every elevated lip, including
-  // the east basin hill. The authored approach and exit are the only ramps.
+  // the east basin hill. The entrance and exit faces have no ramps.
   if (x >= 81 && x <= 121 && z <= -204 && z >= -237.2 && (z <= -205 || x < 92 || x > 108)) y = Math.min(y, base(x, z) + bumps(x, z));
   return Math.max(y, -4.5);
 }
@@ -594,8 +593,6 @@ export function lowlandDeckY(x: number, z: number, solved: readonly ObstacleId[]
       return lowlandBridgeY(id, x, z);
   }
   if (solved.includes("groveLilies") && LILY_PADS.some(p => Math.hypot(x - p.x, z - p.z) <= LILY_PAD_R)) return POND_Y + 0.1;
-  for (const flight of CANOPY_FLIGHTS) if (x >= flight.x0 && x <= flight.x1 && z >= Math.min(flight.footZ, flight.topZ) && z <= Math.max(flight.footZ, flight.topZ))
-    return flight.height(x, z);
   if (x >= 83 && x <= 119 && z <= -184.5 && z >= -252 && canopyUnion(x, z) &&
       !CANOPY_VOIDS.some(h => touches(h.shape, x, z, 0))) return canopyDeckY(x, z);
   return -Infinity;
@@ -632,7 +629,8 @@ export const CHESTS: ChestDef[] = [
 ];
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */
-export const ACT2_OBSTACLE_PLACE: Record<"groveLilies" | "canopyVines" | "canopyRope", Vec2 & { face: Vec2 }> = {
+export const ACT2_OBSTACLE_PLACE: Record<"groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope", Vec2 & { face: Vec2 }> = {
+  canopyAscentRope: { ...CANOPY_ROPES.entrance.foot, face: { x: CANOPY_ROPES.entrance.x, z: CANOPY_ROPES.entrance.faceZ } },
   groveLilies: { ...GROVE_CROSSING.near, face: { ...GROVE_CROSSING.landing } },
   canopyVines: { x: 106, z: -214.6, face: { x: 106, z: -218 } },
   canopyRope: { x: 106, z: -224.2, face: { x: 106, z: -227.5 } },
@@ -882,7 +880,6 @@ export function lowlandSolids(): SolidShape[] {
   for (const t of GIANT_TREES) if (!RIGHT_ARM_TREES.some(arm => arm === t)) circle(t.x, t.z, t.r);
   for (const b of MOSSY_BOULDERS) if (!RIGHT_ARM_BOULDERS.includes(b)) circle(b.x, b.z, b.r * 0.9);
   out.push(...RIGHT_ARM_SOLIDS);
-  out.push(...CANOPY_FLIGHT_RIMS);
   for (const l of LOGS) out.push({ kind: "capsule", ...l });
   for (const ridge of LOWLAND_RIDGES) out.push({ kind: "capsule", ...ridge });
   for (const p of RUIN_PILLARS) circle(p.x, p.z, 0.6);
@@ -904,7 +901,7 @@ export function lowlandSolids(): SolidShape[] {
 export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
   forest1: { x: 47, z: -175 },
   grove: { x: 58, z: -244 },
-  canopy: { x: 96, z: -238 },
+  canopy: CANOPY_ROPES.exit.foot,
   causeway: { x: 76, z: -256 },
   coast: { x: 76, z: -290 },
   port: { x: SERVICES.harbor.keeper.x, z: SERVICES.harbor.keeper.z },
@@ -912,7 +909,7 @@ export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
 
 /** The forest base points toward the nearest arm rather than the closed mesa. */
 export function routeMarker(zone: ZoneId, playerX: number): Vec2 {
-  if (zone === "forest1") return playerX < 76 ? { x: 47, z: -175 } : { x: 104, z: -174 };
+  if (zone === "forest1") return playerX < 76 ? { x: 47, z: -175 } : CANOPY_ROPES.entrance.foot;
   return ROUTE_MARKERS[zone];
 }
 

@@ -177,6 +177,8 @@ export const rt = {
   rope: 0,
   /** Puff is carrying the rope up (the coil at the foot has gone in a puff). */
   ropeCarried: false,
+  /** Entrance rope: the loose end follows Puff while the ground coil pays out. */
+  canopyAscentRope: { carried: false, payout: 0, tied: 0 },
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
@@ -263,6 +265,7 @@ export function resetRuntime() {
   rt.bridge = rt.bridgeTarget = 0;
   rt.rope = 0;
   rt.ropeCarried = false;
+  rt.canopyAscentRope = { carried: false, payout: 0, tied: 0 };
   rt.bramble = rt.brambleTarget = 1;
   rt.lava = rt.cave = rt.gate = rt.starGlow = 0;
   rt.ship.visible = false;

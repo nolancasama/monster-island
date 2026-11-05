@@ -13,7 +13,7 @@ import {
   gapDeck,
   lowlandBridgeY,
   CANOPY_GAPS,
-  CANOPY_FLIGHTS,
+  CANOPY_ROPES,
   CHESTS,
   LILY_PADS,
   POND,
@@ -22,6 +22,8 @@ import {
   type ServiceId,
 } from "../game/world/lowland";
 import { TUNNEL, groundY, inTunnel } from "../game/world/island";
+import { standY } from "../game/world/collision";
+import { ropeCoilGeometry } from "./models/forest";
 import { flatMat, occluderMat, smoothMat } from "./materials";
 import { conformBridge } from "./models/bridge";
 import { portDoorGeometry, portWallGeometry } from "./models/portWall";
@@ -35,7 +37,9 @@ import {
   cliffRopeGeometry,
   giantFernGeometry,
   canopyDeckGeometry,
-  canopyFlightGeometry,
+  canopyRopeGeometry,
+  canopyRopeAnchorsGeometry,
+  updateCanopyPayingRope,
   lilyPadGeometry,
   updateLilyPadMatrices,
   lowlandPropsGeometry,
@@ -273,6 +277,45 @@ function CliffRope() {
   return <mesh ref={ref} geometry={geo} material={flatMat} />;
 }
 
+/** The entrance coil pays out continuously to Puff, then becomes the permanent rope. */
+function CanopyRopes() {
+  const anchors = useMemo(canopyRopeAnchorsGeometry, []);
+  const entrance = useMemo(() => canopyRopeGeometry(CANOPY_ROPES.entrance), []);
+  const exit = useMemo(() => canopyRopeGeometry(CANOPY_ROPES.exit), []);
+  const coil = useMemo(ropeCoilGeometry, []);
+  const paying = useMemo(() => new THREE.BufferGeometry(), []);
+  const end = useMemo(() => new THREE.Vector3(), []);
+  const payingMat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#e6c68c", flatShading: true }), []);
+  const hangRef = useRef<THREE.Mesh>(null), coilRef = useRef<THREE.Mesh>(null), payingRef = useRef<THREE.Mesh>(null);
+  const r = CANOPY_ROPES.entrance, coilX = r.x + .9, coilZ = r.foot.z - .3;
+  useEffect(() => () => { paying.dispose(); payingMat.dispose(); }, [paying, payingMat]);
+  useFrame(() => {
+    const solved = getGame().progress.solved.includes("canopyAscentRope");
+    const flight = rt.canopyAscentRope;
+    const hanging = solved || flight.tied > 0;
+    if (hangRef.current) hangRef.current.visible = hanging;
+    if (coilRef.current) {
+      coilRef.current.visible = !hanging;
+      coilRef.current.scale.setScalar(Math.max(.03, 1 - flight.payout));
+    }
+    if (payingRef.current) {
+      payingRef.current.visible = flight.carried && !hanging;
+      if (payingRef.current.visible) {
+        const m = rt.monsters.puff;
+        end.set(m.x, standY(m.x, m.z, getGame().progress.solved) + m.air - .12, m.z);
+        updateCanopyPayingRope(paying, end);
+      }
+    }
+  });
+  return <group>
+    <DistanceMesh geometry={anchors} material={flatMat} />
+    <mesh ref={hangRef} geometry={entrance} material={flatMat} />
+    <DistanceMesh geometry={exit} material={flatMat} />
+    <mesh ref={coilRef} geometry={coil} material={smoothMat} position={[coilX, groundY(coilX, coilZ), coilZ]} />
+    <mesh ref={payingRef} geometry={paying} material={payingMat} frustumCulled={false} />
+  </group>;
+}
+
 /** The same air from the overlook to the quay, including both rope handoffs. */
 function LowlandFog() {
   const { scene } = useThree();
@@ -299,7 +342,6 @@ export function Lowland() {
   const props = useMemo(() => spatialGeometry(lowlandPropsGeometry(), TILE), []);
   // Solid: walking surfaces must not dither away under the player like props do.
   const canopyDecks = useMemo(canopyDeckGeometry, []);
-  const canopyFlights = useMemo(() => CANOPY_FLIGHTS.map(canopyFlightGeometry), []);
   const cliff = useMemo(cliffFaceGeometry, []);
   const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
@@ -323,8 +365,6 @@ export function Lowland() {
       ))}
       <mesh geometry={cliff} material={flatMat} />
       <DistanceMesh geometry={canopyDecks} material={flatMat} />
-      {/* Near views only: from the sanctuary they would break its render budget. */}
-      {canopyFlights.map((geometry, i) => <DistanceMesh key={CANOPY_FLIGHTS[i].id} geometry={geometry} material={flatMat} far={40} />)}
       <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />
@@ -344,6 +384,7 @@ export function Lowland() {
         <StageBarrier key={`${gate.id}:${gate.x}`} gate={gate} />
       ))}
       <CliffRope />
+      <CanopyRopes />
       <Unlocks />
       <GroveWake />
       <Secrets />

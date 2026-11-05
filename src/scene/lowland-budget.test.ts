@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { groundY } from "../game/world/island";
 import { blocked } from "../game/world/collision";
-import { CANOPY_FLIGHTS, CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible, lowlandWalkable } from "../game/world/lowland";
+import { CANOPY_ROPES, CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible, lowlandWalkable } from "../game/world/lowland";
 import { mesaCameraLift } from "../game/world/mesa";
 import { NPCS, NPC_OF } from "../game/data/town";
 import { cameraProfileAt, DEFAULT_CAMERA } from "./cameraProfiles";
@@ -10,11 +10,12 @@ import { conformBridge } from "./models/bridge";
 import { CHEST_HINGE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import {
   cliffFaceGeometry, cliffRopeGeometry, giantFernGeometry, lilyPadGeometry,
-  canopyDeckGeometry, canopyFlightGeometry, lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
+  canopyDeckGeometry, canopyRopeGeometry, canopyRopeAnchorsGeometry, updateCanopyPayingRope, lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
   mesaGeometry, npcGeometry, primevalTreeGeometry, reedGeometry, ropeBridgeGeometry,
   spatialGeometry, stageBarrierGeometry, townGeometry, treeFernGeometry, vineBridgeGeometry,
   type Spot,
 } from "./models/lowland";
+import { ropeCoilGeometry } from "./models/forest";
 
 const TILE = 96, FOG_FAR = 260;
 type Draw = { name: string; bounds: THREE.Sphere; triangles: number; far: number; spots?: Spot[] };
@@ -57,7 +58,14 @@ beforeAll(() => {
   for (const geometry of lowlandTerrainTiles(TILE)) add("terrain", geometry);
   for (const geometry of spatialGeometry(lowlandPropsGeometry(), TILE)) add("props", geometry);
   add("canopyDecks", canopyDeckGeometry());
-  for (const flight of CANOPY_FLIGHTS) add(`canopy ${flight.id} stairs`, canopyFlightGeometry(flight));
+  add("canopy rope anchors", canopyRopeAnchorsGeometry());
+  for (const [id, rope] of Object.entries(CANOPY_ROPES)) add(`canopy ${id} rope`, canopyRopeGeometry(rope));
+  const entrance = CANOPY_ROPES.entrance, coilX = entrance.x + .9, coilZ = entrance.foot.z - .3;
+  add("canopy rope coil", ropeCoilGeometry(), coilX, groundY(coilX, coilZ), coilZ);
+  // Conservatively count the carried tube alongside the solved rope and coil.
+  const paying = new THREE.BufferGeometry();
+  updateCanopyPayingRope(paying, new THREE.Vector3(entrance.x, lowlandSceneryY(entrance.top.x, entrance.top.z) + 2, entrance.stakeZ));
+  add("canopy paying rope", paying);
   for (const geometry of spatialGeometry(lowlandWaterGeometry(), TILE)) add("water", geometry);
   add("cliff", cliffFaceGeometry(), 0, 0, 0, 0, Infinity);
   add("rope", cliffRopeGeometry(), 0, 0, 0, 0, Infinity);

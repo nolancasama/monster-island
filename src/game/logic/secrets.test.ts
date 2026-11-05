@@ -17,7 +17,7 @@ function ready(): Progress {
   for (const m of Object.values(p.monsters)) { m.discovered = m.friend = true; }
   p.monsters.ember.invited = true;
   p.endings = 3;
-  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
+  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "canopyAscentRope"];
   p.act2 = { ...newAct2(), started: true, lumoTaken: true, cleared: [...STAGES] };
   return p;
 }

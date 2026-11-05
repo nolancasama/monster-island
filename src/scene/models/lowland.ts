@@ -15,8 +15,7 @@ import {
   STAGE_EXITS,
   BASIN,
   CANOPY_DECKS,
-  CANOPY_FLIGHTS,
-  CANOPY_FLIGHT_RIMS,
+  CANOPY_ROPES,
   CANOPY_GAPS,
   CANOPY_TRAIL,
   CAUSEWAY,
@@ -60,7 +59,7 @@ import {
   nearestOnTrail,
   streamY,
   type EnemyKind,
-  type CanopyFlight,
+  type ClimbRope,
 } from "../../game/world/lowland";
 import type { NpcDef } from "../../game/data/town";
 
@@ -275,73 +274,6 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(positions.length / 3 * 2), 2));
   geometry.computeVertexNormals(); geometry.computeBoundingSphere();
   return geometry;
-}
-
-/** One solid draw per flight, including its retaining rims. Averaging endpoint
- * heights keeps both nosings within half a riser, including the eased ends. */
-export function canopyFlightGeometry(flight: CanopyFlight): THREE.BufferGeometry {
-  const b = new PartBuilder(), { x0, x1, footZ, topZ, steps } = flight;
-  const dz = (topZ - footZ) / steps, width = x1 - x0;
-  const rims = CANOPY_FLIGHT_RIMS.filter(r => r.az === footZ && r.bz === topZ);
-  const treadY = (x: number, i: number) => (flight.height(x, footZ + dz * i) + flight.height(x, footZ + dz * (i + 1))) / 2;
-  for (let i = 0; i < steps; i++) {
-    const za = footZ + dz * i, zb = za + dz, z = (za + zb) / 2;
-    const lo = Math.min(za, zb), hi = Math.max(za, zb);
-    // Full-depth stone prisms close retaining walls and the ground join.
-    const vertices: number[] = [];
-    const quad = (a: number[], c: number[], d: number[], e: number[]) => vertices.push(...a, ...c, ...d, ...a, ...d, ...e);
-    const across = Math.ceil(width);
-    for (let j = 0; j < across; j++) {
-      const a = x0 + width * j / across, c = x0 + width * (j + 1) / across;
-      quad([a, treadY(a, i), lo], [a, treadY(a, i), hi], [c, treadY(c, i), hi], [c, treadY(c, i), lo]);
-      // Only the visible riser is needed between adjacent solid stone courses.
-      const lower = (x: number) => i === 0 ? lowlandY(x, za) - .18 : treadY(x, i - 1);
-      const face = [[a, treadY(a, i), za], [c, treadY(c, i), za], [c, lower(c), za], [a, lower(a), za]];
-      if (dz < 0) quad(face[3], face[2], face[1], face[0]);
-      else quad(face[0], face[1], face[2], face[3]);
-      if (i === steps - 1) {
-        const back = [[a, treadY(a, i), zb], [c, treadY(c, i), zb], [c, lowlandY(c, zb) - .18, zb], [a, lowlandY(a, zb) - .18, zb]];
-        if (dz < 0) quad(back[0], back[1], back[2], back[3]);
-        else quad(back[3], back[2], back[1], back[0]);
-      }
-    }
-    for (const x of [x0, x1]) {
-      const side = [[x, treadY(x, i), hi], [x, treadY(x, i), lo], [x, lowlandY(x, lo) - .18, lo], [x, lowlandY(x, hi) - .18, hi]];
-      if (x === x0) quad(side[0], side[1], side[2], side[3]);
-      else quad(side[3], side[2], side[1], side[0]);
-    }
-    const stone = new THREE.BufferGeometry();
-    stone.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    stone.computeVertexNormals();
-    b.add(stone, i % 3 === 0 ? "#898675" : "#777b6c", [0, 0, 0]);
-    if (i % 2 === 0) for (const rim of rims) {
-      const end = footZ + dz * Math.min(i + 2, steps);
-      between(b, [rim.ax, flight.height(rim.ax, za) + .23, za],
-        [rim.ax, flight.height(rim.ax, end) + .23, end], .22, .22,
-        i % 4 === 0 ? "#7c8068" : "#65482e", 5);
-    }
-    // Timber ends project from the stone beneath the upper third.
-    if (i >= steps * 2 / 3 && i % 2 === 0) {
-      const y = treadY((x0 + x1) / 2, i);
-      b.box(width + .12, .22, .25, (x0 + x1) / 2, y - .55, z, "#503a28");
-      for (const x of [x0 + .18, x1 - .18])
-        b.box(.48, .32, Math.abs(dz) * 1.8, x, treadY(x, i) - .87, z, "#765134");
-    }
-    if (i % 8 === 3) {
-      // Broad exposed roots sink into selected stone treads.
-      for (let j = 0; j < 3; j++) {
-        const a = x0 + .5 + (width - 1) * j / 3, c = x0 + .5 + (width - 1) * (j + 1) / 3;
-        between(b, [a, treadY(a, i) - .05, z], [c, treadY(c, i) - .05, z + .04], .17, .13, "#715032", 5);
-      }
-    }
-    if (i % 4 === 1) for (const x of [x0 + .55, x1 - .55]) {
-      const y = treadY(x, i);
-      b.box(.44, .025, Math.abs(dz) * .65, x, y + .006, z, "#5c803e");
-      for (const lean of [-.5, .5])
-        b.add(new THREE.ConeGeometry(.1, .3, 3), "#71964b", [x, y + .15, z], [0, 0, lean]);
-    }
-  }
-  return b.build();
 }
 
 function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Color) {
@@ -664,6 +596,56 @@ export function cliffRopeGeometry(): THREE.BufferGeometry {
   return b.build();
 }
 
+/** A single low-poly tube from the visible timber anchor to the reachable end. */
+export function canopyRopeGeometry(r: ClimbRope): THREE.BufferGeometry {
+  const top = lowlandSceneryY(r.top.x, r.top.z), foot = groundY(r.foot.x, r.foot.z);
+  const points = [
+    new THREE.Vector3(r.x, top + 1.2, r.stakeZ),
+    new THREE.Vector3(r.x, top + .2, r.lipZ),
+    new THREE.Vector3(r.x, top - .4, r.hangZ),
+    new THREE.Vector3(r.x, foot + .7, r.hangZ),
+    new THREE.Vector3(r.x, foot + .12, r.foot.z + (r.hangZ - r.foot.z) * .35),
+  ];
+  const curve = new THREE.CurvePath<THREE.Vector3>();
+  for (let i = 1; i < points.length; i++) curve.add(new THREE.LineCurve3(points[i - 1], points[i]));
+  const b = new PartBuilder(0);
+  b.add(new THREE.TubeGeometry(curve, 64, .075, 6), "#e6c68c", [0, 0, 0]);
+  b.torus(.22, .075, [r.x, top + 1.2, r.stakeZ], [Math.PI / 2, 0, 0], "#d7b177");
+  return b.build();
+}
+
+/** Both posts share one draw; their bases visibly enter the raised roots. */
+export function canopyRopeAnchorsGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  for (const r of Object.values(CANOPY_ROPES)) {
+    const y = lowlandSceneryY(r.top.x, r.top.z);
+    b.cyl(.18, .25, 1.8, r.x, y - .3, r.stakeZ, "#795132", 6);
+    b.cyl(.21, .18, .12, r.x, y + 1.5, r.stakeZ, "#af8050", 6);
+  }
+  return b.build();
+}
+
+/** Reusable indexed tube, updated in place while Puff pays out the free end. */
+export function updateCanopyPayingRope(geometry: THREE.BufferGeometry, end: THREE.Vector3) {
+  const r = CANOPY_ROPES.entrance, x = r.x + .9, z = r.foot.z - .3;
+  const start = new THREE.Vector3(x, groundY(x, z) + .12, z);
+  const top = lowlandSceneryY(r.top.x, r.top.z);
+  const bend = new THREE.Vector3(x, Math.max(start.y, Math.min(end.y, top + .8)), Math.max(z, end.z));
+  const curve = new THREE.CatmullRomCurve3([start, start.clone().lerp(bend, .5), bend, end], false, "centripetal");
+  const tube = new THREE.TubeGeometry(curve, 48, .075, 6);
+  // Copy attributes into stable GPU buffers: animation adds no segment draws.
+  if (!geometry.getAttribute("position")) geometry.copy(tube);
+  else {
+    for (const key of ["position", "normal"] as const) {
+      const target = geometry.getAttribute(key) as THREE.BufferAttribute;
+      target.copyArray(tube.getAttribute(key).array);
+      target.needsUpdate = true;
+    }
+    geometry.computeBoundingSphere();
+  }
+  tube.dispose();
+}
+
 /** Causeway paving, edge rubble and arches, the shrine, forest plants, logs, boulders. */
 export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
@@ -683,8 +665,6 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     for (let z = CAUSEWAY.z0 + 1.6; z < CAUSEWAY.z1 - 0.6; z += 2.1) {
       if (rand() < 0.18) continue;
       const dx = (rand() - 0.5) * 0.15, dz = (rand() - 0.5) * 0.15, turn = (rand() - 0.5) * 0.08, tone = rand();
-      // A slab under the exit flight would take the flight's height and float across its steps.
-      if (CANOPY_FLIGHTS.some(f => x >= f.x0 && x <= f.x1 && z >= Math.min(f.footZ, f.topZ) && z <= Math.max(f.footZ, f.topZ))) continue;
       b.boxAt(
         1.9,
         0.12,
@@ -712,7 +692,6 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   // Small grass blades emerge through the paving in the same merged batch.
   for (let i = 0; i < 35; i++) {
     const x = 52.8 + (i * 7.1) % 58, z = -262 + (i * 3.7) % 17;
-    if (CANOPY_FLIGHTS.some(f => x >= f.x0 && x <= f.x1 && z >= Math.min(f.footZ, f.topZ) && z <= Math.max(f.footZ, f.topZ))) continue;
     for (const yaw of [0, Math.PI / 2])
       b.boxAt(.035, .24, .18, [x, gy(x, z) + .12, z], [0, yaw + i, 0], "#5f9a44");
   }

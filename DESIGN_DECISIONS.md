@@ -2111,3 +2111,33 @@ The area-budget test now models those same hop edges: sampled reachable Grove fl
   base for absolute-height conversion, including across open gaps. Canopy helpers
   start on the deck with zero air; Puff's flight and return keep their intended
   deck-relative heights. Stairs, deck geometry and rope mechanics are unchanged.
+
+## 2026-11-05 — Canopy ropes and entrance question (slice 4)
+
+- Replaced both Canopy stair flights with ropes at the frozen stand coordinates.
+  The old entrance footprint is ordinary forest floor; the exit landing reaches
+  z -241, with ordinary Causeway floor up to its face. Unwalkable face strips
+  separate floor and deck for players, mounts, forced moves and enemies. The
+  existing stage gate remains on the upper landing and the exit ascent refuses
+  access until the Canopy is cleared. Enemies cannot climb.
+- The entrance asks “Can you fly?” through the existing obstacle conversation.
+  Puff carries the end as a continuous tube pays out from a shrinking coil,
+  loops around a visible timber post, and ties the permanent ascent rope.
+  Rope geometry is merged or a single tube, without segment draw calls.
+  Both new climbs share the sanctuary climb implementation; the existing
+  sanctuary and prologue rope coordinates, speeds and flight path remain.
+- Save version stays v4. `canopyAscentRope` records the permanent unlock.
+  Canopy clears, bridge unlocks, a saved Canopy zone, deck positions and legacy
+  stairs grant it on read. Legacy entrance stairs choose the top on the upper
+  half and the foot on the lower half; cleared exit stairs choose the Causeway
+  foot. An uncleared exit save returns to the Canopy side of its stage gate.
+  Stages, chests and secrets retain their progress.
+- Added the additive `act2.canopyLayout: 1` marker because the new entrance
+  foot lies inside the old stairs' footprint. Legacy positions migrate once;
+  a fresh save at the unsolved foot still gets the question. Grove-only saves
+  retain the puzzle. Climb endpoints update safe ground, mid-climb saves use
+  the departure stand, and cancellation clears frozen/climb height state.
+- Controller E2E coverage captures puzzle stages, both rope climbs and raised
+  chest cameras at 1366×768 and 1280×800, alongside stream extinguishing,
+  Inferno regeneration pause and legacy camp loading. Browser execution and
+  aesthetic judgment remain with the controller/design lead.

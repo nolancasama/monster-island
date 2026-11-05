@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { standY } from "../game/world/collision";
-import { CANOPY_DECKS, CANOPY_FLIGHTS, CANOPY_FLIGHT_RIMS, lowlandDeckY, lowlandWalkable, lowlandY, STAGES, STAGE_EXITS, ZONES } from "../game/world/lowland";
-import { canopyDeckGeometry, canopyFlightGeometry, lowlandSceneryY, streamRibbonGeometry } from "./models/lowland";
+import { CANOPY_DECKS, CANOPY_ROPES, lowlandDeckY, lowlandWalkable, lowlandY, STAGES, STAGE_EXITS } from "../game/world/lowland";
+import { canopyDeckGeometry, canopyRopeGeometry, canopyRopeAnchorsGeometry, updateCanopyPayingRope, lowlandSceneryY, streamRibbonGeometry } from "./models/lowland";
 
 const solved = ["groveLilies", "canopyVines", "canopyRope"] as const;
 const open = { act2: true, cleared: STAGES, solved };
@@ -50,52 +50,41 @@ describe("authored Canopy decks", () => {
       }
     }
     expect(walls).toBeGreaterThan(200);
-    for (const f of CANOPY_FLIGHTS)
-      expect(ZONES.canopy.walk).toContainEqual({ kind: "rect", x0: f.x0, x1: f.x1, z0: Math.min(f.footZ, f.topZ), z1: Math.max(f.footZ, f.topZ) });
     geometry.dispose();
   });
 
-  for (const flight of CANOPY_FLIGHTS) it(`${flight.id} treads, supports and rims follow the authored flight`, () => {
-    const geometry = canopyFlightGeometry(flight), material = new THREE.MeshBasicMaterial();
+  for (const [id, rope] of Object.entries(CANOPY_ROPES)) it(`${id} has one continuous visible rope down to its foot`, () => {
+    const geometry = canopyRopeGeometry(rope), positions = geometry.getAttribute("position");
+    const top = standY(rope.top.x, rope.top.z, solved), foot = standY(rope.foot.x, rope.foot.z, solved);
+    // Ray samples through the rope's vertical run prove there are no missing
+    // segments, including immediately beneath the lip and near the loose end.
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geometry, material); mesh.updateMatrixWorld();
-    const dz = (flight.topZ - flight.footZ) / flight.steps;
-    const hitAt = (x: number, z: number) => new THREE.Raycaster(new THREE.Vector3(x, 40, z), new THREE.Vector3(0, -1, 0)).intersectObject(mesh)[0];
-    for (let i = 0; i < flight.steps; i++) {
-      const za = flight.footZ + dz * i, zb = za + dz;
-      for (const x of [flight.x0 + 1, (flight.x0 + flight.x1) / 2, flight.x1 - 1]) {
-        const riser = Math.abs(flight.height(x, zb) - flight.height(x, za));
-        // Read actual mesh nosings, including roots, rather than the builder's metadata.
-        for (const z of [za + dz * .001, zb - dz * .001]) {
-          const hit = hitAt(x, z);
-          expect(hit, `${flight.id} tread ${i}`).toBeDefined();
-          expect(Math.abs(hit.point.y - flight.height(x, z)), JSON.stringify({ step: i, x, z, rendered: hit.point.y, expected: flight.height(x, z), riser })).toBeLessThanOrEqual(riser / 2 + .006);
-        }
-      }
-      for (const rim of CANOPY_FLIGHT_RIMS.filter(r => r.az === flight.footZ)) {
-        const z = (za + zb) / 2;
-        expect(hitAt(rim.ax, z).point.y - flight.height(rim.ax, z)).toBeGreaterThan(.3);
-      }
+    for (let y = foot + .8; y < top - .5; y += .14) {
+      const ray = new THREE.Raycaster(new THREE.Vector3(rope.x - 1, y, rope.hangZ), new THREE.Vector3(1, 0, 0));
+      expect(ray.intersectObject(mesh).length, `${id} rope at ${y}`).toBeGreaterThan(0);
     }
-    const p = geometry.getAttribute("position");
-    for (let i = 0; i < p.count; i++) {
-      expect(p.getX(i)).toBeGreaterThanOrEqual(flight.x0 - .221);
-      expect(p.getX(i)).toBeLessThanOrEqual(flight.x1 + .221);
-      expect(p.getZ(i)).toBeGreaterThanOrEqual(Math.min(flight.footZ, flight.topZ) - .221);
-      expect(p.getZ(i)).toBeLessThanOrEqual(Math.max(flight.footZ, flight.topZ) + .221);
+    expect(positions.count / 3).toBeLessThan(1000);
+    const anchors = canopyRopeAnchorsGeometry();
+    anchors.computeBoundingBox();
+    expect(anchors.boundingBox!.max.y).toBeGreaterThan(top + 1.2);
+    geometry.dispose(); anchors.dispose(); material.dispose();
+  });
+
+  it("updates a single paying-out tube with its free end attached to Puff", () => {
+    const geometry = new THREE.BufferGeometry();
+    const r = CANOPY_ROPES.entrance;
+    for (const y of [4, 8, 15]) {
+      const end = new THREE.Vector3(r.x + .45, y, r.foot.z);
+      updateCanopyPayingRope(geometry, end);
+      const position = geometry.getAttribute("position");
+      const lastRing = new THREE.Vector3();
+      for (let j = 0; j < 6; j++) lastRing.add(new THREE.Vector3().fromBufferAttribute(position, 48 * 7 + j));
+      lastRing.divideScalar(6);
+      expect(lastRing.distanceTo(end)).toBeLessThan(.0001);
+      expect(geometry.index!.count / 3).toBe(576);
     }
-    const count = p.count / 3;
-    expect(count).toBeGreaterThanOrEqual(2000);
-    expect(count).toBeLessThanOrEqual(3000);
-    expect(count).toBe(flight.id === "entrance" ? 2834 : 2980);
-    // Riser fronts must face the foot: single-sided materials expose bad winding.
-    const x = (flight.x0 + flight.x1) / 2, direction = Math.sign(dz);
-    for (const i of [1, 18, 35]) {
-      const z = flight.footZ + dz * i;
-      const y = (flight.height(x, z - dz) + 2 * flight.height(x, z) + flight.height(x, z + dz)) / 4;
-      const ray = new THREE.Raycaster(new THREE.Vector3(x, y, z - direction * .05), new THREE.Vector3(0, 0, direction));
-      expect(ray.intersectObject(mesh)[0]?.distance, `${flight.id} riser ${i}`).toBeCloseTo(.05, 3);
-    }
-    geometry.dispose(); material.dispose();
+    geometry.dispose();
   });
 
   it("closes the approach south face and landing sides down to ground, with the gate on the landing", () => {

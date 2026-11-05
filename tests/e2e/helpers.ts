@@ -37,7 +37,7 @@ export interface MiState {
     question: string | null;
   } | null;
   line: { by: string; en: string } | null;
-  player: { x: number; z: number; y: number; yaw: number; ground: number; riding: boolean; climbing: boolean };
+  player: { x: number; z: number; y: number; yaw: number; ground: number; riding: boolean; climbing: boolean; frozen: boolean; safeGround: { x: number; z: number } | null };
   monsters: Record<string, { x: number; z: number; mode: string; visible: boolean; air: number }>;
   palm: number;
   stones: number;
@@ -51,7 +51,7 @@ export interface MiState {
   gate: number;
   starGlow: number;
   finale: "idle" | "rise" | "maple" | "complete";
-  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
+  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; mode: string };
   perf: { calls: number; triangles: number; fps: number };
   playTime: number;
   act2: {
@@ -71,6 +71,7 @@ export interface MiState {
     projectiles: Array<{ id: number; hostile: boolean; source?: number; x: number; y: number; z: number; vx: number; vz: number; age: number; life: number; radius: number }>;
     ship: { visible: boolean; x: number; y: number; z: number; cage: boolean };
     cliffRope: number;
+    canopyAscentRope: { carried: boolean; payout: number; tied: number };
     unlock: Record<string, number>;
     panel: string | null;
     banner: string | null;

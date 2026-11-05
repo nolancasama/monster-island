@@ -19,6 +19,8 @@ export type Checkpoint = "cliff" | "port";
 export interface Act2 {
   /** Walkability version for the U-shaped forest save migration. */
   forestLayout: 2;
+  /** Distinguishes legacy stair positions from new saves at the rope foot. */
+  canopyLayout: 1;
   /** The kidnapping has played (Lumo stays a friend; being taken is a separate fact). */
   started: boolean;
   /** First-clear exits, independent of transient respawning enemies. */
@@ -54,7 +56,7 @@ export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo
 
 export function newAct2(): Act2 {
   return {
-    forestLayout: 2, started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
+    forestLayout: 2, canopyLayout: 1, started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
     chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
   };
 }
@@ -309,7 +311,7 @@ export function act2Objective(p: Progress): Act2Objective {
 }
 
 /** Act 2's permanent unlocks exist only once the chapter has begun. */
-export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope"];
+export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "canopyAscentRope"];
 
 /** Only registered enemies in this stage count; duplicate or foreign indices cannot clear it. */
 export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): number {

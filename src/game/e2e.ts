@@ -56,7 +56,7 @@ export function installE2eHook(seed: number) {
             }
           : null,
         line: g.line ? { by: g.line.by, en: g.line.en } : null,
-        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, yaw: rt.player.yaw, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null, falling: rt.player.fall !== null, teeter: rt.player.teeter, safeGround: rt.player.safeGround },
+        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, yaw: rt.player.yaw, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null, frozen: rt.player.frozen, falling: rt.player.fall !== null, teeter: rt.player.teeter, safeGround: rt.player.safeGround },
         monsters: Object.fromEntries(
           LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, visible: companionVisible(id), air: rt.monsters[id].air }])
         ),
@@ -111,6 +111,7 @@ export function installE2eHook(seed: number) {
           projectiles: cb.shots.map(s => ({ id: s.id, shape: s.shape, damage: s.damage, hostile: Boolean(s.hostile), source: s.source, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, age: s.age, life: s.life, radius: s.radius })),
           ship: { visible: rt.ship.visible, x: rt.ship.x, y: rt.ship.y, z: rt.ship.z, cage: rt.ship.cage.visible },
           cliffRope: rt.cliffRope,
+          canopyAscentRope: { ...rt.canopyAscentRope },
           unlock: { ...rt.act2Unlock },
           groveCrossing: groveCrossingView.phase,
           panel: g.panel,

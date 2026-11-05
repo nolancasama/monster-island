@@ -3,6 +3,7 @@ import { boot, chooseMode, hook, state, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { MAPLE } from "../../src/game/world/island";
 import { SECRET_IDS, SECRET_SITES } from "../../src/game/world/elementObjects";
+import { CANOPY_ROPES } from "../../src/game/world/lowland";
 
 const SHOTS = ".tmp/shots/seven";
 
@@ -11,7 +12,7 @@ function lowlandSave(x: number, z: number, edit: (p: ReturnType<typeof newProgre
   for (const id of ["leafy", "bubbo", "puff", "ember", "lumo"] as const)
     p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true } as (typeof p.monsters)[typeof id];
   p.active = "bubbo"; p.metMaple = true; p.endings = 3;
-  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope"];
+  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope", "canopyAscentRope"];
   p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true, zone: "forest1", checkpoint: "cliff",
     cleared: ["forest1", "grove", "canopy", "causeway", "coast"], tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   edit(p);
@@ -72,42 +73,39 @@ test("former camp forest floor stays open to the north, in and out", async ({ pa
   expect(errors).toEqual([]);
 });
 
-for (const flight of [
-  { name: "entrance", foot: [107.5, -183.5], top: [107.5, -202], up: "KeyW", upDone: (_x: number, z: number) => z < -201, downDone: (_x: number, z: number) => z > -184 },
-  { name: "exit", foot: [96, -253.5], top: [96, -238.6], up: "KeyS", upDone: (_x: number, z: number) => z > -238.8, downDone: (_x: number, z: number) => z < -253 },
+for (const rope of [
+  { name: "entrance", ...CANOPY_ROPES.entrance, focus: "canopyEntrance" },
+  { name: "exit", ...CANOPY_ROPES.exit, focus: "canopyExit" },
 ] as const) {
-  test(`Canopy ${flight.name} stairs climb and descend smoothly`, async ({ page }) => {
-    const errors = await enter(page, flight.foot[0], flight.foot[1]);
+  test(`Canopy ${rope.name} rope climbs and descends in one interaction`, async ({ page }) => {
+    const errors = await enter(page, rope.foot.x, rope.foot.z);
     await hook(page, "combatFixture", { enemies: [] });
-    await hook(page, "teleport", flight.foot[0], flight.foot[1], Math.PI);
-    await page.waitForTimeout(1500);
-    await page.screenshot({ path: `${SHOTS}/stairs-${flight.name}-foot.png` });
-    const climb = await walk(page, flight.up, flight.upDone);
-    console.log(flight.name, "climb", JSON.stringify(climb));
-    expect(climb.arrived, `stopped at ${climb.x},${climb.z}`).toBe(true);
-    expect(climb.y - climb.startY).toBeGreaterThan(8);
+    await hook(page, "teleport", rope.foot.x, rope.foot.z, rope.facing);
+    await waitFor(page, s => s.focus?.id === `${rope.focus}Up`, 15_000, "rope foot");
+    const footY = (await state(page)).player.ground;
+    await page.screenshot({ path: `${SHOTS}/rope-${rope.name}-foot.png` });
+    await page.keyboard.press("KeyE");
+    const top = await waitFor(page, s => s.mode === "explore" && !s.player.climbing && Math.hypot(s.player.x - rope.top.x, s.player.z - rope.top.z) < .1, 30_000, "rope top");
+    expect(top.player.ground - footY).toBeGreaterThan(8);
+    await page.screenshot({ path: `${SHOTS}/rope-${rope.name}-top.png` });
+    await waitFor(page, s => s.focus?.id === `${rope.focus}Down`, 10_000, "climb down prompt");
+    await page.keyboard.press("KeyE");
+    await waitFor(page, s => s.mode === "explore" && !s.player.climbing && Math.hypot(s.player.x - rope.foot.x, s.player.z - rope.foot.z) < .1, 30_000, "rope foot after descent");
+    const midZ = (rope.foot.z + rope.top.z) / 2;
+    await hook(page, "look", [rope.x + 20, footY + 12, midZ + 3], [rope.x, footY + 5, midZ]);
     await page.waitForTimeout(800);
-    await page.screenshot({ path: `${SHOTS}/stairs-${flight.name}-top.png` });
-    const down = flight.up === "KeyW" ? "KeyS" : "KeyW";
-    const descent = await walk(page, down, flight.downDone);
-    console.log(flight.name, "descent", JSON.stringify(descent));
-    expect(descent.arrived, `stopped at ${descent.x},${descent.z}`).toBe(true);
-    // Side-on evidence of the whole flight.
-    const midZ = (flight.foot[1] + flight.top[1]) / 2;
-    await hook(page, "look", [flight.foot[0] + 20, 12, midZ + 3], [flight.foot[0], 7, midZ]);
-    await page.waitForTimeout(800);
-    await page.screenshot({ path: `${SHOTS}/stairs-${flight.name}-side.png` });
+    await page.screenshot({ path: `${SHOTS}/rope-${rope.name}-side.png` });
     expect(errors).toEqual([]);
   });
 }
 
-test("exit stairs close views", async ({ page }) => {
-  await enter(page, 96, -256);
+test("exit rope close views", async ({ page }) => {
+  await enter(page, CANOPY_ROPES.exit.foot.x, CANOPY_ROPES.exit.foot.z);
   await hook(page, "combatFixture", { enemies: [] });
   for (const [name, pos, at] of [
-    ["looking-up", [96, 5, -262], [96, 6, -245]],
-    ["foot-close", [103, 6, -256], [96, 2.5, -250]],
-    ["upper", [108, 16, -240], [96, 9, -244]],
+    ["looking-up", [96, 5, -250], [96, 7, -241]],
+    ["foot-close", [103, 6, -246], [96, 5, -241]],
+    ["upper", [108, 16, -240], [96, 10, -241]],
   ] as const) {
     await hook(page, "look", [...pos], [...at]);
     await page.waitForTimeout(1000);

@@ -196,7 +196,7 @@ test("views of the expanded stages, in budget", async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
   }
   const save = JSON.parse(forestSave("puff"));
-  save.progress.solved.push("groveLilies", "canopyVines", "canopyRope");
+  save.progress.solved.push("groveLilies", "canopyVines", "canopyRope", "canopyAscentRope");
   save.progress.act2.cleared = ["forest1", "grove", "canopy"];
   await page.addInitScript(s => localStorage.setItem("mi.save.v4", s), JSON.stringify(save));
   const errors = await boot(page);

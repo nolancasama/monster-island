@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { isWalkable, moveCircle, PLAYER_R } from "./collision";
-import { CLIFF_ROPE, STAGES, STAGE_EXITS, zoneAt } from "./lowland";
+import { CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, STAGES, STAGE_EXITS, zoneAt } from "./lowland";
 import { SECRET_IDS } from "./elementObjects";
 import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
 
@@ -11,11 +11,21 @@ export const BASELINE_AREA = { forest1: 286, grove: 464.75, canopy: 236.75, caus
 export function measureAreas() {
   const areas: Record<string, number> = {};
   const necks = STAGE_EXITS.filter(gate => gate.id === "forest1").map(gate => gate.x).sort((a, b) => a - b);
-  const gates = { solved: ["groveLilies", "canopyVines", "canopyRope"] as const, secrets: SECRET_IDS, act2: true, cleared: STAGES };
+  const gates = { solved: ["groveLilies", "canopyAscentRope", "canopyVines", "canopyRope"] as const, secrets: SECRET_IDS, act2: true, cleared: STAGES };
   const start = [Math.round(CLIFF_ROPE.foot.x * 2), Math.round(CLIFF_ROPE.foot.z * 2)];
   const reachable = new Set<string>([start.join(",")]), queue = [start];
   while (queue.length) {
     const [i, j] = queue.pop()!;
+    for (const [id, rope] of Object.entries(CANOPY_ROPES)) {
+      if (id === "entrance" ? !gates.solved.includes("canopyAscentRope") : !gates.cleared.includes("canopy")) continue;
+      for (const [from, to] of [[rope.foot, rope.top], [rope.top, rope.foot]]) {
+        if (Math.hypot(i / 2 - from.x, j / 2 - from.z) > 1) continue;
+        const ni = Math.round(to.x * 2), nj = Math.round(to.z * 2), key = `${ni},${nj}`;
+        if (!reachable.has(key) && isWalkable(to.x, to.z, gates, PLAYER_R) && isWalkable(ni / 2, nj / 2, gates, PLAYER_R)) {
+          reachable.add(key); queue.push([ni, nj]);
+        }
+      }
+    }
     // The optional islet uses explicit hop edges, never a water walk shape.
     for (const node of LILY_ROUTE) {
       const target = hopTarget(i / 2, j / 2, node.x - i / 2, node.z - j / 2, true, 1);
@@ -38,6 +48,10 @@ export function measureAreas() {
       const zone = zoneAt(x, z);
       if (zone && reachable.has(`${x * 2},${z * 2}`) && isWalkable(x, z, gates, PLAYER_R)) {
         areas[zone] = (areas[zone] ?? 0) + 0.25;
+        // The old exit flight belonged to Canopy. Its footprint now counts as
+        // ordinary Causeway floor; retain the downstream cap outside that rezone.
+        if (zone === "causeway" && x >= 92 && x <= 100 && z >= -252 && z <= -239)
+          areas.causewayFormerStairs = (areas.causewayFormerStairs ?? 0) + .25;
         if (zone === "forest1") {
           const part = x < necks[0] ? "forestLeftArm" : x > necks[1] ? "forestRightArm" : "forestBase";
           areas[part] = (areas[part] ?? 0) + 0.25;
@@ -51,8 +65,16 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
   // Slice 4 removes the continuous water strip; hop edges retain the islet.
   // Only reachable floor with every puzzle open counts (0.5 m sampling).
   expect(a.grove).toBe(1423);
-  // Slice 3: broad entrance/exit flights replace the old narrow ramps.
-  expect(a.canopy).toBe(976);
+  // Slice 4 removes stair area; only the authored raised decks remain Canopy.
+  // Compare flood-fill reachability against independently sampled deck floor.
+  let canopyFloor = 0;
+  for (let x = 83; x <= 119; x += .5) for (let z = -241; z <= -200.5; z += .5) {
+    if (!CANOPY_DECKS.some(({ walk }) => x >= walk.x0 && x <= walk.x1 && z >= walk.z0 && z <= walk.z1)) continue;
+    if (zoneAt(x, z) === "canopy" && isWalkable(x, z, { solved: ["canopyVines", "canopyRope"], act2: true, cleared: STAGES, secrets: SECRET_IDS }, PLAYER_R)) canopyFloor += .25;
+  }
+  // Bridge spans are puzzle surfaces outside the fixed polygons.
+  expect(a.canopy).toBeGreaterThanOrEqual(canopyFloor);
+  expect(a.canopy - canopyFloor).toBeLessThan(20);
   // Slice 2 rezones the full former camp disc and removes its prop solids.
   expect(a.forestBase).toBe(778);
   expect(a.grove).toBeGreaterThanOrEqual(757 * 1.7);
@@ -63,7 +85,8 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
     // Open secret pockets add floor in the forest base; the frozen baseline
     // was measured before those pockets were opened for this flood fill. The
     // forest's open north side (docs/SEVEN_IMPROVEMENTS.md section 2) adds more.
-    expect(area / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(zone === "forest1" ? 2.75 : 2.2);
+    const unchangedArea = area - (zone === "causeway" ? a.causewayFormerStairs : 0);
+    expect(unchangedArea / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(zone === "forest1" ? 2.75 : 2.2);
   }
   expect(a.forestLeftArm).toBeGreaterThan(200);
   expect(a.forestRightArm).toBeGreaterThan(200);

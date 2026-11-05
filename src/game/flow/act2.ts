@@ -9,7 +9,7 @@ import { banner, getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { cb, fallHurt, hint, hooks, learn, resetCombat, wakeUp } from "../combat";
 import { FALL_SECONDS, fallLanding } from "../logic/falls";
-import { CHESTS, CLIFF_ROPE, MAPLE_PORT, SERVICES, ZONES, type ServiceId, type ZoneId } from "../world/lowland";
+import { CANOPY_ROPES, CHESTS, CLIFF_ROPE, MAPLE_PORT, SERVICES, ZONES, type ClimbRope, type ServiceId, type ZoneId } from "../world/lowland";
 import { LEDGE, groundY } from "../world/island";
 import { PLAYER_R, gatesOf, nearestWalkable, standY } from "../world/collision";
 import { ask, fastMode, lastHeard, say, wait } from "./ask";
@@ -284,51 +284,70 @@ export function startAct2Scene(): Promise<void> {
 
 /** Climb down (or up) the rope on the sanctuary's cliff. The camera follows the climber steadily from the side. */
 export function climbCliff(down: boolean): Promise<void> {
+  return climbRope(CLIFF_ROPE, down);
+}
+
+/** A single interaction climbs a rope; only the sanctuary rope starts Act 2. */
+export function climbRope(r: ClimbRope, down: boolean): Promise<void> {
   return run(async () => {
     const pl = rt.player;
-    const r = CLIFF_ROPE;
-    const topY = groundY(r.x, r.top.z);
-    const footY = groundY(r.foot.x, r.foot.z);
+    if (r === CANOPY_ROPES.exit && !down && !getGame().progress.act2.cleared.includes("canopy")) {
+      await say("self", "Let's help the Canopy first. Then we can climb this rope!", "先に こだいの こずえを たすけよう。それから ロープを のぼろう！");
+      return;
+    }
+    if (r === CANOPY_ROPES.entrance && !getGame().progress.solved.includes("canopyAscentRope")) return;
+    const topY = standY(r.top.x, r.top.z, getGame().progress.solved);
+    const footY = standY(r.foot.x, r.foot.z, getGame().progress.solved);
     // The hands stay on the rope: start just below the lip (going down) or at the foot (going up).
     const high = topY - 1.05;
     const low = footY;
     const from = down ? high : low;
     const to = down ? low : high;
+    pl.riding = false;
+    pl.seat = 0;
+    pl.safeGround = { ...(down ? r.top : r.foot) };
     pl.frozen = true;
-    const cam = (y: number) => shot({ x: r.x + 4.6, y: y + 1.6, z: r.bodyZ - 6.2 }, { x: r.x, y: y + 0.7, z: r.faceZ });
-    await fadeThrough(() => {
-      pl.vx = pl.vz = 0;
-      pl.yaw = 0;
-      pl.climbY = from;
-      pl.x = r.x;
-      pl.z = r.bodyZ;
-      cam(from);
-    }, 250);
-    audio.play("whoosh");
-    // About 2 m a second; the limbs are driven by the height climbed (rope.ts CLIMB_PULL), so they match the pace.
-    const dur = Math.abs(to - from) / 2;
-    await over(dur, (k) => {
-      const e = k < 0.08 ? (k * k) / 0.16 : k > 0.92 ? 0.92 - ((1 - k) * (1 - k)) / 0.16 : k - 0.04;
-      pl.climbY = from + ((to - from) * e) / 0.92;
-      pl.x = r.x;
-      pl.z = r.bodyZ;
-      cam(pl.climbY);
-    });
-    await fadeThrough(() => {
-      pl.climbY = null;
-      const spot = down ? r.foot : r.top;
-      pl.x = spot.x;
-      pl.z = spot.z;
-      pl.yaw = Math.PI;
-      gatherParty();
-    }, 250);
-    pl.frozen = false;
-    if (down) {
-      const first = !getGame().progress.act2.descended;
-      updateProgress((p) => markDescended(p));
-      if (first) {
-        banner({ title: "Primeval Forest", sub: "Enemies are near! Your friend will help you.", ja: "げんしの もり — てきが いるよ! ともだちが たすけて くれる", tone: "place" }, 3600);
+    const cam = (y: number) => shot({ x: r.x + 4.6, y: y + 1.6, z: r.bodyZ - Math.cos(r.facing ?? 0) * 6.2 }, { x: r.x, y: y + 0.7, z: r === CLIFF_ROPE ? r.faceZ : r.hangZ });
+    try {
+      await fadeThrough(() => {
+        pl.vx = pl.vz = 0;
+        pl.yaw = r.facing ?? 0;
+        pl.climbY = from;
+        pl.x = r.x;
+        pl.z = r.bodyZ;
+        cam(from);
+      }, 250);
+      audio.play("whoosh");
+      // About 2 m a second; limb motion follows the height climbed (CLIMB_PULL).
+      const dur = Math.abs(to - from) / 2;
+      await over(dur, (k) => {
+        const e = k < 0.08 ? (k * k) / 0.16 : k > 0.92 ? 0.92 - ((1 - k) * (1 - k)) / 0.16 : k - 0.04;
+        pl.climbY = from + ((to - from) * e) / 0.92;
+        pl.x = r.x;
+        pl.z = r.bodyZ;
+        cam(pl.climbY);
+      });
+      await fadeThrough(() => {
+        pl.climbY = null;
+        const spot = down ? r.foot : r.top;
+        pl.x = spot.x;
+        pl.z = spot.z;
+        pl.y = standY(spot.x, spot.z, getGame().progress.solved);
+        pl.safeGround = { ...spot };
+        pl.yaw = (r.facing ?? 0) + Math.PI;
+        gatherParty();
+      }, 250);
+      pl.frozen = false;
+      if (down && r === CLIFF_ROPE) {
+        const first = !getGame().progress.act2.descended;
+        updateProgress((p) => markDescended(p));
+        if (first) {
+          banner({ title: "Primeval Forest", sub: "Enemies are near! Your friend will help you.", ja: "げんしの もり — てきが いるよ! ともだちが たすけて くれる", tone: "place" }, 3600);
+        }
       }
+    } finally {
+      pl.climbY = null;
+      pl.frozen = false;
     }
   });
 }

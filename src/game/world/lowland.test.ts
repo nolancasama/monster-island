@@ -5,7 +5,7 @@ import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, RUIN_PILLARS, lowlandSolids,
-  GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY,
+  GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY, CANOPY_ROPES,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
@@ -31,6 +31,19 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
   const queue = [start];
   while (queue.length) {
     const [i, j] = queue.pop()!;
+    // Explicit interactions connect the two surfaces; ordinary movement never does.
+    for (const [id, rope] of Object.entries(CANOPY_ROPES)) {
+      if (id === "entrance" ? !g.solved.includes("canopyAscentRope") : !g.cleared?.includes("canopy")) continue;
+      for (const [from, to] of [[rope.foot, rope.top], [rope.top, rope.foot]]) {
+        if (Math.hypot(i * S - from.x, j * S - from.z) > 1) continue;
+        const zone = zoneAt(to.x, to.z);
+        if (zone && avoid.includes(zone)) continue;
+        const ni = Math.round(to.x / S), nj = Math.round(to.z / S), key = `${ni},${nj}`;
+        if (!seen.has(key) && isWalkable(to.x, to.z, g, radius) && isWalkable(ni * S, nj * S, g, radius)) {
+          seen.add(key); queue.push([ni, nj]);
+        }
+      }
+    }
     if (g.solved.includes("groveLilies")) for (const node of LILY_ROUTE) {
       const dx = node.x - i * S, dz = node.z - j * S;
       const target = hopTarget(i * S, j * S, dx, dz, true, 1);
@@ -118,7 +131,8 @@ describe("the lowland below the sanctuary", () => {
     // Without the grove, the canopy's gaps stop the way until both are bridged.
     expect(reachable(gates(), ["grove"]).near(port.x, port.z, 2.8)).toBe(false);
     expect(reachable(gates(["canopyVines"]), ["grove"]).near(port.x, port.z, 2.8)).toBe(false);
-    expect(reachable(gates(["canopyVines", "canopyRope"]), ["grove"]).near(port.x, port.z, 2.8)).toBe(true);
+    expect(reachable(gates(["canopyVines", "canopyRope"]), ["grove"]).near(port.x, port.z, 2.8)).toBe(false);
+    expect(reachable(gates(["canopyAscentRope", "canopyVines", "canopyRope"]), ["grove"]).near(port.x, port.z, 2.8)).toBe(true);
     // Without the canopy, the grove alone gets there (Bubbo's lily pads are optional).
     expect(reachable(gates(), ["canopy"]).near(port.x, port.z, 2.8)).toBe(true);
   });
@@ -126,7 +140,7 @@ describe("the lowland below the sanctuary", () => {
   it("the mesa closes the northward route; each arm alone reaches its next stage", () => {
     expect(reachable(gates(), ["grove", "canopy"]).near(76, -249)).toBe(false);
     const left = reachable(gates(), ["canopy"]);
-    const right = reachable(gates(["canopyVines", "canopyRope"]), ["grove"]);
+    const right = reachable(gates(["canopyAscentRope", "canopyVines", "canopyRope"]), ["grove"]);
     expect(left.near(42, -196)).toBe(true);
     expect(left.near(51, -211)).toBe(true);
     expect(right.near(113, -194)).toBe(true);
@@ -139,13 +153,13 @@ describe("the lowland below the sanctuary", () => {
     expect(reachable(gates()).near(islet.x, islet.z)).toBe(false);
     expect(reachable(gates(["groveLilies"])).near(islet.x, islet.z)).toBe(true);
     expect(reachable(gates()).near(canopy.x, canopy.z)).toBe(false);
-    expect(reachable(gates(["canopyVines"])).near(canopy.x, canopy.z)).toBe(true);
+    expect(reachable(gates(["canopyAscentRope", "canopyVines"])).near(canopy.x, canopy.z)).toBe(true);
     // The pads and the bridges are walking surfaces once they are there.
     expect(standY(LILY_PADS[1].x, LILY_PADS[1].z, ["groveLilies"])).toBeGreaterThan(groundY(LILY_PADS[1].x, LILY_PADS[1].z));
   });
 
   it("each puzzle is asked from reachable ground, and every enemy lives on walkable ground in its own area", () => {
-    const { near } = reachable(gates(["canopyVines"]));
+    const { near } = reachable(gates(["canopyAscentRope", "canopyVines"]));
     for (const [id, place] of Object.entries(ACT2_OBSTACLE_PLACE)) expect(near(place.x, place.z, 1), id).toBe(true);
     for (const e of ENEMY_SPAWNS) {
       const radius = e.kind === "forestSpitter" || e.kind === "raiderShooter" ? ENEMIES[e.kind].radius : .5;
@@ -272,14 +286,14 @@ describe("first-clear exit collision", () => {
           // The boulder at (76.5, -269.5), r=2.2, blocks the straight-ahead target.
           : exit.id === "causeway" ? { x: 72, z: -267 } : { x: 76, z: exit.z - 4 };
         const avoid: ZoneId[] = exit.id === "grove" ? ["canopy"] : exit.id === "canopy" ? ["grove"] : [];
-        const g = { ...gates(["canopyVines", "canopyRope", "groveLilies"]), cleared: STAGES.filter(id => id !== exit.id) };
+        const g = { ...gates(["canopyAscentRope", "canopyVines", "canopyRope", "groveLilies"]), cleared: STAGES.filter(id => id !== exit.id) };
         expect(reachable(g, avoid, radius, origin).near(target.x, target.z, 1), `${exit.id} ${exit.x} radius ${radius}`).toBe(false);
         expect(reachable({ ...g, cleared: [...STAGES] }, avoid, radius, origin).near(target.x, target.z, 1), `open ${exit.id} ${exit.x} radius ${radius}`).toBe(true);
       }
     }
   }, 60000);
   it("keeps the expanded stages separate and both puzzle bridges required at walking and mounted radii", () => {
-    const open = gates(["groveLilies", "canopyVines", "canopyRope"]);
+    const open = gates(["groveLilies", "canopyAscentRope", "canopyVines", "canopyRope"]);
     for (const radius of [PLAYER_R, .7]) {
       const grove = reachable(open, ["forest1", "causeway", "coast", "port"], radius, { x: 51, z: -211 });
       for (const key of grove.seen) {
@@ -287,7 +301,7 @@ describe("first-clear exit collision", () => {
         expect(zoneAt(i * .6, j * .6), `direct Grove crossing at radius ${radius}`).not.toBe("canopy");
       }
       expect(reachable(open, ["grove", "canopy"], radius).near(76, -249), `arm shortcut ${radius}`).toBe(false);
-      for (const solved of [[], ["canopyVines"], ["canopyRope"]] as ObstacleId[][])
+      for (const solved of [["canopyAscentRope"], ["canopyAscentRope", "canopyVines"], ["canopyAscentRope", "canopyRope"]] as ObstacleId[][])
         expect(reachable(gates(solved), ["grove"], radius).near(80.5, -317.5, 2.8), `bridge bypass ${radius}: ${solved}`).toBe(false);
       const canopy = reachable(open, ["grove"], radius);
       expect(canopy.near(80.5, -317.5, 2.8), `Canopy route ${radius}`).toBe(true);
@@ -326,7 +340,7 @@ describe("first-clear exit collision", () => {
   });
   it("either branch alone unlocks a route to Port Town; the second branch is optional",()=>{
     for(const branch of ["grove","canopy"] as const){
-      const g={...gates(["canopyVines","canopyRope"]),cleared:["forest1",branch,"causeway","coast"] as typeof STAGES[number][]};
+      const g={...gates(["canopyAscentRope","canopyVines","canopyRope"]),cleared:["forest1",branch,"causeway","coast"] as typeof STAGES[number][]};
       const reach=reachable(g,[branch==="grove"?"canopy":"grove"]);
       expect(reach.near(SERVICES.harbor.keeper.x,SERVICES.harbor.keeper.z,2.8),branch).toBe(true);
       for(const e of ENEMY_SPAWNS.filter(e=>["forest1",branch,"causeway","coast"].includes(e.zone)))
@@ -404,7 +418,7 @@ describe("the U around the reserved mesa", () => {
     }
   });
 
-  it("has two independent first-clear necks leading to the Grove and the new Canopy stair foot", () => {
+  it("has two independent first-clear necks leading to the Grove and the Canopy rope foot", () => {
     expect(STAGE_EXITS.filter(gate => gate.id === "forest1").map(gate => gate.orientation)).toEqual(["z", "z"]);
     for (const side of ["left", "right"] as const) {
       const pts = FOREST_ARMS[side], next = side === "left" ? "grove" : "canopy";
@@ -413,15 +427,16 @@ describe("the U around the reserved mesa", () => {
         const p = trailPoint(pts, boundary);
         if (zoneAt(p.x, p.z) === next) break;
       }
-      // The right arm now stops at the stair foot, sixteen metres before
-      // the deck. The left arm retains its original forty-metre approach.
+      // The right trail ends on the continuous forest approach to the rope.
+      // The left arm retains its original forty-metre approach.
       expect(boundary, side).toBeGreaterThanOrEqual(side === "left" ? 40 : 28);
       expect(boundary, side).toBeLessThan(trailLength(pts) + .05);
       if (side === "right") expect(trailPoint(pts, trailLength(pts))).toEqual({ x: 107.5, z: -184.5 });
     }
     expect(routeMarker("forest1", 58)).toEqual({ x: 47, z: -175 });
-    expect(routeMarker("forest1", 94)).toEqual({ x: 104, z: -174 });
-    expect(routeMarker("forest1", 88)).toEqual({ x: 104, z: -174 });
+    expect(routeMarker("forest1", 94)).toEqual(CANOPY_ROPES.entrance.foot);
+    expect(routeMarker("forest1", 88)).toEqual(CANOPY_ROPES.entrance.foot);
+    expect(routeMarker("canopy", 96)).toEqual(CANOPY_ROPES.exit.foot);
   });
 
   it("leaves no raw walk shape within 1.5 metres of the mesa footprint", () => {

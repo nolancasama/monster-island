@@ -11,8 +11,8 @@ import { switchTo } from "./companion";
 import { cloudInteract } from "./act3";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
-import { climbCliff, openChestScene, readForkSign, talkToKeeper } from "./act2";
-import type { ServiceId } from "../world/lowland";
+import { climbCliff, climbRope as climbLowlandRope, openChestScene, readForkSign, talkToKeeper } from "./act2";
+import { CANOPY_ROPES, type ServiceId } from "../world/lowland";
 import type { MonsterId, ObstacleId } from "../types";
 
 /** E / Enter / the touch action button. */
@@ -50,7 +50,9 @@ export function interact(f: Focus | null = getGame().focus) {
       return;
     // Act 2.
     case "cliffRope":
-      void climbCliff(f.id === "cliffDown");
+      if (f.id.startsWith("canopyEntrance")) void climbLowlandRope(CANOPY_ROPES.entrance, f.id.endsWith("Down"));
+      else if (f.id.startsWith("canopyExit")) void climbLowlandRope(CANOPY_ROPES.exit, f.id.endsWith("Down"));
+      else void climbCliff(f.id === "cliffDown");
       return;
     case "chest":
       void openChestScene(f.id);
