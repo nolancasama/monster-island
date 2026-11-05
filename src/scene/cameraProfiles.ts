@@ -1,6 +1,6 @@
 import { BEACON_ARENA } from "../game/logic/beacon";
 import { TUNNEL } from "../game/world/island";
-import { CLIFF_ROPE, inLowland, zoneAt } from "../game/world/lowland";
+import { CANOPY_ROPES, CLIFF_ROPE, inLowland, zoneAt } from "../game/world/lowland";
 import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
 
 export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean }
@@ -33,6 +33,9 @@ const smooth = (v: number) => { const t = Math.max(0, Math.min(1, v)); return t 
  * Margins expand a retained zone and contract an entering zone, in world metres.
  * Scripted shots (including the prologue rope) remain owned by their scenes. */
 export const CAMERA_PROFILES: readonly CameraProfile[] = [
+  // The entrance rope's wall is to the north, opposite the sanctuary cliff: mirror its climb framing.
+  { ...DEFAULT_CAMERA, id: "canopy-entrance-rope", kind: "rope", yaw: Math.atan2(5, 8), pitch: Math.atan2(2.9, Math.hypot(5, 8)), dist: Math.hypot(5, 8, 2.9), ahead: 0,
+    contains: p => !p.cloud && p.climbing && Math.abs(p.x - CANOPY_ROPES.entrance.x) < 2 && Math.abs(p.z - CANOPY_ROPES.entrance.faceZ) < 4 },
   { ...DEFAULT_CAMERA, id: "cliff-rope", kind: "rope", yaw: Math.atan2(5, -8), pitch: Math.atan2(2.9, Math.hypot(5, 8)), dist: Math.hypot(5, 8, 2.9), ahead: 0,
     contains: p => !p.cloud && p.climbing && p.z < -140 },
   { ...DEFAULT_CAMERA, id: "beacon-arena", fov: 80, viewShift: -.2, trackYaw: true, contains: (p, m) => p.cloud && p.y > BEACON_ARENA.y - 3 - m && Math.hypot(p.x - BEACON_ARENA.x, p.z - BEACON_ARENA.z) < BEACON_ARENA.radius + 1 + m,
@@ -67,6 +70,9 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   // The expanded east bank needs its lens west of the mesa's broad head.
   { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55,
     contains: p => !p.cloud && zoneAt(p.x, p.z) === "grove" },
+  // South of here the default lens would sit inside the exit landing's solid mass.
+  { ...DEFAULT_CAMERA, id: "causeway-exit-rope", kind: "lowland", yaw: Math.PI, pitch: .5, dist: 9, ahead: 1,
+    contains: (p, m) => !p.cloud && p.x > 88 - m && p.x < 104 + m && p.z > -251.5 - m && p.z < -240 && zoneAt(p.x, p.z) === "causeway" },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,
     contains: home((p, m) => rect(p, m, TUNNEL.x - 3.6, TUNNEL.x + 3.6, TUNNEL.z0 - 1.2, TUNNEL.z1 + .8)) },

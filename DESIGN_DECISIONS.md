@@ -2141,3 +2141,11 @@ The area-budget test now models those same hop edges: sampled reachable Grove fl
   chest cameras at 1366×768 and 1280×800, alongside stream extinguishing,
   Inferno regeneration pause and legacy camp loading. Browser execution and
   aesthetic judgment remain with the controller/design lead.
+
+## 2026-11-05: Rope camera profiles
+
+Rendered review found the shared rope camera put the lens behind the entrance rope's wall, and the
+default follow camera inside the exit landing at the exit rope's foot. Two narrow profiles fix this:
+`canopy-entrance-rope` mirrors the sanctuary climb framing, and `causeway-exit-rope` looks south at
+the wall within about 11 m of the foot. Rejected: raising the lens over the deck, which is 10 m up
+and would lose the player in a top-down view.
