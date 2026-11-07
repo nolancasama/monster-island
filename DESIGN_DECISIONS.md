@@ -2239,3 +2239,15 @@ controller decisions:
   (would change other profiles and still leave a large wall around the opening).
   The 0.75 m real-geometry ray grid retains a pre-fix failure witness and checks
   the rope pocket, north strip, Grove lintel and shrine.
+
+## 2026-11-07: Causeway lens review (controller)
+
+- **Terrain stays opaque under the fixed Causeway lens.** The correction run had dithered the terrain on
+  the sight line, which showed blue sky through the bank beside the player along the whole north edge.
+  Opaque terrain hides the chest at only 20 of more than 2,000 sampled points, all in the north-east
+  corner.
+- **Mossy boulders (solid) fill that corner** (x ≥ 109.9, z -242.9…-244.9), where a 5.5 m bank directly
+  behind the player hid the whole body. Rejected: flattening the bank (it would leave an invisible wall on
+  flat ground) and fading terrain (sky holes).
+- The door line-of-sight probe now checks the legs as well as the chest. Causeway-side sight lines pass
+  through the opening under the lintel, so the frame can never hide the player.
