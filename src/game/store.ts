@@ -85,6 +85,7 @@ export interface Focus {
   kind: "monster" | "food" | "maple" | "obstacle" | "stone" | "sign" | "rope" | "chest" | "rest" | "npc" | "cliffRope";
   verb: string;
   noun: string;
+  ja?: string;
   x: number;
   z: number;
 }

@@ -41,6 +41,16 @@ describe("debug destination progress", () => {
     for (const d of DEBUG_DESTINATIONS) expect(progressForDestination(d.id).act3.world).toBe(d.world);
     expect(() => progressForDestination("missing")).toThrow();
   });
+  it("offers the unsolved Grove ferry at its north bank and keeps later fixtures crossed", () => {
+    const ferry = DEBUG_DESTINATIONS.find(d => d.id === "groveStream")!;
+    expect(ferry.target).toBe("groveStream");
+    const p = progressForDestination(ferry.id);
+    expect(p.act2.zone).toBe("grove");
+    expect(p.act2.cleared).toEqual(["forest1"]);
+    expect(p.solved).not.toContain("groveStream");
+    for (const zone of ["causeway", "coast", "port"])
+      expect(progressForDestination(`zone:${zone}`).solved).toContain("groveStream");
+  });
   it("offers the unsolved entrance puzzle while raised and later destinations retain the rope", () => {
     const puzzle = progressForDestination("canopyAscentRope");
     expect(puzzle.act2.started).toBe(true);

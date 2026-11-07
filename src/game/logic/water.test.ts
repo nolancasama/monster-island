@@ -3,6 +3,7 @@ import { ISLET, POND } from "../world/hazards";
 import { lowlandY, streamY } from "../world/lowland";
 import { STREAM_WIDTH, streamBanks } from "../world/streams";
 import { POND_WADE, waterAt } from "./water";
+import { hazardAt } from "./elements";
 
 describe("water classification", () => {
   it("distinguishes pond rim, deep water and the dry bank", () => {
@@ -36,7 +37,8 @@ describe("water classification", () => {
         const x = leftX + (a[2] + (b[2] - a[2]) * t - leftX) * u;
         const z = leftZ + (a[3] + (b[3] - a[3]) * t - leftZ) * u;
         const submerged = lowlandY(x, z) < streamY(x, z);
-        expect(waterAt(x, z, "home")).toBe(submerged ? "shallow" : "none");
+        // The upgraded entrance channel now crosses this decorative tributary.
+        if (hazardAt(x, z, "home")?.id !== "groveStream") expect(waterAt(x, z, "home")).toBe(submerged ? "shallow" : "none");
         expect(waterAt(x, z, "cloud")).toBe("none");
         if (submerged) wet++; else exposed++;
       }
@@ -44,7 +46,7 @@ describe("water classification", () => {
     expect(wet).toBeGreaterThan(0);
     expect(exposed).toBeGreaterThan(0);
     // Beyond the visible bank, even though the terrain channel is wider.
-    expect(waterAt(38, -210.7, "home")).toBe("none");
-    expect(waterAt(35.19, -212, "home")).toBe("none");
+    expect(waterAt(38, -213.7, "home")).toBe("none");
+    expect(waterAt(55.9, -215.85, "home")).toBe("none");
   });
 });

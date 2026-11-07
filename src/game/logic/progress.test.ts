@@ -23,6 +23,7 @@ import {
   optionalLines,
   newProgress,
   objective,
+  OBSTACLES,
   pickUp,
   recordLike,
   setActive,
@@ -30,6 +31,20 @@ import {
   type Progress
 } from "./progress";
 import type { FoodId, MonsterId } from "../types";
+import { ACT2_OBSTACLES } from "./act2";
+
+it("the Grove stream uses its own swim question without changing the lily puzzle", () => {
+  expect(OBSTACLES.groveStream).toEqual({ id: "groveStream", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: [] });
+  expect(ACT2_OBSTACLES).toContain("groveStream");
+  const p = newProgress();
+  p.active = "bubbo";
+  expect(askAtObstacle(p, "groveStream", "swim")).toMatchObject({ yes: true, solves: false });
+  p.act2.started = true;
+  expect(askAtObstacle(p, "groveStream", "swim")).toMatchObject({ monster: "bubbo", yes: true, solves: true });
+  const solved = solve(p, "groveStream");
+  expect(solved.solved).toContain("groveStream");
+  expect(solved.solved).not.toContain("groveLilies");
+});
 
 /** Play the encounter loop for one monster: discover (and describe), ask until yes, fetch, give. */
 function makeFriend(p: Progress, id: MonsterId): Progress {

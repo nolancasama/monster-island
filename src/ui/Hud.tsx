@@ -187,6 +187,7 @@ function FocusLabel() {
       {touch && <Icon id="hand" size={22} />}
       <span>
         {focus.verb} {focus.noun}
+        {focus.ja && <Ja>{focus.ja}</Ja>}
       </span>
     </button>
   );

@@ -12,11 +12,16 @@ import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
 import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
 import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, CANOPY_ROPES, GROVE_CROSSING, LILY_PADS, POND_Y, type ClimbRope } from "../world/lowland";
+import { streamY } from "../world/lowland";
+import { GROVE_STREAM_FERRY, groveStreamSide } from "../world/groveStream";
+import { gatherParty } from "./act2";
+import { DebugScriptCancelled, onDebugScriptCancel } from "../debugLifecycle";
 
 type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
 const A2 = ACT2_OBSTACLE_PLACE;
 /** Act 2's unlocks: where to stand, and what is said when no friend can help. */
 export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
+  groveStream: { ...A2.groveStream, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
   canopyAscentRope: { x: A2.canopyAscentRope.x, z: A2.canopyAscentRope.z, alone: { en: "The deck is too high! Who can fly the rope up?", ja: "こずえは たかいね！ とべる ともだちに きこう" } },
   groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
   canopyVines: { x: A2.canopyVines.x, z: A2.canopyVines.z, alone: { en: "The gap is too wide!", ja: "すきまが ひろすぎる! しょくぶつを そだてる ともだちに きこう" } },
@@ -91,7 +96,7 @@ const FRAME: Record<ObstacleId, Vec2> = {
 };
 
 /** From Phase 2 on the student thanks the monster after its power has worked. */
-const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope", "canopyAscentRope"]);
+const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "groveStream", "canopyVines", "canopyRope", "canopyAscentRope"]);
 
 /** How the hint names an ability ("Who can help?", "とべる モンスター"). */
 const NEED_WORD: Partial<Record<AbilityId, { en: string; ja: string }>> = {
@@ -122,7 +127,10 @@ export function useObstacle(id: ObstacleId): Promise<void> {
   return run(async () => {
     const o = OBSTACLES[id];
     const place = PLACE[id];
-    if (isSolved(getGame().progress, id)) return;
+    if (isSolved(getGame().progress, id)) {
+      if (id === "groveStream") await streamFerry(true);
+      return;
+    }
     if (!obstacleAvailable(getGame().progress, id)) {
       await say("self", place.alone.en, place.alone.ja);
       return;
@@ -223,7 +231,8 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   else if (id === "cliff") await flyRope(monster);
   else if (id === "canopyAscentRope") await flyRope(monster, CANOPY_ROPES.entrance);
   else if (id === "groveLilies") await groveCrossing(monster);
-  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope">, monster);
+  else if (id === "groveStream") await streamFerry(false);
+  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream">, monster);
   else await phase3Power(id, monster);
 }
 
@@ -435,7 +444,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
  * Act 2's powers, each a visible permanent change: Bubbo raises lily pads to
  * the islet, Leafy weaves a vine bridge, Puff flies the rolled-up rope bridge across.
  */
-async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope">, monster: MonsterId) {
+async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream">, monster: MonsterId) {
   const place = A2[id];
   const target = place.face;
   const m = rt.monsters[monster];
@@ -676,14 +685,102 @@ async function groveCrossing(id: MonsterId) {
   audio.voice(id, "excited");
 }
 
+type StreamPhase = "idle" | "boarding" | "swimming" | "dismounting" | "complete";
+let streamPhase: StreamPhase = "idle";
+let streamGeneration = 0;
+export const groveStreamView = { get phase(): StreamPhase { return streamPhase; } };
+
+/** Also called before a tester teleport, before it installs the new position. */
+export function cancelGroveStream() {
+  const start = rt.groveStreamFerry.start;
+  if (!start) return;
+  streamGeneration++;
+  Object.assign(rt.player, start, { frozen: false, riding: false, seat: 0 });
+  const m = rt.monsters.bubbo;
+  Object.assign(m, start, { swimming: false, air: 0, airTarget: 0, look: null,
+    mode: getGame().progress.active === "bubbo" ? "follow" : "party" });
+  rt.groveStreamFerry.start = null;
+  streamPhase = "idle";
+}
+onDebugScriptCancel(cancelGroveStream);
+
+async function streamFerry(repeat: boolean) {
+  const p = rt.player, m = rt.monsters.bubbo;
+  const side = repeat ? groveStreamSide(p.x, p.z) : "north";
+  const from = GROVE_STREAM_FERRY[side];
+  const to = GROVE_STREAM_FERRY[side === "north" ? "south" : "north"];
+  const generation = ++streamGeneration;
+  const guard = () => { if (generation !== streamGeneration) throw new DebugScriptCancelled(); };
+  rt.groveStreamFerry.start = { ...from };
+  m.mode = "script";
+  m.look = null;
+  m.air = m.airTarget = 0;
+  p.frozen = true;
+  p.vx = p.vz = 0;
+  streamPhase = "boarding";
+  let complete = false;
+  try {
+    if (!repeat) {
+      const centre = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
+      const y = streamY(centre.x, centre.z);
+      shot({ x: centre.x + 7, y: y + 7, z: centre.z + 11 }, { ...centre, y: y + .5 });
+    }
+    await glideWalk(m, from, repeat ? .15 : .6, guard);
+    m.yaw = Math.atan2(to.x - from.x, to.z - from.z);
+    m.swimming = true;
+    await hop(p, { x: p.x, z: p.z }, true, guard);
+    streamPhase = "swimming";
+    const start = rt.time, duration = repeat ? 1.1 : 3;
+    let splash = -1;
+    for (;;) {
+      guard();
+      const k = Math.min(1, (rt.time - start) / duration), s = k * k * (3 - 2 * k);
+      m.x = from.x + (to.x - from.x) * s;
+      m.z = from.z + (to.z - from.z) * s;
+      m.step += .15;
+      if (Math.floor(k * 10) > splash) {
+        splash = Math.floor(k * 10);
+        const y = streamY(m.x, m.z);
+        effect("splash", m.x + (splash % 2 ? .45 : -.45), y, m.z);
+        audio.play("splash");
+      }
+      if (k === 1) break;
+      await wait(30);
+    }
+    streamPhase = "dismounting";
+    await hop(p, to, false, guard);
+    guard();
+    m.swimming = false;
+    p.yaw = m.yaw;
+    p.safeGround = { ...to };
+    updateProgress(pr => solve(pr, "groveStream"));
+    gatherParty();
+    complete = true;
+    streamPhase = "complete";
+  } finally {
+    if (generation === streamGeneration) {
+      if (!complete) Object.assign(p, from);
+      p.frozen = p.riding = false;
+      p.seat = 0;
+      m.swimming = false;
+      m.air = m.airTarget = 0;
+      m.mode = getGame().progress.active === "bubbo" ? "follow" : "party";
+      m.look = null;
+      rt.groveStreamFerry.start = null;
+      if (!complete) streamPhase = "idle";
+    }
+  }
+}
+
 /** A scripted walk for a monster (eased, facing where it goes). */
-async function glideWalk(m: MonsterRt, to: Vec2, seconds: number) {
+async function glideWalk(m: MonsterRt, to: Vec2, seconds: number, guard?: () => void) {
   const from = { x: m.x, z: m.z };
   const d = Math.hypot(to.x - from.x, to.z - from.z);
   if (d < 0.05) return;
   m.yaw = Math.atan2(to.x - from.x, to.z - from.z);
   const t0 = rt.time;
   for (;;) {
+    guard?.();
     const k = Math.min(1, (rt.time - t0) / seconds);
     const s = k * k * (3 - 2 * k);
     m.x = from.x + (to.x - from.x) * s;
@@ -695,7 +792,7 @@ async function glideWalk(m: MonsterRt, to: Vec2, seconds: number) {
 }
 
 /** Hop onto Bubbo's saddle from `ground`, or off it onto `ground`. */
-async function hop(p: typeof rt.player, ground: Vec2, on: boolean) {
+async function hop(p: typeof rt.player, ground: Vec2, on: boolean, guard?: () => void) {
   p.rideFrom.x = ground.x;
   p.rideFrom.z = ground.z;
   p.seat = on ? 0 : 1;
@@ -703,6 +800,7 @@ async function hop(p: typeof rt.player, ground: Vec2, on: boolean) {
   audio.play("whoosh");
   const t0 = rt.time;
   for (;;) {
+    guard?.();
     const k = Math.min(1, (rt.time - t0) / 0.55);
     const s = k * k * (3 - 2 * k);
     p.seat = on ? s : 1 - s;

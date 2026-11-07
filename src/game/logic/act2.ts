@@ -311,7 +311,7 @@ export function act2Objective(p: Progress): Act2Objective {
 }
 
 /** Act 2's permanent unlocks exist only once the chapter has begun. */
-export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "canopyAscentRope"];
+export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "canopyAscentRope", "groveStream"];
 
 /** Only registered enemies in this stage count; duplicate or foreign indices cannot clear it. */
 export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): number {

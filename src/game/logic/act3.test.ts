@@ -15,7 +15,7 @@ function harbor(): Progress {
   }
   p.endings = 3;
   p.active = "leafy";
-  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "canopyAscentRope"];
+  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "canopyAscentRope", "groveStream"];
   const arrived = hearLead(findPort(markDescended(startAct2(p))));
   return { ...arrived, act2: { ...arrived.act2, cleared: [...STAGES] } };
 }

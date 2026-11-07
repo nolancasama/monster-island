@@ -319,7 +319,7 @@ describe("forest layout save migration", () => {
       const back = decodeSave(encodeSave(p, { ...position, yaw: .7 }, 87))!;
       expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
       expect(Math.hypot(back.player.x - position.x, back.player.z - position.z)).toBeLessThan(8);
-      expect(back.progress).toEqual(solve(p, "canopyAscentRope"));
+      expect(back.progress).toEqual(solve(solve(p, "canopyAscentRope"), "groveStream"));
       expect(back.player.yaw).toBe(.7);
       expect(back.seconds).toBe(87);
     }
@@ -405,7 +405,7 @@ describe("forest layout save migration", () => {
     expect(back.progress.act2.zone).toBe(zone);
     expect(back.progress.act2.secrets).toEqual(p.act2.secrets);
     expect(back.progress.act2.chests).toEqual(p.act2.chests);
-    expect(back.progress.solved).toEqual([...p.solved, "canopyAscentRope"]);
+    expect(back.progress.solved).toEqual([...p.solved, "canopyAscentRope", "groveStream"]);
     expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
   });
 

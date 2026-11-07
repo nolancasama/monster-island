@@ -86,6 +86,7 @@ function TravelMap({ position, onTravel }: { position: ReturnType<typeof usePosi
 
 function DebugDialog() {
   const debug = useDebug();
+  const streamSolved = useGame(s => s.progress.solved.includes("groveStream"));
   const position = usePosition();
   const dialog = useRef<HTMLDivElement>(null);
   const [x, setX] = useState(position.x.toFixed(2));
@@ -124,6 +125,10 @@ function DebugDialog() {
           <TravelMap position={position} onTravel={(nx, nz) => run(() => teleportDebug(nx, nz), "Teleported to nearest walkable spot")} />
         </section>
         <section className="debug-cheats" aria-label="Cheats"><h2>Cheats</h2>
+          <label><input type="checkbox" data-testid="debug-progress-groveStream" checked={streamSolved} onChange={e => {
+            const p = getGame().progress;
+            setGame({ progress: { ...p, solved: e.target.checked ? [...p.solved.filter(id => id !== "groveStream"), "groveStream"] : p.solved.filter(id => id !== "groveStream") } });
+          }} /> Grove stream ferry solved</label>
           {cloudIsleShipDebugEnabled() && <button data-testid="debug-cloud-ship" aria-pressed={debug.cloudIsleShipOpen} onClick={() => setCloudIsleShipOpen(!debug.cloudIsleShipOpen)}>Cloud Isle ship: {debug.cloudIsleShipOpen ? "open" : "locked"}</button>}
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, coins: p.act2.coins + 100 } } }); }, "Added 100 coins")}>+100 coins</button>

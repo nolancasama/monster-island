@@ -20,11 +20,14 @@ import {
   LILY_PADS,
   POND,
   POND_Y,
+  streamY,
   SERVICES,
   type ServiceId,
 } from "../game/world/lowland";
 import { TUNNEL, groundY, inTunnel } from "../game/world/island";
 import { standY } from "../game/world/collision";
+import { GROVE_STREAM } from "../game/world/groveStream";
+import { nearestOnTrail } from "../game/world/lowland";
 import { ropeCoilGeometry } from "./models/forest";
 import { flatMat, occluderMat, smoothMat, canopySolidMat, canopyOccluderMat, causewayOccluderMat } from "./materials";
 import { conformBridge } from "./models/bridge";
@@ -230,12 +233,13 @@ function GroveWake() {
   }, []);
   useFrame(() => {
     const m = rt.monsters.bubbo;
-    if (root.current) root.current.visible = m.swimming && Math.hypot(m.x - POND.x, m.z - POND.z) < POND.r + 2;
+    const stream = nearestOnTrail(GROVE_STREAM.pts, m.x, m.z).d < GROVE_STREAM.w + 2;
+    if (root.current) root.current.visible = m.swimming && (stream || Math.hypot(m.x - POND.x, m.z - POND.z) < POND.r + 2);
     for (let i = 0; i < 3; i++) {
       const ring = rings.current[i];
       if (!ring) continue;
       const t = (rt.time * 0.8 + i / 3) % 1;
-      ring.position.set(m.x - Math.sin(m.yaw) * (0.7 + t * 1.7), POND_Y + 0.025 + i * 0.003, m.z - Math.cos(m.yaw) * (0.7 + t * 1.7));
+      ring.position.set(m.x - Math.sin(m.yaw) * (0.7 + t * 1.7), (stream ? streamY(m.x, m.z) : POND_Y) + 0.025 + i * 0.003, m.z - Math.cos(m.yaw) * (0.7 + t * 1.7));
       ring.scale.setScalar(0.45 + t * 0.85);
     }
   });
@@ -353,12 +357,31 @@ export function Lowland() {
   const cliff = useMemo(cliffFaceGeometry, []);
   const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
-  const waterMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }), []);
+  const waterTime = useMemo(() => ({ value: 0 }), []);
+  const waterMat = useMemo(() => {
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false });
+    material.onBeforeCompile = shader => {
+      shader.uniforms.uWaterTime = waterTime;
+      shader.vertexShader = "varying vec3 vWaterPosition;\n" + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvWaterPosition = position;");
+      shader.fragmentShader = "uniform float uWaterTime; varying vec3 vWaterPosition;\n" + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+        float channel = step(28.0, vWaterPosition.x) * step(vWaterPosition.x, 75.0) * step(-215.0, vWaterPosition.z) * step(vWaterPosition.z, -207.0);
+        // Flow scrolls east; two crossing wavelengths give low broad ripples.
+        float flow = sin(vWaterPosition.x * 3.8 + vWaterPosition.z * 1.7 - uWaterTime * 3.0);
+        float ripple = sin(vWaterPosition.x * 1.3 - vWaterPosition.z * 6.0 - uWaterTime * 2.0);
+        normal = normalize(normal + channel * vec3(flow * .13, 0.0, ripple * .1));
+        diffuseColor.rgb *= 1.0 + channel * (.055 * flow + .035 * ripple);
+      `);
+    };
+    return material;
+  }, [waterTime]);
   const town = useMemo(townGeometry, []);
   const portWall = useMemo(portWallGeometry, []);
   const signs = useMemo(townSigns, []);
   const signMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signs.tex, side: THREE.DoubleSide }), [signs]);
   useFrame(() => {
+    waterTime.value = rt.time;
     // Only the genuinely enclosed passage suppresses the real basin. Outside
     // its roof and walls the scenery uses the same distance/fog tiles everywhere.
     const shot = rt.camera.shot !== null && rt.camera.shot.target.z < -125;

@@ -1,4 +1,5 @@
 import type { WalkShape } from "./lowland";
+import { GROVE_STREAM } from "./groveStream";
 /** Kept here with home voids so collision may import hazard data without a
  * lowland → hazard → cloud → lowland initialisation cycle. */
 export const CLOUD_CHASMS = [
@@ -33,6 +34,7 @@ export const HOME_PONDS: readonly Hazard[] = [
   { id: "pond", world: "home", kind: "splash", shape: { kind: "disc", ...POND }, safe: [{ kind: "disc", ...ISLET }] },
   { id: "groveEastPool", world: "home", kind: "splash", shape: { kind: "disc", x: 65, z: -214, r: 2.6 } },
   { id: "groveRootPool", world: "home", kind: "splash", shape: { kind: "disc", x: 60, z: -232, r: 2.7 } },
+  { id: "groveStream", world: "home", kind: "splash", shape: GROVE_STREAM },
 ];
 export const CANOPY_VOIDS: readonly Hazard[] = [
   ...Object.entries(CANOPY_GAPS).map(([id, g]): Hazard => ({ id, world: "home", kind: "fall", playerFall: true,

@@ -29,6 +29,7 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "ropeFoot", label: "Cliff rope foot", target: "cliffUp", step: 9, act: "Act 2", world: "home" },
   { id: "forestEntrance", label: "Forest entrance", target: "forestEntrance", step: 9, zone: "forest1", act: "Act 2", world: "home" },
   { id: "canopyAscentRope", label: "Canopy rope puzzle", target: "canopyAscentRope", step: 9, zone: "forest1", act: "Act 2", world: "home" },
+  { id: "groveStream", label: "Grove stream north bank", target: "groveStream", step: 9, zone: "grove", act: "Act 2", world: "home" },
   ...(Object.keys(ZONES) as ZoneId[]).map(zone => ({ id: `zone:${zone}`, label: ZONES[zone].name.en, target: `zone:${zone}`, step: 9, zone, act: "Act 2" as const, world: "home" as const })),
   ...["market", "kitchen", "trainer", "inn", "harbor"].map(target => ({ id: target, label: `Port Town ${target === "harbor" ? "harbour" : target}`, target, step: 9, zone: "port" as const, act: "Act 2" as const, world: "home" as const })),
   { id: "voyage", label: "Voyage / Port dock", target: "harbor", step: 10, zone: "port", act: "Act 3", world: "home" },
@@ -70,6 +71,7 @@ export function progressForDestination(id: string, previous?: Progress): Progres
     if (zone && zone !== "forest1") p.act2.tutorial = ["attack", "coins", "special", "eat", "rest", "switch"];
     if (zone === "causeway" || zone === "coast" || zone === "port") solve("canopyVines", "canopyRope");
     if (zone === "canopy" || zone === "causeway" || zone === "coast" || zone === "port") solve("canopyAscentRope");
+    if (zone === "causeway" || zone === "coast" || zone === "port") solve("groveStream");
     p.act2.portFound = zone === "port";
   }
   if (d.step >= 10) p.act2.harbor = true;

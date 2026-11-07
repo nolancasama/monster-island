@@ -11,6 +11,8 @@ import { CLIFF_FOOT_Z, CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, CHESTS, ZONES, ST
 import { SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { rt } from "../runtime";
+import { GROVE_STREAM, GROVE_STREAM_MOVED_SCENERY, groveStreamSide } from "../world/groveStream";
+import { nearestOnTrail } from "../world/lowland";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
@@ -43,7 +45,9 @@ export interface SaveData {
 }
 
 export function encodeSave(progress: Progress, player: SaveData["player"], seconds: number): string {
-  if (rt.player.hop && player.x === rt.player.x && player.z === rt.player.z)
+  if (rt.groveStreamFerry.start && player.x === rt.player.x && player.z === rt.player.z)
+    player = { ...rt.groveStreamFerry.start, yaw: player.yaw };
+  else if (rt.player.hop && player.x === rt.player.x && player.z === rt.player.z)
     player = { x: rt.player.hop.toX, z: rt.player.hop.toZ, yaw: player.yaw };
   const data: SaveData = { v: VERSION, progress, player, seconds };
   return JSON.stringify(data);
@@ -177,14 +181,14 @@ function observatoryApproachUnlocked(a: Act3): boolean {
 /** Loading only: search the saved area before falling back to a checkpoint.
  * Ring spacing bounds the error to a tenth of a metre; no search crosses an
  * area boundary or projects more than eight metres across changed terrain. */
-function nearbySavedFloor(x: number, z: number, zone: ZoneId | null, gates: ReturnType<typeof gatesOf>): { x: number; z: number } | null {
+function nearbySavedFloor(x: number, z: number, zone: ZoneId | null, gates: ReturnType<typeof gatesOf>, streamSide?: "north" | "south"): { x: number; z: number } | null {
   if (!zone || !Number.isFinite(x) || !Number.isFinite(z)) return null;
   for (let ring = 1; ring <= 80; ring++) {
     const distance = ring / 10, samples = Math.ceil(Math.PI * 2 * distance / .15);
     for (let i = 0; i < samples; i++) {
       const angle = i / samples * Math.PI * 2;
       const px = x + Math.cos(angle) * distance, pz = z + Math.sin(angle) * distance;
-      if (zoneAt(px, pz) === zone && isWalkable(px, pz, gates, PLAYER_R)) return { x: px, z: pz };
+      if ((!streamSide || groveStreamSide(px, pz) === streamSide) && zoneAt(px, pz) === zone && isWalkable(px, pz, gates, PLAYER_R)) return { x: px, z: pz };
     }
   }
   return null;
@@ -277,6 +281,13 @@ export function decodeSave(text: string | null): SaveData | null {
     || p.act2.zone === "canopy" || onDeck || entranceStair || exitStair) && !p.solved.includes("canopyAscentRope")) {
     p.solved.push("canopyAscentRope");
   }
+  // Grant access on read for players already beyond this new entrance puzzle.
+  // The lily pond's own unlock is only a migration precedent, never a ferry flag.
+  if (p.act2.started && !p.solved.includes("groveStream") && (p.act2.cleared.some(id => id !== "forest1")
+    || p.solved.includes("groveLilies") || (p.act2.zone === "grove" && Number.isFinite(savedX)
+      && Number.isFinite(savedZ) && groveStreamSide(savedX, savedZ) === "south"))) {
+    p.solved.push("groveStream");
+  }
   // Validate position after migration and progression sanitization, against the
   // same solids and gates movement uses. Progress and the v3 format stay intact.
   let safe;
@@ -325,8 +336,14 @@ export function decodeSave(text: string | null): SaveData | null {
     const lowlandSave = p.act2.descended && (z < CLIFF_FOOT_Z + 1 || (!Number.isFinite(z) && p.act2.zone !== null));
     const legacyRelocation = legacyForest && (oldCamp || oldTrail);
     const removedFloor = !lowlandWalkable(x, z, { ...gates, cleared: STAGES, solved: [...p.solved, ...ACT2_OBSTACLES] }, PLAYER_R);
-    const nearby = lowlandSave && !legacyRelocation && removedFloor && !isWalkable(x, z, gates, PLAYER_R)
-      ? nearbySavedFloor(x, z, p.act2.zone, gates) : null;
+    // Changed stream water and its relocated scenery must never project an old
+    // save across the crossing. Search from the saved point on its original side.
+    const movedStreamScenery = GROVE_STREAM_MOVED_SCENERY.some(shape => shape.kind === "circle"
+      ? Math.hypot(x - shape.x, z - shape.z) <= shape.r + PLAYER_R
+      : shape.kind === "capsule" && nearestOnTrail([[shape.ax, shape.az], [shape.bx, shape.bz]], x, z).d <= shape.r + PLAYER_R);
+    const nearStream = p.act2.zone === "grove" && (nearestOnTrail(GROVE_STREAM.pts, x, z).d <= GROVE_STREAM.w + PLAYER_R || movedStreamScenery);
+    const nearby = lowlandSave && !legacyRelocation && (removedFloor || nearStream) && !isWalkable(x, z, gates, PLAYER_R)
+      ? nearbySavedFloor(x, z, p.act2.zone, gates, nearStream ? groveStreamSide(x, z) : undefined) : null;
     if (nearby) {
       safe = nearby;
     } else if (lowlandSave && (legacyRelocation || !isWalkable(x, z, gates, PLAYER_R))) {

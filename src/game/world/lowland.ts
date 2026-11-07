@@ -1,6 +1,8 @@
 import type { ObstacleId, Text, Vec2 } from "../types";
 import type { SolidShape } from "./island";
 import { bridgeSurfaceY } from "./bridge";
+import { GROVE_STREAM_FERRY } from "./groveStream";
+import { GROVE_STREAM } from "./groveStream";
 import { SECRET_IDS, SECRET_SITES, type SecretId } from "./elementObjects";
 import { CANOPY_GAPS, CANOPY_VOIDS, HOME_PONDS, ISLET, POND, canopyGapDeck } from "./hazards";
 export { CANOPY_GAPS, ISLET, POND } from "./hazards";
@@ -526,13 +528,7 @@ export const STREAMS: Array<Array<[number, number]>> = [
     [51, -231],
     [56, -233],
   ],
-  [
-    [29, -205],
-    [42, -208],
-    [52, -214.5],
-    [62, -212],
-    [66, -207],
-  ],
+  GROVE_STREAM.pts,
   [
     [33, -239],
     [44, -240.5],
@@ -565,7 +561,9 @@ export function lowlandY(x: number, z: number): number {
   if (x < 70 && z < -200 && z > -246) {
     for (const st of STREAMS) {
       const d = nearestOnTrail(st, x, z).d;
-      if (d < 2.4) y -= 0.32 * (1 - smooth((d - 0.7) / 1.5));
+      if (st === GROVE_STREAM.pts) {
+        if (d < GROVE_STREAM.w + .8) y -= 1.35 * (1 - smooth((d - 1.1) / 2.3));
+      } else if (d < 2.4) y -= 0.32 * (1 - smooth((d - 0.7) / 1.5));
     }
   }
   // Hills close the basin east and west, then fall into the sea; the north coast falls past the town.
@@ -639,7 +637,8 @@ export const CHESTS: ChestDef[] = [
 ];
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */
-export const ACT2_OBSTACLE_PLACE: Record<"groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope", Vec2 & { face: Vec2 }> = {
+export const ACT2_OBSTACLE_PLACE: Record<"groveStream" | "groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope", Vec2 & { face: Vec2 }> = {
+  groveStream: { ...GROVE_STREAM_FERRY.north, face: { ...GROVE_STREAM_FERRY.south } },
   canopyAscentRope: { ...CANOPY_ROPES.entrance.foot, face: { x: CANOPY_ROPES.entrance.x, z: CANOPY_ROPES.entrance.faceZ } },
   groveLilies: { ...GROVE_CROSSING.near, face: { ...GROVE_CROSSING.landing } },
   canopyVines: { x: 106, z: -214.6, face: { x: 106, z: -218 } },
@@ -728,7 +727,7 @@ export const GIANT_TREES: Array<Vec2 & { r: number; h: number }> = [
   { x: 81.3, z: -163.4, r: 1.05, h: 15 },
   { x: 70.4, z: -170.4, r: 1.2, h: 17 },
   { x: 79.9, z: -180.3, r: 1, h: 14 },
-  { x: 54.6, z: -208.4, r: 1.1, h: 16 },
+  { x: 55, z: -203.5, r: 1.1, h: 16 },
   { x: 47.2, z: -217.6, r: 0.9, h: 13 },
   { x: 43.6, z: -235.5, r: 1.15, h: 16 },
   { x: 69.3, z: -194.6, r: 0.95, h: 14 },
@@ -760,7 +759,7 @@ export const LOGS: Array<{ ax: number; az: number; bx: number; bz: number; r: nu
   { ax: 65, az: -163, bx: 67, bz: -161, r: 0.35 },
   { ax: 39, az: -235, bx: 41, bz: -237, r: 0.35 },
   { ax: 69.2, az: -175.4, bx: 71.4, bz: -181.4, r: 0.38 },
-  { ax: 44.4, az: -209.3, bx: 49.3, bz: -207.1, r: 0.42 },
+  { ax: 44.4, az: -204.3, bx: 49.3, bz: -202.1, r: 0.42 },
   { ax: 50.6, az: -229.1, bx: 52.2, bz: -235.2, r: 0.4 },
   { ax: 55, az: -192, bx: 59, bz: -194.3, r: .5 },
   { ax: 53, az: -220, bx: 57, bz: -222, r: .45 },
@@ -799,9 +798,9 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "forest1", kind: "snapjaw", x: 72.6, z: -178.6 },
   { zone: "forest1", kind: "gloomlet", x: 85, z: -177.2 },
   // The grove: more enemies, simple ground.
-  { zone: "grove", kind: "gloomlet", x: 57, z: -211 },
-  { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 38.8, z: -211.6 },
-  { zone: "grove", kind: "snapjaw", x: 51.5, z: -211.8 },
+  { zone: "grove", kind: "gloomlet", x: 53, z: -216.5 },
+  { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 38.8, z: -215.5 },
+  { zone: "grove", kind: "snapjaw", x: 51.5, z: -215.5 },
   { zone: "grove", kind: "gloomlet", x: 48.6, z: -216.4 },
   { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 46.4, z: -226.8 },
   { zone: "grove", kind: "snapjaw", x: 48.5, z: -232.2 },
@@ -832,7 +831,7 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "forest1", kind: "gloomlet", x: 103, z: -174, optional: true },
   { zone: "forest1", kind: "snapjaw", x: 113, z: -184, optional: true },
   { zone: "forest1", kind: "gloomlet", x: 113, z: -194, optional: true },
-  { zone: "grove", kind: "gloomlet", x: 62, z: -210 },
+  { zone: "grove", kind: "gloomlet", x: 62, z: -216.5 },
   { zone: "grove", kind: "snapjaw", x: 60, z: -228 },
   { zone: "canopy", kind: "gloomlet", x: 89, z: -213 },
   { zone: "canopy", kind: "snapjaw", x: 99.5, z: -222.5 },

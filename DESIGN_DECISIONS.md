@@ -2251,3 +2251,31 @@ controller decisions:
   flat ground) and fading terrain (sky holes).
 - The door line-of-sight probe now checks the legs as well as the chest. Causeway-side sight lines pass
   through the opening under the lintel, so the frame can never hide the player.
+
+## 2026-11-07: Flooded Grove entrance stream (slice C)
+
+- Replaced decorative STREAMS[2] with a 5.2 m wide curved channel through
+  (28,-211), (39,-210.5), (49,-211), (59,-209.4), (74,-211.5). Its shared trail
+  footprint supplies the splash hazard and rendered segment capsules; the ends
+  continue into the west hills and mesa. The muddy rim uses the existing 1.1 m
+  wade classifier. The east bend stays north of the unchanged Bubbo key chest's
+  reward stand at (60,-212.9). Rejected: a rectangle, a decorative walkable
+  stream, or a south bend that floods the existing secret reward stand.
+- Ferry stands are north (46,-207.2), south (46,-214.5). The first swim lasts
+  3 seconds, with the existing hop, walk, saddle and wake implementations.
+  Repeats use a 1.1 second swim and short boarding, without dialogue or a shot;
+  they always use Bubbo regardless of the selected companion. Rejected: sharing
+  the lily-pad unlock or opening a permanent walking strip across deep water.
+- Moved the giant tree from (54.6,-208.4) to (55,-203.5), and translated the
+  (44.4,-209.3)-(49.3,-207.1) log 5 m north with their authored collisions.
+  Grove enemy indices 5, 6, 7 and 35 now stand at (53,-216.5), (38.8,-215.5),
+  (51.5,-215.5), (62,-216.5), keeping the existing secret target clearances.
+  Scattered vegetation avoids the channel;
+  submerged stones, aquatic leaves and reeds share existing scenery batches.
+  Rejected: deleting enemy entries, moving secrets, or raising render budgets.
+- Save v4 remains additive. Legacy progress beyond the crossing grants only
+  the new stream unlock. Water and relocated-solid recovery searches nearby
+  valid Grove floor on the saved side in 0.1 m rings. Active ferry saves store
+  their departure bank until dismount; cancellation restores that bank before
+  debug travel installs its destination. Rejected: granting the ferry from a
+  transient mid-swim south position or projecting a save across the channel.

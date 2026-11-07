@@ -179,6 +179,8 @@ export const rt = {
   ropeCarried: false,
   /** Entrance rope: the loose end follows Puff while the ground coil pays out. */
   canopyAscentRope: { carried: false, payout: 0, tied: 0 },
+  /** Active stream rides save at their departure bank until dismount. */
+  groveStreamFerry: { start: null as Vec2 | null },
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
@@ -224,6 +226,7 @@ export function animate(id: MonsterId, kind: MonsterAnim) {
 export const PICK_TIME = 0.7;
 
 export function resetRuntime() {
+  rt.groveStreamFerry.start = null;
   rt.world = "home";
   rt.voyage.active = false;
   rt.voyage.sail = 0;

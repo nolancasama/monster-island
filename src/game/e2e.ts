@@ -3,7 +3,7 @@ import { cloudIsleOpen, setE2eCloudIsleShipOpen } from "./release";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
-import { groveCrossingView } from "./flow/obstacles";
+import { groveCrossingView, groveStreamView } from "./flow/obstacles";
 import { objective } from "./logic/progress";
 import { PLAYER_R, moveCircle, gatesOf, standY } from "./world/collision";
 import { GATE_PILLARS, MAPLE, groundY } from "./world/island";
@@ -114,6 +114,7 @@ export function installE2eHook(seed: number) {
           canopyAscentRope: { ...rt.canopyAscentRope },
           unlock: { ...rt.act2Unlock },
           groveCrossing: groveCrossingView.phase,
+          groveStream: groveStreamView.phase,
           panel: g.panel,
           banner: g.banner?.title ?? null,
           hint: g.hint

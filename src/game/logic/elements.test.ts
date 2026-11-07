@@ -155,7 +155,8 @@ describe("direction, collision and hazards", () => {
     expect(hazardAt((chasm.x0 + chasm.x1) / 2, (chasm.z0 + chasm.z1) / 2, "cloud")?.kind).toBe("fall");
     expect(hazardAt(-42, 62, "cloud")?.id).toBe("coastSea");
     expect(hazardAt(999, 999, "home")).toBeNull();
-    expect(HOME_PONDS).toHaveLength(3);
+    expect(HOME_PONDS).toHaveLength(4);
+    expect(hazardAt(46, -210.85, "home")?.id).toBe("groveStream");
     expect(CANOPY_VOIDS).toHaveLength(6);
     expect(HAZARDS).toHaveLength(HOME_PONDS.length + CANOPY_VOIDS.length + CLOUD_CHASMS.length + 1);
   });

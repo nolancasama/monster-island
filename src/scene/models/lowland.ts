@@ -10,6 +10,7 @@ import { MESA_CENTER, MESA_FOOT, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesa
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import { CANOPY_VOIDS, HAZARDS } from "../../game/world/hazards";
 import { STREAM_WIDTH, streamBanks } from "../../game/world/streams";
+import { GROVE_STREAM } from "../../game/world/groveStream";
 import {
   STAGES,
   STAGE_EXITS,
@@ -298,7 +299,7 @@ function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Co
   if (inRect({x0:44,x1:52,z0:-257,z1:-250},0) || inRect(CAUSEWAY, 0) || Math.hypot(x - SHRINE.x, z - SHRINE.z) < SHRINE.r) c.lerp(STONE, 0.9);
   if (inRect(PORT, 0)) c.lerp(COBBLE, 0.92);
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.6 && Math.hypot(x - ISLET.x, z - ISLET.z) > ISLET.r) c.lerp(MUD, 0.85);
-  if (x < 70 && z < -200 && z > -246) for (const s of STREAMS) if (nearestOnTrail(s, x, z).d < 1.6) c.lerp(MUD, 0.6);
+  if (x < 75 && z < -200 && z > -246) for (const s of STREAMS) if (nearestOnTrail(s, x, z).d < (s === GROVE_STREAM.pts ? GROVE_STREAM.w + .8 : 1.6)) c.lerp(MUD, 0.6);
   c.lerp(ROCK, steep);
   if (y < SEA_Y + 0.9) c.lerp(SAND, (1 - steep) * 0.85);
   if (y < SEA_Y - 0.3) c.lerp(SEABED, 0.7);
@@ -444,6 +445,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     reeds: Spot[] = [];
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
   const off = (x: number, z: number, pad: number) => {
+    if (nearestOnTrail(GROVE_STREAM.pts, x, z).d < GROVE_STREAM.w + pad) return false;
     // Nothing grows on the sanctuary's shelf or against the cliff (it would poke up beside the garden).
     if (z > -157.5 || inMesa(x, z, pad + 1)) return false;
     // Keep crowns and fronds clear of the open drops, so every dark cut stays legible.
@@ -523,6 +525,14 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     }
   }
   // Thin out overlaps: one big tree per 5 m.
+  for (let i = 1; i < GROVE_STREAM.pts.length; i++) {
+    const a = GROVE_STREAM.pts[i - 1], b = GROVE_STREAM.pts[i];
+    for (let t = .1; t < 1; t += .22) for (const side of [-1, 1]) {
+      const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t + side * 2.4;
+      if (x < 32 || x > 68 || (x > 43.5 && x < 48.5)) continue;
+      reeds.push({ x, z, s: .65 + (i % 3) * .13, r: i + t, tint: .9 });
+    }
+  }
   const kept: Spot[] = [];
   for (const t of trees) if (kept.every((k) => Math.hypot(k.x - t.x, k.z - t.z) > 5 * Math.max(k.s, t.s))) kept.push(t);
   for (const t of GIANT_TREES) if (!inMesa(t.x, t.z) && !canopyTrunk(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
@@ -657,6 +667,11 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const rand = makeRng(31);
   const gy = lowlandSceneryY;
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
+  // Low submerged stones and floating leaves stay in the existing merged batch.
+  for (const [x, z] of [[34, -210], [41, -212.5], [53, -210], [61, -213.7], [67, -211]] as const) {
+    b.add(rockGeometry(.45, .55, Math.round(x), 1), "#697a72", [x, streamY(x, z) - .4, z]);
+    b.sphere(.3, x + .6, streamY(x, z) + .018, z + .3, "#618f54", [1, .08, .7], 5);
+  }
   // The islet belongs to scenery, never to the animated pad instances.
   const mound = new THREE.CylinderGeometry(ISLET.r, ISLET.r + 0.35, 1, 24, 1);
   const mp = mound.getAttribute("position");
@@ -823,6 +838,13 @@ export function streamRibbonGeometry(points: Array<[number, number]>, width: num
 }
 
 /** Water: the pond and the shallow channels (the existing transparent tiles). */
+export function groveStreamWaterGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0), s = GROVE_STREAM.pts;
+  // The union of these capsules is precisely the trail-distance hazard shape.
+  for (let i = 1; i < s.length; i++) b.add(streamRibbonGeometry([s[i - 1], s[i]], GROVE_STREAM.w * 2, streamY), "#358f9b", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+  return b.build();
+}
+
 export function lowlandWaterGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   b.add(new THREE.CircleGeometry(POND.r + 0.6, 24).rotateX(-Math.PI / 2), "#3fb5c8", [POND.x, POND_Y, POND.z], [0, 0, 0], [1, 1, 1], { flatAo: true });
@@ -831,7 +853,11 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
     b.add(new THREE.CircleGeometry(pond.r, 16).rotateX(-Math.PI / 2), "#358f9b", [pond.x, streamY(pond.x, pond.z) - .12, pond.z], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
   for (const s of STREAMS) {
-    b.add(streamRibbonGeometry(s, STREAM_WIDTH, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+    if (s === GROVE_STREAM.pts) {
+      // Each segment uses the hazard's circular-distance footprint. Overlapping
+      // capsule joins are merged into the existing tiled water draw.
+      b.add(groveStreamWaterGeometry(), "#358f9b", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+    } else b.add(streamRibbonGeometry(s, STREAM_WIDTH, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
   // Conform visual water to the rendered 2 m terrain triangles. This shares
   // water's existing tiled draw and never cuts a channel into walking ground.

@@ -15,14 +15,16 @@ import { SECRET_SITES } from "./elementObjects";
 import { hazardAt } from "../logic/elements";
 import { rt } from "../runtime";
 import { MONSTERS } from "../data/monsters";
-import { lowlandSpots } from "../../scene/models/lowland";
+import { groveStreamWaterGeometry, lowlandSpots } from "../../scene/models/lowland";
 import { clearStage, remainingEnemies } from "../logic/act2";
 import { newProgress } from "../logic/progress";
 import { createHash } from "node:crypto";
 import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
+import { GROVE_STREAM, GROVE_STREAM_FERRY } from "./groveStream";
+import { waterAt } from "../logic/water";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
-const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
+const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, "groveStream", ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
 
 /** Flood the lowland from the foot of the rope with real collision moves (optionally keeping out of some areas). */
 function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = CLIFF_ROPE.foot) {
@@ -33,6 +35,13 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
   while (queue.length) {
     const [i, j] = queue.pop()!;
     // Explicit interactions connect the two surfaces; ordinary movement never does.
+    if (g.solved.includes("groveStream") && !avoid.includes("grove")) {
+      for (const [from, to] of [[GROVE_STREAM_FERRY.north, GROVE_STREAM_FERRY.south], [GROVE_STREAM_FERRY.south, GROVE_STREAM_FERRY.north]]) {
+        if (Math.hypot(i * S - from.x, j * S - from.z) > 1) continue;
+        const ni = Math.round(to.x / S), nj = Math.round(to.z / S), key = `${ni},${nj}`;
+        if (!seen.has(key) && isWalkable(ni * S, nj * S, g, radius)) { seen.add(key); queue.push([ni, nj]); }
+      }
+    }
     for (const [id, rope] of Object.entries(CANOPY_ROPES)) {
       if (id === "entrance" ? !g.solved.includes("canopyAscentRope") : !g.cleared?.includes("canopy")) continue;
       for (const [from, to] of [[rope.foot, rope.top], [rope.top, rope.foot]]) {
@@ -75,6 +84,50 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
 }
 
 describe("the lowland below the sanctuary", () => {
+  it("seals the deep entrance channel for walking, mounts and long knock-back steps", () => {
+    const g: Gates = { ...gates(), solved: PROLOGUE, cleared: ["forest1"] };
+    for (const radius of [PLAYER_R, .55]) {
+      const flood = reachable(g, [], radius, { x: 45.5, z: -207 });
+      expect(flood.near(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, 1)).toBe(false);
+      for (const key of flood.seen) {
+        const [i, j] = key.split(",").map(Number);
+        if (i * .6 < 26 || i * .6 > 76 || j * .6 > -205) continue;
+        const moved = moveCircle(i * .6, j * .6, i * .6, j * .6 - 12, radius, g);
+        expect(moved.z, `${radius} at ${key}`).toBeGreaterThan(-214);
+      }
+    }
+    expect(GROVE_STREAM.pts[0][0]).toBeLessThanOrEqual(31);
+    expect(GROVE_STREAM.pts[GROVE_STREAM.pts.length - 1][0]).toBeGreaterThanOrEqual(70.5);
+  }, 60000);
+
+  it("uses one splash footprint with a shallow rim, deep centre and dry near bank", () => {
+    expect(hazardAt(46, -210.85, "home")?.id).toBe("groveStream");
+    expect(waterAt(46, -210.85, "home")).toBe("deep");
+    expect(waterAt(46, -208.45, "home")).toBe("shallow");
+    expect(hazardAt(46, -208.1, "home")).toBeNull();
+    for (const radius of [0, PLAYER_R, .55]) {
+      expect(isWalkable(46, -210.85, gates(), radius, true)).toBe(false);
+      expect(isWalkable(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, gates(), radius)).toBe(true);
+      expect(isWalkable(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, gates(), radius)).toBe(true);
+    }
+  });
+
+  it("renders the same capsule footprint used by the entrance stream hazard", () => {
+    const geometry = groveStreamWaterGeometry(), vertices = geometry.getAttribute("position");
+    for (let i = 0; i < vertices.count; i++) {
+      expect(nearestOnTrail(GROVE_STREAM.pts, vertices.getX(i), vertices.getZ(i)).d).toBeLessThanOrEqual(GROVE_STREAM.w + .00002);
+    }
+    geometry.dispose();
+  });
+
+  it("retains Grove spawn indices and keeps every home at least 1.5m outside the entrance water", () => {
+    for (const [index, x, z] of [[5, 53, -216.5], [6, 38.8, -215.5], [7, 51.5, -215.5], [35, 62, -216.5]]) {
+      expect(ENEMY_SPAWNS[index]).toMatchObject({ zone: "grove", x, z });
+    }
+    for (const e of ENEMY_SPAWNS.filter(e => e.zone === "grove")) {
+      expect(nearestOnTrail(GROVE_STREAM.pts, e.x, e.z).d - GROVE_STREAM.w, `${e.x},${e.z}`).toBeGreaterThan(1.5);
+    }
+  });
   it("keeps a 3.2m swing circle at every Causeway home clear of solids and internal ground cuts", () => {
     const spawns = ENEMY_SPAWNS.filter(e => e.zone === "causeway");
     expect(spawns).toHaveLength(14);
@@ -125,7 +178,7 @@ describe("the lowland below the sanctuary", () => {
   });
 
   it("fits the real mounted body on the widened flat combat shoulders", () => {
-    for (const [x, z] of [[60.5, -166], [32.6, -210], [112, -251], [91, -280]]) {
+    for (const [x, z] of [[60.5, -166], [32.6, -215.2], [112, -251], [91, -280]]) {
       for (const radius of [PLAYER_R, MONSTERS.bubbo.radius])
         expect(isWalkable(x, z, gates(), radius), `${x},${z} radius ${radius}`).toBe(true);
     }
@@ -192,7 +245,7 @@ describe("the lowland below the sanctuary", () => {
     const left = reachable(gates(), ["canopy"]);
     const right = reachable(gates(["canopyAscentRope", "canopyVines", "canopyRope"]), ["grove"]);
     expect(left.near(42, -196)).toBe(true);
-    expect(left.near(51, -211)).toBe(true);
+    expect(left.near(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z)).toBe(true);
     expect(right.near(113, -194)).toBe(true);
     expect(right.near(106, -208)).toBe(true);
   });
@@ -308,7 +361,8 @@ describe("the lowland below the sanctuary", () => {
     expect(ENEMY_SPAWNS[23]).toMatchObject({ x: 107.4, z: -248.8 });
     // Slice A moves these homes away from the passage rim and shrine chest;
     // restore only their old coordinates when checking all other saved indices.
-    const original = ENEMY_SPAWNS.slice(0, 41).map((e, i) => i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
+    const oldGroveZ: Record<number, number> = { 5: -211, 6: -211.6, 7: -211.8, 35: -210 };
+    const original = ENEMY_SPAWNS.slice(0, 41).map((e, i) => oldGroveZ[i] !== undefined ? { ...e, x: i === 5 ? 57 : e.x, z: oldGroveZ[i] } : i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
       .toBe("18654bf281508a56bd02a112c48e294fa1c0c0b75a4a13de8f74ed7662868d28");
   });
@@ -349,7 +403,7 @@ describe("first-clear exit collision", () => {
   it("keeps the expanded stages separate and both puzzle bridges required at walking and mounted radii", () => {
     const open = gates(["groveLilies", "canopyAscentRope", "canopyVines", "canopyRope"]);
     for (const radius of [PLAYER_R, .7]) {
-      const grove = reachable(open, ["forest1", "causeway", "coast", "port"], radius, { x: 51, z: -211 });
+      const grove = reachable(open, ["forest1", "causeway", "coast", "port"], radius, GROVE_STREAM_FERRY.south);
       for (const key of grove.seen) {
         const [i, j] = key.split(",").map(Number);
         expect(zoneAt(i * .6, j * .6), `direct Grove crossing at radius ${radius}`).not.toBe("canopy");
@@ -360,7 +414,7 @@ describe("first-clear exit collision", () => {
       const canopy = reachable(open, ["grove"], radius);
       expect(canopy.near(80.5, -317.5, 2.8), `Canopy route ${radius}`).toBe(true);
       const groveRoute = reachable(gates(), ["canopy"], radius);
-      expect(groveRoute.near(80.5, -317.5, 2.8), `Grove needs no Bubbo ${radius}`).toBe(true);
+      expect(groveRoute.near(80.5, -317.5, 2.8), `Grove ferry route ${radius}`).toBe(true);
     }
   }, 60000);
   it("blocks the forest exit with every approach, while the rope and every required enemy remain reachable", () => {

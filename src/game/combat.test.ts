@@ -279,9 +279,13 @@ describe("water extinguishing", () => {
     expect(e.wade).toBeNull();
   });
 
-  it("keeps forced splash KOs and rewards, adding one steam and sizzle", () => {
+  it.each(["pond", "stream"])("keeps forced %s splash KOs and rewards, adding one steam and sizzle", water => {
     const e = pondEnemy(.2);
     e.kx = -12;
+    if (water === "stream") {
+      Object.assign(e, { x: 46, z: -207.9, homeX: 46, homeZ: -207.9, lastGround: { x: 46, z: -207.9 }, kx: 0, kz: -28 });
+      Object.assign(rt.player, { x: 46, z: -205.9 });
+    }
     rt.time += .1; combatTick(.1);
     expect(e.state).toBe("ko");
     expect(cb.zones.defeated.grove).toContain(e.i);
@@ -290,13 +294,30 @@ describe("water extinguishing", () => {
     expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
   });
 
+  it("uses the existing panic wade and extinguish rules at the new stream rim", () => {
+    const e = pondEnemy(.2);
+    Object.assign(e, { x: 46, z: -207.6, homeX: 46, homeZ: -207.6, lastGround: { x: 46, z: -207.6 } });
+    Object.assign(rt.player, { x: 46, z: -205.6 });
+    Object.assign(e.panic!, { hx: 0, hz: -1, turnAt: rt.time + 10 });
+    for (let i = 0; i < 60 && !e.wade; i++) { rt.time += 1 / 60; combatTick(1 / 60); }
+    expect(e.wade).not.toBeNull();
+    expect(e.burn).toBeNull(); expect(e.panic).toBeNull();
+    expect(e.state).not.toBe("ko");
+    expect(cb.fx.filter(f => f.kind === "steam")).toHaveLength(1);
+    advanceCombat(.6);
+    expect(e.wade).toBeNull();
+    expect(hazardAt(e.x, e.z, "home")).toBeNull();
+    expect(cb.drops).toHaveLength(0);
+  });
+
   it("blocks both fire ignitions in walkable stream water while preserving direct damage", () => {
     changeWorld("home");
-    // A submerged point on the first rendered stream, still ordinary walkable ground.
+    // A submerged point on the first stream's southern segment. The entrance
+    // segment is now deep ferry water and must not serve as a walkable fixture.
     let wet: { x: number; z: number } | undefined;
     for (let t = 0; t <= 1; t += .05) {
-      const point = { x: 36 + 6 * t, z: -212 - t };
-      if (waterAt(point.x, point.z, "home") === "shallow") { wet = point; break; }
+      const point = { x: 49 + 7 * t, z: -216 + t };
+      if (waterAt(point.x, point.z, "home") === "shallow" && isWalkable(point.x, point.z, gatesOf(getGame().progress), ENEMIES.snapjaw.radius)) { wet = point; break; }
     }
     expect(wet).toBeDefined();
     for (const enemy of cb.enemies) enemy.state = "gone";
