@@ -878,6 +878,22 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   // The optional cave (cave layer): two gloomlets in the head's bend, far from the chamber.
   { zone: "cave", kind: "gloomlet", x: 83.2, z: -197.3, optional: true },
   { zone: "cave", kind: "gloomlet", x: 80.8, z: -192.3, optional: true },
+  // The Upper Canopy (high layer): four small optional pockets, none more than three.
+  // Broadleaf Clearing.
+  { zone: "upperCanopy", kind: "gloomlet", x: 103.2, z: -225.2, optional: true },
+  { zone: "upperCanopy", kind: "gloomlet", x: 105.7, z: -227.3, optional: true },
+  // Windward Branch: exposed edges for Puff's wind.
+  { zone: "upperCanopy", kind: "gloomlet", x: 109.4, z: -220.0, optional: true },
+  { zone: "upperCanopy", kind: "forestSpitter", replaces: "gloomlet", x: 110.3, z: -220.8, optional: true },
+  { zone: "upperCanopy", kind: "gloomlet", x: 112.6, z: -217.2, optional: true },
+  // Broken Crown.
+  { zone: "upperCanopy", kind: "snapjaw", x: 104.8, z: -213.6, optional: true },
+  { zone: "upperCanopy", kind: "gloomlet", x: 99.6, z: -215.4, optional: true },
+  { zone: "upperCanopy", kind: "gloomlet", x: 94.8, z: -210.6, optional: true },
+  // Summit Approach: tougher guards before the last bridge (it is never gated).
+  { zone: "upperCanopy", kind: "shellback", x: 90.3, z: -205.5, optional: true },
+  { zone: "upperCanopy", kind: "snapjaw", x: 89.4, z: -206.5, optional: true },
+  { zone: "upperCanopy", kind: "snapjaw", x: 91.1, z: -204.8, optional: true },
 ];
 
 /** Town props (scenery placements shared by the scene and collision). */

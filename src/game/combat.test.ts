@@ -14,6 +14,7 @@ import { run } from "./flow/script";
 import { audio } from "../audio/audio";
 import { pressAttack, releaseAttack } from "../input/attackInput";
 import { hazardAt } from "./logic/elements";
+import { ELEMENT_OBJECTS } from "./world/elementObjects";
 import { waterAt } from "./logic/water";
 import { startPanic } from "./logic/panic";
 
@@ -1239,6 +1240,59 @@ describe("elemental J simulation", () => {
     expect(e.control?.kind).not.toBe("grabbed");
     expect(hazardAt(e.x, e.z, "home")).toBeNull();
     expect(isWalkable(e.x, e.z, gatesOf(getGame().progress), .55)).toBe(true);
+  });
+
+  describe("on the Upper Canopy (high layer)", () => {
+    const leaf = { x: 104.4, z: -226.2, r: 3.6 }; // Broadleaf Clearing
+    afterEach(() => { region.layer = "ground"; });
+    function upperEnemy(kind: EnemyKind = "snapjaw") {
+      changeWorld("home");
+      region.layer = "high";
+      for (const enemy of cb.enemies) enemy.state = "gone";
+      const e = cb.enemies.find(e => e.zone === "upperCanopy")!;
+      cb.zones.current = "upperCanopy";
+      Object.assign(e, { kind, x: leaf.x + leaf.r - .7, z: leaf.z, hp: 100, state: "recover", timer: 99 });
+      return e;
+    }
+
+    it("Wind Blast pushes an enemy off a giant leaf: a plunge KO, counted once, reward on the leaf", () => {
+      const e = upperEnemy();
+      Object.assign(rt.player, { x: leaf.x + leaf.r - 2.7, z: leaf.z, yaw: Math.PI / 2 });
+      friend("puff");
+      expect(hazardAt(e.x, e.z, "home")).toBeNull();
+      expect(basicAttack()).toBe(true);
+      advanceCombat(.15);
+      expect(e.state).toBe("ko");
+      expect(e.plunge).not.toBeNull();
+      expect(hazardAt(e.x, e.z, "home")?.id).toBe("upperCanopyFall");
+      expect(cb.zones.defeated.upperCanopy).toEqual([e.i]);
+      advanceCombat(.5);
+      expect(cb.zones.defeated.upperCanopy).toEqual([e.i]);
+      for (const drop of cb.drops) expect(isWalkable(drop.x, drop.z, gatesOf(getGame().progress), 0)).toBe(true);
+    });
+
+    it("Leafy's Vine Grab swings a light enemy out over the drop", () => {
+      const e = upperEnemy("gloomlet");
+      Object.assign(e, { x: leaf.x + 1.2, z: leaf.z });
+      Object.assign(rt.player, { x: leaf.x, z: leaf.z, yaw: Math.PI / 2 });
+      friend("leafy");
+      basicAttack();
+      advanceCombat(.15);
+      let overEdge = false;
+      for (let i = 0; i < 60 && !overEdge; i++) {
+        advanceCombat(.02);
+        overEdge = hazardAt(e.x, e.z, "home")?.id === "upperCanopyFall";
+      }
+      expect(overEdge).toBe(true);
+    });
+
+    it("ground enemies never wake while the player is up here, and Ember sets no leaf alight", () => {
+      upperEnemy();
+      const ground = cb.enemies.filter(e => e.zone === "canopy");
+      combatTick(.1);
+      expect(ground.every(e => e.state === "gone" || e.state === "dormant")).toBe(true);
+      expect(ELEMENT_OBJECTS.some(o => o.layer === "high")).toBe(false);
+    });
   });
 
   it("a Canopy void uses the same forced-motion KO and leaves its reward on the last floor", () => {

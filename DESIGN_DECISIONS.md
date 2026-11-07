@@ -2391,3 +2391,14 @@ controller decisions:
 - **Camera:** `upper-canopy` (yaw 0.5, pitch 0.7, dist 12). Seen from below, upper geometry within
   9 m of the lens and below its height is discarded in the shader (no transparency), so lower-Canopy
   views are unchanged. Upper views: 73–87 draw calls, at most 131k triangles.
+
+## 2026-11-07: Upper Canopy encounters (slice G, controller)
+
+- 11 optional high-layer enemies (`zone: "upperCanopy"`), appended in four pockets, none over three:
+  Broadleaf Clearing (2 gloomlets), Windward Branch (2 gloomlets and a spitter on the exposed leaves),
+  Broken Crown (a snapjaw and 2 gloomlets), Summit Approach (a shellback and 2 snapjaws; the bridge
+  is never gated). Windward B grew from 1.9 m to 2.1 m: a panic run there made too little progress.
+- Tested through real attacks on the high layer: Puff's Wind Blast pushes an enemy off a giant leaf
+  into a plunge KO (counted once, reward on the leaf), Leafy's swing carries one out over the drop,
+  and ground enemies stay asleep while the player is up there. Bubble Trap and Cyclone use the same
+  forced-motion and hazard path as the lower Canopy's tested voids. No high-layer object is flammable.

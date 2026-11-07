@@ -20,7 +20,7 @@ export const UPPER_LEAVES: UpperLeaf[] = [
   { id: "ropeLeaf", x: 97.6, z: -233.6, r: 2.6, y: 20.6 },
   { id: "broadleaf", x: 104.4, z: -226.2, r: 3.6, y: 21.0 },
   { id: "windwardA", x: 109.8, z: -220.4, r: 2.2, y: 21.5 },
-  { id: "windwardB", x: 112.6, z: -217.2, r: 1.9, y: 21.7 },
+  { id: "windwardB", x: 112.6, z: -217.2, r: 2.1, y: 21.7 },
   { id: "lookout", x: 113.6, z: -223.4, r: 1.3, y: 21.4, unstable: true },
   { id: "crownEast", x: 104.8, z: -213.6, r: 2.4, y: 21.6 },
   { id: "crownMid", x: 99.6, z: -215.4, r: 2.0, y: 21.9 },
