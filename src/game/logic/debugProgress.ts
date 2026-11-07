@@ -35,6 +35,8 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "groveStream", label: "Grove stream north bank", target: "groveStream", step: 9, zone: "grove", act: "Act 2", world: "home" },
   { id: "caveMouth", label: "Cave mouth", target: "caveMouth", step: 9, zone: "grove", act: "Act 2", world: "home" },
   { id: "caveChamber", label: "Cave chamber", target: "caveChamber", step: 9, zone: "cave", layer: "cave", act: "Act 2", world: "home" },
+  { id: "upperRopeFoot", label: "Upper Canopy rope foot", target: "upperRopeFoot", step: 9, zone: "canopy", act: "Act 2", world: "home" },
+  { id: "upperRopeTop", label: "Upper Canopy (treetops)", target: "upperRopeTop", step: 9, zone: "upperCanopy", layer: "high", act: "Act 2", world: "home" },
   ...ZONE_ORDER.map(zone => ({ id: `zone:${zone}`, label: ZONES[zone].name.en, target: `zone:${zone}`, step: 9, zone, act: "Act 2" as const, world: "home" as const })),
   ...["market", "kitchen", "trainer", "inn", "harbor"].map(target => ({ id: target, label: `Port Town ${target === "harbor" ? "harbour" : target}`, target, step: 9, zone: "port" as const, act: "Act 2" as const, world: "home" as const })),
   { id: "voyage", label: "Voyage / Port dock", target: "harbor", step: 10, zone: "port", act: "Act 3", world: "home" },

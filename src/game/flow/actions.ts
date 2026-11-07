@@ -12,6 +12,7 @@ import { cloudInteract } from "./act3";
 import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
 import { climbCliff, climbRope as climbLowlandRope, openChestScene, readForkSign, talkToKeeper } from "./act2";
+import { UPPER_ROPE } from "../world/upperCanopy";
 import { CANOPY_ROPES, type ServiceId } from "../world/lowland";
 import type { MonsterId, ObstacleId } from "../types";
 
@@ -52,6 +53,7 @@ export function interact(f: Focus | null = getGame().focus) {
     case "cliffRope":
       if (f.id.startsWith("canopyEntrance")) void climbLowlandRope(CANOPY_ROPES.entrance, f.id.endsWith("Down"));
       else if (f.id.startsWith("canopyExit")) void climbLowlandRope(CANOPY_ROPES.exit, f.id.endsWith("Down"));
+      else if (f.id.startsWith("upperCanopy")) void climbLowlandRope(UPPER_ROPE, f.id.endsWith("Down"));
       else void climbCliff(f.id === "cliffDown");
       return;
     case "chest":

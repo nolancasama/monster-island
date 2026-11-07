@@ -2,6 +2,7 @@ import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
 import { region, type Layer } from "./world/region";
+import { resetUpperLeaves } from "./world/upperCanopy";
 
 /**
  * Mutable per-frame state shared by the scene, input and game flow. Kept out
@@ -244,6 +245,7 @@ export function resetRuntime() {
   rt.kikoTrail = 0;
   const p = rt.player;
   p.layer = "ground";
+  resetUpperLeaves();
   p.x = SPAWN.x;
   p.z = SPAWN.z;
   p.yaw = SPAWN.yaw;

@@ -27,8 +27,10 @@ export interface LayerWorld {
 
 export const LAYER_WORLDS: Partial<Record<OtherLayer, LayerWorld>> = {};
 
-export function registerLayerWorld(layer: OtherLayer, world: LayerWorld): void {
-  LAYER_WORLDS[layer] = { ...world, hazards: world.hazards?.map(h => ({ ...h, layer })) };
+export function registerLayerWorld(layer: OtherLayer, world: LayerWorld): LayerWorld & { hazards: Hazard[] } {
+  const stored = { ...world, hazards: (world.hazards ?? []).map(h => ({ ...h, layer })) };
+  LAYER_WORLDS[layer] = stored;
+  return stored;
 }
 /** Tests register fixture layers and must remove them afterwards. */
 export function unregisterLayerWorld(layer: OtherLayer): void {

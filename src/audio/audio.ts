@@ -34,6 +34,8 @@ export type SfxName =
   | "splash"
   | "stones"
   | "drip"
+  | "creak"
+  | "leafDrop"
   | "sparkle"
   | "stone"
   | "poof"
@@ -350,6 +352,15 @@ class AudioEngine {
       case "splash":
         this.noiseBurst(t, { filter: "bandpass", freq: 2200, to: 500, q: 0.6, peak: 0.22, attack: 0.015, decay: 0.4 });
         [460, 620, 780].forEach((f, i) => this.tone(f, t + i * 0.05, { to: f * 0.45, peak: 0.06, decay: 0.12 }));
+        break;
+      case "creak":
+        // An old leaf bending: a slow, wobbling low groan.
+        this.tone(150, t, { to: 110, peak: 0.12, attack: 0.05, decay: 0.5, type: "triangle" });
+        this.tone(190, t + 0.25, { to: 140, peak: 0.08, attack: 0.05, decay: 0.45, type: "triangle" });
+        break;
+      case "leafDrop":
+        this.noiseBurst(t, { filter: "bandpass", freq: 900, to: 300, q: 0.7, peak: 0.16, attack: 0.02, decay: 0.5 });
+        this.tone(260, t, { to: 90, peak: 0.1, decay: 0.45 });
         break;
       case "drip":
         // A single drop in a still cave: a short rising plink and a faint echo.

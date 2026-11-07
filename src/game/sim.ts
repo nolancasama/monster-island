@@ -20,6 +20,7 @@ import { bubboSeat } from "./ride";
 import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale, hooks } from "./combat";
 import { lumoHidden, startAct2Scene, switchPlayerLayer } from "./flow/act2";
 import { portalSwitch } from "./world/layers";
+import { LEAF_STATE, UPPER_CHECKPOINTS, UPPER_LEAVES, refreshUpperHazards, stepLeaf } from "./world/upperCanopy";
 import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
 import { audio } from "../audio/audio";
@@ -134,6 +135,30 @@ function monsterObstacles(): Obstacles[] {
   return playerObstacles;
 }
 
+/** The Upper Canopy: unstable leaves give way under a standing player (warning
+ * first), checkpoints remember where a fall returns you, and ground that has
+ * gone from under you is a real fall. True when a fall has just begun. */
+function upperCanopyTick(dt: number): boolean {
+  const p = rt.player;
+  let changed = false;
+  for (const l of UPPER_LEAVES) {
+    if (!l.unstable) continue;
+    const s = LEAF_STATE[l.id], before = s.phase;
+    stepLeaf(s, p.climbY === null && !p.fall && Math.hypot(p.x - l.x, p.z - l.z) <= l.r, dt);
+    if (s.phase === before) continue;
+    changed = true;
+    if (s.phase === "warn") audio.play("creak");
+    else if (s.phase === "gone") audio.play("leafDrop");
+  }
+  if (changed) refreshUpperHazards();
+  for (const c of UPPER_CHECKPOINTS) if (Math.hypot(p.x - c.x, p.z - c.z) <= c.r) p.safeGround = { x: c.x, z: c.z };
+  if (p.climbY === null && !p.frozen && !isWalkable(p.x, p.z, gatesOf(getGame().progress), 0)) {
+    hooks.playerFall?.(0, 0);
+    return true;
+  }
+  return false;
+}
+
 function movePlayer(dt: number, canMove: boolean) {
   const p = rt.player;
   if (p.hop) { advanceLilyHop(); return; }
@@ -146,6 +171,7 @@ function movePlayer(dt: number, canMove: boolean) {
     p.vx = p.vz = p.speed = 0;
     return;
   }
+  if (p.layer === "high" && upperCanopyTick(dt)) return;
   let ix = 0;
   let iy = 0;
   if (canMove) {

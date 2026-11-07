@@ -10,6 +10,7 @@ import { lumoHidden } from "./act2";
 import { cloudCandidates } from "./act3";
 import { CLOUD_SPAWNS, HOLLOW } from "../world/cloudisle";
 import { CANOPY_ROPES, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
+import { UPPER_ROPE } from "../world/upperCanopy";
 import { obstacleAvailable } from "../logic/progress";
 import type { ObstacleId } from "../types";
 import { GROVE_STREAM_FERRY } from "../world/groveStream";
@@ -37,6 +38,8 @@ interface Candidate {
 /** Interactions that live on the cave and high layers (filled by their content). */
 function layerCandidates(): Candidate[] {
   const p = getGame().progress, out: Candidate[] = [];
+  if (rt.player.layer === "high")
+    out.push({ focus: { id: "upperCanopyDown", kind: "cliffRope", verb: "Climb down", noun: "the rope", x: UPPER_ROPE.top.x, z: UPPER_ROPE.top.z }, reach: 2.2 });
   for (const c of CHESTS)
     if ((c.layer ?? "ground") === rt.player.layer && !p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret)))
       out.push({ focus: { id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, reach: 2.3 });
@@ -109,6 +112,8 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
     const spot = down ? rope.top : rope.foot;
     add({ id: `canopy${id === "entrance" ? "Entrance" : "Exit"}${down ? "Down" : "Up"}`, kind: "cliffRope", verb: down ? "Climb down" : "Climb", noun: "the rope", x: spot.x, z: spot.z }, 2.2);
   }
+  // The rope up into the treetops, from the lower Canopy's north root walk.
+  add({ id: "upperCanopyUp", kind: "cliffRope", verb: "Climb", noun: "the rope", x: UPPER_ROPE.foot.x, z: UPPER_ROPE.foot.z }, 2.2);
   for (const c of CHESTS) if ((c.layer ?? "ground") === "ground" && !p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret))) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {

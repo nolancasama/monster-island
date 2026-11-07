@@ -2363,3 +2363,31 @@ controller decisions:
   2 amber, relic `caveCrystal`. Ground chests render in the lowland; layer chests render in their layer's
   group. `act2.relics` is additive in v4, granted once by its chest, with a toast and a line on open
   and a star count in the coin panel (names in its tooltip and aria label).
+
+## 2026-11-07: Upper Canopy (slice F, controller)
+
+- **High layer, 20.6–22.65 m:** 10 giant round leaves and 11 branches (`world/upperCanopy.ts`), hung
+  from the lower Canopy's three giant trunks (now solid walls up here). The route runs from the
+  rope top (97, -234.3) up to the `summitBridge` stub at the mesa's east shoulder. Flood-filled route
+  over 50 m at both body radii; ramps ≤ 25°; branches ≥ 2.3 m wide.
+- **Leaves are discs, not authored polygons** (deviation from the spec's "polygons sharing vertices"):
+  each leaf's top is a flat disc at its walking height with exactly its walking radius (a gentle
+  scallop never exceeds it; tested), so the outline you see is the edge you fall from. Rejected: a new
+  polygon `WalkShape`, which every existing walk, hazard and bank switch would have to learn.
+- **Branch ends reach 0.6 m into the leaf they join and take its height.** Without that, joints were
+  closed to a mounted rider (0.55 m) and a short twig was 29° steep.
+- **Falls:** one high-layer fall hazard over the area, with every leaf and branch as its safe ground,
+  so every open edge teeters and drops through the existing fall flow (−12 HP floored at 1). A fall
+  returns you to the most recently reached `UPPER_CHECKPOINTS` entry (rope top, Broadleaf Clearing,
+  Broken Crown, Summit Approach).
+- **Two unstable leaves** (a dead-end lookout and the Broken Crown shortcut, so never two on the main
+  route) are yellow-brown and cracked. Standing 0.8 s starts a 1.2 s shaking, creaking warning; then
+  the leaf drops away (and a dedicated fall disc covers it, even where a branch end reached in) and
+  regrows after 6 s. Ground giving way under a standing player is checked before movement, so the
+  player falls instead of being snapped sideways.
+- **Rope:** `UPPER_ROPE` (not in `CANOPY_ROPES`, whose renderer assumes a deck face) hangs from a
+  branch collar on the giant trunk. It is climbed with the shared `climbRope`, which switches layer at
+  the ends. Prompts are "Climb" at the foot (ground) and "Climb down" at the top (high).
+- **Camera:** `upper-canopy` (yaw 0.5, pitch 0.7, dist 12). Seen from below, upper geometry within
+  9 m of the lens and below its height is discarded in the shader (no transparency), so lower-Canopy
+  views are unchanged. Upper views: 73–87 draw calls, at most 131k triangles.

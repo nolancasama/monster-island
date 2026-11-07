@@ -104,7 +104,7 @@ describe("traversal layers", () => {
     const above = { x: LEAF.x, y: LEAF.y, z: LEAF.z, climbing: false, cloud: false };
     expect(cameraProfileAt(above).id).toBe("ancient-canopy");
     expect(cameraProfileAt({ ...above, layer: "high" }).id).not.toBe("ancient-canopy");
-    expect(cameraProfileAt({ ...above, layer: "high" }).id).toBe("layer-default");
+    expect(cameraProfileAt({ ...above, layer: "high" }).id).toBe("upper-canopy");
   });
 
   it("loads a layered save on its layer, or its entry, or the ground", () => {
