@@ -2194,3 +2194,30 @@ controller decisions:
   system.
 - **The Leafy root seal is the 7th secret** (existing hidden-chest rules). **The torches are Ember's new
   Act 2 "Can you make fire?" unlock**, which closes the known issue "Ember lost its only Act 2 unlock".
+
+## 2026-11-07: Vertical expansion slices A/B implementation
+
+- Removed both broken arches; moved the shrine statues to x=114.2, z=-253.7/-249.3.
+  Their complete silhouettes clear the east walk boundary by at least 0.6 m, with
+  matching off-ground solids. Rejected: leaving tall decoration inside the fight.
+- Causeway framing is yaw 0, pitch 0.8, distance 10.5, ahead 1. Its follow camera
+  bypasses endpoint and smoothed floor/mesa lifts. Only Canopy north wall faces use
+  the existing sight-line fading material; walking surfaces and all deck geometry
+  remain intact. Rejected: rotating the lens or raising it above the exit landing.
+- The Grove stone gate keeps the existing stage-clear cut and a 1.85 m half-opening.
+  Posts are 0.4 m deep: a 1 m post clipped the curved trail at (58,-242), removing
+  one 0.5 m floor sample. Short capsule returns join the existing ridge endpoints.
+  Doors fold 180 degrees outside the walk band, open within 7 m after clear, latch,
+  reuse the stone sound, and restore open after Continue installs saved progress.
+  Rejected: an additional question, save field, or progression gate.
+- Door-plane camera retention is 1 m on each side; other profile borders retain
+  their existing 0.65 m margin. Rejected: changing global hysteresis.
+- Swing-circle checks found the passage rim at home 17 and shrine chest at home 23.
+  Their z coordinates move to -249.3 and -248.8 respectively, retaining indices,
+  types, order and all 14 required enemies. Rejected: moving the shrine chest or
+  widening the stage passage. Paving which floated above the passage shoulder is
+  omitted; low rubble and moss remain. Elevated Canopy branches remain unchanged.
+- Audit also found the separate Leafy secret statues and sealed slab in the central
+  Causeway. These are preserved pending clarification of whether the existing
+  secret is an exception or must be relocated; this remains an unresolved slice A
+  requirement, not an approved exception.

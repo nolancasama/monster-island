@@ -1,13 +1,59 @@
 import { describe, expect, it } from "vitest";
 import { BEACON } from "../game/world/cloudisle";
 import { CAMERA_PROFILES, DEFAULT_CAMERA, cameraProfileAt, type CameraPoint } from "./cameraProfiles";
-import { CLIFF_ROPE } from "../game/world/lowland";
+import { CANOPY_ROPES, CLIFF_ROPE, zoneAt } from "../game/world/lowland";
 import { GATE_PILLARS, groundY } from "../game/world/island";
 import * as THREE from "three";
 
 const point = (x: number, z: number, cloud = false, y = 0): CameraPoint => ({ x, z, y, cloud, climbing: false });
 
 describe("authored camera profiles", () => {
+  it("uses identical fixed framing throughout the Causeway and its rope-foot pocket", () => {
+    const expected = { yaw: 0, pitch: .8, dist: 10.5, ahead: 1 };
+    let samples = 0;
+    for (let x = 45; x <= 114; x += 1) for (let z = -265; z <= -241; z += 1) {
+      if (zoneAt(x, z) !== "causeway") continue;
+      const profile = cameraProfileAt(point(x, z));
+      expect(profile.id, `${x},${z}`).toBe("ruined-causeway");
+      expect(profile).toMatchObject({ ...expected, kind: "lowland" });
+      expect(profile.resolve).toBeUndefined();
+      expect(profile.trackYaw).toBeUndefined();
+      samples++;
+    }
+    expect(samples).toBeGreaterThan(1000);
+    for (const x of [92, 96, 100]) for (const z of [-244, -242, -241]) {
+      expect(cameraProfileAt(point(x, z))).toMatchObject({ id: "ruined-causeway", ...expected });
+    }
+  });
+
+  it("uses the exit-rope profile only while climbing and returns to the fixed Causeway lens", () => {
+    const r = CANOPY_ROPES.exit;
+    const ground = point(r.foot.x, r.foot.z);
+    const climbing = { ...point(r.x, r.bodyZ), climbing: true };
+    const rope = cameraProfileAt(climbing, cameraProfileAt(ground));
+    expect(rope.id).toBe("causeway-exit-rope");
+    expect(rope.kind).toBe("rope");
+    expect(rope.contains(ground, 100)).toBe(false);
+    expect(cameraProfileAt(ground, rope).id).toBe("ruined-causeway");
+  });
+
+  it("switches at the Grove door plane and retains both views throughout a ±0.9m walk", () => {
+    const plane = -241.4;
+    const grove = cameraProfileAt(point(56, plane + .01));
+    const causeway = cameraProfileAt(point(56, plane - .01));
+    expect(grove.id).toBe("flooded-grove");
+    expect(causeway.id).toBe("ruined-causeway");
+    for (const initial of [grove, causeway]) {
+      let profile = initial;
+      for (let i = 0; i < 300; i++) {
+        profile = cameraProfileAt(point(56, plane + Math.sin(i) * .9), profile);
+        expect(profile).toBe(initial);
+      }
+    }
+    expect(cameraProfileAt(point(56, plane - 1.01), grove)).toBe(causeway);
+    expect(cameraProfileAt(point(56, plane + 1.01), causeway)).toBe(grove);
+  });
+
   it("retains either side of a border until the player clears its dead band", () => {
     const glade = cameraProfileAt(point(37, -21));
     const bridge = cameraProfileAt(point(37, -26));

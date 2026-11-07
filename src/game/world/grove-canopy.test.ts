@@ -47,6 +47,7 @@ describe("Grove and Canopy hazard boundaries", () => {
 it("keeps existing enemy indices stable and appends the expanded stage encounters", () => {
   // Enemy array indices are persistent identities. These are the pre-Slice-C
   // homes, including optional arm encounters and the appended original Canopy foe.
+  // Slice A adjusts homes 17 and 23 for the passage rim and shrine chest clearance.
   const homes: Array<[string, string, number, number]> = [
     ["forest1", "gloomlet", 74.6, -162.8], ["forest1", "gloomlet", 75.6, -170.2],
     ["forest1", "forestSpitter", 66.4, -167.8], ["forest1", "snapjaw", 72.6, -178.6], ["forest1", "gloomlet", 85, -177.2],
@@ -54,10 +55,10 @@ it("keeps existing enemy indices stable and appends the expanded stage encounter
     ["grove", "gloomlet", 48.6, -216.4], ["grove", "forestSpitter", 46.4, -226.8], ["grove", "snapjaw", 48.5, -232.2],
     ["grove", "gloomlet", 37.8, -233.8], ["grove", "snapjaw", 56, -239.5],
     ["canopy", "gloomlet", 97, -203.3], ["canopy", "snapjaw", 106, -208.6], ["canopy", "forestSpitter", 105.2, -230.6],
-    ["canopy", "snapjaw", 112, -235], ["causeway", "raiderShooter", 62, -248.2], ["causeway", "shellback", 61.4, -258.4],
+    ["canopy", "snapjaw", 112, -235], ["causeway", "raiderShooter", 62, -249.3], ["causeway", "shellback", 61.4, -258.4],
     // Same persistent gloomlet index; its former home is on the exit stairs.
     ["causeway", "raiderShooter", 85, -247.4], ["causeway", "shellback", 91.6, -260.1], ["causeway", "gloomlet", 103, -247.5],
-    ["causeway", "shellback", 103.4, -251.8], ["causeway", "snapjaw", 107.4, -249.2], ["coast", "gloomlet", 65.4, -272.4],
+    ["causeway", "shellback", 103.4, -251.8], ["causeway", "snapjaw", 107.4, -248.8], ["coast", "gloomlet", 65.4, -272.4],
     ["coast", "gloomlet", 85.2, -280.4], ["coast", "raiderShooter", 77.4, -284.6], ["coast", "gloomlet", 64, -278],
     ["canopy", "gloomlet", 98, -207], ["forest1", "gloomlet", 49, -175], ["forest1", "snapjaw", 42, -186],
     ["forest1", "gloomlet", 42, -196], ["forest1", "gloomlet", 103, -174], ["forest1", "snapjaw", 113, -184],

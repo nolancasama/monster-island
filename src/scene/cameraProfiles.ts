@@ -1,6 +1,6 @@
 import { BEACON_ARENA } from "../game/logic/beacon";
 import { TUNNEL } from "../game/world/island";
-import { CANOPY_ROPES, CLIFF_ROPE, inLowland, zoneAt } from "../game/world/lowland";
+import { CANOPY_ROPES, CLIFF_ROPE, STAGE_PASSAGES, inLowland, zoneAt } from "../game/world/lowland";
 import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
 
 export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean }
@@ -28,6 +28,13 @@ const rect = (p: CameraPoint, m: number, x0: number, x1: number, z0: number, z1:
   p.x >= x0 - m && p.x <= x1 + m && p.z >= z0 - m && p.z <= z1 + m;
 const home = (contains: CameraProfile["contains"]): CameraProfile["contains"] => (p, m) => !p.cloud && !inLowland(p.x, p.z + m) && contains(p, m);
 const smooth = (v: number) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
+const GROVE_DOOR_Z = -241.4;
+const grovePassage = (p: CameraPoint) => {
+  const t = STAGE_PASSAGES[0];
+  return !p.cloud && !p.climbing && rect(p, 0, t.x0, t.x1, t.z0, t.z1);
+};
+// This threshold has a one-metre dead band on either side of the door.
+const doorMargin = (margin: number) => margin / CAMERA_HYSTERESIS;
 
 /** Priority order, most specific first. All gameplay follow framing lives here.
  * Margins expand a retained zone and contract an entering zone, in world metres.
@@ -36,6 +43,8 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   // The entrance rope's wall is to the north, opposite the sanctuary cliff: mirror its climb framing.
   { ...DEFAULT_CAMERA, id: "canopy-entrance-rope", kind: "rope", yaw: Math.atan2(5, 8), pitch: Math.atan2(2.9, Math.hypot(5, 8)), dist: Math.hypot(5, 8, 2.9), ahead: 0,
     contains: p => !p.cloud && p.climbing && Math.abs(p.x - CANOPY_ROPES.entrance.x) < 2 && Math.abs(p.z - CANOPY_ROPES.entrance.faceZ) < 4 },
+  { ...DEFAULT_CAMERA, id: "causeway-exit-rope", kind: "rope", yaw: Math.PI, pitch: .8, dist: 9, ahead: 1,
+    contains: p => !p.cloud && p.climbing && Math.abs(p.x - CANOPY_ROPES.exit.x) < 2 && Math.abs(p.z - CANOPY_ROPES.exit.faceZ) < 4 },
   { ...DEFAULT_CAMERA, id: "cliff-rope", kind: "rope", yaw: Math.atan2(5, -8), pitch: Math.atan2(2.9, Math.hypot(5, 8)), dist: Math.hypot(5, 8, 2.9), ahead: 0,
     contains: p => !p.cloud && p.climbing && p.z < -140 },
   { ...DEFAULT_CAMERA, id: "beacon-arena", fov: 80, viewShift: -.2, trackYaw: true, contains: (p, m) => p.cloud && p.y > BEACON_ARENA.y - 3 - m && Math.hypot(p.x - BEACON_ARENA.x, p.z - BEACON_ARENA.z) < BEACON_ARENA.radius + 1 + m,
@@ -61,6 +70,12 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
     contains: (p, m) => !p.cloud && p.x > 94 - m && p.z > -207 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
   { ...DEFAULT_CAMERA, id: "forest-base", kind: "lowland", pitch: .36, dist: 11.5, ahead: 2,
     contains: (p, m) => !p.cloud && p.z < -165 + m && p.x > 58 - m && p.x < 94 + m && zoneAt(p.x, p.z) === "forest1" },
+  // A single fixed lens covers the ground fight, shrine and rope-foot pocket.
+  // It precedes the adjacent zone views so the door plane owns the passage.
+  { ...DEFAULT_CAMERA, id: "ruined-causeway", kind: "lowland", yaw: 0, pitch: .8, dist: 10.5, ahead: 1,
+    contains: (p, m) => !p.cloud && (grovePassage(p)
+      ? p.z <= GROVE_DOOR_Z + doorMargin(m)
+      : zoneAt(p.x, p.z) === "causeway" || rect(p, 0, 92, 100, -244, -241)) },
   // Sees over the town wall from both sides; the wall also fades on the sight line.
   { ...DEFAULT_CAMERA, id: "port-gate", kind: "lowland", pitch: .85, dist: 11, ahead: 1,
     contains: (p, m) => !p.cloud && p.z < -282 + m && p.z > -298 - m },
@@ -69,10 +84,7 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
     contains: p => !p.cloud && zoneAt(p.x, p.z) === "canopy" },
   // The expanded east bank needs its lens west of the mesa's broad head.
   { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55,
-    contains: p => !p.cloud && zoneAt(p.x, p.z) === "grove" },
-  // South of here the default lens would sit inside the exit landing's solid mass.
-  { ...DEFAULT_CAMERA, id: "causeway-exit-rope", kind: "lowland", yaw: Math.PI, pitch: .8, dist: 9, ahead: 1,
-    contains: (p, m) => !p.cloud && p.x > 88 - m && p.x < 104 + m && p.z > -251.5 - m && p.z < -240 && zoneAt(p.x, p.z) === "causeway" },
+    contains: (p, m) => !p.cloud && (grovePassage(p) ? p.z >= GROVE_DOOR_Z - doorMargin(m) : zoneAt(p.x, p.z) === "grove") },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,
     contains: home((p, m) => rect(p, m, TUNNEL.x - 3.6, TUNNEL.x + 3.6, TUNNEL.z0 - 1.2, TUNNEL.z1 + .8)) },
@@ -113,6 +125,9 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
 /** Schmitt borders: retain until .65m outside, enter higher-priority zones
  * only .65m inside. No timer can alternate views for a stationary player. */
 export function cameraProfileAt(p: CameraPoint, current?: CameraProfile): CameraProfile {
+  // A fresh camera at the doorway chooses the actual side of its plane;
+  // subsequent updates use the same Schmitt retention as every other border.
+  if (!current && grovePassage(p)) return CAMERA_PROFILES.find(profile => profile.id === (p.z <= GROVE_DOOR_Z ? "ruined-causeway" : "flooded-grove"))!;
   const candidate = CAMERA_PROFILES.find(profile => profile.contains(p, -CAMERA_HYSTERESIS));
   if (current?.contains(p, CAMERA_HYSTERESIS) && (!candidate || CAMERA_PROFILES.indexOf(current) <= CAMERA_PROFILES.indexOf(candidate))) return current;
   return candidate ?? current ?? CAMERA_PROFILES[CAMERA_PROFILES.length - 1];

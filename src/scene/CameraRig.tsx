@@ -81,6 +81,7 @@ export function CameraRig() {
     const point = { x: p.x, y: p.y, z: p.z, climbing: p.climbY !== null, cloud };
     const selected = cameraProfileAt(point, c.snap ? undefined : profile.current);
     const lowland = selected.kind === "lowland" && !rope && (c.mode === "follow" || leavingRope);
+    const fixedCauseway = lowland && selected.id === "ruined-causeway";
     const tunnel = selected.kind === "tunnel";
     if (selected !== profile.current || c.snap) {
       blendFrom.current = { ...framing.current };
@@ -160,7 +161,7 @@ export function CameraRig() {
         want.current.x = cx;
         want.current.y = Math.min(want.current.y, roof);
       }
-      if (lowland) {
+      if (lowland && !fixedCauseway) {
         // Banks only pull the camera in or lift it a bounded amount. The
         // close endpoint also keeps the cliff behind the camera at its foot.
         // The cliff closes the lowland's north side: near its foot the lens
@@ -186,7 +187,7 @@ export function CameraRig() {
           }
         }
         want.current.y += Math.max(Math.min(1.5, up), mesaCameraLift(wantLook.current, want.current));
-      } else if (!cloud && !tunnelClearance) {
+      } else if (!fixedCauseway && !cloud && !tunnelClearance) {
         // Against the mountain (the volcano's flank, the ridge) the view
         // comes in closer rather than climbing tens of metres up the rock;
         // small things like the beach ridge are still risen over.
@@ -224,7 +225,7 @@ export function CameraRig() {
     } else {
       pos.current.lerp(want.current, k);
       look.current.lerp(wantLook.current, k);
-      if (!rt.voyage.active) {
+      if (!rt.voyage.active && !fixedCauseway) {
         const floor = standY(pos.current.x, pos.current.z, g.progress.solved);
         // Lowland bank framing keeps its bounded lift, but a raised deck is
         // solid even while smoothing from the previous camera position.
@@ -237,7 +238,7 @@ export function CameraRig() {
       pos.current.y = Math.min(pos.current.y, tunnelRoof - .55);
     }
     // Smoothing can sweep a clear endpoint back through a mesa corner.
-    if (!cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && !rope)
+    if (!fixedCauseway && !cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && !rope)
       pos.current.y += mesaCameraLift(look.current, pos.current);
     camera.position.copy(pos.current);
     camera.lookAt(look.current);

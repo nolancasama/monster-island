@@ -192,6 +192,16 @@ export const CAUSEWAY = rect(50, 113, -264.5, -242.5);
 export const PORT = rect(54, 100, -322.5, -289.5);
 export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.55 };
 export const SHRINE = disc(106.5, -251.5, 4.8);
+/** Full statue silhouettes sit at least .6m beyond the east walk boundary. */
+export const SHRINE_STATUES = [{ x: 114.2, z: -253.7 }, { x: 114.2, z: -249.3 }];
+export const GROVE_DOOR = { x: 56, z: -241.4, half: 1.85, postWidth: .8, depth: .4, height: 3.6, openAngle: Math.PI };
+export const GROVE_DOOR_RETURNS = [
+  { ax: 53.35, az: -241.4, bx: 52.8, bz: -240, r: .4 },
+  { ax: 58.65, az: -241.4, bx: 59.2, bz: -240, r: .4 },
+];
+/** A restored save starts open; a live clear waits for approach from either side. */
+export const groveDoorOpen = (cleared: boolean, distance: number, wasOpen: boolean, loading = false) =>
+  cleared && (loading || wasOpen || distance < 7);
 
 /** Central rock footprint shared by the landmark and collision. Never add walk shapes here. */
 export const MESA_OUTLINE: Array<[number, number]> = [
@@ -798,13 +808,13 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "canopy", kind: "forestSpitter", replaces: "gloomlet", x: 105.2, z: -230.6 },
   { zone: "canopy", kind: "snapjaw", x: 112, z: -235 },
   // The causeway: tougher pairs, and the shrine's guards.
-  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 62, z: -248.2 },
+  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 62, z: -249.3 },
   { zone: "causeway", kind: "shellback", x: 61.4, z: -258.4 },
   { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 85, z: -247.4 },
   { zone: "causeway", kind: "shellback", x: 91.6, z: -260.1 },
   { zone: "causeway", kind: "gloomlet", x: 103, z: -247.5 },
   { zone: "causeway", kind: "shellback", x: 103.4, z: -251.8 },
-  { zone: "causeway", kind: "snapjaw", x: 107.4, z: -249.2 },
+  { zone: "causeway", kind: "snapjaw", x: 107.4, z: -248.8 },
   // The coast: a lighter last stretch.
   { zone: "coast", kind: "gloomlet", x: 65.4, z: -272.4 },
   { zone: "coast", kind: "gloomlet", x: 85.2, z: -280.4 },
@@ -883,6 +893,9 @@ export function lowlandSolids(): SolidShape[] {
   for (const l of LOGS) out.push({ kind: "capsule", ...l });
   for (const ridge of LOWLAND_RIDGES) out.push({ kind: "capsule", ...ridge });
   for (const p of RUIN_PILLARS) circle(p.x, p.z, 0.6);
+  for (const p of SHRINE_STATUES) box(p.x, p.z, .55, .55);
+  for (const side of [-1, 1]) box(GROVE_DOOR.x + side * (GROVE_DOOR.half + GROVE_DOOR.postWidth / 2), GROVE_DOOR.z, GROVE_DOOR.postWidth / 2, GROVE_DOOR.depth / 2);
+  for (const wall of GROVE_DOOR_RETURNS) out.push({ kind: "capsule", ...wall });
   circle(FORK_SIGN.x, FORK_SIGN.z, 0.12);
   for (const c of CHESTS) if (!c.secret) box(c.x, c.z, 0.5, 0.36, c.yaw);
   for (const s of Object.values(SERVICES)) {
@@ -915,10 +928,10 @@ export function routeMarker(zone: ZoneId, playerX: number): Vec2 {
 
 /** Narrow exits span every walkable crossing, including the mounted body radius.
  * Backward routes to the preceding safe area remain open. */
-export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: number; orientation: "x" | "z"; kind: "roots" | "reeds" | "stone" | "wood"; cut: Rect }> = [
+export const STAGE_EXITS: Array<{ id: StageId; x: number; z: number; half: number; orientation: "x" | "z"; kind: "roots" | "reeds" | "stone" | "wood" | "groveDoor"; cut: Rect }> = [
   { id: "forest1", x: 58, z: -172, half: 9, orientation: "z", kind: "roots", cut: rect(57.6, 58.4, -184, -160) },
   { id: "forest1", x: 94, z: -170, half: 9, orientation: "z", kind: "roots", cut: rect(93.6, 94.4, -182, -158) },
-  { id: "grove", x: 56, z: -241.4, half: 5.8, orientation: "x", kind: "reeds", cut: rect(19, 70, -241.8, -241) },
+  { id: "grove", x: 56, z: -241.4, half: 5.8, orientation: "x", kind: "groveDoor", cut: rect(19, 70, -241.8, -241) },
   { id: "canopy", x: 96, z: -238, half: 6, orientation: "x", kind: "roots", cut: rect(82, 135, -238.4, -237.6) },
   { id: "causeway", x: 76, z: -264, half: 5, orientation: "x", kind: "stone", cut: rect(19, 135, -264.4, -263.6) },
   { id: "coast", x: 76, z: -288, half: 3.4, orientation: "x", kind: "wood", cut: rect(72.6, 79.4, -288.4, -287.6) },

@@ -47,6 +47,7 @@ import {
   RIGHT_ARM_TREES,
   SERVICES,
   SHRINE,
+  SHRINE_STATUES,
   STREAMS,
   ZONE_ORDER,
   ZONES,
@@ -199,7 +200,8 @@ function canopyRim(b: PartBuilder) {
   }
 }
 
-export function canopyDeckGeometry(): THREE.BufferGeometry {
+/** Keep the authored surface intact; only north-facing walls need sight-line fading. */
+export function canopyDeckGeometry(part: "all" | "solid" | "occluder" = "all"): THREE.BufferGeometry {
   const positions: number[] = [], colors: number[] = [];
   const top = new THREE.Color("#71984a"), dark = new THREE.Color("#4a452f"), bark = new THREE.Color("#6b4a30");
   const triangle = (a: number[], b: number[], c: number[], color: THREE.Color) => {
@@ -212,7 +214,7 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
       const x = x0 + (x1 - x0) * i / nx, z = z0 + (z1 - z0) * j / nz;
       return [x, canopySurfaceY(x, z), z];
     };
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    if (part !== "occluder") for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const a = vertex(i, j), b = vertex(i + 1, j), c = vertex(i, j + 1), d = vertex(i + 1, j + 1);
       // Dark lips mark real edges only, never the seam between two platforms.
       const edge = (i === 0 && !onCanopyDeck(x0 - .4, (a[2] + c[2]) / 2)) || (i === nx - 1 && !onCanopyDeck(x1 + .4, (a[2] + c[2]) / 2))
@@ -223,6 +225,8 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     }
     for (let i = 0; i < deck.pts.length; i++) {
       const [ax, az] = deck.pts[i], [bx, bz] = deck.pts[(i + 1) % deck.pts.length];
+      const northFace = az === bz && az === z0;
+      if (part !== "all" && northFace !== (part === "occluder")) continue;
       const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 1.5);
       for (let j = 0; j < n; j++) {
         const x = ax + (bx - ax) * j / n, z = az + (bz - az) * j / n;
@@ -253,7 +257,7 @@ export function canopyDeckGeometry(): THREE.BufferGeometry {
     }
     return result;
   };
-  for (let plank = 0; plank < 24; plank++) for (let ring = 1; ring < radii.length; ring++) {
+  if (part !== "occluder") for (let plank = 0; plank < 24; plank++) for (let ring = 1; ring < radii.length; ring++) {
     const a = plank * Math.PI / 12 + .006, b = (plank + 1) * Math.PI / 12 - .006;
     const at = (r: number, angle: number): [number, number] => [center.x + Math.cos(angle) * r, center.z + Math.sin(angle) * r];
     const polygon = [at(radii[ring - 1], a), at(radii[ring - 1], b), at(radii[ring], b), at(radii[ring], a)];
@@ -647,11 +651,12 @@ export function updateCanopyPayingRope(geometry: THREE.BufferGeometry, end: THRE
   tube.dispose();
 }
 
-/** Causeway paving, edge rubble and arches, the shrine, forest plants, logs, boulders. */
+/** Causeway paving and edge rubble, the shrine, forest plants, logs, boulders. */
 export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.3);
   const rand = makeRng(31);
   const gy = lowlandSceneryY;
+  const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
   // The islet belongs to scenery, never to the animated pad instances.
   const mound = new THREE.CylinderGeometry(ISLET.r, ISLET.r + 0.35, 1, 24, 1);
   const mp = mound.getAttribute("position");
@@ -666,6 +671,15 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     for (let z = CAUSEWAY.z0 + 1.6; z < CAUSEWAY.z1 - 0.6; z += 2.1) {
       if (rand() < 0.18) continue;
       const dx = (rand() - 0.5) * 0.15, dz = (rand() - 0.5) * 0.15, turn = (rand() - 0.5) * 0.08, tone = rand();
+      const cx = x + dx, cz = z + dz, top = gy(x, z) + .08;
+      // A shoulder beside the Grove passage rises above the combat floor.
+      // Never let its paving bridge over the lower floor as a floating slab.
+      if (!lowlandWalkable(cx, cz, open, 0)) continue;
+      const corners = [-.95, .95].flatMap(u => [-.95, .95].map(v => [
+        cx + Math.cos(turn) * u + Math.sin(turn) * v,
+        cz - Math.sin(turn) * u + Math.cos(turn) * v,
+      ]));
+      if (corners.some(([xx, zz]) => top > gy(xx, zz) + .3)) continue;
       b.boxAt(
         1.9,
         0.12,
@@ -696,29 +710,15 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
     for (const yaw of [0, Math.PI / 2])
       b.boxAt(.035, .24, .18, [x, gy(x, z) + .12, z], [0, yaw + i, 0], "#5f9a44");
   }
-  // A broken arch where the grove joins the causeway, another at the shrine.
-  for (const [x, z] of [
-    [58, -243],
-    [102, -251.5],
-  ]) {
-    const y = gy(x, z);
-    b.cyl(0.45, 0.55, 4.2, x - 2.4, y - 0.1, z, "#b3a893", 8);
-    b.cyl(0.45, 0.55, 3.1, x + 2.4, y - 0.1, z, "#b3a893", 8);
-    b.boxAt(5.6, 0.7, 1, [x - 0.3, y + 4.3, z], [0, 0, -0.08], "#c2b7a3");
-  }
   // The shrine: a stepped platform, statues of monsters, a glowing stone.
   const sy = gy(SHRINE.x, SHRINE.z);
   b.cyl(4.2, 4.5, 0.25, SHRINE.x, sy - 0.15, SHRINE.z, "#b2a895", 12);
-  for (const [dx, dz] of [
-    [2.6, -2.2],
-    [2.6, 2.2],
-  ]) {
-    const x = SHRINE.x + dx,
-      z = SHRINE.z + dz;
-    b.box(0.9, 0.9, 0.9, x, sy, z, "#9d9384");
-    b.sphere(0.55, x, sy + 1.4, z, "#a8b0a0", [1, 1.1, 1], 8);
-    b.sphere(0.12, x - 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
-    b.sphere(0.12, x + 0.18, sy + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
+  for (const { x, z } of SHRINE_STATUES) {
+    const y = gy(x, z);
+    b.box(0.9, 0.9, 0.9, x, y, z, "#9d9384");
+    b.sphere(0.55, x, y + 1.4, z, "#a8b0a0", [1, 1.1, 1], 8);
+    b.sphere(0.12, x - 0.18, y + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
+    b.sphere(0.12, x + 0.18, y + 1.6, z + 0.45, "#5a6a5a", [1, 1, 0.5], 5);
   }
   // Scattered small rocks and undergrowth continue the forest floor here.
   for (const [i, [x, z]] of [[84.4, -158.5], [90.8, -157.2], [91.4, -163.6]].entries())

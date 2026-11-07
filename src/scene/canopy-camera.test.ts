@@ -14,13 +14,18 @@ it("the entrance rope's climb camera stays on the open forest side of the wall",
   expect(c.z).toBeGreaterThan(r.faceZ + 3);
 });
 
-it("the exit rope's climb camera and the foot's follow camera stay north of the landing", () => {
+it("the exit rope's climb camera stays north while the foot keeps the fixed Causeway lens", () => {
   const r = CANOPY_ROPES.exit;
   expect(lens(r.x, r.bodyZ, true).z).toBeLessThan(r.faceZ - 3);
-  for (let z = r.foot.z; z > -251; z -= 1) expect(lens(r.x, z).z).toBeLessThan(r.faceZ);
+  for (let z = r.foot.z; z > -251; z -= 1) {
+    const c = lens(r.x, z);
+    expect(c.id).toBe("ruined-causeway");
+    expect(c.x).toBe(r.x);
+    expect(c.z).toBeCloseTo(z + 10.5 * Math.cos(.8));
+  }
 });
 
-it("the sanctuary rope keeps its own climb framing and the open Causeway keeps the default", () => {
+it("the sanctuary rope keeps its own climb framing and the open Causeway uses its fixed profile", () => {
   expect(lens(CLIFF_ROPE.x, CLIFF_ROPE.bodyZ, true).id).toBe("cliff-rope");
-  expect(lens(76, -256).id).toBe("lowland");
+  expect(lens(76, -256).id).toBe("ruined-causeway");
 });

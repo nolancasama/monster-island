@@ -10,6 +10,8 @@ import {
   STAGE_EXITS,
   TOWN_GATE,
   townGateOpen,
+  GROVE_DOOR,
+  groveDoorOpen,
   gapDeck,
   lowlandBridgeY,
   CANOPY_GAPS,
@@ -27,6 +29,7 @@ import { ropeCoilGeometry } from "./models/forest";
 import { flatMat, occluderMat, smoothMat } from "./materials";
 import { conformBridge } from "./models/bridge";
 import { portDoorGeometry, portWallGeometry } from "./models/portWall";
+import { groveDoorGeometry, groveDoorFrameGeometry } from "./models/groveDoor";
 import { audio } from "../audio/audio";
 import { Chest } from "./Chest";
 import { Secrets } from "./Secrets";
@@ -344,8 +347,9 @@ export function Lowland() {
   const fernTree = useMemo(treeFernGeometry, []);
   const reed = useMemo(reedGeometry, []);
   const props = useMemo(() => spatialGeometry(lowlandPropsGeometry(), TILE), []);
-  // Solid: walking surfaces must not dither away under the player like props do.
-  const canopyDecks = useMemo(canopyDeckGeometry, []);
+  // Walking tops stay solid; north faces dissolve along the fixed Causeway sight line.
+  const canopyDecks = useMemo(() => canopyDeckGeometry("solid"), []);
+  const canopyFaces = useMemo(() => canopyDeckGeometry("occluder"), []);
   const cliff = useMemo(cliffFaceGeometry, []);
   const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
@@ -369,6 +373,7 @@ export function Lowland() {
       ))}
       <mesh geometry={cliff} material={flatMat} />
       <DistanceMesh geometry={canopyDecks} material={flatMat} />
+      <DistanceMesh geometry={canopyFaces} material={occluderMat} />
       <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />
@@ -379,12 +384,13 @@ export function Lowland() {
       <DistanceMesh geometry={town} material={flatMat} />
       <DistanceMesh geometry={portWall} material={occluderMat} far={PORT_WALL_FAR} />
       <PortGate />
+      <GroveDoor />
       <DistanceMesh geometry={signs.geo} material={signMat} />
       <TiledInstances geometry={tree} spots={spots.trees} material={occluderMat} />
       <TiledInstances geometry={fernTree} spots={spots.fernTrees} material={occluderMat} />
       <TiledInstances geometry={fern} spots={spots.ferns} material={flatMat} far={60} />
       <TiledInstances geometry={reed} spots={spots.reeds} material={flatMat} far={50} />
-      {STAGE_EXITS.filter((gate) => gate.kind !== "wood").map((gate) => (
+      {STAGE_EXITS.filter((gate) => gate.kind !== "wood" && gate.kind !== "groveDoor").map((gate) => (
         <StageBarrier key={`${gate.id}:${gate.x}`} gate={gate} />
       ))}
       <CliffRope />
@@ -440,6 +446,34 @@ function PortGate() {
     <mesh ref={right} geometry={doors.right} material={occluderMat} position={[TOWN_GATE.x + PORT_WALL.gateHalf, y, PORT_WALL.z]} />
   </group>;
 }
+function GroveDoor() {
+  const frame = useMemo(groveDoorFrameGeometry, []);
+  const doors = useMemo(() => [groveDoorGeometry(1), groveDoorGeometry(-1)], []);
+  const left = useRef<THREE.Mesh>(null), right = useRef<THREE.Mesh>(null);
+  const state = useRef({ open: false, k: -1 });
+  useFrame((_, dt) => {
+    const game = getGame(), s = state.current;
+    // The scene mounts behind the title, before Continue installs saved progress.
+    if (game.screen !== "game") { s.open = false; s.k = -1; return; }
+    const cleared = game.progress.act2.cleared.includes("grove");
+    const opened = groveDoorOpen(cleared, Math.hypot(rt.player.x - GROVE_DOOR.x, rt.player.z - GROVE_DOOR.z), s.open, s.k < 0);
+    if (s.k < 0) s.k = opened ? 1 : 0;
+    else if (opened && !s.open) audio.play("stones");
+    s.open = opened;
+    s.k = Math.max(0, Math.min(1, s.k + (s.open ? dt : -dt) / .7));
+    const angle = s.k * s.k * (3 - 2 * s.k) * GROVE_DOOR.openAngle;
+    if (left.current) left.current.rotation.y = angle;
+    if (right.current) right.current.rotation.y = -angle;
+    lowlandView.barriers.grove = s.k;
+  });
+  const y = groundY(GROVE_DOOR.x, GROVE_DOOR.z);
+  return <group>
+    <DistanceMesh geometry={frame} material={occluderMat} />
+    <mesh ref={left} geometry={doors[0]} material={occluderMat} position={[GROVE_DOOR.x - GROVE_DOOR.half, y, GROVE_DOOR.z]} />
+    <mesh ref={right} geometry={doors[1]} material={occluderMat} position={[GROVE_DOOR.x + GROVE_DOOR.half, y, GROVE_DOOR.z]} />
+  </group>;
+}
+
 function StageBarrier({ gate }: { gate: (typeof STAGE_EXITS)[number] }) {
   const geometry = useMemo(() => stageBarrierGeometry(gate), [gate]),
     ref = useRef<THREE.Mesh>(null),

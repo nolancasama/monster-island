@@ -16,6 +16,8 @@ import {
   type Spot,
 } from "./models/lowland";
 import { ropeCoilGeometry } from "./models/forest";
+import { groveDoorFrameGeometry, groveDoorGeometry } from "./models/groveDoor";
+import { GROVE_DOOR } from "../game/world/lowland";
 
 const TILE = 96, FOG_FAR = 260;
 type Draw = { name: string; bounds: THREE.Sphere; triangles: number; far: number; spots?: Spot[] };
@@ -57,7 +59,11 @@ function instances(name: string, geometry: THREE.BufferGeometry, spots: Spot[], 
 beforeAll(() => {
   for (const geometry of lowlandTerrainTiles(TILE)) add("terrain", geometry);
   for (const geometry of spatialGeometry(lowlandPropsGeometry(), TILE)) add("props", geometry);
-  add("canopyDecks", canopyDeckGeometry());
+  add("canopyDecks", canopyDeckGeometry("solid"));
+  add("canopy north faces", canopyDeckGeometry("occluder"));
+  add("grove door frame", groveDoorFrameGeometry());
+  for (const dir of [1, -1] as const)
+    add("grove door leaf", groveDoorGeometry(dir), GROVE_DOOR.x - dir * GROVE_DOOR.half, groundY(GROVE_DOOR.x, GROVE_DOOR.z), GROVE_DOOR.z);
   add("canopy rope anchors", canopyRopeAnchorsGeometry(), 0, 0, 0, 0, 40);
   for (const [id, rope] of Object.entries(CANOPY_ROPES)) add(`canopy ${id} rope`, canopyRopeGeometry(rope), 0, 0, 0, 0, 40);
   const entrance = CANOPY_ROPES.entrance, coilX = entrance.x + .9, coilZ = entrance.foot.z - .3;
@@ -77,6 +83,7 @@ beforeAll(() => {
   instances("ferns", giantFernGeometry(), spots.ferns, 60);
   instances("reeds", reedGeometry(), spots.reeds, 50);
   for (const gate of STAGE_EXITS)
+    if (gate.kind !== "groveDoor")
     add("barrier", stageBarrierGeometry(gate), gate.x, lowlandSceneryY(gate.x, gate.z), gate.z, gate.orientation === "z" ? Math.PI / 2 : 0);
   const lilies = lilyPadGeometry();
   geometries.add(lilies);

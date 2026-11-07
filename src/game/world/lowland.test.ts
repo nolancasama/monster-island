@@ -6,6 +6,7 @@ import {
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, RUIN_PILLARS, lowlandSolids,
   GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY, CANOPY_ROPES,
+  CAUSEWAY, GROVE_DOOR, groveDoorOpen,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
@@ -74,6 +75,55 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
 }
 
 describe("the lowland below the sanctuary", () => {
+  it("keeps a 3.2m swing circle at every Causeway home clear of solids and internal ground cuts", () => {
+    const spawns = ENEMY_SPAWNS.filter(e => e.zone === "causeway");
+    expect(spawns).toHaveLength(14);
+    for (const e of spawns) {
+      for (const s of lowlandSolids()) {
+        let distance: number;
+        if (s.kind === "circle") distance = Math.hypot(e.x - s.x, e.z - s.z) - s.r;
+        else if (s.kind === "capsule") distance = nearestOnTrail([[s.ax, s.az], [s.bx, s.bz]], e.x, e.z).d - s.r;
+        else {
+          const dx = e.x - s.x, dz = e.z - s.z, c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+          distance = Math.hypot(Math.max(0, Math.abs(dx * c - dz * sn) - s.hx), Math.max(0, Math.abs(dx * sn + dz * c) - s.hz));
+        }
+        expect(distance, `${e.x},${e.z}: ${JSON.stringify(s)}`).toBeGreaterThanOrEqual(3.2);
+      }
+      for (let dx = -3.2; dx <= 3.2; dx += .2) for (let dz = -3.2; dz <= 3.2; dz += .2) {
+        if (Math.hypot(dx, dz) > 3.2) continue;
+        const x = e.x + dx, z = e.z + dz;
+        // Only the outer rectangle boundary may truncate a swing circle.
+        if (x < CAUSEWAY.x0 || x > CAUSEWAY.x1 || z < CAUSEWAY.z0 || z > CAUSEWAY.z1) continue;
+        expect(lowlandWalkable(x, z, gates(), 0), `${e.x},${e.z} circle at ${x},${z}`).toBe(true);
+      }
+    }
+  });
+
+  it("keeps the Grove cut closed until clear for foot and mounted bodies, with solid posts outside the open trail", () => {
+    for (const radius of [PLAYER_R, .55]) {
+      const closed = { ...gates(), cleared: STAGES.filter(id => id !== "grove") };
+      expect(lowlandWalkable(GROVE_DOOR.x, GROVE_DOOR.z, closed, radius)).toBe(false);
+      expect(isWalkable(GROVE_DOOR.x, GROVE_DOOR.z, gates(), radius)).toBe(true);
+      for (const direction of [-1, 1]) {
+        let p = { x: GROVE_DOOR.x, z: GROVE_DOOR.z + direction * 1.1 };
+        for (let i = 1; i <= 22; i++) p = moveCircle(p.x, p.z, GROVE_DOOR.x, GROVE_DOOR.z + direction * (1.1 - i * .1), radius, gates());
+        expect(p.z).toBeCloseTo(GROVE_DOOR.z - direction * 1.1);
+      }
+      for (const side of [-1, 1]) {
+        expect(isWalkable(GROVE_DOOR.x + side * (GROVE_DOOR.half + .4), GROVE_DOOR.z, gates(), radius)).toBe(false);
+        expect(isWalkable(GROVE_DOOR.x + side * (GROVE_DOOR.half - radius - .02), GROVE_DOOR.z, gates(), radius)).toBe(true);
+      }
+    }
+  });
+
+  it("opens the Grove door only after clear, on approach from either side, latching and restoring open", () => {
+    expect(groveDoorOpen(false, 0, true, true)).toBe(false);
+    expect(groveDoorOpen(true, 20, false)).toBe(false);
+    for (const z of [GROVE_DOOR.z - 6.9, GROVE_DOOR.z + 6.9]) expect(groveDoorOpen(true, Math.abs(z - GROVE_DOOR.z), false)).toBe(true);
+    expect(groveDoorOpen(true, 20, true)).toBe(true);
+    expect(groveDoorOpen(true, 20, false, true)).toBe(true);
+  });
+
   it("fits the real mounted body on the widened flat combat shoulders", () => {
     for (const [x, z] of [[60.5, -166], [32.6, -210], [112, -251], [91, -280]]) {
       for (const radius of [PLAYER_R, MONSTERS.bubbo.radius])
@@ -254,7 +304,11 @@ describe("the lowland below the sanctuary", () => {
 
   it("preserves every pre-existing spawn index, including the first seven Causeway enemies", () => {
     // Index 21 moved aside for the exit stairs; with its old point this hashes to ac5f4ffe….
-    const original = ENEMY_SPAWNS.slice(0, 41);
+    expect(ENEMY_SPAWNS[17]).toMatchObject({ x: 62, z: -249.3 });
+    expect(ENEMY_SPAWNS[23]).toMatchObject({ x: 107.4, z: -248.8 });
+    // Slice A moves these homes away from the passage rim and shrine chest;
+    // restore only their old coordinates when checking all other saved indices.
+    const original = ENEMY_SPAWNS.slice(0, 41).map((e, i) => i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
       .toBe("18654bf281508a56bd02a112c48e294fa1c0c0b75a4a13de8f74ed7662868d28");
   });
