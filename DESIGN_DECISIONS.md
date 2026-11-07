@@ -2161,3 +2161,36 @@ and would lose the player in a top-down view.
 - **Plank floor in the crate-lift chamber only.** The old dark floor had been hiding a stream, so
   removing it left the chest in running water. Rejected: moving the chest, which would move a tested
   secret's reachable spot.
+
+## 2026-11-07: Act 2 vertical expansion (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`)
+
+User plan (stream, cave, door, Causeway, Upper Canopy, summit, bubble descent) accepted with these
+controller decisions:
+
+- **Three traversal layers (`ground`, `cave`, `high`), one surface per (x, z) within a layer.** Every
+  existing query defaults to ground and must return byte-identical results (golden grid test). Rejected:
+  widening the 2D walk footprint (walks through the mesa) and a general multi-floor height query on
+  every call (regression risk across combat, companions and cameras). Bubble flight is a script state,
+  not a layer.
+- **The cave is a physical sublevel inside the mesa base, on its own layer, entered through an overlap
+  portal.** The mesa's ground solids stay untouched. Inside, the exterior is not drawn, which gives
+  leak-free darkness and no lens-in-rock problem. Rejected: a deep underground cave (long ramps) and an
+  off-map interior (breaks the geography).
+- **Cave light is baked along route distance, with no real point lights.** Parallel tunnels cannot
+  light each other through the spine. Characters take a cave ambient sampled at the player.
+- **Causeway: one profile, yaw 0, pitch about 0.8.** The 180° yaw swap of `causeway-exit-rope` near the
+  rope was the erratic turn; it becomes climbing-only, and the landing faces fade on the sight line.
+  Rejected: yaw π everywhere (looks back the way you came and away from the Coast exit).
+- **Grove door keeps the existing clear rule.** It only replaces the reeds barrier with a stone gate
+  that opens on approach.
+- **Upper Canopy edges fall by default** (one hazard with leaves as `safe`), returning to authored
+  checkpoints. Sway is visual only, there are at most 3 unstable leaves, and leaves are not flammable.
+  Upper leaves near the lower-Canopy lens are hidden per instance. Rejected: transparency (overdraw)
+  and keeping the upper level clear of the lower decks (it would not be above them).
+- **Upper Canopy, cave and summit enemies are optional**, and the summit bridge is not gated.
+- **Bubble descent lands in the Causeway only when `grove` or `canopy` is cleared**, otherwise in the
+  lower Canopy, so it is never a shortcut.
+- **Relics:** a two-value `act2.relics` list (Glow Crystal, Summit Star). Rejected: a new inventory
+  system.
+- **The Leafy root seal is the 7th secret** (existing hidden-chest rules). **The torches are Ember's new
+  Act 2 "Can you make fire?" unlock**, which closes the known issue "Ember lost its only Act 2 unlock".
