@@ -33,6 +33,7 @@ export type SfxName =
   | "thud"
   | "splash"
   | "stones"
+  | "drip"
   | "sparkle"
   | "stone"
   | "poof"
@@ -349,6 +350,11 @@ class AudioEngine {
       case "splash":
         this.noiseBurst(t, { filter: "bandpass", freq: 2200, to: 500, q: 0.6, peak: 0.22, attack: 0.015, decay: 0.4 });
         [460, 620, 780].forEach((f, i) => this.tone(f, t + i * 0.05, { to: f * 0.45, peak: 0.06, decay: 0.12 }));
+        break;
+      case "drip":
+        // A single drop in a still cave: a short rising plink and a faint echo.
+        this.tone(1250, t, { to: 2100, peak: 0.05, attack: 0.004, decay: 0.09 });
+        this.tone(1300, t + 0.16, { to: 2000, peak: 0.018, attack: 0.004, decay: 0.12 });
         break;
       case "stones":
         this.noiseBurst(t, { filter: "lowpass", freq: 300, to: 90, peak: 0.32, attack: 0.1, decay: 1.2 });

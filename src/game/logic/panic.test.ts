@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { ENEMIES, type EnemyKind } from "../data/combat";
 import { ENEMY_SPAWNS, STAGES, zoneAt } from "../world/lowland";
 import { CLOUD_ENEMY_SPAWNS, CLOUD_PUZZLES, CLOUD_STAGES, cloudZoneAt } from "../world/cloudisle";
 import { isWalkable, moveCircle, type Gates } from "../world/collision";
 import { hazardAt } from "./elements";
+import { region } from "../world/region";
+import { layerOfZone } from "../world/layers";
 import { PANIC_TURN, canStartPanic, endPanicResistance, panicDuration, panicSpeedScale, recordPanicStep, startPanic, updatePanicHeading } from "./panic";
 
 describe("burning panic rules", () => {
@@ -56,6 +58,7 @@ describe("burning panic rules", () => {
 });
 
 describe("panic movement property", () => {
+  afterEach(() => { region.layer = "ground"; });
   it("makes net progress from every spawn in both worlds while staying walkable, in-zone and outside hazards", () => {
     const home: Gates = { solved: ["groveLilies", "canopyVines", "canopyRope"], act2: true, cleared: STAGES };
     const cloud: Gates = { solved: [], cloud: { cleared: CLOUD_STAGES, solved: CLOUD_PUZZLES, tunnelOpen: true } };
@@ -67,6 +70,9 @@ describe("panic movement property", () => {
       const solved = world === "home" ? home.solved : CLOUD_PUZZLES;
       for (let i = 0; i < spawns.length; i++) {
         const spawn = spawns[i], kind: EnemyKind = spawn.kind, def = ENEMIES[kind];
+        // An enemy runs only while the player shares its layer (the active one).
+        region.layer = world === "home" ? layerOfZone(spawn.zone) : "ground";
+        const zoneHere = (x: number, z: number) => world === "home" ? zoneAt(x, z, region.layer) : zoneAtPoint(x, z);
         for (const bearing of [.51, 3.6]) {
           const panic = startPanic(def.weightClass, 0);
           const px = spawn.x + Math.sin(bearing) * 2, pz = spawn.z + Math.cos(bearing) * 2;
@@ -79,14 +85,14 @@ describe("panic movement property", () => {
             let moved = 0;
             if (!hazardAt(nx, nz, world, solved)) {
               moveCircle(x, z, nx, nz, def.radius, gates, false, undefined, out);
-              if (zoneAtPoint(out.x, out.z) === spawn.zone && !hazardAt(out.x, out.z, world, solved)) {
+              if (zoneHere(out.x, out.z) === spawn.zone && !hazardAt(out.x, out.z, world, solved)) {
                 moved = Math.hypot(out.x - x, out.z - z);
                 x = out.x; z = out.z;
               }
             }
             recordPanicStep(panic, moved, expected, now);
             expect(isWalkable(x, z, gates, def.radius), `${world}:${i}:${frame}:walkable`).toBe(true);
-            expect(zoneAtPoint(x, z), `${world}:${i}:${frame}:zone`).toBe(spawn.zone);
+            expect(zoneHere(x, z), `${world}:${i}:${frame}:zone`).toBe(spawn.zone);
             expect(hazardAt(x, z, world, solved), `${world}:${i}:${frame}:hazard`).toBeNull();
           }
           expect(Math.hypot(x - spawn.x, z - spawn.z), `${world}:${i}:${kind}:${bearing}:progress`).toBeGreaterThan(.08);

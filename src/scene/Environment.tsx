@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
+import { caveAtmosphere } from "./layerView";
+
+const CAVE_BLACK = new THREE.Color("#020203");
 import {
   BOULDERS,
   DRIFTWOOD,
@@ -65,7 +68,24 @@ export function SkyAndLights() {
     scene.fog = new THREE.Fog("#cdeeff", 70, 260);
     gl.setClearColor(bg);
   }, [scene, gl]);
+  const hemi = useRef<THREE.HemisphereLight>(null), ambient = useRef<THREE.AmbientLight>(null), sky = useRef<THREE.Group>(null);
+  const caveLast = useRef(0);
   useFrame(() => {
+    // Inside the cave the sky is gone and the sun barely reaches: characters
+    // are dark but for their eyes, warmed only by the torches near them.
+    const cave = caveAtmosphere.k;
+    if (cave > 0 || caveLast.current > 0) {
+      caveLast.current = cave;
+      const dim = 1 - .96 * cave + .3 * caveAtmosphere.warm * cave;
+      if (hemi.current) hemi.current.intensity = 1.15 * dim;
+      if (ambient.current) ambient.current.intensity = .16 * dim;
+      if (daylight.current) daylight.current.intensity = 2.3 * (1 - cave);
+      if (sky.current) sky.current.visible = cave < .5;
+      const bg = scene.background instanceof THREE.Color ? scene.background : null;
+      if (bg) { bg.set("#cdeeff").lerp(CAVE_BLACK, cave); gl.setClearColor(bg); }
+      if (scene.fog instanceof THREE.Fog) scene.fog.color.set("#cdeeff").lerp(CAVE_BLACK, cave);
+      if (cave > 0) return;
+    }
     const storm = voyageStorm(), color = dome.attributes.color as THREE.BufferAttribute;
     if (storm === 0 && lastStorm.current === 0) return;
     lastStorm.current = storm;
@@ -83,15 +103,17 @@ export function SkyAndLights() {
   });
   return (
     <group>
-      <mesh geometry={dome} material={domeMat} renderOrder={-10} />
-      <mesh ref={sun} position={[-140, 260, 200]} renderOrder={-9}>
-        <circleGeometry args={[16, 24]} />
-        <meshBasicMaterial color="#fff6dc" fog={false} />
-      </mesh>
-      <Clouds />
-      <hemisphereLight args={["#d8ecff", "#c8a878", 1.15]} />
+      <group ref={sky}>
+        <mesh geometry={dome} material={domeMat} renderOrder={-10} />
+        <mesh ref={sun} position={[-140, 260, 200]} renderOrder={-9}>
+          <circleGeometry args={[16, 24]} />
+          <meshBasicMaterial color="#fff6dc" fog={false} />
+        </mesh>
+        <Clouds />
+      </group>
+      <hemisphereLight ref={hemi} args={["#d8ecff", "#c8a878", 1.15]} />
       <directionalLight ref={daylight} color="#fff4e0" intensity={2.3} position={[-40, 55, 30]} />
-      <ambientLight color="#ffffff" intensity={0.16} />
+      <ambientLight ref={ambient} color="#ffffff" intensity={0.16} />
     </group>
   );
 }

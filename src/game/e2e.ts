@@ -11,6 +11,7 @@ import { GATE_PILLARS, MAPLE, groundY } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
 import { cameraRef } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
+import { caveView } from "../scene/Cave";
 import { dprState, perf } from "../scene/GameScene";
 import * as THREE from "three";
 import { cb, companionVisible, elementObjectStates, stageStatus, wakeEnemy, type EnemyState } from "./combat";
@@ -116,6 +117,7 @@ export function installE2eHook(seed: number) {
           unlock: { ...rt.act2Unlock },
           groveCrossing: groveCrossingView.phase,
           groveStream: groveStreamView.phase,
+          cave: { ...caveView },
           panel: g.panel,
           banner: g.banner?.title ?? null,
           hint: g.hint

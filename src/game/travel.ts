@@ -7,7 +7,8 @@ import { ACT2_PLACE, PHASE3_PLACE, cancelGroveStream } from "./flow/obstacles";
 import { cancelDebugScripts } from "./debugLifecycle";
 import type { Layer } from "./world/region";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
-import { ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
+import { CAVE_CHAMBER } from "./world/cave";
+import { ACT2_OBSTACLE_PLACE, CAVE_MOUTH, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
 export const placePlayer = (x: number, z: number, faceX: number, faceZ: number, layer: Layer = "ground") => {
@@ -58,6 +59,9 @@ export const travelTarget = (name: string): { x: number; z: number } | null => {
     if (name === "cliffUp") return { x: CLIFF_ROPE.foot.x, z: CLIFF_ROPE.foot.z + 0.6 };
     if (name === "forestEntrance") return CLIFF_ROPE.foot;
     if (name === "forkSign") return FORK_SIGN;
+    // The cave: its mouth outside (ground) and its chamber (cave layer).
+    if (name === "caveMouth") return { x: CAVE_MOUTH.portalX - 1.6, z: CAVE_MOUTH.z };
+    if (name === "caveChamber") return { x: CAVE_CHAMBER.x + 1, z: CAVE_CHAMBER.z };
     if (name in SERVICES) return SERVICES[name as ServiceId].keeper;
     if (name.startsWith("zone:")) return routeMarker(name.slice(5) as ZoneId, rt.player.x) ?? null;
     const chest = CHESTS.find((c) => c.id === name);

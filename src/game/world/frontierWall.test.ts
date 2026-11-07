@@ -4,6 +4,7 @@ import { blocked, gatesOf, isWalkable, moveCircle, PLAYER_R, solidsFor, type Gat
 import { groundY, LEDGE, massifY } from "./island";
 import { CLIFF_FOOT_Z, CLIFF_ROPE, ENEMY_SPAWNS, lowlandWalkable, STAGES, zoneAt } from "./lowland";
 import { ENEMIES } from "../data/combat";
+import { layerOfZone } from "./layers";
 import { FRONTIER_ANCHORS, FRONTIER_GATE, FRONTIER_GATE_FOOTPRINT, FRONTIER_JAMBS, FRONTIER_SOLIDS, FRONTIER_STONES, FRONTIER_TOWER, footprintPoint, frontierTerrainY } from "./frontierWall";
 import { frontierGateGeometry, frontierRenderedFoundation, frontierWallGeometry } from "../../scene/models/frontierWall";
 import { cliffFaceGeometry } from "../../scene/models/lowland";
@@ -44,6 +45,12 @@ describe("the Sanctuary frontier", () => {
   it("has no enemy spawn or reachable chase/leash area on the prologue side, even with the gate open", () => {
     for (const e of ENEMY_SPAWNS) {
       const def = ENEMIES[e.kind];
+      // Cave and treetop enemies live on their own layer, far north of the cliff foot.
+      if (layerOfZone(e.zone) !== "ground") {
+        expect(zoneAt(e.x, e.z, layerOfZone(e.zone))).toBe(e.zone);
+        expect(e.z + def.leash + def.radius).toBeLessThan(CLIFF_FOOT_Z);
+        continue;
+      }
       expect(zoneAt(e.x, e.z)).toBe(e.zone);
       // Spawn centres are on lowland floor; some existing large shellbacks
       // overlap a prop at full body radius and are projected by moveCircle.

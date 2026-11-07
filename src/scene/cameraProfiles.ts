@@ -14,6 +14,8 @@ export interface CameraProfile extends Framing {
   fov?: number;
   viewShift?: number;
   trackYaw?: boolean;
+  /** A fixed lens: no bank pull-in, floor clamp or mesa lift (geometry is cut away for it). */
+  fixed?: boolean;
   /** Metres of smoothed look-ahead along world x, from the player's velocity. */
   lead?: number;
   anchor?: { x: number; z: number } | ((p: CameraPoint, frame: Framing) => { x: number; z: number });
@@ -126,6 +128,10 @@ const GROUND_PROFILES: readonly CameraProfile[] = [
 
 /** Profiles for the cave and high layers (added by their content), most specific first. */
 const LAYER_PROFILES: readonly CameraProfile[] = [
+  // Inside the mesa: one fixed steep view. The camera-side walls are built as low
+  // lips for this yaw, and no terrain or mesa lift applies (the lens is "in" rock).
+  { ...DEFAULT_CAMERA, id: "cave", kind: "lowland", fixed: true, yaw: 0, pitch: 1.0, dist: 8, ahead: 1,
+    contains: p => !p.cloud && p.layer === "cave" },
   // Fallback for any layer area without its own framing (never a ground view).
   { ...DEFAULT_CAMERA, id: "layer-default", kind: "lowland", contains: p => !p.cloud && (p.layer ?? "ground") !== "ground" },
 ];

@@ -1,6 +1,8 @@
 import type { ObstacleId } from "../types";
 import { region, type Layer } from "./region";
 import { LAYER_WORLDS } from "./layers";
+// Layer content registers itself with the layer registry on import.
+import "./cave";
 import { cloudMove, cloudNearestWalkable, cloudSolids, cloudWalkable, cloudY, type CloudGates } from "./cloudisle";
 import {
   EARLY_OVERLOOK,

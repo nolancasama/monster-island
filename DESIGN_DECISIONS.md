@@ -2312,3 +2312,30 @@ controller decisions:
   (`layerCandidates()` is for layer content), and there is no story marker off the ground.
   **Rendering:** `scene/layerView.ts`; the whole ground lowland group hides while the player is in
   the cave.
+
+## 2026-11-07: The cave (slice D, controller)
+
+- **Layout:** a J/U route of 59.4 m, mouth to chamber. The mouth is on the mesa's west face at z -227
+  (Grove south bank). The tunnel runs east, north up the stem's east side (x ≈ 78.6), round a bend
+  through the head's east lobe, and west into a 6.2 m chamber in the head's west lobe, with an alcove
+  on its east side. Deviation from the spec's "chamber at the far tip of the U's other arm": the
+  stem is 7.4 m wide inside the 0.8 m margin, too narrow for a 5.5 m chamber beside a parallel arm
+  and a 1.2 m spine, so the far tip lives in the broad head. Three side recesses, 2.5–3.2 m tunnels.
+- **Mouth:** `CAVE_MOUTH` in `lowland.ts`. A ground approach pocket (`groundX1` 70.8, kept 1.5 m off
+  the mesa as the raw-shape rule requires) overlaps the cave floor, and the portal line at x 69.6 has
+  a ±0.45 m dead band. The mesa's ground solids and exclusions are unchanged. The ground golden test
+  proves the pocket is the only ground change: removing it reproduces the pre-layer hashes exactly.
+- **Rendering:** a `GroundWorld` group hides the whole island and lowland while the player is in the
+  cave (the sea and massif had shown through as navy). `caveAtmosphere.k` (0.4 s) dims the lights
+  to 4%, hides the sky and blacks out the background and fog, and the fade overlay dips briefly at the
+  portal. The cave material is a `ShaderMaterial` that ignores scene lights (ambient 0.05 plus a faint
+  3 m silhouette around the player) and carries `routeS` and `torch` attributes for slice E.
+  Mushrooms and crystals use an unlit glow material. Eyes are instanced white dots (amber for
+  enemies) shown only in the unlit cave. 20 draw calls, 23k triangles.
+- **Walls are graded for the fixed lens** (yaw 0, pitch 1.0, dist 8): each wall vertex looks along -z
+  for the nearest floor a body can stand on, and its height is capped so the sight line from the lens
+  to a head there clears it. Far and side walls stay 3.2–4.4 m tall and rough, with overhangs and
+  stalactites. Rejected: the first rule, a lip chosen by wall orientation, which failed 26 of 400+
+  sampled points at concave recesses. Verified by `cave-visibility.test.ts`.
+- Two optional cave gloomlets sit in the bend, at least 10 m from the chamber. Debug destinations: Cave
+  mouth, Cave chamber. A drip sound plays every 1.4–4.2 s while inside.

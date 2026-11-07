@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PLAYER_R, isWalkable, moveCircle, standY, type Gates } from "./collision";
+import { layerOfZone } from "./layers";
 import { groundY } from "./island";
 import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
@@ -266,8 +267,9 @@ describe("the lowland below the sanctuary", () => {
     for (const [id, place] of Object.entries(ACT2_OBSTACLE_PLACE)) expect(near(place.x, place.z, 1), id).toBe(true);
     for (const e of ENEMY_SPAWNS) {
       const radius = e.kind === "forestSpitter" || e.kind === "raiderShooter" ? ENEMIES[e.kind].radius : .5;
-      expect(isWalkable(e.x, e.z, gates(["canopyVines", "canopyRope", "groveLilies"]), radius), `${e.zone} ${e.x},${e.z}`).toBe(true);
-      expect(zoneAt(e.x, e.z), `${e.x},${e.z}`).toBe(e.zone);
+      const layer = layerOfZone(e.zone);
+      expect(isWalkable(e.x, e.z, gates(["canopyVines", "canopyRope", "groveLilies"]), radius, false, layer), `${e.zone} ${e.x},${e.z}`).toBe(true);
+      expect(zoneAt(e.x, e.z, layer), `${e.x},${e.z}`).toBe(e.zone);
     }
   });
 
@@ -600,7 +602,8 @@ describe("the U around the reserved mesa", () => {
     expect(required).toHaveLength(5);
     expect(required.every(e => e.z >= -183 && e.x > 60 && e.x < 90)).toBe(true);
     for (const side of ["left", "right"] as const) {
-      const optional = ENEMY_SPAWNS.filter(e => e.optional && (side === "left" ? e.x < 76 : e.x > 76));
+      // The forest arms only; the cave and treetops hold their own optional enemies.
+      const optional = ENEMY_SPAWNS.filter(e => e.optional && layerOfZone(e.zone) === "ground" && (side === "left" ? e.x < 76 : e.x > 76));
       expect(optional).toHaveLength(3);
       for (const e of optional) {
         expect(e.zone).toBe("forest1");

@@ -212,6 +212,11 @@ export const GROVE_DOOR_RETURNS = [
 export const groveDoorOpen = (cleared: boolean, distance: number, wasOpen: boolean, loading = false) =>
   cleared && (loading || wasOpen || distance < 7);
 
+/** The cave mouth on the mesa's west face (Grove south bank). The ground pocket
+ * reaches the rock's 1.5 m clearance; the cave layer's floor overlaps it from
+ * x0, and the portal line at portalX switches layer (world/cave.ts). */
+export const CAVE_MOUTH = { z: -227, portalX: 69.6, x0: 67, x1: 73.6, z0: -229, z1: -225, groundX1: 70.8 };
+
 /** Central rock footprint shared by the landmark and collision. Never add walk shapes here. */
 export const MESA_OUTLINE: Array<[number, number]> = [
   [69, -187], [83, -188], [89, -197], [82.1, -204],
@@ -323,6 +328,8 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       disc(48, -232.5, 11.6),
       rect(48.5, 63.4, -207, -186),
       rect(51, 69, -240, -205),
+      // The cave mouth's approach, up to the mesa's clearance (it stays solid rock).
+      rect(66.5, CAVE_MOUTH.groundX1, CAVE_MOUTH.z0, CAVE_MOUTH.z1),
       rect(32, 51.5, -240, -203),
       rect(51, 67.8, -205, -203),
       rect(51, 65.8, -203, -201),
@@ -861,6 +868,9 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "causeway", kind: "gloomlet", x: 68, z: -261 },
   { zone: "causeway", kind: "snapjaw", x: 54, z: -252 },
   { zone: "causeway", kind: "gloomlet", x: 101, z: -259 },
+  // The optional cave (cave layer): two gloomlets in the head's bend, far from the chamber.
+  { zone: "cave", kind: "gloomlet", x: 83.2, z: -197.3, optional: true },
+  { zone: "cave", kind: "gloomlet", x: 80.8, z: -192.3, optional: true },
 ];
 
 /** Town props (scenery placements shared by the scene and collision). */

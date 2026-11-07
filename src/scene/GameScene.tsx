@@ -19,6 +19,8 @@ import { CameraRig } from "./CameraRig";
 import { CollisionOverlay } from "./CollisionOverlay";
 import { useGame } from "../game/store";
 import { CloudIsle } from "./CloudIsle";
+import { Cave } from "./Cave";
+import { layerView } from "./layerView";
 import { VoyageBoat } from "./VoyageBoat";
 import { installMouseAttacks } from "../input/attackInput";
 
@@ -90,6 +92,16 @@ function BeachDetail({ children }: { children: ReactNode }) {
   return <group ref={ref}>{children}</group>;
 }
 
+/** Everything on the ground layer: hidden while the player is inside the cave,
+ * where the mesa's rock would otherwise surround the lens. */
+function GroundWorld({ children }: { children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.visible = layerView(rt.player.layer).ground;
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 export function GameScene() {
   const cloud = useGame((s) => s.screen === "game" && s.progress.act3.world === "cloud");
   return (
@@ -105,19 +117,22 @@ export function GameScene() {
       <AdaptiveDpr />
       {cloud ? <CloudIsle /> : <>
       <SkyAndLights />
-      <Terrain />
-      <Sea />
-      <FarLand />
-      <BeachDetail>
-        <River />
-        <Rocks />
-        <Vegetation />
-        <Props />
-      </BeachDetail>
-      <Forest />
-      <Volcano />
-      <Lowland />
-      <Maple />
+      <GroundWorld>
+        <Terrain />
+        <Sea />
+        <FarLand />
+        <BeachDetail>
+          <River />
+          <Rocks />
+          <Vegetation />
+          <Props />
+        </BeachDetail>
+        <Forest />
+        <Volcano />
+        <Lowland />
+        <Maple />
+      </GroundWorld>
+      <Cave />
       </>}
       <VoyageBoat />
       <CombatScene />
