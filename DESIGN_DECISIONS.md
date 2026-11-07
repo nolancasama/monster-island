@@ -2431,3 +2431,12 @@ controller decisions:
   timing unchanged. A save mid-descent resumes on the departure stone.
 - The bubble is one translucent fresnel sphere (r 1.3, around the whole body) with shimmer, a
   highlight, a wobble, five pooled motes and Bubbo's smaller bubble.
+
+## 2026-11-07: User playtest decisions (after the first deploy)
+
+- **The cave is a true U with two entrances**, both on the Grove's south bank, with the treasure chamber
+  at the bottom of the U. This replaces the spec's "no second exit". The plan is in `CURRENT_STATE.md`.
+- **The unlit cave is pitch black, almost unplayable**: only eyes and faint glows, so lighting the torches
+  matters.
+- **The first Grove stream crossing must always be a "Can you swim?" moment.** No save migration skips it,
+  and the ask is offered at both banks.
