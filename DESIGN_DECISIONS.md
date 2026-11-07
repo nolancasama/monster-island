@@ -2221,3 +2221,21 @@ controller decisions:
   Causeway. These are preserved pending clarification of whether the existing
   secret is an exception or must be relocated; this remains an unresolved slice A
   requirement, not an approved exception.
+
+## 2026-11-07: Causeway landing cutaway correction
+
+- The rope-foot lens is inside the Canopy mass. The opaque `exitLanding` back
+  (+z) wall at z=-237.1 in `canopyDeckGeometry("solid")` fills the view; the
+  chest ray hits (96,9.689,-237.1). North-face-only fading missed this face.
+- Discard both complete deck batches (all faces, including tops) while the
+  ground Causeway follow view has its lens beyond z=-241.12 on the Canopy side
+  and its player chest before z=-240.88 on the Causeway side. Deck walkers retain
+  their tops; mesh vertices, walking surfaces, ropes and stage gates are intact.
+  The existing LOS screen-door rule also applies to terrain and the exit rope
+  only in Causeway framing: real chest rays additionally hit the east terrain
+  shoulder and the thin rope. No extra draws or transparency blending.
+- Rejected: moving/raising the fixed lens, changing yaw/pitch/distance, deleting
+  deck faces or altering traversal, and enlarging the global LOS cone/radius
+  (would change other profiles and still leave a large wall around the opening).
+  The 0.75 m real-geometry ray grid retains a pre-fix failure witness and checks
+  the rope pocket, north strip, Grove lintel and shrine.

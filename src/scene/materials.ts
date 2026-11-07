@@ -15,6 +15,27 @@ const losUniforms = {
   radius: { value: 0 }
 };
 
+const canopyCutaway = { value: 0 };
+const causewayView = { value: 0 };
+/** Whole-mass cutaway, including tops, only while looking out from inside the
+ * Canopy toward the ground Causeway. Deck walkers keep the complete surface. */
+export function canopyCutawayAt(lens: THREE.Vector3, target: THREE.Vector3, causeway: boolean): boolean {
+  return causeway && lens.z > -241.12 && target.z < -240.88;
+}
+
+function deckMaterial(base: THREE.MeshLambertMaterial): THREE.MeshLambertMaterial {
+  const material = base.clone();
+  material.onBeforeCompile = (shader, renderer) => {
+    base.onBeforeCompile(shader, renderer);
+    shader.uniforms.uCanopyCutaway = canopyCutaway;
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uCanopyCutaway;")
+      .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (uCanopyCutaway > 0.5) discard;");
+  };
+  material.customProgramCacheKey = () => `${base.customProgramCacheKey()}-canopy-cutaway-v1`;
+  return material;
+}
+
 /**
  * Shared world material with a screen-door opening around the camera-to-player
  * line. Keeping the effect in one material means instanced and merged scenery
@@ -62,8 +83,25 @@ if (uLosRadius > 0.0) {
 };
 occluderMat.customProgramCacheKey = () => "line-of-sight-screen-door-v4";
 
+export const canopySolidMat = deckMaterial(flatMat);
+export const canopyOccluderMat = deckMaterial(occluderMat);
+
+/** Terrain shoulders and the thin exit rope need LOS clearance only in the
+ * fixed Causeway view. Geometry, collision and every other profile stay intact. */
+export const causewayOccluderMat = occluderMat.clone();
+causewayOccluderMat.onBeforeCompile = (shader, renderer) => {
+  occluderMat.onBeforeCompile(shader, renderer);
+  shader.uniforms.uCausewayView = causewayView;
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", "#include <common>\nuniform float uCausewayView;")
+    .replace("if (uLosRadius > 0.0)", "if (uLosRadius > 0.0 && uCausewayView > 0.5)");
+};
+causewayOccluderMat.customProgramCacheKey = () => "causeway-line-of-sight-screen-door-v1";
+
 /** Update the shared line-of-sight capsule after the follow camera has moved. */
-export function updateOccluderFade(camera: THREE.Camera, target: THREE.Vector3, enabled: boolean): void {
+export function updateOccluderFade(camera: THREE.Camera, target: THREE.Vector3, enabled: boolean, causeway = false): void {
+  causewayView.value = enabled && causeway ? 1 : 0;
+  canopyCutaway.value = enabled && canopyCutawayAt(camera.position, target, causeway) ? 1 : 0;
   losUniforms.radius.value = enabled ? 1.55 : 0;
   if (!enabled) return;
   camera.updateMatrixWorld(true);

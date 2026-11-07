@@ -258,7 +258,7 @@ export function CameraRig() {
     } else if (cam.view) {
       cam.clearViewOffset();
     }
-    updateOccluderFade(camera, probe.set(rt.player.x, rt.player.y + 1, rt.player.z), g.screen === "game");
+    updateOccluderFade(camera, probe.set(rt.player.x, rt.player.y + 1, rt.player.z), g.screen === "game", fixedCauseway);
     c.pos.x = pos.current.x;
     c.pos.y = pos.current.y;
     c.pos.z = pos.current.z;

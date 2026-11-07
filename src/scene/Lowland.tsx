@@ -26,7 +26,7 @@ import {
 import { TUNNEL, groundY, inTunnel } from "../game/world/island";
 import { standY } from "../game/world/collision";
 import { ropeCoilGeometry } from "./models/forest";
-import { flatMat, occluderMat, smoothMat } from "./materials";
+import { flatMat, occluderMat, smoothMat, canopySolidMat, canopyOccluderMat, causewayOccluderMat } from "./materials";
 import { conformBridge } from "./models/bridge";
 import { portDoorGeometry, portWallGeometry } from "./models/portWall";
 import { groveDoorGeometry, groveDoorFrameGeometry } from "./models/groveDoor";
@@ -317,7 +317,7 @@ function CanopyRopes() {
   return <group>
     <DistanceMesh geometry={anchors} material={flatMat} far={CANOPY_ROPE_FAR} />
     <mesh ref={hangRef} geometry={entrance} material={flatMat} />
-    <DistanceMesh geometry={exit} material={flatMat} far={CANOPY_ROPE_FAR} />
+    <DistanceMesh geometry={exit} material={causewayOccluderMat} far={CANOPY_ROPE_FAR} />
     <mesh ref={coilRef} geometry={coil} material={smoothMat} position={[coilX, groundY(coilX, coilZ), coilZ]} />
     <mesh ref={payingRef} geometry={paying} material={payingMat} frustumCulled={false} />
   </group>;
@@ -372,8 +372,8 @@ export function Lowland() {
         <DistanceMesh key={i} geometry={g} material={flatMat} />
       ))}
       <mesh geometry={cliff} material={flatMat} />
-      <DistanceMesh geometry={canopyDecks} material={flatMat} />
-      <DistanceMesh geometry={canopyFaces} material={occluderMat} />
+      <DistanceMesh geometry={canopyDecks} material={canopySolidMat} />
+      <DistanceMesh geometry={canopyFaces} material={canopyOccluderMat} />
       <DistanceMesh geometry={mesa} material={flatMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />

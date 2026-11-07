@@ -18,7 +18,9 @@ describe("open Causeway scenery", () => {
       // Existing Canopy branches overhang the rope pocket from the raised deck;
       // their bases stand upstairs, rather than obstructing the ground fight.
       const canopyBranch = x >= 91.8 && x <= 100.2 && z >= -242.3 && z <= -241 && aboveGround > 8;
-      if (fight(x, z) && aboveGround > .6 && !canopyBranch) tall.push([x, y, z]);
+      // Boulders deliberately fill the unreachable north-east corner (solid, off the floor).
+      const cornerBoulders = x >= 108.8 && z >= -246 && z <= -241.8;
+      if (fight(x, z) && aboveGround > .6 && !canopyBranch && !cornerBoulders) tall.push([x, y, z]);
     }
     expect(tall).toEqual([]);
     // Both former arches and statue sites are inside this checked footprint.

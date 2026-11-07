@@ -750,6 +750,11 @@ export const MOSSY_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
   ...RIGHT_ARM_BOULDERS,
   { x: 63, z: -225, r: 1.1, h: 1.6 },
   { x: 53, z: -194, r: .9, h: 1.3 },
+  // The Causeway's north-east corner backs onto a steep bank that hides a
+  // player from the fixed lens; boulders fill it so nobody stands there.
+  { x: 111.9, z: -243.3, r: 1.35, h: 1.1 },
+  { x: 109.9, z: -242.9, r: .85, h: .8 },
+  { x: 112.6, z: -244.9, r: .8, h: .7 },
 ];
 export const LOGS: Array<{ ax: number; az: number; bx: number; bz: number; r: number }> = [
   { ax: 65, az: -163, bx: 67, bz: -161, r: 0.35 },
