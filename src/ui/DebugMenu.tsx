@@ -84,6 +84,25 @@ function TravelMap({ position, onTravel }: { position: ReturnType<typeof usePosi
   </div>;
 }
 
+/** The optional exploration's permanent unlocks: cave torches, the root seal,
+ * Bubbo's bubble, and the two relics. */
+function ProgressToggles() {
+  const p = useGame(s => s.progress);
+  const solved = (id: "caveTorches" | "summitBubble") => (on: boolean) => setGame({ progress: { ...p, solved: on ? [...p.solved.filter(x => x !== id), id] : p.solved.filter(x => x !== id) } });
+  const secret = (on: boolean) => setGame({ progress: { ...p, act2: { ...p.act2, secrets: on ? [...p.act2.secrets.filter(x => x !== "caveRootSeal"), "caveRootSeal"] : p.act2.secrets.filter(x => x !== "caveRootSeal") } } });
+  const relic = (id: "caveCrystal" | "summitStar") => (on: boolean) => setGame({ progress: { ...p, act2: { ...p.act2, relics: on ? [...p.act2.relics.filter(x => x !== id), id] : p.act2.relics.filter(x => x !== id) } } });
+  const rows: Array<[string, string, boolean, (on: boolean) => void]> = [
+    ["caveTorches", "Cave torches lit", p.solved.includes("caveTorches"), solved("caveTorches")],
+    ["caveRootSeal", "Cave root seal open", p.act2.secrets.includes("caveRootSeal"), secret],
+    ["summitBubble", "Bubbo's bubble unlocked", p.solved.includes("summitBubble"), solved("summitBubble")],
+    ["caveCrystal", "Relic: Glow Crystal", p.act2.relics.includes("caveCrystal"), relic("caveCrystal")],
+    ["summitStar", "Relic: Summit Star", p.act2.relics.includes("summitStar"), relic("summitStar")],
+  ];
+  return <>{rows.map(([id, label, checked, set]) => (
+    <label key={id}><input type="checkbox" data-testid={`debug-progress-${id}`} checked={checked} onChange={e => set(e.target.checked)} /> {label}</label>
+  ))}</>;
+}
+
 function DebugDialog() {
   const debug = useDebug();
   const streamSolved = useGame(s => s.progress.solved.includes("groveStream"));
@@ -129,6 +148,7 @@ function DebugDialog() {
             const p = getGame().progress;
             setGame({ progress: { ...p, solved: e.target.checked ? [...p.solved.filter(id => id !== "groveStream"), "groveStream"] : p.solved.filter(id => id !== "groveStream") } });
           }} /> Grove stream ferry solved</label>
+          <ProgressToggles />
           {cloudIsleShipDebugEnabled() && <button data-testid="debug-cloud-ship" aria-pressed={debug.cloudIsleShipOpen} onClick={() => setCloudIsleShipOpen(!debug.cloudIsleShipOpen)}>Cloud Isle ship: {debug.cloudIsleShipOpen ? "open" : "locked"}</button>}
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, coins: p.act2.coins + 100 } } }); }, "Added 100 coins")}>+100 coins</button>
