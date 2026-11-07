@@ -3,7 +3,7 @@ import { FOODS } from "../data/foods";
 import { COMBAT, PRICES, RECIPES, COMPANION_IDS, type CompanionId } from "../data/combat";
 import { NPCS, type NpcId } from "../data/town";
 import { NUMBER_PHRASE, WANT_PHRASE, heardQuantity, type PhraseId } from "../logic/english";
-import { buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDescended, openChest, practise, rested, stayAtInn, startAct2, addCoins, type Checkpoint } from "../logic/act2";
+import { RELIC_NAMES, buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDescended, openChest, practise, rested, stayAtInn, startAct2, addCoins, type Checkpoint } from "../logic/act2";
 import { companions } from "../logic/progress";
 import { banner, getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
@@ -388,6 +388,11 @@ export function openChestScene(id: string): Promise<void> {
     if (c.food && c.food.n > overflow) parts.push(`${c.food.n - overflow} ${FOODS[c.food.id].word}`);
     if (overflow) parts.push(`${overflow} bonus coins`);
     await say("game", `Treasure! ${parts.join(", ")}!`, `たからばこ! コイン ${c.coins}まい${c.amber ? "・こはく" : ""}${c.food ? `・${FOODS[c.food.id].ja}` : ""}`);
+    if (c.relic) {
+      const relic = RELIC_NAMES[c.relic];
+      toast({ en: `${relic.en}!`, ja: `${relic.ja}!`, icon: "star", tone: "good" }, 3600);
+      await say("game", `You found the ${relic.en}! It is very rare.`, `${relic.ja}を みつけた! とても めずらしい たからものだよ`);
+    }
     if (id === "forestChest") {
       await say("game", "Food gives HP and MP! Press F to eat. (Tap the food in your bag.)", "たべものを たべると HPと MPが ふえるよ! F キー (または バッグの たべもの を タップ)");
       await say("game", "Amber is for monster treats. Keep it for the town!", "こはくは モンスターの おやつの ざいりょう。まちまで もっていこう!");

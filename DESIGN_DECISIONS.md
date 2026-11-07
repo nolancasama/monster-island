@@ -2339,3 +2339,27 @@ controller decisions:
   sampled points at concave recesses. Verified by `cave-visibility.test.ts`.
 - Two optional cave gloomlets sit in the bend, at least 10 m from the chamber. Debug destinations: Cave
   mouth, Cave chamber. A drip sound plays every 1.4–4.2 s while inside.
+
+## 2026-11-07: Cave puzzles (slice E, controller)
+
+- **`caveTorches`** ("Can you make fire?", Ember). Ember walks to the north brazier, and a scripted flame jet lights it. Then
+  `rt.caveTorches.spread` runs 0→1 over 6 s: both braziers burn outside, and an orange carved channel
+  beside the route lights up as the flame travels, lighting 12 torches in route order (two in the
+  chamber). Any Fire Breath or Inferno on a brazier or torch does the same through the element-object
+  reducer (state `lit`, no secret) and `hooks.caveFlame`. Rejected: a fake `cb.breath` for the scripted
+  route (player-driven state). The cave never needs lighting.
+- **Light:** baked per vertex from both route distance and straight-line distance, so it never crosses
+  rock; the lit cave raises ambient to 0.1. Characters warm up by the baked light at the player's
+  position (`caveAtmosphere.warm` feeds the hemisphere light), and eyes stop glowing once warm.
+- **The cave material is double-sided:** marching-squares wall segments have no consistent winding,
+  so single-sided culling striped the walls like a stockade.
+- **Root seal:** the `caveRootSeal` secret lives in a new `CAVE_SECRET_IDS` list. It is saved in
+  `act2.secrets` (the reader accepts `ALL_SECRET_IDS`), but its blocker is not in the ground solids:
+  the alcove's walk shape opens only once the secret is complete (`LayerWorld.walkable` now receives
+  gates). Rejected: adding it to `SECRET_IDS`, which would put a cave blocker into the ground solids
+  and every ground-secret test. Leafy's Vine Grab pulls it (grabbable + heavy), lit or dark, and the
+  slab slides 1.75 m aside along its plane. The clue is glowing moss along its crack.
+- **Chest `caveRootSealChest`:** cave layer, hidden until discovered (existing chest rule), 45 coins,
+  2 amber, relic `caveCrystal`. Ground chests render in the lowland; layer chests render in their layer's
+  group. `act2.relics` is additive in v4, granted once by its chest, with a toast and a line on open
+  and a star count in the coin panel (names in its tooltip and aria label).

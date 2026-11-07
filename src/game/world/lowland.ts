@@ -3,7 +3,8 @@ import type { SolidShape } from "./island";
 import { bridgeSurfaceY } from "./bridge";
 import { GROVE_STREAM_FERRY } from "./groveStream";
 import { GROVE_STREAM } from "./groveStream";
-import { SECRET_IDS, SECRET_SITES, type SecretId } from "./elementObjects";
+import { SECRET_IDS, SECRET_SITES, type CaveSecretId, type SecretId } from "./elementObjects";
+import type { RelicId } from "../logic/act2";
 import { CANOPY_GAPS, CANOPY_VOIDS, HOME_PONDS, ISLET, POND, canopyGapDeck } from "./hazards";
 import { LAYER_WORLDS, type LayerZone } from "./layers";
 import type { Layer } from "./region";
@@ -633,7 +634,7 @@ export const FORK_SIGN = { x: 76.5, z: -175, yaw: 0 };
 
 export interface ChestDef {
   id: string;
-  secret?: SecretId;
+  secret?: SecretId | CaveSecretId;
   /** Traversal layer (default ground) for the cave's and summit's chests. */
   layer?: Layer;
   /** Each chest is several draws: optional ones stay out of long views. */
@@ -644,6 +645,8 @@ export interface ChestDef {
   coins: number;
   amber: number;
   food?: { id: "apples" | "fish" | "berries" | "meat"; n: number };
+  /** A unique treasure, granted once (act2.relics). */
+  relic?: RelicId;
 }
 export const CHESTS: ChestDef[] = [
   // The tutorial chest at the end of the first forest: food to learn eating, and the first amber.
@@ -657,10 +660,14 @@ export const CHESTS: ChestDef[] = [
   { id: "groveHiddenCache", close: true, x: 61, z: -201, yaw: .5, coins: 25, amber: 1 },
   { id: "canopyTreasureLedge", close: true, x: 85.5, z: -210, yaw: -.5, coins: 25, amber: 1 },
   ...SECRET_IDS.map(secret => ({ id: `${secret}Chest`, secret, ...SECRET_SITES[secret].chest, yaw: 0, coins: 20, amber: 1 })),
+  // Behind Leafy's root seal at the back of the cave (cave layer; see world/cave.ts CAVE_CHEST).
+  { id: "caveRootSealChest", secret: "caveRootSeal", layer: "cave", close: true, x: 74.15, z: -199.35, yaw: -1.13, coins: 45, amber: 2, relic: "caveCrystal" },
 ];
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */
-export const ACT2_OBSTACLE_PLACE: Record<"groveStream" | "groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope", Vec2 & { face: Vec2 }> = {
+export const ACT2_OBSTACLE_PLACE: Record<"groveStream" | "groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope" | "caveTorches", Vec2 & { face: Vec2 }> = {
+  // In front of the cave mouth, facing the north brazier (Ember lights it).
+  caveTorches: { x: 67.4, z: -226.2, face: { x: 69.9, z: -224.55 } },
   groveStream: { ...GROVE_STREAM_FERRY.north, face: { ...GROVE_STREAM_FERRY.south } },
   canopyAscentRope: { ...CANOPY_ROPES.entrance.foot, face: { x: CANOPY_ROPES.entrance.x, z: CANOPY_ROPES.entrance.faceZ } },
   groveLilies: { ...GROVE_CROSSING.near, face: { ...GROVE_CROSSING.landing } },

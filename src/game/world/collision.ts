@@ -196,7 +196,7 @@ export function isWalkable(x: number, z: number, gates: Gates = CLOSED, m = 0, s
 function layerWalkable(x: number, z: number, gates: Gates, m: number, layer: Exclude<Layer, "ground">): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
   const world = LAYER_WORLDS[layer];
-  return world !== undefined && world.walkable(x, z, m, gates.solved) && !blocked(x, z, m, gates, layer);
+  return world !== undefined && world.walkable(x, z, m, gates) && !blocked(x, z, m, gates, layer);
 }
 
 /** The deck joins the beach at its north end, including beyond the waterline. */

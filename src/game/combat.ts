@@ -19,6 +19,7 @@ import { debugPaused, useDebug } from "./debugState";
 import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, weaponVictims, type Burn, type Control } from "./logic/elements";
 import { objectState, secretEvent, tickSecrets, type ElementState, type SecretProgress } from "./logic/secrets";
 import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementObject } from "./world/elementObjects";
+import { isCaveFlame } from "./world/cave";
 import { releaseAllAttacks } from "../input/attackInput";
 import { fireDamage } from "./logic/elements";
 import { hpAfterFall } from "./logic/falls";
@@ -287,7 +288,7 @@ export const cb = {
 };
 
 /** Called with the live fight when a knock-out happens (the flow owns the scene). */
-export const hooks = { knockout: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void), playerFall: null as null | ((ux: number, uz: number) => void) };
+export const hooks = { knockout: null as null | (() => void), caveFlame: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void), playerFall: null as null | ((ux: number, uz: number) => void) };
 
 /** No per-attempt boss progress is saved; checkpoints and lamps live in act3. */
 export function resetBeaconFight() {
@@ -688,7 +689,12 @@ function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) =
         || getGame().progress.act2.secrets.includes(secretOf(o))
         || cb.elementObjects[o.id]?.state === response.becomes || !contains(o)) continue;
       const before = secretProgress(), next = secretEvent(o.id, "burn", before);
-      if (next !== before) { applySecretProgress(next); selected = o; }
+      if (next !== before) {
+        applySecretProgress(next);
+        selected = o;
+        // Any brazier or torch lights the cave's whole ancient system.
+        if (isCaveFlame(o.id)) hooks.caveFlame?.();
+      }
     }
     return selected;
   }

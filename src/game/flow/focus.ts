@@ -22,7 +22,7 @@ const SERVICE_FOCUS: Record<ServiceId, { verb: string; noun: string }> = {
   inn: { verb: "Rest at", noun: "the inn" },
   harbor: { verb: "Ask about", noun: "the ship" }
 };
-const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { groveStream: "the stream", groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap", canopyAscentRope: "the rope coil" };
+const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { caveTorches: "the torch", groveStream: "the stream", groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap", canopyAscentRope: "the rope coil" };
 
 /**
  * What E (or the touch action button) would use right now: the nearest usable
@@ -36,7 +36,11 @@ interface Candidate {
 
 /** Interactions that live on the cave and high layers (filled by their content). */
 function layerCandidates(): Candidate[] {
-  return [];
+  const p = getGame().progress, out: Candidate[] = [];
+  for (const c of CHESTS)
+    if ((c.layer ?? "ground") === rt.player.layer && !p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret)))
+      out.push({ focus: { id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, reach: 2.3 });
+  return out;
 }
 
 function candidates(): Candidate[] {
@@ -105,7 +109,7 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
     const spot = down ? rope.top : rope.foot;
     add({ id: `canopy${id === "entrance" ? "Entrance" : "Exit"}${down ? "Down" : "Up"}`, kind: "cliffRope", verb: down ? "Climb down" : "Climb", noun: "the rope", x: spot.x, z: spot.z }, 2.2);
   }
-  for (const c of CHESTS) if (!p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret))) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
+  for (const c of CHESTS) if ((c.layer ?? "ground") === "ground" && !p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret))) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {
     if (id === "groveStream" && isSolved(p, id)) {
@@ -115,7 +119,7 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
     }
     if (isSolved(p, id) || !obstacleAvailable(p, id as ObstacleId)) continue;
     const place = ACT2_PLACE[id];
-    add({ id, kind: "obstacle", verb: "Look at", noun: ACT2_NOUN[id], ...(id === "groveStream" ? { ja: "かわを みよう" } : {}), x: place.x, z: place.z }, 2.6);
+    add({ id, kind: "obstacle", verb: "Look at", noun: ACT2_NOUN[id], ...(id === "groveStream" ? { ja: "かわを みよう" } : id === "caveTorches" ? { ja: "たいまつを みよう" } : {}), x: place.x, z: place.z }, 2.6);
   }
   for (const s of Object.values(SERVICES)) add({ id: s.id, kind: "npc", ...SERVICE_FOCUS[s.id], x: s.keeper.x, z: s.keeper.z }, 2.8);
 }

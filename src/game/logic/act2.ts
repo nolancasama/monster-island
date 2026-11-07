@@ -50,14 +50,23 @@ export interface Act2 {
   trained: CompanionId[];
   /** The area the player was in when last saved. */
   zone: ZoneId | null;
+  /** Unique treasures from the optional cave and summit chests (once each). */
+  relics: RelicId[];
 }
+
+export const RELIC_IDS = ["caveCrystal", "summitStar"] as const;
+export type RelicId = (typeof RELIC_IDS)[number];
+export const RELIC_NAMES: Record<RelicId, { en: string; ja: string }> = {
+  caveCrystal: { en: "Glow Crystal", ja: "ひかる クリスタル" },
+  summitStar: { en: "Summit Star", ja: "やまの ほし" },
+};
 
 export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo: MAX_MP, puff: MAX_MP, ember: MAX_MP });
 
 export function newAct2(): Act2 {
   return {
     forestLayout: 2, canopyLayout: 1, started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
-    chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null
+    chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null, relics: []
   };
 }
 
@@ -234,6 +243,7 @@ export function openChest(p: Progress, id: string): Progress {
   next = addCoins(next, c.coins + chestFoodOverflow(p, id));
   if (c.amber) next = addItem(next, "amber", c.amber);
   if (c.food) next = addFood(next, c.food.id, c.food.n).progress;
+  if (c.relic && !next.act2.relics.includes(c.relic)) next = withAct2(next, { relics: [...next.act2.relics, c.relic] });
   return next;
 }
 
@@ -311,7 +321,7 @@ export function act2Objective(p: Progress): Act2Objective {
 }
 
 /** Act 2's permanent unlocks exist only once the chapter has begun. */
-export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "canopyAscentRope", "groveStream"];
+export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "canopyRope", "canopyAscentRope", "groveStream", "caveTorches"];
 
 /** Only registered enemies in this stage count; duplicate or foreign indices cannot clear it. */
 export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): number {

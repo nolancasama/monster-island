@@ -184,6 +184,8 @@ export const rt = {
   canopyAscentRope: { carried: false, payout: 0, tied: 0 },
   /** Active stream rides save at their departure bank until dismount. */
   groveStreamFerry: { start: null as Vec2 | null },
+  /** The cave's ancient lights: spread 0..1 along the route; a scripted flame jet. */
+  caveTorches: { spread: 0, animating: false, jet: null as null | { from: Vec3; to: Vec3; until: number } },
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
@@ -230,6 +232,9 @@ export const PICK_TIME = 0.7;
 
 export function resetRuntime() {
   rt.groveStreamFerry.start = null;
+  rt.caveTorches.spread = 0;
+  rt.caveTorches.animating = false;
+  rt.caveTorches.jet = null;
   rt.world = "home";
   rt.voyage.active = false;
   rt.voyage.sail = 0;

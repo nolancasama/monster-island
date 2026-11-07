@@ -109,7 +109,8 @@ describe("shared move/object dispatch", () => {
     const completed = getGame().progress.act2.secrets;
     resetCombat();
     expect(cb.elementObjects).toEqual({});
-    expect(elementObjectStates().every(o => o.state === "complete")).toBe(true);
+    // The ground secrets' objects; the cave's torches and seal are separate.
+    expect(elementObjectStates().filter(o => !o.id.startsWith("cave")).every(o => o.state === "complete")).toBe(true);
     expect(getGame().progress.act2.secrets).toBe(completed);
   });
 

@@ -1,6 +1,7 @@
 import type { Vec2 } from "../types";
 import type { SolidShape } from "./island";
-import { CAVE_MOUTH, MESA_OUTLINE, inMesa, lowlandY, nearestOnTrail, trailLength, type WalkShape } from "./lowland";
+import { CAVE_MOUTH, MESA_OUTLINE, inMesa, lowlandY, nearestOnTrail, trailLength, trailPoint, type WalkShape } from "./lowland";
+import { ELEMENT_OBJECTS, type ElementObject } from "./elementObjects";
 import { LAYER_ENTRY, LAYER_PORTALS, registerLayerWorld, type LayerPortal } from "./layers";
 
 /**
@@ -36,6 +37,7 @@ export const CAVE_WALK: WalkShape[] = [
   { kind: "disc", ...CAVE_BEND },
   ...RECESSES.map((r): WalkShape => ({ kind: "disc", ...r })),
 ];
+const ALCOVE_SHAPE = CAVE_WALK[SEGMENT_HALF.length + 1];
 
 /** Stalagmites standing on the floor (solid, matching their rendered bases). */
 export const CAVE_STALAGMITES: Array<Vec2 & { r: number; h: number }> = [
@@ -44,7 +46,11 @@ export const CAVE_STALAGMITES: Array<Vec2 & { r: number; h: number }> = [
   { x: 72.6, z: -195.1, r: .3, h: 1.1 },
   { x: 75.6, z: -227.6, r: .28, h: .9 },
 ];
-const CAVE_SOLIDS: SolidShape[] = CAVE_STALAGMITES.map(s => ({ kind: "circle", x: s.x, z: s.z, r: s.r }));
+const CAVE_SOLIDS: SolidShape[] = [
+  ...CAVE_STALAGMITES.map((s): SolidShape => ({ kind: "circle", x: s.x, z: s.z, r: s.r })),
+  // The treasure chest at the back of the alcove (only reachable once the seal is open).
+  { kind: "box", x: 74.15, z: -199.35, hx: .5, hz: .36, yaw: -1.13 },
+];
 
 const BOUNDS = (() => {
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -72,9 +78,11 @@ export function caveClearance(x: number, z: number): number {
   }
   return best;
 }
-export function caveWalkable(x: number, z: number, m: number): boolean {
+/** Open floor. The alcove behind the root seal opens only once Leafy pulls it
+ * away (`open`); geometry and rendering always include it. */
+export function caveWalkable(x: number, z: number, m: number, open = true): boolean {
   if (x < BOUNDS.x0 || x > BOUNDS.x1 || z < BOUNDS.z0 || z > BOUNDS.z1) return false;
-  return CAVE_WALK.some(sh => inShape(sh, x, z, m));
+  return CAVE_WALK.some(sh => (open || sh !== ALCOVE_SHAPE) && inShape(sh, x, z, m));
 }
 
 /** Route distance of the nearest centreline point (for light spreading along the tunnel). */
@@ -112,9 +120,42 @@ const nearMesaEdge = (x: number, z: number, d: number) => nearestOnTrail(EDGE, x
 
 registerLayerWorld("cave", {
   zoneAt: (x, z) => caveWalkable(x, z, 0) ? "cave" : null,
-  walkable: (x, z, m) => caveWalkable(x, z, m),
+  walkable: (x, z, m, gates) => caveWalkable(x, z, m, gates.secrets?.includes("caveRootSeal") === true),
   surfaceY: (x, z) => caveWalkable(x, z, -.6) ? caveFloorY(x, z) : -Infinity,
   solids: CAVE_SOLIDS,
 });
 LAYER_PORTALS.push(CAVE_PORTAL);
 LAYER_ENTRY.cave = CAVE_ENTRY;
+
+// ------------------------------------------------------------ Ember's torches and Leafy's seal
+
+/** Two braziers flank the mouth outside (ground layer, on the bank: nobody stands there). */
+export const CAVE_BRAZIERS: Array<Vec2 & { id: string }> = [
+  { id: "caveBrazierNorth", x: 69.9, z: -224.55 },
+  { id: "caveBrazierSouth", x: 69.9, z: -229.45 },
+];
+/** Torches stand at the wall's foot along the route (cave layer), lit in route order. */
+export const CAVE_TORCHES: Array<Vec2 & { id: string; s: number }> = [4.5, 10.5, 16.5, 22.5, 28.5, 34.5, 40.5, 46.5, 52, 57].map((s, i): Vec2 & { id: string; s: number } => {
+  const p = trailPoint(CAVE_ROUTE, s), q = trailPoint(CAVE_ROUTE, Math.min(CAVE_ROUTE_LENGTH, s + .3));
+  const dx = q.x - p.x, dz = q.z - p.z, l = Math.hypot(dx, dz) || 1;
+  // The side away from the camera (toward -z), or east for a north-south tunnel.
+  let nx = -dz / l, nz = dx / l;
+  if (nz > .2 || (Math.abs(nz) <= .2 && nx < 0)) { nx = -nx; nz = -nz; }
+  let d = 0;
+  while (d < 4 && caveWalkable(p.x + nx * (d + .1), p.z + nz * (d + .1), 0)) d += .05;
+  return { id: `caveTorch${i}`, x: p.x + nx * (d - .22), z: p.z + nz * (d - .22), s };
+});
+// Two more on the chamber's far wall light the treasure room itself.
+for (const [i, [ux, uz]] of ([[-.6, -.8], [.1, -1]] as const).entries())
+  CAVE_TORCHES.push({ id: `caveTorch${10 + i}`, x: CAVE_CHAMBER.x + ux * (CAVE_CHAMBER.r - .22), z: CAVE_CHAMBER.z + uz * (CAVE_CHAMBER.r - .22), s: CAVE_ROUTE_LENGTH });
+/** The cracked stone panel across the alcove's opening, bound by an old root. */
+export const CAVE_SEAL = { x: 72.85, z: -198.75, yaw: Math.atan2(CAVE_ALCOVE.x - CAVE_CHAMBER.x, CAVE_ALCOVE.z - CAVE_CHAMBER.z), width: 2.3, height: 2.1 };
+export const CAVE_CHEST = { x: 74.15, z: -199.35, yaw: -1.13 };
+
+ELEMENT_OBJECTS.push(
+  ...CAVE_BRAZIERS.map((b): ElementObject => ({ id: b.id, world: "home", x: b.x, z: b.z, r: .6, tags: ["flammable"], on: { burn: { becomes: "lit" } } })),
+  ...CAVE_TORCHES.map((t): ElementObject => ({ id: t.id, world: "home", layer: "cave", x: t.x, z: t.z, r: .5, tags: ["flammable"], on: { burn: { becomes: "lit" } } })),
+  { id: "caveRootSeal", world: "home", layer: "cave", x: CAVE_SEAL.x, z: CAVE_SEAL.z, r: .8, tags: ["grabbable", "heavy"], on: { grab: { becomes: "pulled", secret: "caveRootSeal" } } },
+);
+/** True for any of the cave's ancient lighting objects. */
+export const isCaveFlame = (id: string) => id.startsWith("caveTorch") || id.startsWith("caveBrazier");

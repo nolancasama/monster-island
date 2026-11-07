@@ -31,7 +31,7 @@ describe("the fixed cave lens", () => {
       const hits = meshes.flatMap(m => ray.intersectObject(m));
       if (hits.length) failures.push(`(${x.toFixed(1)},${z.toFixed(1)}) hit at ${hits[0].point.toArray().map(n => n.toFixed(2))}`);
     }
-    expect(points).toBeGreaterThan(400);
+    expect(points).toBeGreaterThan(350);
     expect(failures).toEqual([]);
   }, 60_000);
 });

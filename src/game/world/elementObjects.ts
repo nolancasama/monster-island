@@ -16,6 +16,11 @@ export interface ElementObject {
 
 export const SECRET_IDS = ["emberThicket", "bubboLedgeKey", "leafyStatues", "puffLeaves", "comboCrateLift", "comboFurnace", "groveDryReeds", "canopyDryReeds"] as const;
 export type SecretId = (typeof SECRET_IDS)[number];
+/** Secrets on other traversal layers (the cave's root seal): saved with the
+ * ground ones, but their blockers live in their layer, not the ground solids. */
+export const CAVE_SECRET_IDS = ["caveRootSeal"] as const;
+export type CaveSecretId = (typeof CAVE_SECRET_IDS)[number];
+export const ALL_SECRET_IDS: readonly (SecretId | CaveSecretId)[] = [...SECRET_IDS, ...CAVE_SECRET_IDS];
 
 /** Optional pockets on existing land. Closed footprints enclose the reward so
  * it cannot be reached by walking around a thin door. No terrain is added. */
@@ -36,7 +41,8 @@ export const SECRET_SITES: Record<SecretId, {
   canopyDryReeds: { stage: "canopy", blocker: { kind: "box", x: 115, z: -211, hx: 1.5, hz: 2, yaw: 0 }, chest: { x: 115, z: -211.5 }, approach: { x: 114, z: -205.4 } },
 };
 
-export const ELEMENT_OBJECTS: readonly ElementObject[] = [
+/** Layer content (world/cave.ts) appends its own objects on import. */
+export const ELEMENT_OBJECTS: ElementObject[] = [
   { id: "emberThicket", world: "home", x: 89, z: -171.5, r: .8, tags: ["flammable"], on: { burn: { becomes: "burning", secret: "emberThicket" } } },
   { id: "bubboLedgeKey", world: "home", x: 56.8, z: -218, r: .6, tags: ["liftable"], on: { lift: { becomes: "slotted", secret: "bubboLedgeKey" } } },
   { id: "leafyStatues", world: "home", x: 66, z: -252, r: .7, tags: ["grabbable", "heavy"], on: { grab: { becomes: "pulled", secret: "leafyStatues" } } },

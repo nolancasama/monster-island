@@ -4,7 +4,7 @@ import { stageStatus, cloudStageStatus, cb, eat, inHostileZone } from "../game/c
 import { pressAttack, releaseAttack, type AttackSlot } from "../input/attackInput";
 import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
 import { FOODS } from "../game/data/foods";
-import { favouriteFood } from "../game/logic/act2";
+import { RELIC_NAMES, favouriteFood } from "../game/logic/act2";
 import { MONSTERS } from "../game/data/monsters";
 import { practiseCommand, quickBuy } from "../game/flow/act2";
 import { rt } from "../game/runtime";
@@ -186,6 +186,8 @@ function Moves() {
 function Coins() {
   const coins = useGame((s) => s.progress.act2.coins);
   const amber = useGame((s) => s.progress.act2.items.amber ?? 0);
+  const relics = useGame((s) => s.progress.act2.relics);
+  const names = relics.map(id => RELIC_NAMES[id].en).join(", ");
   return (
     <div className="coins panel ui" data-testid="coins" aria-label="Monster Coins">
       <Icon id="coin" size={28} />
@@ -194,6 +196,12 @@ function Coins() {
         <span className="amber-count" title="amber" data-testid="amber-count">
           <Icon id="amber" size={24} />
           <b>{amber}</b>
+        </span>
+      )}
+      {relics.length > 0 && (
+        <span className="amber-count" title={names} aria-label={`Treasures: ${names}`} data-testid="relics">
+          <Icon id="star" size={22} />
+          <b>{relics.length}</b>
         </span>
       )}
     </div>

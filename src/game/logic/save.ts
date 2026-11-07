@@ -5,10 +5,10 @@ import { OBSTACLES, gateOpen, newProgress, obstacleAvailable, type MonsterRecord
 import { PHRASES, type PhraseId } from "./english";
 import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
-import { ACT2_OBSTACLES, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
+import { ACT2_OBSTACLES, RELIC_IDS, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CLIFF_FOOT_Z, CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, CHESTS, ZONES, STAGES, STAGE_EXITS, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
-import { SECRET_IDS } from "../world/elementObjects";
+import { ALL_SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { rt } from "../runtime";
 import { GROVE_STREAM, GROVE_STREAM_MOVED_SCENERY, groveStreamSide } from "../world/groveStream";
@@ -96,7 +96,8 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   const amber = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(num(items.amber, 0))));
   if (amber) a.items.amber = amber;
   a.chests = list(raw.chests, CHESTS.map((c) => c.id));
-  a.secrets = list(raw.secrets, SECRET_IDS);
+  a.secrets = list(raw.secrets, ALL_SECRET_IDS);
+  a.relics = list(raw.relics, RELIC_IDS);
   a.tutorial = list(raw.tutorial, TUTORIAL_STEPS);
   a.upgrades = list<CompanionId>(raw.upgrades, COMPANION_IDS).filter((id) => p.monsters[id].friend);
   a.trained = list<CompanionId>(raw.trained, COMPANION_IDS);

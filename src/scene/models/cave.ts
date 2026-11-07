@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { makeRng } from "../../game/logic/rng";
-import { CAVE_ALCOVE, CAVE_CHAMBER, CAVE_ROUTE, CAVE_STALAGMITES, caveClearance, caveFloorY, caveRouteS, caveWalkable } from "../../game/world/cave";
+import { CAVE_ALCOVE, CAVE_BRAZIERS, CAVE_CHAMBER, CAVE_ROUTE, CAVE_ROUTE_LENGTH, CAVE_SEAL, CAVE_STALAGMITES, CAVE_TORCHES, caveClearance, caveFloorY, caveRouteS, caveWalkable } from "../../game/world/cave";
 import { CAVE_MOUTH } from "../../game/world/lowland";
 import { groundY } from "../../game/world/island";
 
@@ -73,10 +73,30 @@ export function caveWallHeight(_nz: number, x: number, z: number): number {
   return tall;
 }
 
-/** Tag vertices with route distance and a zero torch term (slice E bakes it). */
-function tagged(g: THREE.BufferGeometry): THREE.BufferGeometry {
+/** Light sources: the torches, plus the mouth (fed by the braziers). */
+const LIGHT_SOURCES = [{ x: CAVE_MOUTH.portalX + 1.6, z: CAVE_MOUTH.z, s: 1.5 }, ...CAVE_TORCHES];
+/**
+ * Baked warm light at a point: falls off with route distance as well as
+ * straight-line distance, so it never crosses solid rock between tunnels.
+ */
+export function caveTorchLight(x: number, z: number, s = caveRouteS(x, z)): number {
+  let sum = 0;
+  for (const t of LIGHT_SOURCES) {
+    const ds = Math.abs(s - t.s), d = Math.hypot(x - t.x, z - t.z);
+    if (ds > 9 || d > 9) continue;
+    const k = Math.max(0, 1 - Math.hypot(ds * .8, d * .55) / 5.5);
+    sum += k * k;
+  }
+  return Math.min(1.25, sum * 1.5);
+}
+
+/** Tag vertices with route distance and their baked torch light (`bright` overrides it). */
+export function tagged(g: THREE.BufferGeometry, bright?: number): THREE.BufferGeometry {
   const p = g.getAttribute("position"), s = new Float32Array(p.count), torch = new Float32Array(p.count);
-  for (let i = 0; i < p.count; i++) s[i] = caveRouteS(p.getX(i), p.getZ(i));
+  for (let i = 0; i < p.count; i++) {
+    s[i] = caveRouteS(p.getX(i), p.getZ(i));
+    torch[i] = bright ?? caveTorchLight(p.getX(i), p.getZ(i), s[i]);
+  }
   g.setAttribute("routeS", new THREE.BufferAttribute(s, 1));
   g.setAttribute("torch", new THREE.BufferAttribute(torch, 1));
   return g;
@@ -246,6 +266,8 @@ export function caveMouthGeometry(): { arch: THREE.BufferGeometry; dark: THREE.B
 export function caveMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexColors: true,
+    // Contour segments have no consistent winding; walls must show either face.
+    side: THREE.DoubleSide,
     uniforms: {
       uAmbient: { value: .05 },
       uPlayer: { value: new THREE.Vector3() },
@@ -288,4 +310,118 @@ void main() {
   #include <colorspace_fragment>
 }`,
   });
+}
+
+// ------------------------------------------------------------ slice E: torches, channel, braziers, seal
+
+/** Wall brackets, sticks and bowls (lit by their own torch once burning). */
+export function caveTorchGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  for (const t of CAVE_TORCHES) {
+    const y = caveFloorY(t.x, t.z);
+    b.cyl(.05, .07, 1.35, t.x, y - .05, t.z, "#5a3b22", 6);
+    b.cyl(.17, .1, .16, t.x, y + 1.3, t.z, "#3d3a36", 8);
+    b.box(.32, .06, .32, t.x, y + .04, t.z, "#4c4640");
+  }
+  return tagged(b.build());
+}
+/** Height of each torch's flame base (shared by the flames). */
+export const torchFlameY = (t: { x: number; z: number }) => caveFloorY(t.x, t.z) + 1.42;
+
+/** The carved channel the flame runs along: a narrow groove beside the route. */
+export function caveChannelGeometry(): THREE.BufferGeometry {
+  const positions: number[] = [], colors: number[] = [];
+  const c = new THREE.Color("#c8642a");
+  const step = .35;
+  let prev: [number, number] | null = null;
+  // The channel stops at the chamber's threshold; its own torches light the room.
+  for (let s = .8; s <= CAVE_ROUTE_LENGTH - 4.2; s += step) {
+    let best = CAVE_TORCHES[0], bestD = Infinity;
+    for (const t of CAVE_TORCHES) if (Math.abs(t.s - s) < bestD) { bestD = Math.abs(t.s - s); best = t; }
+    const p = routePoint(s), q = routePoint(Math.min(CAVE_ROUTE_LENGTH, s + .2));
+    const dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz) || 1;
+    let nx = -dz / l, nz = dx / l;
+    // Same side as the nearest torch.
+    if ((best.x - p[0]) * nx + (best.z - p[1]) * nz < 0) { nx = -nx; nz = -nz; }
+    let d = 0;
+    while (d < 4 && caveWalkable(p[0] + nx * (d + .1), p[1] + nz * (d + .1), 0)) d += .05;
+    const cx = p[0] + nx * Math.max(0, d - .35), cz = p[1] + nz * Math.max(0, d - .35);
+    if (prev) {
+      const [px, pz] = prev, ex = -(cz - pz), ez = cx - px, el = Math.hypot(ex, ez) || 1, w = .07;
+      const ox = ex / el * w, oz = ez / el * w;
+      const y0 = caveFloorY(px, pz) + .03, y1 = caveFloorY(cx, cz) + .03;
+      for (const v of [[px - ox, y0, pz - oz], [px + ox, y0, pz + oz], [cx + ox, y1, cz + oz], [px - ox, y0, pz - oz], [cx + ox, y1, cz + oz], [cx - ox, y1, cz - oz]]) {
+        positions.push(v[0], v[1], v[2]);
+        colors.push(c.r, c.g, c.b);
+      }
+    }
+    prev = [cx, cz];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return tagged(g, 2.2);
+}
+function routePoint(s: number): [number, number] {
+  let acc = 0;
+  for (let i = 1; i < CAVE_ROUTE.length; i++) {
+    const [ax, az] = CAVE_ROUTE[i - 1], [bx, bz] = CAVE_ROUTE[i], len = Math.hypot(bx - ax, bz - az);
+    if (acc + len >= s) { const u = (s - acc) / len; return [ax + (bx - ax) * u, az + (bz - az) * u]; }
+    acc += len;
+  }
+  return CAVE_ROUTE[CAVE_ROUTE.length - 1];
+}
+
+/** The two stone braziers outside the mouth (ground layer, ordinary lit material). */
+export function caveBrazierGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  for (const br of CAVE_BRAZIERS) {
+    const y = groundY(br.x, br.z);
+    b.cyl(.42, .5, .55, br.x, y - .1, br.z, "#8a8578", 8);
+    b.cyl(.22, .3, .55, br.x, y + .4, br.z, "#77726a", 8);
+    b.cyl(.52, .3, .32, br.x, y + .9, br.z, "#3f3b36", 10);
+    for (let k = 0; k < 4; k++) b.boxAt(.08, .38, .08, [br.x + Math.cos(k * 1.57) * .45, y + 1.0, br.z + Math.sin(k * 1.57) * .45], [Math.cos(k * 1.57) * .4, 0, Math.sin(k * 1.57) * .4], "#2f2c29");
+  }
+  return b.build();
+}
+export const brazierFlameY = (br: { x: number; z: number }) => groundY(br.x, br.z) + 1.15;
+
+/** A single flame (a cone) for instancing: base at the origin, tip up. */
+export function flameGeometry(): THREE.BufferGeometry {
+  const g = new THREE.ConeGeometry(.13, .48, 6, 1);
+  g.translate(0, .24, 0);
+  const inner = new THREE.ConeGeometry(.07, .3, 5, 1);
+  inner.translate(0, .17, 0);
+  const colors = (geo: THREE.BufferGeometry, hex: string) => {
+    const c = new THREE.Color(hex), n = geo.getAttribute("position").count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+    geo.setAttribute("color", new THREE.BufferAttribute(a, 3));
+    return geo.index ? geo.toNonIndexed() : geo;
+  };
+  const merged = new PartBuilder(0);
+  merged.add(colors(g, "#ff8a2a"), "#ff8a2a", [0, 0, 0], [0, 0, 0], [1, 1, 1], { vary: false, flatAo: true });
+  merged.add(colors(inner, "#ffe48a"), "#ffe48a", [0, 0, 0], [0, 0, 0], [1, 1, 1], { vary: false, flatAo: true });
+  return merged.build();
+}
+
+/** Leafy's seal: a cracked stone panel bound by an old root (moves as one group). */
+export function caveSealGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  const { width: w, height: h } = CAVE_SEAL;
+  b.box(w, h, .3, 0, 0, 0, "#7f858a");
+  for (const [mx, my] of [[-.7, .3], [.6, 1.6], [-.2, 1.85]]) b.boxAt(.5, .3, .33, [mx, my, 0], [0, 0, .3], "#5d7a4a");
+  // Cracks (dark), a carved vine symbol (lighter relief), and the binding root.
+  b.boxAt(.06, h * .8, .32, [.15, h * .45, 0], [0, 0, .18], "#2b2724");
+  b.boxAt(.05, h * .4, .32, [-.4, h * .62, 0], [0, 0, -.5], "#2b2724");
+  for (let k = 0; k < 5; k++) b.boxAt(.1, .32, .34, [-.6 + Math.sin(k * 1.3) * .12, .45 + k * .3, 0], [0, 0, k % 2 ? .6 : -.6], "#857a6c");
+  for (const y of [.55, 1.45]) b.boxAt(w + .25, .16, .4, [0, y, 0], [0, 0, y > 1 ? .06 : -.05], "#3b2a1c");
+  b.cylAt(.12, h + .4, [w / 2 - .1, h / 2, .08], [0, 0, .05], "#4a3322", 6);
+  return b.build();
+}
+/** Faint glowing moss along the panel's crack: visible even in the dark. */
+export function caveSealGlowGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  const h = CAVE_SEAL.height;
+  for (let k = 0; k < 7; k++) b.sphere(.05 + (k % 3) * .015, .15 + Math.sin(k * 1.7) * .06 + (k - 3) * .02, .3 + k * h * .11, .17, k % 2 ? "#5ff0d0" : "#8dffb0", [1.4, .7, .6], 5);
+  return b.build();
 }

@@ -422,7 +422,7 @@ export function Lowland() {
       <Unlocks />
       <GroveWake />
       <Secrets />
-      {CHESTS.map((c) => (
+      {CHESTS.filter((c) => (c.layer ?? "ground") === "ground").map((c) => (
         <Chest key={c.id} id={c.id} visible={c.secret ? nearSecretChest : c.close ? nearSideChest : near} />
       ))}
       {(Object.keys(SERVICES) as ServiceId[]).map((s) => (

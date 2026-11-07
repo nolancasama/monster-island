@@ -16,7 +16,7 @@ export interface LayerWorld {
   /** The layer's zone at a point, or null off its walkable surface. */
   zoneAt(x: number, z: number): LayerZone | null;
   /** True when a circle of radius m fits the layer's open surface (solids are separate). */
-  walkable(x: number, z: number, m: number, solved: readonly string[]): boolean;
+  walkable(x: number, z: number, m: number, gates: { solved: readonly string[]; secrets?: readonly string[] }): boolean;
   /** Height of the layer's walking surface, or -Infinity off it. */
   surfaceY(x: number, z: number, solved: readonly string[]): number;
   /** Solid scenery on this layer only. */

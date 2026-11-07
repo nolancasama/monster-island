@@ -15,6 +15,8 @@ import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, CANOPY_ROPES, GROVE_CROSSING, LILY_PA
 import { streamY } from "../world/lowland";
 import { GROVE_STREAM_FERRY, groveStreamSide } from "../world/groveStream";
 import { gatherParty } from "./act2";
+import { hooks } from "../combat";
+import { CAVE_BRAZIERS } from "../world/cave";
 import { DebugScriptCancelled, onDebugScriptCancel } from "../debugLifecycle";
 
 type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
@@ -22,6 +24,7 @@ const A2 = ACT2_OBSTACLE_PLACE;
 /** Act 2's unlocks: where to stand, and what is said when no friend can help. */
 export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
   groveStream: { ...A2.groveStream, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
+  caveTorches: { ...A2.caveTorches, alone: { en: "It's dark in there!", ja: "なかは まっくら! ひを だせる ともだちに きこう" } },
   canopyAscentRope: { x: A2.canopyAscentRope.x, z: A2.canopyAscentRope.z, alone: { en: "The deck is too high! Who can fly the rope up?", ja: "こずえは たかいね！ とべる ともだちに きこう" } },
   groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
   canopyVines: { x: A2.canopyVines.x, z: A2.canopyVines.z, alone: { en: "The gap is too wide!", ja: "すきまが ひろすぎる! しょくぶつを そだてる ともだちに きこう" } },
@@ -96,7 +99,7 @@ const FRAME: Record<ObstacleId, Vec2> = {
 };
 
 /** From Phase 2 on the student thanks the monster after its power has worked. */
-const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "groveStream", "canopyVines", "canopyRope", "canopyAscentRope"]);
+const THANKS = new Set<ObstacleId>(["bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "groveStream", "canopyVines", "canopyRope", "canopyAscentRope", "caveTorches"]);
 
 /** How the hint names an ability ("Who can help?", "とべる モンスター"). */
 const NEED_WORD: Partial<Record<AbilityId, { en: string; ja: string }>> = {
@@ -232,7 +235,8 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   else if (id === "canopyAscentRope") await flyRope(monster, CANOPY_ROPES.entrance);
   else if (id === "groveLilies") await groveCrossing(monster);
   else if (id === "groveStream") await streamFerry(false);
-  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream">, monster);
+  else if (id === "caveTorches") await emberLightsTorches(monster);
+  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream" | "caveTorches">, monster);
   else await phase3Power(id, monster);
 }
 
@@ -444,7 +448,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
  * Act 2's powers, each a visible permanent change: Bubbo raises lily pads to
  * the islet, Leafy weaves a vine bridge, Puff flies the rolled-up rope bridge across.
  */
-async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream">, monster: MonsterId) {
+async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream" | "caveTorches">, monster: MonsterId) {
   const place = A2[id];
   const target = place.face;
   const m = rt.monsters[monster];
@@ -887,4 +891,50 @@ async function ferry(id: MonsterId) {
   audio.voice(id, "excited");
   frameTwo(rt.player, m);
   await say("game", "Stepping stones! Now you can walk across.", "いしの みちが できた! これで いつでも わたれるよ");
+}
+
+// ------------------------------------------------------------ Ember's torches (the cave)
+
+/** Solve the cave's lights and start the flame running in along the route.
+ * Shared by the English route and by any Fire Breath or Inferno on a brazier or torch. */
+export function lightCaveTorches(): boolean {
+  if (isSolved(getGame().progress, "caveTorches")) return false;
+  updateProgress(p => solve(p, "caveTorches"));
+  rt.caveTorches.spread = 0;
+  rt.caveTorches.animating = true;
+  audio.play("whoosh");
+  return true;
+}
+
+hooks.caveFlame = () => {
+  if (lightCaveTorches()) toast({ en: "The cave lights up!", ja: "どうくつに あかりが ついた!", icon: "star", tone: "good" }, 2600);
+};
+
+/** "Can you make fire?": Ember walks to the north brazier and breathes on it; the
+ * flame runs along a carved channel into the mountain and lights every torch. */
+async function emberLightsTorches(id: MonsterId) {
+  const m = rt.monsters[id], b = CAVE_BRAZIERS[0];
+  m.mode = "script";
+  m.look = null;
+  m.air = m.airTarget = 0;
+  const by = walkY(b);
+  shot({ x: 63.6, y: by + 4.4, z: -219.8 }, { x: 69.2, y: by + 1, z: -226.6 });
+  await glideWalk(m, { x: b.x - 1.75, z: b.z - .25 }, .8);
+  m.yaw = Math.atan2(b.x - m.x, b.z - m.z);
+  animate(id, "power");
+  audio.play("whoosh");
+  const my = walkY(m);
+  rt.caveTorches.jet = {
+    from: { x: m.x + Math.sin(m.yaw) * .45, y: my + .72, z: m.z + Math.cos(m.yaw) * .45 },
+    to: { x: b.x, y: by + .95, z: b.z },
+    until: rt.time + 1.2,
+  };
+  await wait(950);
+  lightCaveTorches();
+  effect("sparkle", b.x, by + 1.3, b.z);
+  // Watch the flame cross to the second brazier and run into the mouth.
+  await wait(1600);
+  animate(id, "friend");
+  audio.voice(id, "excited");
+  toast({ en: "The cave lights up!", ja: "どうくつに あかりが ついた!", icon: "star", tone: "good" }, 2600);
 }
