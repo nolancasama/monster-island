@@ -2279,3 +2279,36 @@ controller decisions:
   their departure bank until dismount; cancellation restores that bank before
   debug travel installs its destination. Rejected: granting the ferry from a
   transient mid-swim south position or projecting a save across the channel.
+
+## 2026-11-07: Traversal layers as built (slice L, controller; Codex hit its usage limit)
+
+- **`region.layer` is the active layer, the player's** (`rt.player.layer` is a getter and setter on it),
+  following the existing `region.world` pattern. Collision and height queries (`isWalkable`,
+  `moveCircle`, `nearestWalkable`, `blocked`, `obstaclesFor`, `standY`, `hazardAt`, `combatZoneAt`)
+  take an optional trailing `layer` that **defaults to `region.layer`**. The pure geometry functions
+  `zoneAt` and `lowlandWalkable` default to `"ground"`. Deviation from the frozen spec (which said
+  "defaults to ground"): every active walker (player, friends, and enemies in the player's zone) shares
+  the player's layer, so a global default touches about 10 call sites instead of about 200. Scenery that
+  lives on a fixed layer passes it explicitly: chests (`ChestDef.layer`), secrets, element objects
+  (`ElementObject.layer`), enemies by `layerOfZone(e.zone)`. Rejected: threading `layer` through every
+  call site (regression risk across combat, cameras and effects for no behavioural gain).
+- **Enemies on other layers sit out for free.** Combat already only updates enemies whose zone is the
+  player's current zone, and zones are now layer-aware. Element-object hits filter on the object's layer.
+- **Layer content registers a `LayerWorld`** (`world/layers.ts`: zone, walkable, surface height, solids,
+  hazards). It also supplies `LAYER_PORTALS` (a signed-distance strip with a ±`enter` dead band) and
+  `LAYER_ENTRY` (save fallback). A non-ground `standY` returns the layer's surface, falling back to the
+  ground below it.
+- **Ground behaviour is proven unchanged:** `layers-ground.test.ts` hashes `zoneAt`, `lowlandWalkable`,
+  `isWalkable` (three radii), `standY` and the solids over the whole 0.5 m `BASIN` grid in three
+  progress states. The hashes were recorded at `405a5be`; a 1 cm boulder change fails the test.
+- **Saves:** `player.layer` is additive in v4 and written only when not ground. The reader keeps the
+  spot if it is walkable on that layer, else uses `LAYER_ENTRY`, else loads on the ground. `decodeSave`
+  always validates ground saves on the ground (Continue reads before the runtime resets).
+- **Transitions:** `switchPlayerLayer` (sim portal), rope ends (`ClimbRope.footLayer`/`topLayer`),
+  knock-out (always wakes on the ground), and `placePlayer(..., layer)` / `teleport(..., layer)` for
+  debug and e2e. Friends are always poofed to the player on a layer change (`gatherParty(true)`).
+- **Camera:** every ground profile matches the ground layer only, through one wrapper. Layer profiles go
+  first, with a `layer-default` fallback. **Focus:** ground interactions never apply off the ground
+  (`layerCandidates()` is for layer content), and there is no story marker off the ground.
+  **Rendering:** `scene/layerView.ts`; the whole ground lowland group hides while the player is in
+  the cave.

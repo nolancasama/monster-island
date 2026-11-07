@@ -1,5 +1,6 @@
 import type { ObstacleId } from "../types";
-import { region } from "./region";
+import { region, type Layer } from "./region";
+import { LAYER_WORLDS } from "./layers";
 import { cloudMove, cloudNearestWalkable, cloudSolids, cloudWalkable, cloudY, type CloudGates } from "./cloudisle";
 import {
   EARLY_OVERLOOK,
@@ -131,8 +132,16 @@ const LOWLAND_OBSTACLES: Obstacles[] = [{ circles: [], boxes: [], shapes: lowlan
 const lowlandSecretCache: Obstacles[][] = [];
 const inLowlandSet = (z: number) => z < CLIFF_FOOT_Z + 0.5;
 
-export function obstaclesFor(gates: Gates, z = 0): Obstacles[] {
+const layerObstacleCache = new Map<object, Obstacles[]>();
+export function obstaclesFor(gates: Gates, z = 0, layer: Layer = region.layer): Obstacles[] {
   if (gates.cloud) return [{ circles: [], boxes: [], shapes: cloudSolids() }];
+  if (layer !== "ground") {
+    const world = LAYER_WORLDS[layer];
+    if (!world) return EMPTY;
+    let sets = layerObstacleCache.get(world);
+    if (!sets) layerObstacleCache.set(world, sets = [{ circles: [], boxes: [], shapes: world.solids }]);
+    return sets;
+  }
   if (inLowlandSet(z)) {
     if (!gates.act2) return LOWLAND_OBSTACLES;
     const key = secretKey(gates.secrets);
@@ -175,9 +184,17 @@ export function inSanctuary(_x: number, z: number): boolean {
  * True when a circle of radius `m` fits the currently reachable land.
  * Swimmers (Bubbo) may also use the river.
  */
-export function isWalkable(x: number, z: number, gates: Gates = CLOSED, m = 0, swimmer = false): boolean {
+export function isWalkable(x: number, z: number, gates: Gates = CLOSED, m = 0, swimmer = false, layer: Layer = region.layer): boolean {
   if (gates.cloud) return cloudWalkable(x, z, gates.cloud, m);
-  return onLand(x, z, gates, m, swimmer) && !blocked(x, z, m, gates);
+  if (layer !== "ground") return layerWalkable(x, z, gates, m, layer);
+  return onLand(x, z, gates, m, swimmer) && !blocked(x, z, m, gates, "ground");
+}
+
+/** A non-ground layer: its own surface and solids only (never the ground's). */
+function layerWalkable(x: number, z: number, gates: Gates, m: number, layer: Exclude<Layer, "ground">): boolean {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  const world = LAYER_WORLDS[layer];
+  return world !== undefined && world.walkable(x, z, m, gates.solved) && !blocked(x, z, m, gates, layer);
 }
 
 /** The deck joins the beach at its north end, including beyond the waterline. */
@@ -314,10 +331,11 @@ export function moveCircle(
   gates: Gates = CLOSED,
   swimmer = false,
   extra: Obstacles[] = EMPTY,
-  out = { x: 0, z: 0 }
+  out = { x: 0, z: 0 },
+  layer: Layer = region.layer
 ): { x: number; z: number } {
   if (gates.cloud) return cloudMove(x0, z0, x1, z1, r, gates.cloud, out);
-  const sets = obstaclesFor(gates, z0);
+  const sets = obstaclesFor(gates, z0, layer);
   const count = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.15));
   const dx = (x1 - x0) / count, dz = (z1 - z0) / count;
   let x = x0, z = z0;
@@ -331,13 +349,13 @@ export function moveCircle(
         pushOut(nx, nz, r, sets); nx = pushX; nz = pushZ;
         pushOut(nx, nz, r, extra); nx = pushX; nz = pushZ;
       }
-      if (isWalkable(nx, nz, gates, r, swimmer) && !overlaps(nx, nz, r, extra)) {
+      if (isWalkable(nx, nz, gates, r, swimmer, layer) && !overlaps(nx, nz, r, extra)) {
         x = nx; z = nz; break;
       }
     }
   }
-  if (!isWalkable(x, z, gates, r, swimmer)) {
-    const safe = nearestWalkable(x, z, r, gates, swimmer);
+  if (!isWalkable(x, z, gates, r, swimmer, layer)) {
+    const safe = nearestWalkable(x, z, r, gates, swimmer, false, layer);
     x = safe.x; z = safe.z;
   }
   out.x = x; out.z = z;
@@ -350,10 +368,10 @@ export function moveCircle(
  * that are still closed (Ember before the lava, Lumo behind the gate), and
  * must never be sent to the beach. Loading a save passes `toSpawn`.
  */
-export function nearestWalkable(x: number, z: number, r: number, gates: Gates = CLOSED, swimmer = false, toSpawn = false): { x: number; z: number } {
+export function nearestWalkable(x: number, z: number, r: number, gates: Gates = CLOSED, swimmer = false, toSpawn = false, layer: Layer = region.layer): { x: number; z: number } {
   if (gates.cloud) return cloudNearestWalkable(x, z, r, gates.cloud);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return { x: SPAWN.x, z: SPAWN.z };
-  if (isWalkable(x, z, gates, r, swimmer)) return { x, z };
+  if (isWalkable(x, z, gates, r, swimmer, layer)) return { x, z };
   for (let ring = 1; ring <= 40; ring++) {
     const d = ring * 0.35;
     const n = 8 + ring * 2;
@@ -361,20 +379,25 @@ export function nearestWalkable(x: number, z: number, r: number, gates: Gates = 
       const a = (i / n) * Math.PI * 2;
       const px = x + Math.cos(a) * d;
       const pz = z + Math.sin(a) * d;
-      if (isWalkable(px, pz, gates, r, swimmer)) return { x: px, z: pz };
+      if (isWalkable(px, pz, gates, r, swimmer, layer)) return { x: px, z: pz };
     }
   }
   return toSpawn ? { x: SPAWN.x, z: SPAWN.z } : { x, z };
 }
 
 /** True if a circle overlaps solid scenery. */
-export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED): boolean {
-  return overlaps(x, z, r, obstaclesFor(gates, z));
+export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED, layer: Layer = region.layer): boolean {
+  return overlaps(x, z, r, obstaclesFor(gates, z, layer));
 }
 
-/** Height a walker stands at: the ground, or the stepping stones' tops once they are up. */
-export function standY(x: number, z: number, solved: readonly ObstacleId[]): number {
+/** Height a walker stands at: the ground, or the stepping stones' tops once they are up.
+ * On another layer: that layer's surface, falling back to the ground below it. */
+export function standY(x: number, z: number, solved: readonly ObstacleId[], layer: Layer = region.layer): number {
   if (region.world === "cloud") return cloudY(x, z);
+  if (layer !== "ground") {
+    const surface = LAYER_WORLDS[layer]?.surfaceY(x, z, solved) ?? -Infinity;
+    if (surface > -Infinity) return surface;
+  }
   const y = groundY(x, z);
   if (z < CLIFF_FOOT_Z + 1) return Math.max(y, lowlandDeckY(x, z, solved));
   if (onPier(x, z)) return Math.max(y, groundY(PIER.x, PIER.z0) + PIER.deckY);

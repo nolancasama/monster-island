@@ -18,7 +18,8 @@ import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
 import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale, hooks } from "./combat";
-import { lumoHidden, startAct2Scene } from "./flow/act2";
+import { lumoHidden, startAct2Scene, switchPlayerLayer } from "./flow/act2";
+import { portalSwitch } from "./world/layers";
 import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
 import { audio } from "../audio/audio";
@@ -214,6 +215,9 @@ function movePlayer(dt: number, canMove: boolean) {
     updateEdge(dt, canMove, wx, wz, walk, q.x - p.x, q.z - p.z, Math.abs(kx) + Math.abs(kz));
     p.x = q.x;
     p.z = q.z;
+    // Walking through an authored overlap strip (the cave mouth) changes layer.
+    const through = getGame().progress.act3.world === "cloud" ? null : portalSwitch(p.layer, p.x, p.z);
+    if (through) switchPlayerLayer(through);
   } else p.teeter = 0;
   updateSafeGround(dt);
   p.speed = p.frozen ? 0 : Math.hypot(p.vx, p.vz);
@@ -290,6 +294,8 @@ function updateSafeGround(dt: number) {
   if (safeClock > 0) return;
   safeClock = .2;
   const p = rt.player;
+  // The lower Canopy's last safe ground. Other layers set their own (authored checkpoints).
+  if (p.layer !== "ground") return;
   if (getGame().progress.act3.world === "cloud" || p.climbY !== null || zoneAt(p.x, p.z) !== "canopy") { p.safeGround = null; return; }
   if (safeFromFalls(p.x, p.z, getGame().progress.solved)) p.safeGround = { x: p.x, z: p.z };
 }

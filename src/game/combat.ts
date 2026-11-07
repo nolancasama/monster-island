@@ -6,6 +6,7 @@ import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
 import { effect, rt } from "./runtime";
 import { isRunning } from "./flow/script";
 import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/lowland";
+import { region, type Layer } from "./world/region";
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
@@ -53,7 +54,10 @@ interface CloudZoneMemory {
 }
 
 export const onCloudIsle = () => getGame().progress.act3.world === "cloud";
-export const combatZoneAt = (x: number, z: number): CombatZone | null => onCloudIsle() ? cloudZoneAt(x, z) : zoneAt(x, z);
+/** Zones on the active layer: enemies on another layer are never in the player's zone,
+ * so they stay dormant, unhittable and harmless until the player reaches their layer. */
+export const combatZoneAt = (x: number, z: number, layer: Layer = region.layer): CombatZone | null =>
+  onCloudIsle() ? cloudZoneAt(x, z) : zoneAt(x, z, layer);
 export const currentCombatZone = (): CombatZone | null => onCloudIsle() ? cb.cloudZones.current : cb.zones.current;
 export const currentCloudZone = (): CloudAreaId | null => cb.cloudZones.current;
 const activeSpawns = () => onCloudIsle() ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
@@ -680,7 +684,7 @@ function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) =
     let selected: ElementObject | null = null;
     for (const o of ELEMENT_OBJECTS) {
       const response = o.on?.burn;
-      if (o.world !== cb.world || !response || !o.tags.includes(EVENT_TAG.burn)
+      if (o.world !== cb.world || (o.layer ?? "ground") !== region.layer || !response || !o.tags.includes(EVENT_TAG.burn)
         || getGame().progress.act2.secrets.includes(secretOf(o))
         || cb.elementObjects[o.id]?.state === response.becomes || !contains(o)) continue;
       const before = secretProgress(), next = secretEvent(o.id, "burn", before);
@@ -689,7 +693,7 @@ function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) =
     return selected;
   }
   const p = rt.player, progress = secretProgress();
-  const objects = ELEMENT_OBJECTS.filter(o => o.world === cb.world && !progress.secrets.includes(secretOf(o)) && o.tags.includes(EVENT_TAG[event]) && o.on?.[event] && contains(o))
+  const objects = ELEMENT_OBJECTS.filter(o => o.world === cb.world && (o.layer ?? "ground") === region.layer && !progress.secrets.includes(secretOf(o)) && o.tags.includes(EVENT_TAG[event]) && o.on?.[event] && contains(o))
     .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
   let selected: ElementObject | null = null;
   for (const o of objects) {
@@ -750,7 +754,7 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
   const range = move.range * (up && (f === "ember" || f === "puff") ? COMBAT[f].upgrade.size : 1);
   if (options.repeat && move.shape === "grab" && !coneTargets(range, 70).length) {
     const contains = objectCone(range, 70), progress = secretProgress();
-    const reachable = ELEMENT_OBJECTS.some(o => o.world === cb.world && !progress.secrets.includes(secretOf(o))
+    const reachable = ELEMENT_OBJECTS.some(o => o.world === cb.world && (o.layer ?? "ground") === region.layer && !progress.secrets.includes(secretOf(o))
       && o.tags.includes(EVENT_TAG.grab) && o.on?.grab && contains(o) && secretEvent(o.id, "grab", progress) !== progress);
     if (!reachable) return false;
   }
@@ -924,7 +928,7 @@ function sampleWhipAim() {
   let object: ElementObject | null = null;
   for (const o of ELEMENT_OBJECTS) {
     const response = o.on?.grab;
-    if (o.world !== cb.world || !response || !o.tags.includes(EVENT_TAG.grab)
+    if (o.world !== cb.world || (o.layer ?? "ground") !== region.layer || !response || !o.tags.includes(EVENT_TAG.grab)
       || getGame().progress.act2.secrets.includes(secretOf(o))
       || (cb.elementObjects[o.id]?.state ?? "intact") === response.becomes
       || (o.id === "comboCrateLift" && (cb.elementObjects[o.id]?.state ?? "intact") !== "intact")) continue;

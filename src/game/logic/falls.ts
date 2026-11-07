@@ -1,5 +1,7 @@
 import { CANOPY_VOIDS, type Hazard } from "../world/hazards";
 import { hazardAt, inShape } from "./elements";
+import { region, type Layer } from "../world/region";
+import { LAYER_ENTRY } from "../world/layers";
 
 export const TEETER_SECONDS = .22;
 export const FALL_SECONDS = .9;
@@ -12,7 +14,8 @@ export const CANOPY_LANDINGS = { south: { x: 100, z: -212 }, north: { x: 101, z:
 
 export interface Point { x: number; z: number }
 
-const inCanopyBox = (x: number, z: number) => x > 82 && x < 120 && z > -238 && z < -200;
+// The lower Canopy's flagged voids; other layers register their own fall hazards.
+const inCanopyBox = (x: number, z: number) => region.layer !== "ground" || (x > 82 && x < 120 && z > -238 && z < -200);
 const playerFallAt = (x: number, z: number, solved: readonly string[]): Hazard | null => {
   const hazard = hazardAt(x, z, "home", solved);
   return hazard?.playerFall ? hazard : null;
@@ -22,7 +25,7 @@ const playerFallAt = (x: number, z: number, solved: readonly string[]): Hazard |
  * nobody walks off their sides; every other flagged edge is open. */
 export function fallAhead(x: number, z: number, ux: number, uz: number, radius: number, solved: readonly string[]): Hazard | null {
   if (!inCanopyBox(x, z)) return null;
-  for (const h of CANOPY_VOIDS) if (h.safeWhen && solved.includes(h.safeWhen) && h.safe?.some(s => inShape(s, x, z))) return null;
+  if (region.layer === "ground") for (const h of CANOPY_VOIDS) if (h.safeWhen && solved.includes(h.safeWhen) && h.safe?.some(s => inShape(s, x, z))) return null;
   return playerFallAt(x + ux * (radius + .15), z + uz * (radius + .15), solved);
 }
 
@@ -36,8 +39,8 @@ export function safeFromFalls(x: number, z: number, solved: readonly string[]): 
   return true;
 }
 
-export const fallLanding = (safe: Point | null, z: number): Point =>
-  safe ?? (z < -230 ? CANOPY_LANDINGS.north : CANOPY_LANDINGS.south);
+export const fallLanding = (safe: Point | null, z: number, layer: Layer = region.layer): Point =>
+  safe ?? (layer !== "ground" && LAYER_ENTRY[layer] ? LAYER_ENTRY[layer]! : z < -230 ? CANOPY_LANDINGS.north : CANOPY_LANDINGS.south);
 
 /** Falling costs HP but never knocks a child out on top of the fall. */
 export const hpAfterFall = (hp: number) => Math.max(Math.min(hp, 1), hp - FALL_DAMAGE);

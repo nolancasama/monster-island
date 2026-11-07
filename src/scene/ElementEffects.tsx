@@ -325,7 +325,7 @@ export function ElementEffects() {
         if (complete && object.id !== "comboFurnace") continue;
         if (!complete && state !== "burning" && state !== "lit") continue;
         if (Math.hypot(object.x - rt.player.x, object.z - rt.player.z) > 48) continue;
-        const y = standY(object.x, object.z, game.progress.solved);
+        const y = standY(object.x, object.z, game.progress.solved, object.layer ?? "ground");
         if (object.id === "comboFurnace") {
           draw.sprite(object.x, y + .45, object.z + .75, 1.4, .8, "#ff7923", .65);
           if (complete) {
@@ -480,7 +480,7 @@ export function ElementEffects() {
               const c = enemy.control;
               if (whip.struck && c?.kind === "grabbed") tension = .92;
             } else if (object) {
-              whipTip.set(object.x, standY(object.x, object.z, game.progress.solved) + .6, object.z);
+              whipTip.set(object.x, standY(object.x, object.z, game.progress.solved, object.layer ?? "ground") + .6, object.z);
             } else {
               whipTip.set(p.x + whipFacing.x * COMBAT.leafy.basic.range, p.y + .9, p.z + whipFacing.z * COMBAT.leafy.basic.range);
             }
@@ -541,7 +541,7 @@ export function ElementEffects() {
             const state = cb.elementObjects[object.id]?.state;
             if (!object.on?.burn || object.world !== cb.world || (state !== "burning" && state !== "lit")
               || !inCone(rt.player, yaw, object, range + object.r, 80)) continue;
-            const y = standY(object.x, object.z, game.progress.solved);
+            const y = standY(object.x, object.z, game.progress.solved, object.layer ?? "ground");
             for (let i = 0; i < 3; i++) {
               const a = t * 23 + i * TAU / 3;
               draw.sprite(object.x + Math.sin(a) * object.r, y + .6 + Math.cos(a) * .3, object.z + Math.cos(a) * object.r,

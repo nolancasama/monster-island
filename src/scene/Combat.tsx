@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
+import { layerOfZone } from "../game/world/layers";
 import { getGame, useGame } from "../game/store";
 import { cb, combatZoneAt, currentCombatZone, enemyRevealScale, type EnemyRt, type Fx } from "../game/combat";
 import { ENEMIES, type CloudEnemyKind, type EnemyKind } from "../game/data/combat";
@@ -77,7 +78,7 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     g.scale.setScalar(reveal);
     const t = rt.time;
     // A plunge keeps its own height: the ground under the void is far below the lip.
-    const y = e.plunge ? plungeY(e.plunge, t) : standY(e.x, e.z, getGame().progress.solved);
+    const y = e.plunge ? plungeY(e.plunge, t) : standY(e.x, e.z, getGame().progress.solved, layerOfZone(e.zone));
     g.position.set(e.x, y, e.z);
     g.rotation.y = e.yaw;
     enemyBodyPose(e, t, pose);

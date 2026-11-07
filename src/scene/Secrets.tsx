@@ -11,7 +11,7 @@ import { ELEMENT_OBJECTS, SECRET_IDS, SECRET_SITES } from "../game/world/element
 // Flames share ElementEffects' existing sprite draw. Scratch storage is mount-only.
 const CAP = 1024;
 const WOOD = "#956038", DARK_WOOD = "#523824", STONE = "#999c91", DARK = "#302b27";
-const groundY = (x: number, z: number) => standY(x, z, getGame().progress.solved);
+const groundY = (x: number, z: number) => standY(x, z, getGame().progress.solved, "ground");
 
 function makeBatch(geometry: THREE.BufferGeometry, material: THREE.Material) {
   const mesh = new THREE.InstancedMesh(geometry, material, CAP);

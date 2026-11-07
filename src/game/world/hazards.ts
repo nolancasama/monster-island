@@ -1,4 +1,5 @@
 import type { WalkShape } from "./lowland";
+import type { Layer } from "./region";
 import { GROVE_STREAM } from "./groveStream";
 /** Kept here with home voids so collision may import hazard data without a
  * lowland → hazard → cloud → lowland initialisation cycle. */
@@ -17,6 +18,8 @@ export interface Hazard {
   safeWhen?: string;
   /** Slice D consumes this flag; player collision still blocks every edge. */
   playerFall?: boolean;
+  /** Traversal layer (default ground). Layer worlds register their own hazards. */
+  layer?: Layer;
 }
 
 export const POND = { x: 37.6, z: -222.5, r: 6.4 };

@@ -1,6 +1,8 @@
 import type { EnemyDef } from "../data/combat";
 import { CLOUD_CAVES } from "../world/cloudisle";
 import { HAZARDS, type Hazard } from "../world/hazards";
+import { LAYER_WORLDS } from "../world/layers";
+import { region, type Layer } from "../world/region";
 import { nearestOnTrail, type WalkShape } from "../world/lowland";
 
 export type WeightClass = EnemyDef["weightClass"];
@@ -95,7 +97,9 @@ export function forwardTargets<T extends Point>(targets: readonly T[], origin: P
 }
 /** Return a new victim list only for a first collision during this swing/fling. */
 export const weaponVictims = (victims: readonly number[], victim: number): number[] | null => victims.includes(victim) ? null : [...victims, victim];
-export function hazardAt(x: number, z: number, world: "home" | "cloud", solved: readonly string[] = [], hazards: readonly Hazard[] = HAZARDS): Hazard | null {
-  return hazards.find(h => h.world === world && inShape(h.shape, x, z)
+export function hazardAt(x: number, z: number, world: "home" | "cloud", solved: readonly string[] = [], hazards?: readonly Hazard[], layer: Layer = region.layer): Hazard | null {
+  // Each layer sees only its own hazards: a ground pond never lies under a leaf walker.
+  const list = hazards ?? (layer === "ground" || world === "cloud" ? HAZARDS : LAYER_WORLDS[layer]?.hazards ?? []);
+  return list.find(h => h.world === world && (h.layer ?? "ground") === (world === "cloud" ? "ground" : layer) && inShape(h.shape, x, z)
     && !((!h.safeWhen || solved.includes(h.safeWhen)) && h.safe?.some(s => inShape(s, x, z)))) ?? null;
 }

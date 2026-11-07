@@ -369,7 +369,9 @@ describe("the lowland below the sanctuary", () => {
 
   it("fights happen in the forests, causeway and coast; the town is safe", () => {
     const hostile = (Object.keys(ZONES) as ZoneId[]).filter((z) => ZONES[z].hostile).sort();
-    expect(hostile).toEqual(["canopy", "causeway", "coast", "forest1", "grove"]);
+    // The optional cave and Upper Canopy (layer zones) also hold enemies; the summit is safe.
+    expect(hostile).toEqual(["canopy", "causeway", "cave", "coast", "forest1", "grove", "upperCanopy"]);
+    expect(ZONES.summit.hostile).toBe(false);
     expect(zoneAt(88, -160)).toBe("forest1");
     expect(zoneAt(SERVICES.market.keeper.x + 2, SERVICES.market.keeper.z)).toBe("port");
     expect(zoneAt(CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z)).toBe("forest1");
@@ -458,7 +460,7 @@ describe("first-clear exit collision", () => {
 });
 
 it("draws one real lowland from the overlook, rope and every stage, while keeping the prologue isolated",()=>{
-  for(const [x,z] of [[87,-129],[75.5,-149.8],[75.5,-152.15],[75.5,-154.4],...Object.values(ZONES).map(zone=>{
+  for(const [x,z] of [[87,-129],[75.5,-149.8],[75.5,-152.15],[75.5,-154.4],...Object.values(ZONES).filter(zone=>zone.walk.length>0).map(zone=>{
     const sh=zone.walk[0];
     return sh.kind==="disc"?[sh.x,sh.z]:sh.kind==="trail"?sh.pts[0]:[sh.x0,sh.z0];
   })]) expect(lowlandRegionVisible(x,z),`${x},${z}`).toBe(true);

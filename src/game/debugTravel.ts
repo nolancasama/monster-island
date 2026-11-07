@@ -45,9 +45,9 @@ export function jumpDebug(id: string) {
   applyDebugProgress(progress);
   // Restore Maple and other destination targets before placing, then gather
   // companions around the final player position using the save-load path.
-  if (destination.target === "beach" || destination.target === "volcanoTrail" || destination.area) {
+  if (destination.target === "beach" || destination.target === "volcanoTrail" || destination.area || destination.layer) {
     const at = travelTarget(destination.target)!;
-    placePlayer(at.x, at.z, at.x, at.z + 1);
+    placePlayer(at.x, at.z, at.x, at.z + 1, destination.layer);
   } else goToTarget(destination.target);
   applyWorld(progress);
 }

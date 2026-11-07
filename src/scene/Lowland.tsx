@@ -29,6 +29,7 @@ import { standY } from "../game/world/collision";
 import { GROVE_STREAM } from "../game/world/groveStream";
 import { nearestOnTrail } from "../game/world/lowland";
 import { ropeCoilGeometry } from "./models/forest";
+import { layerView } from "./layerView";
 import { flatMat, occluderMat, smoothMat, canopySolidMat, canopyOccluderMat, causewayOccluderMat } from "./materials";
 import { conformBridge } from "./models/bridge";
 import { portDoorGeometry, portWallGeometry } from "./models/portWall";
@@ -385,7 +386,7 @@ export function Lowland() {
     // Only the genuinely enclosed passage suppresses the real basin. Outside
     // its roof and walls the scenery uses the same distance/fog tiles everywhere.
     const shot = rt.camera.shot !== null && rt.camera.shot.target.z < -125;
-    lowlandView.visible = !cameraInTunnel() && (shot || lowlandRegionVisible(rt.player.x, rt.player.z));
+    lowlandView.visible = !cameraInTunnel() && layerView(rt.player.layer).ground && (shot || lowlandRegionVisible(rt.player.x, rt.player.z));
     if (region.current) region.current.visible = lowlandView.visible;
   });
   return (

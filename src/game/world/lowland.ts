@@ -5,6 +5,8 @@ import { GROVE_STREAM_FERRY } from "./groveStream";
 import { GROVE_STREAM } from "./groveStream";
 import { SECRET_IDS, SECRET_SITES, type SecretId } from "./elementObjects";
 import { CANOPY_GAPS, CANOPY_VOIDS, HOME_PONDS, ISLET, POND, canopyGapDeck } from "./hazards";
+import { LAYER_WORLDS, type LayerZone } from "./layers";
+import type { Layer } from "./region";
 export { CANOPY_GAPS, ISLET, POND } from "./hazards";
 
 /**
@@ -34,7 +36,9 @@ export { CANOPY_GAPS, ISLET, POND } from "./hazards";
 export const STAGES = ["forest1", "grove", "canopy", "causeway", "coast"] as const;
 export type StageId = (typeof STAGES)[number];
 
-export type ZoneId = "forest1" | "grove" | "canopy" | "causeway" | "coast" | "port";
+/** Ground zones plus the optional zones on the cave and high layers (not stages). */
+export type GroundZoneId = "forest1" | "grove" | "canopy" | "causeway" | "coast" | "port";
+export type ZoneId = GroundZoneId | LayerZone;
 
 type Rect = { kind: "rect"; x0: number; x1: number; z0: number; z1: number };
 type Trail = { kind: "trail"; pts: Array<[number, number]>; w: number };
@@ -139,6 +143,9 @@ export interface ClimbRope {
   top: Vec2;
   /** Player yaw toward the face; the sanctuary rope keeps its existing zero. */
   facing?: number;
+  /** Traversal layers at each end (default ground): the climb switches layer. */
+  footLayer?: Layer;
+  topLayer?: Layer;
 }
 
 /** Separate floor and deck stands: a rope is the only way across each face. */
@@ -286,6 +293,11 @@ export interface ZoneDef {
 }
 
 export const ZONES: Record<ZoneId, ZoneDef> = {
+  // Layer zones: their walking surfaces live in their LayerWorld (world/layers.ts),
+  // never in these ground walk lists.
+  cave: { id: "cave", name: { en: "Mountain Cave", ja: "やまの どうくつ" }, hostile: true, walk: [] },
+  upperCanopy: { id: "upperCanopy", name: { en: "Upper Canopy", ja: "こずえの うえ" }, hostile: true, walk: [] },
+  summit: { id: "summit", name: { en: "Mountain Summit", ja: "やまの てっぺん" }, hostile: false, walk: [] },
   port: {
     id: "port",
     name: { en: "Port Town", ja: "みなとまち" },
@@ -404,7 +416,7 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
   },
 };
 /** Overlaps are decided in this order (the town before the coast). */
-export const ZONE_ORDER: ZoneId[] = ["port", "canopy", "grove", "causeway", "coast", "forest1"];
+export const ZONE_ORDER: GroundZoneId[] = ["port", "canopy", "grove", "causeway", "coast", "forest1"];
 
 type Bounds = { x0: number; x1: number; z0: number; z1: number };
 function shapeBounds(sh: WalkShape): Bounds {
@@ -418,8 +430,10 @@ const boundsContain = (b: Bounds, x: number, z: number, pad = 0) => x >= b.x0 - 
 const inWalk = (sh: WalkShape, x: number, z: number, m: number) => boundsContain(WALK_BOUNDS.get(sh)!, x, z) && inside(sh, x, z, m);
 const canopyUnion = (x: number, z: number) => ZONES.canopy.walk.some(sh => inWalk(sh, x, z, 0));
 
-/** The zone at a point (null outside the lowland's walkable land). */
-export function zoneAt(x: number, z: number): ZoneId | null {
+/** The zone at a point on a layer (null outside that layer's walkable land).
+ * Pure geometry: the layer is explicit and defaults to the ground. */
+export function zoneAt(x: number, z: number, layer: Layer = "ground"): ZoneId | null {
+  if (layer !== "ground") return LAYER_WORLDS[layer]?.zoneAt(x, z) ?? null;
   if (z > CLIFF_FOOT_Z + 0.5) return null;
   if (inMesa(x, z, 1.5)) return null;
   if (x >= 83 && x <= 119 && z >= -237 && z <= -205) return "canopy";
@@ -613,6 +627,8 @@ export const FORK_SIGN = { x: 76.5, z: -175, yaw: 0 };
 export interface ChestDef {
   id: string;
   secret?: SecretId;
+  /** Traversal layer (default ground) for the cave's and summit's chests. */
+  layer?: Layer;
   /** Each chest is several draws: optional ones stay out of long views. */
   close?: true;
   x: number;
@@ -915,7 +931,7 @@ export function lowlandSolids(): SolidShape[] {
 }
 
 /** Waypoints for the ★ marker on the way to the town (either route). */
-export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
+export const ROUTE_MARKERS: Record<GroundZoneId, Vec2> = {
   forest1: { x: 47, z: -175 },
   grove: { x: 58, z: -244 },
   canopy: CANOPY_ROPES.exit.foot,
@@ -925,9 +941,10 @@ export const ROUTE_MARKERS: Record<ZoneId, Vec2> = {
 };
 
 /** The forest base points toward the nearest arm rather than the closed mesa. */
-export function routeMarker(zone: ZoneId, playerX: number): Vec2 {
+export function routeMarker(zone: ZoneId, playerX: number): Vec2 | null {
   if (zone === "forest1") return playerX < 76 ? { x: 47, z: -175 } : CANOPY_ROPES.entrance.foot;
-  return ROUTE_MARKERS[zone];
+  // Optional layer zones lead nowhere on the way to the town.
+  return zone in ROUTE_MARKERS ? ROUTE_MARKERS[zone as GroundZoneId] : null;
 }
 
 /** Narrow exits span every walkable crossing, including the mounted body radius.

@@ -18,6 +18,7 @@ import { poofTo } from "./companion";
 import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
 import type { FoodId, MonsterId } from "../types";
+import type { Layer } from "../world/region";
 import { cloudIsleComingSoon, cloudKnockout, sailWithGull } from "./act3";
 import { cloudIsleOpen, harborDecision, CLOUD_ISLE_SHIP_SOON, CLOUD_ISLE_SOON } from "../release";
 
@@ -58,7 +59,7 @@ export function placeMapleForAct2() {
 }
 
 /** Friends gather round after a scene (the active one beside the player, the rest just behind). */
-export function gatherParty() {
+export function gatherParty(force = false) {
   const p = getGame().progress;
   const pl = rt.player;
   companions(p).forEach((id, i) => {
@@ -70,8 +71,20 @@ export function gatherParty() {
     const side = (i % 2 ? 1 : -1) * (1 + i * 0.35);
     const x = pl.x - Math.sin(pl.yaw) * back + Math.cos(pl.yaw) * side;
     const z = pl.z - Math.cos(pl.yaw) * back - Math.sin(pl.yaw) * side;
-    if (Math.hypot(m.x - x, m.z - z) > 3) poofTo(id, x, z);
+    if (force || Math.hypot(m.x - x, m.z - z) > 3) poofTo(id, x, z);
   });
+}
+
+/** Every authored layer change (portal, rope, flight, knock-out, debug travel):
+ * friends always arrive with the player, on the new layer's surface. */
+export function switchPlayerLayer(layer: Layer) {
+  const pl = rt.player;
+  if (pl.layer === layer) return;
+  pl.layer = layer;
+  pl.teeter = 0;
+  pl.safeGround = null;
+  pl.y = standY(pl.x, pl.z, getGame().progress.solved);
+  gatherParty(true);
 }
 
 // ------------------------------------------------------------ the kidnapping
@@ -296,8 +309,8 @@ export function climbRope(r: ClimbRope, down: boolean): Promise<void> {
       return;
     }
     if (r === CANOPY_ROPES.entrance && !getGame().progress.solved.includes("canopyAscentRope")) return;
-    const topY = standY(r.top.x, r.top.z, getGame().progress.solved);
-    const footY = standY(r.foot.x, r.foot.z, getGame().progress.solved);
+    const topY = standY(r.top.x, r.top.z, getGame().progress.solved, r.topLayer ?? "ground");
+    const footY = standY(r.foot.x, r.foot.z, getGame().progress.solved, r.footLayer ?? "ground");
     // The hands stay on the rope: start just below the lip (going down) or at the foot (going up).
     const high = topY - 1.05;
     const low = footY;
@@ -332,10 +345,13 @@ export function climbRope(r: ClimbRope, down: boolean): Promise<void> {
         const spot = down ? r.foot : r.top;
         pl.x = spot.x;
         pl.z = spot.z;
+        const layer = (down ? r.footLayer : r.topLayer) ?? "ground";
+        const changed = pl.layer !== layer;
+        pl.layer = layer;
         pl.y = standY(spot.x, spot.z, getGame().progress.solved);
         pl.safeGround = { ...spot };
         pl.yaw = (r.facing ?? 0) + Math.PI;
-        gatherParty();
+        gatherParty(changed);
       }, 250);
       pl.frozen = false;
       if (down && r === CLIFF_ROPE) {
@@ -441,13 +457,16 @@ hooks.knockout = () => {
     await say("game", "Oh no! You need a rest.", "たいへん! ひと やすみ しよう");
     const at = CHECKPOINT_SPOT[getGame().progress.act2.checkpoint];
     await fadeThrough(() => {
+      // Every checkpoint is on the ground: wake there even after a cave or treetop knock-out.
+      const changed = pl.layer !== "ground";
+      pl.layer = "ground";
       const s = nearestWalkable(at.x, at.z, PLAYER_R, gatesOf(getGame().progress));
       pl.x = s.x;
       pl.z = s.z;
       pl.yaw = at.yaw;
       pl.action = null;
       wakeUp();
-      gatherParty();
+      gatherParty(changed);
     }, 600);
     toast({ en: "You're OK! Coins and items are safe.", ja: "だいじょうぶ! コインも どうぐも そのまま", icon: "heart", tone: "info" }, 3000);
   });

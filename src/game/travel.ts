@@ -5,15 +5,18 @@ import { SPAWN, VOLCANO_PATH, BRIDGE, CLIFF_TOP_SPOT, CROSSING, FALLEN_PALM, FOO
 import { LIVE_MONSTERS } from "./data/monsters";
 import { ACT2_PLACE, PHASE3_PLACE, cancelGroveStream } from "./flow/obstacles";
 import { cancelDebugScripts } from "./debugLifecycle";
+import type { Layer } from "./world/region";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
 import { ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
-export const placePlayer = (x: number, z: number, faceX: number, faceZ: number) => {
+export const placePlayer = (x: number, z: number, faceX: number, faceZ: number, layer: Layer = "ground") => {
     if (rt.groveStreamFerry.start) {
       cancelDebugScripts();
       cancelGroveStream();
     }
+    // Every placement names its layer (debug targets and hooks default to the ground).
+    if (getGame().progress.act3.world !== "cloud") rt.player.layer = layer;
     const p = nearestWalkable(x, z, PLAYER_R, gatesOf(getGame().progress));
     rt.player.x = p.x;
     rt.player.z = p.z;

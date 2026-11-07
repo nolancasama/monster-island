@@ -2,8 +2,10 @@ import { BEACON_ARENA } from "../game/logic/beacon";
 import { TUNNEL } from "../game/world/island";
 import { CANOPY_ROPES, CLIFF_ROPE, STAGE_PASSAGES, inLowland, zoneAt } from "../game/world/lowland";
 import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
+import type { Layer } from "../game/world/region";
 
-export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean }
+/** `layer` is the player's traversal layer; omitted means ground. */
+export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean; layer?: Layer }
 export interface Framing { yaw: number; pitch: number; dist: number; ahead: number }
 export interface CameraProfile extends Framing {
   id: string;
@@ -39,7 +41,7 @@ const doorMargin = (margin: number) => margin / CAMERA_HYSTERESIS;
 /** Priority order, most specific first. All gameplay follow framing lives here.
  * Margins expand a retained zone and contract an entering zone, in world metres.
  * Scripted shots (including the prologue rope) remain owned by their scenes. */
-export const CAMERA_PROFILES: readonly CameraProfile[] = [
+const GROUND_PROFILES: readonly CameraProfile[] = [
   // The entrance rope's wall is to the north, opposite the sanctuary cliff: mirror its climb framing.
   { ...DEFAULT_CAMERA, id: "canopy-entrance-rope", kind: "rope", yaw: Math.atan2(5, 8), pitch: Math.atan2(2.9, Math.hypot(5, 8)), dist: Math.hypot(5, 8, 2.9), ahead: 0,
     contains: p => !p.cloud && p.climbing && Math.abs(p.x - CANOPY_ROPES.entrance.x) < 2 && Math.abs(p.z - CANOPY_ROPES.entrance.faceZ) < 4 },
@@ -120,6 +122,19 @@ export const CAMERA_PROFILES: readonly CameraProfile[] = [
   { ...BEACH_SIDE, id: "far-bank", contains: home((p, m) => p.x > 28 - m) },
   { ...BEACH_SIDE, id: "east-beach", contains: home((p, m) => p.x > 3 - m) },
   { ...BEACH_SIDE, id: "west-beach", contains: p => !p.cloud },
+];
+
+/** Profiles for the cave and high layers (added by their content), most specific first. */
+const LAYER_PROFILES: readonly CameraProfile[] = [
+  // Fallback for any layer area without its own framing (never a ground view).
+  { ...DEFAULT_CAMERA, id: "layer-default", kind: "lowland", contains: p => !p.cloud && (p.layer ?? "ground") !== "ground" },
+];
+
+/** Every ground profile matches the ground layer only: a treetop walker above the
+ * lower Canopy, or a cave walker under the mesa, never takes a ground framing. */
+export const CAMERA_PROFILES: readonly CameraProfile[] = [
+  ...LAYER_PROFILES,
+  ...GROUND_PROFILES.map((profile): CameraProfile => ({ ...profile, contains: (p, m) => (p.layer ?? "ground") === "ground" && profile.contains(p, m) })),
 ];
 
 /** Schmitt borders: retain until .65m outside, enter higher-priority zones

@@ -34,10 +34,17 @@ interface Candidate {
   reach: number;
 }
 
+/** Interactions that live on the cave and high layers (filled by their content). */
+function layerCandidates(): Candidate[] {
+  return [];
+}
+
 function candidates(): Candidate[] {
   const g = getGame();
   const p = g.progress;
   if (p.act3.world === "cloud") return cloudCandidates();
+  // Ground interactions never reach through rock or from a leaf to the deck below.
+  if (rt.player.layer !== "ground") return layerCandidates();
   const out: Candidate[] = [];
   const add = (focus: Focus, reach = INTERACT_RANGE) => out.push({ focus, reach });
   if (p.metMaple) add({ id: "maple", kind: "maple", verb: "Talk to", noun: "Maple", x: rt.maple.x, z: rt.maple.z }, 2.5);
@@ -138,6 +145,8 @@ export function findFocus(): Focus | null {
 
 /** Where the ★ marker floats for the current objective (null = no marker). */
 export function objectiveTarget(): (Vec2 & { y: number }) | null {
+  // The optional cave and treetops carry no story marker: it would float over the ground below.
+  if (rt.player.layer !== "ground") return null;
   const g = getGame();
   const p = g.progress;
   const o = objective(p);
@@ -190,7 +199,7 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
     case "reachPort": {
       const zone = zoneAt(rt.player.x, rt.player.z);
       const t = zone ? routeMarker(zone, rt.player.x) : CLIFF_ROPE.top;
-      return { x: t.x, z: t.z, y: 2.2 };
+      return t ? { x: t.x, z: t.z, y: 2.2 } : null;
     }
     case "market":
     case "kitchen":

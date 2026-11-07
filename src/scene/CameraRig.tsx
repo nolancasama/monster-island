@@ -78,7 +78,7 @@ export function CameraRig() {
     const rope = g.screen === "game" && p.climbY !== null && p.z < -140;
     const wasRope = c.framing === "rope";
     const leavingRope = !rope && (wasRope || c.shot !== null && c.shot === ropeShot.current);
-    const point = { x: p.x, y: p.y, z: p.z, climbing: p.climbY !== null, cloud };
+    const point = { x: p.x, y: p.y, z: p.z, climbing: p.climbY !== null, cloud, layer: p.layer };
     const selected = cameraProfileAt(point, c.snap ? undefined : profile.current);
     const lowland = selected.kind === "lowland" && !rope && (c.mode === "follow" || leavingRope);
     const fixedCauseway = lowland && selected.id === "ruined-causeway";

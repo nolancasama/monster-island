@@ -1,4 +1,5 @@
 import { placePlayer, goToTarget } from "./travel";
+import type { Layer } from "./world/region";
 import { cloudIsleOpen, setE2eCloudIsleShipOpen } from "./release";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
@@ -56,7 +57,7 @@ export function installE2eHook(seed: number) {
             }
           : null,
         line: g.line ? { by: g.line.by, en: g.line.en } : null,
-        player: { x: rt.player.x, z: rt.player.z, y: rt.player.y, yaw: rt.player.yaw, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null, frozen: rt.player.frozen, falling: rt.player.fall !== null, teeter: rt.player.teeter, safeGround: rt.player.safeGround },
+        player: { layer: rt.player.layer, x: rt.player.x, z: rt.player.z, y: rt.player.y, yaw: rt.player.yaw, ground: standY(rt.player.x, rt.player.z, g.progress.solved), riding: rt.player.riding, climbing: rt.player.climbY !== null, frozen: rt.player.frozen, falling: rt.player.fall !== null, teeter: rt.player.teeter, safeGround: rt.player.safeGround },
         monsters: Object.fromEntries(
           LIVE_MONSTERS.map((id) => [id, { x: rt.monsters[id].x, z: rt.monsters[id].z, mode: rt.monsters[id].mode, visible: companionVisible(id), air: rt.monsters[id].air }])
         ),
@@ -142,8 +143,8 @@ export function installE2eHook(seed: number) {
     /** Terrain height alone, ignoring decks: proves puzzle animation moves no land. */
     groundAt(x: number, z: number) { return groundY(x, z); },
     saveNow() { writeSave(encodeSave(getGame().progress, { x: rt.player.x, z: rt.player.z, yaw: rt.player.yaw }, rt.playTime)); },
-    teleport(x: number, z: number, yaw = 0, snap = true) {
-      placePlayer(x, z, x + Math.sin(yaw), z + Math.cos(yaw));
+    teleport(x: number, z: number, yaw = 0, snap = true, layer: Layer = "ground") {
+      placePlayer(x, z, x + Math.sin(yaw), z + Math.cos(yaw), layer);
       rt.camera.snap = snap;
     },
     /** Pin the camera (screenshots). */

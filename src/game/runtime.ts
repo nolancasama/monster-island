@@ -1,7 +1,7 @@
 import type { FoodId, MonsterId, ObstacleId, Vec2, Vec3 } from "./types";
 import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
-import { region } from "./world/region";
+import { region, type Layer } from "./world/region";
 
 /**
  * Mutable per-frame state shared by the scene, input and game flow. Kept out
@@ -111,6 +111,9 @@ export const rt = {
   /** Seconds of play (paused on the title and results). */
   playTime: 0,
   player: {
+    /** Traversal layer; the world queries' shared default (region.layer) is the single source. */
+    get layer(): Layer { return region.layer; },
+    set layer(layer: Layer) { region.layer = layer; },
     x: SPAWN.x,
     z: SPAWN.z,
     y: 0,
@@ -235,6 +238,7 @@ export function resetRuntime() {
   rt.squallLift = 0;
   rt.kikoTrail = 0;
   const p = rt.player;
+  p.layer = "ground";
   p.x = SPAWN.x;
   p.z = SPAWN.z;
   p.yaw = SPAWN.yaw;

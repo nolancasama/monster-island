@@ -13,6 +13,8 @@ import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./
 import { rt } from "../runtime";
 import { GROVE_STREAM, GROVE_STREAM_MOVED_SCENERY, groveStreamSide } from "../world/groveStream";
 import { nearestOnTrail } from "../world/lowland";
+import { region, type Layer } from "../world/region";
+import { LAYER_ENTRY } from "../world/layers";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
@@ -39,16 +41,20 @@ const VERSION = 4;
 export interface SaveData {
   v: number;
   progress: Progress;
-  player: { x: number; z: number; yaw: number };
+  /** `layer` is additive in v4: absent means ground. */
+  player: { x: number; z: number; yaw: number; layer?: Layer };
   /** Play seconds (results card). */
   seconds: number;
 }
 
 export function encodeSave(progress: Progress, player: SaveData["player"], seconds: number): string {
-  if (rt.groveStreamFerry.start && player.x === rt.player.x && player.z === rt.player.z)
+  const live = player.x === rt.player.x && player.z === rt.player.z;
+  if (rt.groveStreamFerry.start && live)
     player = { ...rt.groveStreamFerry.start, yaw: player.yaw };
-  else if (rt.player.hop && player.x === rt.player.x && player.z === rt.player.z)
+  else if (rt.player.hop && live)
     player = { x: rt.player.hop.toX, z: rt.player.hop.toZ, yaw: player.yaw };
+  const layer = player.layer ?? (live ? rt.player.layer : "ground");
+  if (layer !== "ground") player = { ...player, layer };
   const data: SaveData = { v: VERSION, progress, player, seconds };
   return JSON.stringify(data);
 }
@@ -220,7 +226,19 @@ function cloudSavePositionUnlocked(a: Act3, x: number, z: number): boolean {
   return true;
 }
 
+/** Ground positions are always validated on the ground layer, whatever the
+ * live game's layer is (Continue reads the save before the runtime resets). */
 export function decodeSave(text: string | null): SaveData | null {
+  const active = region.layer;
+  region.layer = "ground";
+  try {
+    return decodeSaveOnGround(text);
+  } finally {
+    region.layer = active;
+  }
+}
+
+function decodeSaveOnGround(text: string | null): SaveData | null {
   if (!text) return null;
   let raw: unknown;
   try {
@@ -291,7 +309,23 @@ export function decodeSave(text: string | null): SaveData | null {
   // Validate position after migration and progression sanitization, against the
   // same solids and gates movement uses. Progress and the v3 format stay intact.
   let safe;
-  if (p.act3.world === "cloud") {
+  // A cave, treetop or summit save stays on its layer: its own spot when that
+  // is walkable there, otherwise the layer's safe entry. Anything else loads on
+  // the ground (never inside the mesa's rock or over a void).
+  const savedLayer: Layer | null = pl.layer === "cave" || pl.layer === "high" ? pl.layer : null;
+  let layer: Layer = "ground", layeredSpot: { x: number; z: number } | null = null;
+  if (savedLayer && p.act2.started && p.act3.world !== "cloud") {
+    const gates = gatesOf(p), entry = LAYER_ENTRY[savedLayer];
+    if (isWalkable(savedX, savedZ, gates, PLAYER_R, false, savedLayer)) layeredSpot = { x: savedX, z: savedZ };
+    else if (entry && isWalkable(entry.x, entry.z, gates, PLAYER_R, false, savedLayer)) layeredSpot = { ...entry };
+    if (layeredSpot) {
+      layer = savedLayer;
+      p.act2.zone = zoneAt(layeredSpot.x, layeredSpot.z, savedLayer);
+    }
+  }
+  if (layeredSpot) {
+    safe = layeredSpot;
+  } else if (p.act3.world === "cloud") {
     const oldLayout = !isObj(src.act3) || src.act3.cloudLayout !== 2;
     let { x, z } = oldLayout ? CLOUD_SPAWNS[p.act3.area] : { x: num(pl.x, NaN), z: num(pl.z, NaN) };
     // An autosave during the authored hop resumes on its nearest marked pad.
@@ -359,7 +393,7 @@ export function decodeSave(text: string | null): SaveData | null {
   return {
     v: VERSION,
     progress: p,
-    player: { x: safe.x, z: safe.z, yaw: num(pl.yaw, 0) },
+    player: { x: safe.x, z: safe.z, yaw: num(pl.yaw, 0), ...(layer !== "ground" ? { layer } : {}) },
     seconds: Math.max(0, num(raw.seconds, 0))
   };
 }

@@ -30,7 +30,7 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
   const wasPlaying = useRef(false);
   useFrame((_, dt) => {
     const revealed = discovered();
-    if (revealed && !wasDiscovered.current && wasPlaying.current) revealSmoke(c.x, standY(c.x, c.z, getGame().progress.solved) + .4, c.z);
+    if (revealed && !wasDiscovered.current && wasPlaying.current) revealSmoke(c.x, standY(c.x, c.z, getGame().progress.solved, c.layer ?? "ground") + .4, c.z);
     wasDiscovered.current = revealed;
     wasPlaying.current = getGame().screen === "game";
     if (root.current) root.current.visible = revealed && visible(c.x, c.z);
@@ -55,7 +55,7 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
       openingGlowRef.current.scale.setScalar(0.35 + t * 0.5);
     }
   });
-  const y = standY(c.x, c.z, getGame().progress.solved);
+  const y = standY(c.x, c.z, getGame().progress.solved, c.layer ?? "ground");
   if (!revealed) return null;
   return (
     <group ref={root} visible={discovered() && visible(c.x, c.z)} position={[c.x, y, c.z]} rotation={[0, c.yaw, 0]}>

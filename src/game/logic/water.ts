@@ -1,4 +1,5 @@
 import { hazardAt } from "./elements";
+import { region } from "../world/region";
 import { lowlandY, nearestOnTrail, STREAMS, streamY } from "../world/lowland";
 import { STREAM_WIDTH, streamBanks, type StreamPoint } from "../world/streams";
 
@@ -48,7 +49,8 @@ export function waterAt(x: number, z: number, world: "home" | "cloud", solved: r
   }
   // All authored streams lie in the full lowland blend: lowlandY is the
   // terrain there, without consulting the mutable active-world selector.
-  if (world === "home" && streamFootprints.some(polygons => polygons.some(p => insidePolygon(p, x, z)))
+  // Ground streams never reach the cave floor or the treetops above them.
+  if (world === "home" && region.layer === "ground" && streamFootprints.some(polygons => polygons.some(p => insidePolygon(p, x, z)))
     && lowlandY(x, z) < streamY(x, z)) return "shallow";
   return "none";
 }

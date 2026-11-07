@@ -1,3 +1,4 @@
+import type { Layer } from "./region";
 import type { StageId } from "./lowland";
 import type { SolidShape } from "./island";
 
@@ -6,6 +7,8 @@ export type ElementEvent = "burn" | "grab" | "wind" | "lift" | "bomb";
 export interface ElementObject {
   id: string;
   world: "home" | "cloud";
+  /** Traversal layer (default ground): only walkers on it can affect the object. */
+  layer?: Layer;
   x: number; z: number; r: number;
   tags: ElementTag[];
   on?: Partial<Record<ElementEvent, { becomes: string; secret?: string }>>;

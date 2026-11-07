@@ -1,7 +1,8 @@
 import { MONSTERS } from "../data/monsters";
 import { COMPANION_IDS } from "../data/combat";
 import { CLOUD_AREAS, CLOUD_ZONES, type CloudAreaId } from "../world/cloudisle";
-import { STAGES, ZONES, type ZoneId } from "../world/lowland";
+import { STAGES, ZONES, ZONE_ORDER, type ZoneId } from "../world/lowland";
+import type { Layer } from "../world/region";
 import { newProgress, GATES, type Progress } from "./progress";
 import type { MonsterId, ObstacleId } from "../types";
 
@@ -14,6 +15,8 @@ export interface DebugDestination {
   step: number;
   zone?: ZoneId;
   area?: CloudAreaId;
+  /** Destinations on the cave or high layer place the player on that layer's surface. */
+  layer?: Layer;
 }
 
 const prologue: Array<[string, string, string, number]> = [
@@ -30,7 +33,7 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "forestEntrance", label: "Forest entrance", target: "forestEntrance", step: 9, zone: "forest1", act: "Act 2", world: "home" },
   { id: "canopyAscentRope", label: "Canopy rope puzzle", target: "canopyAscentRope", step: 9, zone: "forest1", act: "Act 2", world: "home" },
   { id: "groveStream", label: "Grove stream north bank", target: "groveStream", step: 9, zone: "grove", act: "Act 2", world: "home" },
-  ...(Object.keys(ZONES) as ZoneId[]).map(zone => ({ id: `zone:${zone}`, label: ZONES[zone].name.en, target: `zone:${zone}`, step: 9, zone, act: "Act 2" as const, world: "home" as const })),
+  ...ZONE_ORDER.map(zone => ({ id: `zone:${zone}`, label: ZONES[zone].name.en, target: `zone:${zone}`, step: 9, zone, act: "Act 2" as const, world: "home" as const })),
   ...["market", "kitchen", "trainer", "inn", "harbor"].map(target => ({ id: target, label: `Port Town ${target === "harbor" ? "harbour" : target}`, target, step: 9, zone: "port" as const, act: "Act 2" as const, world: "home" as const })),
   { id: "voyage", label: "Voyage / Port dock", target: "harbor", step: 10, zone: "port", act: "Act 3", world: "home" },
   ...CLOUD_AREAS.map(area => ({ id: `cloud:${area}`, label: CLOUD_ZONES[area].name.en, target: `cloud:${area}`, step: 10, area, act: "Act 3" as const, world: "cloud" as const })),

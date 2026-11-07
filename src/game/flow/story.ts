@@ -157,6 +157,8 @@ export async function continueGame() {
   resetRuntime();
   const p = save.progress;
   rt.world = p.act3.world;
+  // The reader already validated the position on its saved layer.
+  rt.player.layer = save.player.layer ?? "ground";
   const gates = gatesOf(p);
   const spot = Number.isFinite(save.player.x) && isWalkable(save.player.x, save.player.z, gates, PLAYER_R) ? save.player : SPAWN;
   const safe = nearestWalkable(spot.x, spot.z, PLAYER_R, gates);
