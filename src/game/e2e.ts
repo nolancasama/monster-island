@@ -118,6 +118,7 @@ export function installE2eHook(seed: number) {
           groveCrossing: groveCrossingView.phase,
           groveStream: groveStreamView.phase,
           cave: { ...caveView },
+          bubble: rt.bubbleRide.phase,
           panel: g.panel,
           banner: g.banner?.title ?? null,
           hint: g.hint

@@ -19,7 +19,7 @@ export type ObstacleId =
   // Act 2 (the lowland below the sanctuary).
   | "groveStream" | "groveLilies" | "canopyAscentRope" | "canopyVines" | "canopyRope"
   // Optional exploration: the cave's torches.
-  | "caveTorches";
+  | "caveTorches" | "summitBubble";
 /** Rare crafting materials (Act 2). */
 export type ItemId = "amber";
 export type SizeId = "small" | "big";

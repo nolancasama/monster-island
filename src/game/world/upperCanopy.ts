@@ -2,6 +2,7 @@ import type { Vec2 } from "../types";
 import type { SolidShape } from "./island";
 import type { Hazard } from "./hazards";
 import { GIANT_TREES, nearestOnTrail, type ClimbRope, type WalkShape } from "./lowland";
+import { MESA_CENTER, MESA_PLATEAU_Y, MESA_STRATA, mesaRimY } from "./mesa";
 import { LAYER_ENTRY, registerLayerWorld } from "./layers";
 
 /**
@@ -107,13 +108,16 @@ const leafWalk = (l: UpperLeaf): WalkShape => ({ kind: "disc", x: l.x, z: l.z, r
 const branchWalk = (b: UpperBranch): WalkShape => ({ kind: "trail", pts: b.pts, w: b.w });
 const present = (l: UpperLeaf) => !l.unstable || LEAF_STATE[l.id].phase !== "gone";
 
-export const UPPER_BOUNDS = { x0: 83.5, x1: 118, z0: -237.5, z1: -201.5 };
+// West of x 85.5 is the plateau and its bridge: their edges are walls, not falls.
+export const UPPER_BOUNDS = { x0: 85.5, x1: 118, z0: -237.5, z1: -201.5 };
 const inBounds = (x: number, z: number, pad = 0) => x >= UPPER_BOUNDS.x0 - pad && x <= UPPER_BOUNDS.x1 + pad && z >= UPPER_BOUNDS.z0 - pad && z <= UPPER_BOUNDS.z1 + pad;
 
 /** The leaf or branch under a point (with margin m), or null. */
-export function upperSurfaceAt(x: number, z: number, m = 0): { y: number; leaf?: UpperLeaf; branch?: UpperBranch } | null {
-  if (!inBounds(x, z, 1)) return null;
-  let best: { y: number; leaf?: UpperLeaf; branch?: UpperBranch } | null = null;
+export function upperSurfaceAt(x: number, z: number, m = 0): { y: number; leaf?: UpperLeaf; branch?: UpperBranch; summit?: true } | null {
+  const summit = onSummit(x, z, m);
+  // No early exit on the treetop bounds: the summit bridge runs well west of them.
+  if (!summit && !inBounds(x, z, 10)) return null;
+  let best: { y: number; leaf?: UpperLeaf; branch?: UpperBranch; summit?: true } | null = summit ? { y: summitY(x, z), summit: true } : null;
   for (const l of UPPER_LEAVES) {
     if (!present(l) || Math.hypot(x - l.x, z - l.z) > l.r - m) continue;
     if (!best || l.y > best.y) best = { y: l.y, leaf: l };
@@ -133,7 +137,7 @@ export function upperSurfaceAt(x: number, z: number, m = 0): { y: number; leaf?:
 export const upperWalkable = (x: number, z: number, m: number) => upperSurfaceAt(x, z, m) !== null;
 
 /** Areas, for zone and camera purposes: the whole treetop route. */
-export const upperZoneAt = (x: number, z: number) => upperSurfaceAt(x, z, 0) ? "upperCanopy" as const : null;
+export const upperZoneAt = (x: number, z: number) => onSummit(x, z) ? "summit" as const : upperSurfaceAt(x, z, 0) ? "upperCanopy" as const : null;
 
 /** The giant trunks pass up through the leaves: their faces are walls. */
 export const UPPER_TRUNKS = GIANT_TREES.filter(t => t.h >= 20 && inBounds(t.x, t.z)).map(t => ({ x: t.x, z: t.z, r: t.r * .82 }));
@@ -166,3 +170,75 @@ export function refreshUpperHazards() {
 LAYER_ENTRY.high = { ...UPPER_ROPE.top };
 
 export const leafById = leaf;
+
+// ------------------------------------------------------------ the mountain summit (slice H)
+
+/** The plateau: the mesa's top stratum. Its walking floor stays 1 m inside the
+ * rim (low stones and grass show the edge); the floor follows the rendered fan
+ * from the plateau's centre to each rim vertex. */
+export const SUMMIT_OUTLINE: Array<[number, number]> = MESA_STRATA[MESA_STRATA.length - 1].outline;
+const SUMMIT_BAND = MESA_STRATA.length - 1;
+const SUMMIT_EDGE = [...SUMMIT_OUTLINE, SUMMIT_OUTLINE[0]];
+const SUMMIT_BOX = {
+  x0: Math.min(...SUMMIT_OUTLINE.map(p => p[0])), x1: Math.max(...SUMMIT_OUTLINE.map(p => p[0])),
+  z0: Math.min(...SUMMIT_OUTLINE.map(p => p[1])), z1: Math.max(...SUMMIT_OUTLINE.map(p => p[1])),
+};
+function inSummitPolygon(x: number, z: number): boolean {
+  if (x < SUMMIT_BOX.x0 || x > SUMMIT_BOX.x1 || z < SUMMIT_BOX.z0 || z > SUMMIT_BOX.z1) return false;
+  let inside = false;
+  for (let i = 0, j = SUMMIT_OUTLINE.length - 1; i < SUMMIT_OUTLINE.length; j = i++) {
+    const [ax, az] = SUMMIT_OUTLINE[i], [bx, bz] = SUMMIT_OUTLINE[j];
+    if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) inside = !inside;
+  }
+  return inside;
+}
+export const SUMMIT_MARGIN = 1;
+export const onSummit = (x: number, z: number, m = 0) => inSummitPolygon(x, z) && nearestOnTrail(SUMMIT_EDGE, x, z).d >= SUMMIT_MARGIN + m;
+
+/** Height of the rendered plateau fan at a point (centre MESA_PLATEAU_Y, rim mesaRimY). */
+export function summitY(x: number, z: number): number {
+  const [cx, cz] = MESA_CENTER, n = SUMMIT_OUTLINE.length;
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = SUMMIT_OUTLINE[i], [bx, bz] = SUMMIT_OUTLINE[(i + 1) % n];
+    // Barycentric weights in the fan triangle (centre, a, b).
+    const d = (az - bz) * (cx - bx) + (bx - ax) * (cz - bz);
+    const w1 = ((az - bz) * (x - bx) + (bx - ax) * (z - bz)) / d, w2 = ((bz - cz) * (x - bx) + (cx - bx) * (z - bz)) / d, w3 = 1 - w1 - w2;
+    if (w1 >= -1e-6 && w2 >= -1e-6 && w3 >= -1e-6) return w1 * MESA_PLATEAU_Y + w2 * mesaRimY(SUMMIT_BAND, i) + w3 * mesaRimY(SUMMIT_BAND, (i + 1) % n);
+  }
+  return MESA_PLATEAU_Y;
+}
+
+/** The root bridge from the Summit Approach's stub onto the plateau's east rim. */
+export const SUMMIT_BRIDGE: UpperBranch = (() => {
+  // From the stub's end straight in toward the plateau's centre, until a mounted
+  // rider (0.55 m) stands well on the summit floor.
+  const [sx, sz] = UPPER_BRANCHES.find(b => b.id === "summitBridge")!.pts[1];
+  const dx = MESA_CENTER[0] - sx, dz = MESA_CENTER[1] - sz, l = Math.hypot(dx, dz);
+  let t = 0;
+  while (t < l && !onSummit(sx + dx / l * t, sz + dz / l * t, .75)) t += .2;
+  const ex = sx + dx / l * (t + .6), ez = sz + dz / l * (t + .6);
+  return { id: "summitLedge", pts: [[sx, sz], [ex, ez]], w: 1.15, y0: 22.65, y1: summitY(ex, ez) };
+})();
+/** The summit chest, the departure stone (Bubbo's bubble), and solid summit furniture. */
+export const SUMMIT_CHEST = { x: 77.6, z: -207.2, yaw: .4 };
+export const SUMMIT_DEPARTURE = { x: 76.8, z: -220.4, face: { x: 76.8, z: -226 } };
+export const SUMMIT_STONES: Array<Vec2 & { r: number; h: number }> = [
+  { x: 74.2, z: -211.5, r: .42, h: 1.7 }, { x: 80.6, z: -212.8, r: .38, h: 1.4 }, { x: 72.8, z: -205, r: .35, h: 1.2 },
+];
+const SUMMIT_SOLIDS: SolidShape[] = [
+  // The mesa's existing small trees and two weathered pillars (see scene mesaGeometry).
+  ...[[74, -195], [79, -197], [77, -201]].map(([x, z]): SolidShape => ({ kind: "circle", x, z, r: .32 })),
+  ...[75.5, 78.2].map((x): SolidShape => ({ kind: "circle", x, z: -198, r: .55 })),
+  ...SUMMIT_STONES.map((s): SolidShape => ({ kind: "circle", x: s.x, z: s.z, r: s.r })),
+  { kind: "box", x: SUMMIT_CHEST.x, z: SUMMIT_CHEST.z, hx: .5, hz: .36, yaw: SUMMIT_CHEST.yaw },
+  { kind: "circle", x: SUMMIT_DEPARTURE.x, z: SUMMIT_DEPARTURE.z - 1.2, r: .45 },
+];
+
+/** Bubbo's bubble lands here: open Causeway paving, 7 m+ from every Causeway spawn.
+ * Before the Causeway is open by a walking route, it lands at the upper rope's foot. */
+export const BUBBLE_LANDING = { causeway: { x: 84.5, z: -254.5 }, canopy: { ...UPPER_ROPE.foot } };
+
+// The summit joins the high layer: its furniture is solid, its bridge is a branch.
+UPPER_SOLIDS.push(...SUMMIT_SOLIDS);
+UPPER_BRANCHES.push(SUMMIT_BRIDGE);
+refreshUpperHazards();

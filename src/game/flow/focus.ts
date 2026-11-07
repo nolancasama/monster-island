@@ -23,7 +23,7 @@ const SERVICE_FOCUS: Record<ServiceId, { verb: string; noun: string }> = {
   inn: { verb: "Rest at", noun: "the inn" },
   harbor: { verb: "Ask about", noun: "the ship" }
 };
-const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { caveTorches: "the torch", groveStream: "the stream", groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap", canopyAscentRope: "the rope coil" };
+const ACT2_NOUN: Record<keyof typeof ACT2_PLACE, string> = { summitBubble: "the way down", caveTorches: "the torch", groveStream: "the stream", groveLilies: "the pond", canopyVines: "the gap", canopyRope: "the gap", canopyAscentRope: "the rope coil" };
 
 /**
  * What E (or the touch action button) would use right now: the nearest usable
@@ -38,8 +38,12 @@ interface Candidate {
 /** Interactions that live on the cave and high layers (filled by their content). */
 function layerCandidates(): Candidate[] {
   const p = getGame().progress, out: Candidate[] = [];
-  if (rt.player.layer === "high")
+  if (rt.player.layer === "high") {
     out.push({ focus: { id: "upperCanopyDown", kind: "cliffRope", verb: "Climb down", noun: "the rope", x: UPPER_ROPE.top.x, z: UPPER_ROPE.top.z }, reach: 2.2 });
+    const s = ACT2_PLACE.summitBubble;
+    if (isSolved(p, "summitBubble")) out.push({ focus: { id: "summitBubble", kind: "obstacle", verb: "Float down", noun: "with Bubbo", ja: "バボと ふわふわ おりよう", x: s.x, z: s.z }, reach: 2.6 });
+    else out.push({ focus: { id: "summitBubble", kind: "obstacle", verb: "Look at", noun: "the way down", ja: "したを みよう", x: s.x, z: s.z }, reach: 2.6 });
+  }
   for (const c of CHESTS)
     if ((c.layer ?? "ground") === rt.player.layer && !p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret)))
       out.push({ focus: { id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, reach: 2.3 });
@@ -117,6 +121,8 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
   for (const c of CHESTS) if ((c.layer ?? "ground") === "ground" && !p.act2.chests.includes(c.id) && (!c.secret || p.act2.secrets.includes(c.secret))) add({ id: c.id, kind: "chest", verb: "Open", noun: "the chest", x: c.x, z: c.z }, 2.3);
   add({ id: "forkSign", kind: "sign", verb: "Read", noun: "the sign", x: FORK_SIGN.x, z: FORK_SIGN.z }, 2.2);
   for (const id of Object.keys(ACT2_PLACE) as Array<keyof typeof ACT2_PLACE>) {
+    // The summit's departure stone is on the high layer (layerCandidates).
+    if (id === "summitBubble") continue;
     if (id === "groveStream" && isSolved(p, id)) {
       for (const point of Object.values(GROVE_STREAM_FERRY))
         add({ id, kind: "obstacle", verb: "Ride", noun: "Bubbo", ja: "バボに のろう", ...point }, 2.6);

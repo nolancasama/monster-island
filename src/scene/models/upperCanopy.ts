@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { makeRng } from "../../game/logic/rng";
-import { UPPER_BRANCHES, UPPER_LEAVES, UPPER_ROPE, UPPER_ROPE_COLLAR, UPPER_TRUNKS, type UpperLeaf } from "../../game/world/upperCanopy";
+import { SUMMIT_DEPARTURE, SUMMIT_OUTLINE, SUMMIT_STONES, UPPER_BRANCHES, UPPER_LEAVES, UPPER_ROPE, UPPER_ROPE_COLLAR, UPPER_TRUNKS, onSummit, summitY, type UpperLeaf } from "../../game/world/upperCanopy";
+import { MESA_CENTER } from "../../game/world/mesa";
 import { standY } from "../../game/world/collision";
 
 /**
@@ -167,4 +168,40 @@ export function upperCanopyMaterial(): THREE.MeshLambertMaterial & { userData: {
   };
   m.customProgramCacheKey = () => "upper-canopy-cull-v1";
   return m;
+}
+
+/** The summit: a stone-and-grass rim showing where the floor ends, windswept
+ * tufts, standing stones and the departure stone's blue rune. */
+export function summitGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  const rand = makeRng(9);
+  const n = SUMMIT_OUTLINE.length;
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = SUMMIT_OUTLINE[i], [bx, bz] = SUMMIT_OUTLINE[(i + 1) % n];
+    const steps = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / .9));
+    for (let k = 0; k < steps; k++) {
+      const t = (k + .5) / steps, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      // 0.75 m inside the rim, toward the centre: just beyond the walking floor.
+      const dx = MESA_CENTER[0] - x, dz = MESA_CENTER[1] - z, l = Math.hypot(dx, dz) || 1;
+      const px = x + dx / l * .75, pz = z + dz / l * .75, y = summitY(px, pz);
+      if (rand() < .55) b.add(new THREE.DodecahedronGeometry(.22 + rand() * .16), rand() < .5 ? "#8c8577" : "#7a7468", [px, y + .08, pz], [rand(), rand(), rand()], [1.2, .65, 1]);
+      else b.cone(.12, .35 + rand() * .2, px, y - .02, pz, "#6f9a45", 4);
+    }
+  }
+  for (let k = 0; k < 70; k++) {
+    const x = 70 + rand() * 15, z = -222 + rand() * 25;
+    if (!onSummit(x, z, .2)) continue;
+    const y = summitY(x, z), lean = .35 + rand() * .2;
+    b.boxAt(.05, .32 + rand() * .2, .1, [x, y + .14, z], [0, 2.4, lean], rand() < .5 ? "#7fae4e" : "#9cbf5e");
+  }
+  for (const s of SUMMIT_STONES) {
+    const y = summitY(s.x, s.z);
+    b.add(new THREE.CylinderGeometry(s.r * .7, s.r, s.h, 6), "#9a9484", [s.x, y + s.h / 2 - .05, s.z], [0, s.x, .06]);
+    b.sphere(s.r * .5, s.x + .1, y + s.h * .7, s.z + .15, "#6d8f4a", [1.2, .5, 1], 5);
+  }
+  // The departure stone: a low slab facing the drop, ringed with a pale rune.
+  const d = SUMMIT_DEPARTURE, dy = summitY(d.x, d.z - 1.2);
+  b.cyl(.55, .62, .35, d.x, dy - .1, d.z - 1.2, "#a49c8a", 9);
+  b.add(new THREE.TorusGeometry(.42, .04, 4, 18), "#8fd8ff", [d.x, dy + .27, d.z - 1.2], [Math.PI / 2, 0, 0]);
+  return b.build();
 }

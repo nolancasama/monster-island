@@ -5,7 +5,8 @@ import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { LEAF_STATE, UPPER_LEAVES } from "../game/world/upperCanopy";
 import { layerView } from "./layerView";
-import { unstableLeafGeometry, upperCanopyGeometry, upperCanopyMaterial, upperRopeGeometry } from "./models/upperCanopy";
+import { summitGeometry, unstableLeafGeometry, upperCanopyGeometry, upperCanopyMaterial, upperRopeGeometry } from "./models/upperCanopy";
+import { Chest } from "./Chest";
 import { flatMat } from "./materials";
 
 /** Exposed for the browser capture hook. */
@@ -19,6 +20,7 @@ export function UpperCanopy() {
   const mat = useMemo(upperCanopyMaterial, []);
   const main = useMemo(upperCanopyGeometry, []);
   const rope = useMemo(upperRopeGeometry, []);
+  const summit = useMemo(summitGeometry, []);
   const unstable = useMemo(() => UPPER_LEAVES.filter(l => l.unstable).map(l => ({ leaf: l, geometry: unstableLeafGeometry(l) })), []);
   const leafRefs = useRef<Array<THREE.Mesh | null>>([]);
   const drop = useRef<Record<string, number>>({});
@@ -55,11 +57,77 @@ export function UpperCanopy() {
   return <group ref={group} visible={false}>
     <mesh geometry={main} material={mat} />
     <mesh geometry={rope} material={flatMat} />
+    <mesh geometry={summit} material={flatMat} />
+    <Chest id="summitChest" visible={() => true} />
     {unstable.map(({ leaf, geometry }, i) => {
       // Re-centre on the leaf so it can tilt and fall about itself.
       const g = geometry.clone();
       g.translate(-leaf.x, -leaf.y, -leaf.z);
       return <mesh key={leaf.id} ref={m => { leafRefs.current[i] = m; }} geometry={g} material={mat} position={[leaf.x, leaf.y, leaf.z]} />;
     })}
+  </group>;
+}
+
+/** Bubbo's big bubble around the player (and his own small one), while it lasts. */
+export function BubbleRide() {
+  const group = useRef<THREE.Group>(null), big = useRef<THREE.Mesh>(null), small = useRef<THREE.Mesh>(null);
+  const motes = useRef<Array<THREE.Mesh | null>>([]);
+  const mat = useMemo(() => new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+varying vec3 vN;
+varying vec3 vV;
+varying vec3 vP;
+void main() {
+  vN = normalize(normalMatrix * normal);
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vV = normalize(-mv.xyz);
+  vP = position;
+  gl_Position = projectionMatrix * mv;
+}`,
+    fragmentShader: `
+uniform float uTime;
+varying vec3 vN;
+varying vec3 vV;
+varying vec3 vP;
+void main() {
+  float rim = pow(1.0 - abs(dot(vN, vV)), 2.4);
+  float shimmer = 0.5 + 0.5 * sin(vP.y * 9.0 + vP.x * 6.0 + uTime * 2.3);
+  vec3 col = mix(vec3(0.55, 0.82, 1.0), vec3(0.92, 0.85, 1.0), shimmer * rim);
+  float spot = smoothstep(0.93, 0.99, dot(vN, normalize(vec3(-0.4, 0.6, 0.7))));
+  float alpha = 0.06 + 0.5 * rim + 0.6 * spot;
+  gl_FragColor = vec4(col + spot, alpha);
+  #include <colorspace_fragment>
+}`,
+  }), []);
+  const sphere = useMemo(() => new THREE.SphereGeometry(1, 24, 16), []);
+  useFrame(() => {
+    const r = rt.bubbleRide, on = r.phase !== "idle";
+    if (group.current) group.current.visible = on;
+    if (!on) return;
+    mat.uniforms.uTime.value = rt.time;
+    const pop = r.phase === "popping" ? 1.25 : 1, wob = .035 * Math.sin(rt.time * 3.1);
+    if (big.current) {
+      big.current.position.set(r.x, r.y + .85, r.z);
+      big.current.scale.set(1.3 * r.k * pop * (1 + wob), 1.3 * r.k * pop * (1 - wob), 1.3 * r.k * pop * (1 + wob * .5));
+      big.current.visible = r.phase !== "popping" || rt.time % .2 < .1;
+    }
+    if (small.current) {
+      small.current.position.set(r.bubbo.x, r.bubbo.y + .45, r.bubbo.z);
+      small.current.scale.setScalar(.8 * r.k * (1 - wob));
+      small.current.visible = r.phase === "flying";
+    }
+    motes.current.forEach((m, i) => {
+      if (!m) return;
+      const a = rt.time * (.8 + i * .17) + i * 1.3;
+      m.position.set(r.x + Math.cos(a) * (1.6 + i * .12), r.y + .9 + Math.sin(a * 1.3) * .6, r.z + Math.sin(a) * (1.6 + i * .12));
+      m.scale.setScalar(.09 + .03 * i * r.k);
+    });
+  });
+  return <group ref={group} visible={false}>
+    <mesh ref={big} geometry={sphere} material={mat} renderOrder={5} />
+    <mesh ref={small} geometry={sphere} material={mat} renderOrder={5} />
+    {[0, 1, 2, 3, 4].map(i => <mesh key={i} ref={m => { motes.current[i] = m; }} geometry={sphere} material={mat} renderOrder={5} />)}
   </group>;
 }

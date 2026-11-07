@@ -17,6 +17,7 @@ import { GROVE_STREAM_FERRY, groveStreamSide } from "../world/groveStream";
 import { gatherParty } from "./act2";
 import { hooks } from "../combat";
 import { CAVE_BRAZIERS } from "../world/cave";
+import { bubbleDescent } from "./summit";
 import { DebugScriptCancelled, onDebugScriptCancel } from "../debugLifecycle";
 
 type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
@@ -25,6 +26,7 @@ const A2 = ACT2_OBSTACLE_PLACE;
 export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
   groveStream: { ...A2.groveStream, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
   caveTorches: { ...A2.caveTorches, alone: { en: "It's dark in there!", ja: "なかは まっくら! ひを だせる ともだちに きこう" } },
+  summitBubble: { ...A2.summitBubble, alone: { en: "It's a long way down!", ja: "したまで とおいね! たすけて くれる ともだちに きこう" } },
   canopyAscentRope: { x: A2.canopyAscentRope.x, z: A2.canopyAscentRope.z, alone: { en: "The deck is too high! Who can fly the rope up?", ja: "こずえは たかいね！ とべる ともだちに きこう" } },
   groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
   canopyVines: { x: A2.canopyVines.x, z: A2.canopyVines.z, alone: { en: "The gap is too wide!", ja: "すきまが ひろすぎる! しょくぶつを そだてる ともだちに きこう" } },
@@ -132,6 +134,7 @@ export function useObstacle(id: ObstacleId): Promise<void> {
     const place = PLACE[id];
     if (isSolved(getGame().progress, id)) {
       if (id === "groveStream") await streamFerry(true);
+      else if (id === "summitBubble") await bubbleDescent(false);
       return;
     }
     if (!obstacleAvailable(getGame().progress, id)) {
@@ -236,7 +239,8 @@ async function perform(id: ObstacleId, monster: MonsterId) {
   else if (id === "groveLilies") await groveCrossing(monster);
   else if (id === "groveStream") await streamFerry(false);
   else if (id === "caveTorches") await emberLightsTorches(monster);
-  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream" | "caveTorches">, monster);
+  else if (id === "summitBubble") { updateProgress(p => solve(p, "summitBubble")); await bubbleDescent(true); }
+  else if (id in ACT2_PLACE) await act2Power(id as Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream" | "caveTorches" | "summitBubble">, monster);
   else await phase3Power(id, monster);
 }
 
@@ -448,7 +452,7 @@ async function flyThrough(id: MonsterId, points: Array<{ x: number; y: number; z
  * Act 2's powers, each a visible permanent change: Bubbo raises lily pads to
  * the islet, Leafy weaves a vine bridge, Puff flies the rolled-up rope bridge across.
  */
-async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream" | "caveTorches">, monster: MonsterId) {
+async function act2Power(id: Exclude<Act2Obstacle, "groveLilies" | "canopyAscentRope" | "groveStream" | "caveTorches" | "summitBubble">, monster: MonsterId) {
   const place = A2[id];
   const target = place.face;
   const m = rt.monsters[monster];

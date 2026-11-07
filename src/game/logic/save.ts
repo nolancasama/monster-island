@@ -15,6 +15,7 @@ import { GROVE_STREAM, GROVE_STREAM_MOVED_SCENERY, groveStreamSide } from "../wo
 import { nearestOnTrail } from "../world/lowland";
 import { region, type Layer } from "../world/region";
 import { LAYER_ENTRY } from "../world/layers";
+import { SUMMIT_DEPARTURE } from "../world/upperCanopy";
 import { CANOPY_GLIDE, CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, OBSERVATORY_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_ROUTE_REQUIRED, CLOUD_ROUTE_GATES, CLOUD_PUZZLE_BARRIERS, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_SPAWNS, cloudNearestWalkable, cloudZoneAt } from "../world/cloudisle";
 
 /**
@@ -53,6 +54,8 @@ export function encodeSave(progress: Progress, player: SaveData["player"], secon
     player = { ...rt.groveStreamFerry.start, yaw: player.yaw };
   else if (rt.player.hop && live)
     player = { x: rt.player.hop.toX, z: rt.player.hop.toZ, yaw: player.yaw };
+  // A save mid-descent resumes on the summit's departure stone.
+  if (live && rt.bubbleRide.phase !== "idle") player = { x: SUMMIT_DEPARTURE.x, z: SUMMIT_DEPARTURE.z, yaw: player.yaw, layer: "high" };
   const layer = player.layer ?? (live ? rt.player.layer : "ground");
   if (layer !== "ground") player = { ...player, layer };
   const data: SaveData = { v: VERSION, progress, player, seconds };

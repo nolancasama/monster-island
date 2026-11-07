@@ -131,6 +131,8 @@ export const rt = {
     /** While riding: 0 = standing at rideFrom, 1 = seated on Bubbo (the hop on and off). */
     seat: 0,
     rideFrom: { x: 0, z: 0 },
+    /** Floating in Bubbo's bubble: the height the player floats at (null = on the ground). */
+    floatY: null as number | null,
     /** Climbing the cliff rope: the height the player hangs at (null = on the ground). */
     climbY: null as number | null,
     /** Over a Canopy edge: a scene owns this; the simulation only drops the body. */
@@ -187,6 +189,8 @@ export const rt = {
   groveStreamFerry: { start: null as Vec2 | null },
   /** The cave's ancient lights: spread 0..1 along the route; a scripted flame jet. */
   caveTorches: { spread: 0, animating: false, jet: null as null | { from: Vec3; to: Vec3; until: number } },
+  /** Bubbo's bubble descent from the summit (the scene draws it from this). */
+  bubbleRide: { phase: "idle" as "idle" | "forming" | "flying" | "popping", k: 0, x: 0, y: 0, z: 0, bubbo: { x: 0, y: 0, z: 0 } },
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
@@ -236,6 +240,8 @@ export function resetRuntime() {
   rt.caveTorches.spread = 0;
   rt.caveTorches.animating = false;
   rt.caveTorches.jet = null;
+  rt.bubbleRide.phase = "idle";
+  rt.player.floatY = null;
   rt.world = "home";
   rt.voyage.active = false;
   rt.voyage.sail = 0;

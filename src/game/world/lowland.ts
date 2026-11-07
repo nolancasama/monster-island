@@ -662,10 +662,14 @@ export const CHESTS: ChestDef[] = [
   ...SECRET_IDS.map(secret => ({ id: `${secret}Chest`, secret, ...SECRET_SITES[secret].chest, yaw: 0, coins: 20, amber: 1 })),
   // Behind Leafy's root seal at the back of the cave (cave layer; see world/cave.ts CAVE_CHEST).
   { id: "caveRootSealChest", secret: "caveRootSeal", layer: "cave", close: true, x: 74.15, z: -199.35, yaw: -1.13, coins: 45, amber: 2, relic: "caveCrystal" },
+  // The ornate chest on the mountain summit (high layer; see world/upperCanopy.ts SUMMIT_CHEST).
+  { id: "summitChest", layer: "high", close: true, x: 77.6, z: -207.2, yaw: .4, coins: 60, amber: 3, relic: "summitStar" },
 ];
 
 /** Where the student stands to ask for each Act 2 unlock, and what it looks at. */
-export const ACT2_OBSTACLE_PLACE: Record<"groveStream" | "groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope" | "caveTorches", Vec2 & { face: Vec2 }> = {
+export const ACT2_OBSTACLE_PLACE: Record<"groveStream" | "groveLilies" | "canopyVines" | "canopyRope" | "canopyAscentRope" | "caveTorches" | "summitBubble", Vec2 & { face: Vec2 }> = {
+  // The summit's departure stone (high layer; see world/upperCanopy.ts SUMMIT_DEPARTURE).
+  summitBubble: { x: 76.8, z: -220.4, face: { x: 76.8, z: -226 } },
   // In front of the cave mouth, facing the north brazier (Ember lights it).
   caveTorches: { x: 67.4, z: -226.2, face: { x: 69.9, z: -224.55 } },
   groveStream: { ...GROVE_STREAM_FERRY.north, face: { ...GROVE_STREAM_FERRY.south } },
@@ -950,7 +954,8 @@ export function lowlandSolids(): SolidShape[] {
   for (const side of [-1, 1]) box(GROVE_DOOR.x + side * (GROVE_DOOR.half + GROVE_DOOR.postWidth / 2), GROVE_DOOR.z, GROVE_DOOR.postWidth / 2, GROVE_DOOR.depth / 2);
   for (const wall of GROVE_DOOR_RETURNS) out.push({ kind: "capsule", ...wall });
   circle(FORK_SIGN.x, FORK_SIGN.z, 0.12);
-  for (const c of CHESTS) if (!c.secret) box(c.x, c.z, 0.5, 0.36, c.yaw);
+  // Ground chests only: the cave's and summit's chests are solid on their own layers.
+  for (const c of CHESTS) if (!c.secret && (c.layer ?? "ground") === "ground") box(c.x, c.z, 0.5, 0.36, c.yaw);
   for (const s of Object.values(SERVICES)) {
     box(s.house.x, s.house.z, s.house.w / 2, s.house.d / 2, s.house.yaw);
     circle(s.keeper.x, s.keeper.z, 0.4);

@@ -279,6 +279,7 @@ function movePlayer(dt: number, canMove: boolean) {
     }
   }
   if (p.climbY !== null) p.y = p.climbY;
+  else if (p.floatY !== null) p.y = p.floatY;
 }
 
 function advanceLilyHop() {

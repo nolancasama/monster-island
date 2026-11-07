@@ -8,7 +8,7 @@ import { cancelDebugScripts } from "./debugLifecycle";
 import type { Layer } from "./world/region";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
 import { CAVE_CHAMBER } from "./world/cave";
-import { UPPER_ROPE } from "./world/upperCanopy";
+import { BUBBLE_LANDING, SUMMIT_DEPARTURE, UPPER_ROPE } from "./world/upperCanopy";
 import { ACT2_OBSTACLE_PLACE, CAVE_MOUTH, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
@@ -65,6 +65,8 @@ export const travelTarget = (name: string): { x: number; z: number } | null => {
     if (name === "caveChamber") return { x: CAVE_CHAMBER.x + 1, z: CAVE_CHAMBER.z };
     if (name === "upperRopeFoot") return UPPER_ROPE.foot;
     if (name === "upperRopeTop") return UPPER_ROPE.top;
+    if (name === "summit") return { x: SUMMIT_DEPARTURE.x, z: SUMMIT_DEPARTURE.z + 1.5 };
+    if (name === "causewayLanding") return BUBBLE_LANDING.causeway;
     if (name in SERVICES) return SERVICES[name as ServiceId].keeper;
     if (name.startsWith("zone:")) return routeMarker(name.slice(5) as ZoneId, rt.player.x) ?? null;
     const chest = CHESTS.find((c) => c.id === name);

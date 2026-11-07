@@ -228,6 +228,7 @@ export const OBSTACLES: Record<ObstacleId, ObstacleDef> = {
   // Act 2: the entrance ferry, optional lily treasure and canopy traversal.
   groveStream: { id: "groveStream", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: [] },
   caveTorches: { id: "caveTorches", needs: "fire", question: "canFire", others: ["canSwim", "canFly"], after: [] },
+  summitBubble: { id: "summitBubble", needs: "swim", question: "canHelp", others: ["canFly", "canFire"], after: [] },
   groveLilies: { id: "groveLilies", needs: "swim", question: "canSwim", others: ["canFly", "canFire"], after: [] },
   canopyAscentRope: { id: "canopyAscentRope", needs: "fly", question: "canFly", others: ["canJump", "canSwim"], after: [] },
   canopyVines: { id: "canopyVines", needs: "grow", question: "canHelp", others: ["canSwim", "canFire"], after: [] },

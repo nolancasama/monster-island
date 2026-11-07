@@ -276,6 +276,8 @@ export const cb = {
   holdK: false,
   /** The player cannot be hurt again until this rt.time. */
   safeUntil: 0,
+  /** No enemy starts an attack before this (a landing from Bubbo's bubble). */
+  calmUntil: 0,
   hurtT: -10,
   /** Player knock-back velocity. */
   knock: { x: 0, z: 0 },
@@ -321,6 +323,7 @@ export function resetCombat() {
   cb.holdK = false;
   releaseAllAttacks();
   cb.safeUntil = 0;
+  cb.calmUntil = 0;
   cb.knock = { x: 0, z: 0 };
   cb.knockedOut = false;
   cb.kos = 0;
@@ -2074,7 +2077,7 @@ function updateRanged(e: EnemyRt, dt: number, distance: number) {
       const step = Math.min(6 - distance, def.speed * dt);
       stepTo(e, e.x - dx * step, e.z - dz * step, dt, Math.atan2(dx, dz));
     } else if (distance > 9) moveEnemy(e, p.x, p.z, def.speed, dt);
-    else if (rangedClear(e)) {
+    else if (rangedClear(e) && rt.time >= cb.calmUntil) {
       e.state = "windup";
       e.timer = def.windup;
       e.yaw = Math.atan2(dx, dz);
@@ -2212,7 +2215,7 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
         e.state = "return";
         return;
       }
-      if (dPlayer < def.windupAt) {
+      if (dPlayer < def.windupAt && rt.time >= cb.calmUntil) {
         e.state = "windup";
         e.timer = def.windup;
         e.dx = (p.x - e.x) / (dPlayer || 1);

@@ -2402,3 +2402,32 @@ controller decisions:
   into a plunge KO (counted once, reward on the leaf), Leafy's swing carries one out over the drop,
   and ground enemies stay asleep while the player is up there. Bubble Trap and Cyclone use the same
   forced-motion and hazard path as the lower Canopy's tested voids. No high-layer object is flammable.
+
+## 2026-11-07: Summit and bubble descent (slice H, controller)
+
+- **Summit (zone `summit`, high layer):** the mesa's top stratum. Its floor is 1 m inside the rim and
+  follows the rendered fan exactly (`summitY`: barycentric over centre `MESA_PLATEAU_Y` and the rim's
+  `mesaRimY`), and its edge is a wall marked by rim stones and grass tufts. The plateau is smaller than
+  the keyhole suggested, so the `summitLedge` root bridge runs 8.6 m from the treetop stub straight in
+  toward the centre over the mesa's upper ledges, ending where a mounted rider stands well on the
+  floor. Solid: the mesa's existing small trees and pillars, three standing stones, the chest and the
+  departure stone. West of x 85.5 is outside the treetops' fall hazard, so the plateau and its
+  bridge never drop you. Reachable only from the rope top along the treetops (flood fill); never from
+  ground or cave.
+- **Chest `summitChest`:** 60 coins, 3 amber, relic `summitStar`, once (the relic system from slice E).
+  Bug the golden test caught: a chest with no secret was being added to the ground solids. Layer chests
+  are now solid only on their own layer.
+- **`summitBubble`** ("Can you help me?", Bubbo) at the departure stone. Afterwards the stone offers
+  "Float down with Bubbo". The descent takes about 11 s: the bubble forms, the player floats along a
+  Catmull-Rom path (out from the mountain, west over the Grove, into the Causeway), Bubbo floats in his
+  own small bubble, then it lands and pops. The player's height uses a new `floatY` override, because
+  the simulation re-snaps height to the floor every frame. The camera pulls back and sweeps, the lens
+  never enters the mesa (`mesaCameraLift`; tested at every 1% of both paths), and the last keyframe is
+  exactly the `ruined-causeway` framing at the landing.
+- **Entitlement:** the Causeway landing (84.5, -254.5) requires `grove` or `canopy` cleared; otherwise
+  the player lands at the upper rope's foot in the lower Canopy with "Let's land in the trees!". The
+  landing is at least 7 m from every Causeway spawn on open paving. After the pop: `safeUntil` (no damage)
+  and a new `calmUntil` (no enemy starts an attack), 2.5 s each. A separate field keeps existing combat
+  timing unchanged. A save mid-descent resumes on the departure stone.
+- The bubble is one translucent fresnel sphere (r 1.3, around the whole body) with shimmer, a
+  highlight, a wobble, five pooled motes and Bubbo's smaller bubble.

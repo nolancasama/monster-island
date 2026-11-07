@@ -264,7 +264,8 @@ describe("the lowland below the sanctuary", () => {
 
   it("each puzzle is asked from reachable ground, and every enemy lives on walkable ground in its own area", () => {
     const { near } = reachable(gates(["canopyAscentRope", "canopyVines"]));
-    for (const [id, place] of Object.entries(ACT2_OBSTACLE_PLACE)) expect(near(place.x, place.z, 1), id).toBe(true);
+    // The summit's departure stone is on the high layer (tested in summit.test.ts).
+    for (const [id, place] of Object.entries(ACT2_OBSTACLE_PLACE)) if (id !== "summitBubble") expect(near(place.x, place.z, 1), id).toBe(true);
     for (const e of ENEMY_SPAWNS) {
       const radius = e.kind === "forestSpitter" || e.kind === "raiderShooter" ? ENEMIES[e.kind].radius : .5;
       const layer = layerOfZone(e.zone);

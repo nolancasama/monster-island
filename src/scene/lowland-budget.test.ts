@@ -97,7 +97,8 @@ beforeAll(() => {
     const geometry = conformBridge(id === "canopyVines" ? vineBridgeGeometry(len) : ropeBridgeGeometry(len), gap.x, (deck.z0 + deck.z1) / 2, y, (x, z) => lowlandBridgeY(id, x, z));
     add("bridge", geometry, gap.x, y, (deck.z0 + deck.z1) / 2);
   }
-  for (const chest of CHESTS) {
+  // Layer chests (cave, summit) draw in their own layer groups, never in the lowland.
+  for (const chest of CHESTS.filter(c => (c.layer ?? "ground") === "ground")) {
     const y = lowlandSceneryY(chest.x, chest.z);
     add("chest", chestBaseGeometry(), chest.x, y, chest.z, chest.yaw);
     const lid = chestLidGeometry().translate(...CHEST_HINGE);

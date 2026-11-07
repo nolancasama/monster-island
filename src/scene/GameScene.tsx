@@ -20,7 +20,7 @@ import { CollisionOverlay } from "./CollisionOverlay";
 import { useGame } from "../game/store";
 import { CloudIsle } from "./CloudIsle";
 import { Cave } from "./Cave";
-import { UpperCanopy } from "./UpperCanopy";
+import { BubbleRide, UpperCanopy } from "./UpperCanopy";
 import { layerView } from "./layerView";
 import { VoyageBoat } from "./VoyageBoat";
 import { installMouseAttacks } from "../input/attackInput";
@@ -135,6 +135,7 @@ export function GameScene() {
       </GroundWorld>
       <Cave />
       <UpperCanopy />
+      <BubbleRide />
       </>}
       <VoyageBoat />
       <CombatScene />
