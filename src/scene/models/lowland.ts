@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PartBuilder } from "../partBuilder";
 import { bridgeDeck } from "./bridge";
-import { caveBrazierGeometry, caveMouthGeometry } from "./cave";
+import { caveBrazierGeometry, caveMouthGeometry, caveMouthWallQuads } from "./cave";
+import { mesaTopGeometry } from "./mesaTop";
 import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
 import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Outfit } from "./people";
@@ -136,12 +137,16 @@ export function mesaGeometry(): THREE.BufferGeometry {
       const j = (i + 1) % n, [x, z] = stratum.outline[i], [xx, zz] = stratum.outline[j];
       const bottom = (k: number) => band === 0 ? MESA_SKIRT_Y : mesaRimY(band - 1, k);
       const top = mesaRimY(band, i), next = mesaRimY(band, j);
-      quad([x, bottom(i), z], [xx, bottom(j), zz], [xx, next - .22, zz], [x, top - .22, z], band);
-      quad([x, top - .22, z], [xx, next - .22, zz], [xx, next, zz], [x, top, z], band, false, true);
+      const wall = (a: V, b: V, c: V, d: V, seam = false) => {
+        const pieces = band === 0 ? caveMouthWallQuads(a, b, c, d) : [[a, b, c, d]];
+        for (const [aa, bb, cc, dd] of pieces) quad(aa, bb, cc, dd, band, false, seam);
+      };
+      wall([x, bottom(i), z], [xx, bottom(j), zz], [xx, next - .22, zz], [x, top - .22, z]);
+      wall([x, top - .22, z], [xx, next - .22, zz], [xx, next, zz], [x, top, z], true);
       if (band < MESA_STRATA.length - 1) {
         const inner = MESA_STRATA[band + 1].outline;
         quad([x, top, z], [xx, next, zz], [inner[j][0], next, inner[j][1]], [inner[i][0], top, inner[i][1]], band, true);
-      } else triangle([MESA_CENTER[0], MESA_PLATEAU_Y, MESA_CENTER[1]], [x, top, z], [xx, next, zz], band, true);
+      }
     }
   });
   for (let i = 0; i < MESA_FOOT.length; i++) {
@@ -163,9 +168,13 @@ export function mesaGeometry(): THREE.BufferGeometry {
     b.cyl(.49, .41, .18, x, MESA_PLATEAU_Y + h - .25, -198, "#a99b87", 7);
   }
   const furnishings = b.build();
+  // This batch now uses vertex normals. Preserve the original flat shading of
+  // the strata and furnishings; only the grass top shares normals across faces.
+  furnishings.computeVertexNormals(); trees.forEach(g => g.computeVertexNormals());
+  const top = mesaTopGeometry();
   // Keep the tree builders' original bark/foliage colours when merging.
-  const merged = mergeGeometries([shell, furnishings, ...trees], false);
-  shell.dispose(); furnishings.dispose(); trees.forEach(g => g.dispose());
+  const merged = mergeGeometries([shell, top, furnishings, ...trees], false);
+  shell.dispose(); top.dispose(); furnishings.dispose(); trees.forEach(g => g.dispose());
   merged.computeBoundingSphere();
   return merged;
 }

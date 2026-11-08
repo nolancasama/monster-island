@@ -325,7 +325,7 @@ export const ACT2_OBSTACLES: ObstacleId[] = ["groveLilies", "canopyVines", "cano
 
 /** Only registered enemies in this stage count; duplicate or foreign indices cannot clear it. */
 export function remainingEnemies(zone: ZoneId, defeated: readonly number[]): number {
-  return ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !e.optional && !defeated.includes(i)), 0);
+  return ENEMY_SPAWNS.reduce((n, e, i) => n + Number(e.zone === zone && !e.optional && !e.retired && !defeated.includes(i)), 0);
 }
 export function clearStage(p: Progress, zone: ZoneId, defeated: readonly number[]): Progress {
   if (!p.act2.started || !STAGES.includes(zone as StageId) || p.act2.cleared.includes(zone as StageId) || remainingEnemies(zone, defeated) !== 0) return p;

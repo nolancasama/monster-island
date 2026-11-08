@@ -2495,3 +2495,91 @@ controller decisions:
   matters.
 - **The first Grove stream crossing must always be a "Can you swim?" moment.** No save migration skips it,
   and the ask is offered at both banks.
+
+## 2026-11-08: Act 2 revision plan (user plan, controller review)
+
+User plan: natural summit top, "Can you…?" traversal, dark cave blocks entry, Grove stream moved next to the
+Causeway door, Causeway 14 → 8 enemies, enemies vanish only past the door. Accepted with these decisions:
+
+- **The three asks already exist** (`groveStream` "Can you swim?", `caveTorches` "Can you make fire?",
+  `summitBubble` "Can you help me?", all through `flow/obstacles.ts`). No new system. What changes is that
+  environmental solves come **only** from the ask: Fire Breath or Inferno on a cave brazier or torch no longer
+  solves `caveTorches` (`hooks.caveFlame` stops calling `lightCaveTorches`; a brief flicker on the brazier
+  is fine). Supersedes "Any Fire Breath or Inferno on a brazier or torch does the same" (slice E).
+- **The dark cave cannot be entered.** Supersedes slice E's "The cave never needs lighting". The ground →
+  cave portal at both mouths refuses while `caveTorches` is unsolved: the player is held on the ground side of
+  the portal by a gate (a walk/solid gate keyed on `solved`, like other obstacle gates), with the line
+  "It's too dark!" / 「くらすぎて はいれない!」 shown when pushing in (rate-limited). Leaving the cave is never
+  blocked. Lit once, both mouths stay open for good (the existing saved `caveTorches` solve). Rejected: a
+  separate save field, or relighting each visit.
+- **Save fallback:** a cave-layer save with `caveTorches` unsolved still loads in the cave (exit is always
+  allowed, so no soft-lock); the cave gloomlets are optional. Rejected: teleporting such saves out (would move
+  players who are mid-puzzle without explanation).
+- **Grove stream moves south, next to the Grove–Causeway door** (door at (56, -241.4)). The channel crosses the
+  whole Grove from the west hills to the mesa at roughly z -233…-236 so the south bank in front of the door is
+  a ~5 m landing; both cave mouths and the lily pads end up on the north side. The old entrance channel
+  becomes dry ground. Same obstacle id `groveStream`, so existing saves keep their solve. Rejected: a second
+  stream (two Bubbo gates) and keeping the old one (the crossing felt detached from the route).
+- **Causeway: 8 required enemies, two each of shooter, shellback, snapjaw, gloomlet.** Keep the entries at
+  (61.4,-258.4) shellback, (68,-261) gloomlet, (73,-247.5) snapjaw, (85,-247.4) shooter, (88,-248) gloomlet,
+  (96,-257) shooter, (103.4,-251.8) shellback, (107.4,-248.8) snapjaw. Retire (62,-249.3), (91.6,-260.1),
+  (103,-247.5), (78,-259), (54,-252), (101,-259): the two closest to the door go, so first contact is
+  about 17 m in. Retired entries keep their array slot (a `retired` flag) so saved spawn indices stay valid.
+  Rejected: deleting entries (shifts every later saved index).
+- **The door plane is the zone boundary.** Diagnosis: enemies draw only in the player's combat zone, and
+  `zoneAt` keeps the Grove's walk shapes to about z -245.5 near x 56, 4 m past the door at z -241.4. Walking
+  north from the Causeway therefore flips the zone to `grove` 4 m short of the door, and every Causeway enemy
+  vanishes and is sent home. The camera already switches at the door plane (1 m retention). Fix: in the
+  door passage, ground `zoneAt` is `grove` north of `GROVE_DOOR.z` and `causeway` south of it, and the combat
+  zone switch uses the same 1 m retention as the camera, so standing on the line cannot flicker. The ground
+  golden hashes are re-recorded for this one intended change.
+- **Summit top:** replace the visible radial fan with a non-radial, lightly jittered triangulation that samples
+  the existing `summitY`, smooth normals and blended grass/earth vertex colours plus a few stones.
+  Walk height is unchanged. Rejected: changing `summitY` (walk, chest and departure tests depend on it).
+- **Cave mouths** become recessed arches with depth (a short dark tunnel throat inside the rock), mouth B to
+  the same standard, still baked into the static lowland props (no pop, no extra draw calls).
+
+## 2026-11-08: Act 2 revision gameplay slice (as built)
+
+- Both dark mouths use the existing ground walk-query gate plumbing, keyed only on saved
+  `caveTorches`. The walker's centre stops at each portal plane (x 69.6 / 69.3); the sealed lateral strip
+  includes body clearance. Cave-layer movement is unrestricted, including old unsolved saves exiting
+  on foot or mounted. This avoids a solid wall overlapping the exit's portal dead band. The gate cache
+  reserves a separate bit after the stage bits for this solve. Pushing east into darkness shows the
+  bilingual warning as a short toast, at most once every three simulation seconds across both mouths.
+- Ember's existing ask remains reachable from each blocked opening and is the only environmental
+  lighting solve. Fire Breath and Inferno retain their local element response and a sparkle, without
+  starting light spread, opening a mouth, or granting progress. Ask/answer and thank-you flow are unchanged.
+- Ground zoning uses the first authored passage trail's bounding box, including its 1.85 m banks:
+  x 49.15–62.85, z -247.85–-235.15. Within it, the door plane assigns Grove north and Causeway south,
+  including the line itself. Only the home ground combat transition retains its incoming zone through
+  one metre beyond that plane; geometric queries used by enemy boundaries keep the actual plane.
+  Ground hashes were re-recorded with cave lighting solved to isolate this intended zone change;
+  explicit movement tests cover the dark gate separately.
+- Exactly six Causeway descriptors retain their indices with `retired: true`. Their runtime slots are
+  inert `gone` placeholders so existing index lookups stay valid; they create no rendered body and
+  appear in neither remaining-enemy counts nor debug enemy snapshots. Eight live encounters remain,
+  two of each kind, all at least 7 m from the bubble landing. Retired defeat indices are harmless;
+  the existing v4 save format and fields remain unchanged.
+
+## 2026-11-08: Act 2 revision visual slice (as built)
+
+- **Summit ground:** the visible centre-to-rim fan is removed. A deterministic irregular triangulation
+  preserves every rim vertex and samples the unchanged `summitY` at its interior vertices. Interior
+  samples expand and diagonals flip only while the resulting planes stay within 18 mm of the old
+  piecewise-planar floor. Checks at intersections with the original height creases bound the error
+  between samples as well. The cap has no centre hub and uses at most twice the old cap's triangles.
+  Shared normals and continuous, low-frequency grass/earth vertex colours replace the banded spokes.
+  It merges into the existing mesa draw; the rest of that batch retains faceted normals. Existing
+  summit furniture, rim, strata, elevation and root bridge stay in place. Small weathered fragments
+  sit within the existing standing stones' solid footprints and join the existing summit batch.
+- **Both cave mouths:** shaped rock lips follow each mouth's actual west mesa face, projecting about
+  half a metre. Shared arch profiles cut matching apertures in the base-stratum wall, with side and
+  ceiling reveals running 2.2 m from the lip into a nearly black throat. This replaces the uncut wall
+  and flat dark facade, including at mouth B. The buried skirt stays closed. Mouths and braziers remain
+  baked into the same lowland props tiles, with no additional draws or visibility gates. All new rock
+  stays east of the complete ground approach pockets; portals, walk heights, collision and braziers
+  are unchanged. Geometry tests cover the recesses and Grove camera-to-player sight lines.
+- **Verification:** summit render tests raycast a dense walkable grid, check all height-crease
+  intersections, and verify shared normals/colours, a watertight cap and its triangle budget. Existing
+  mesa skirt checks now probe below the intentional cave apertures, which have separate throat tests.

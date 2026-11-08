@@ -15,8 +15,34 @@ import { bubbleDescent, pathPoint } from "./flow/summit";
 import * as ask from "./flow/ask";
 import { BUBBLE_LANDING, SUMMIT_DEPARTURE, summitY } from "./world/upperCanopy";
 import { encodeSave } from "./logic/save";
+import { CAVE_MOUTHS } from "./world/lowland";
 
 vi.mock("../audio/audio", () => ({ audio: { setNearness: vi.fn(), voice: vi.fn(), play: vi.fn(), startMusic: vi.fn(), setScene: vi.fn() } }));
+
+it.each(CAVE_MOUTHS)("warns only while pushing into the dark mouth at z $z, at most every three seconds", mouth => {
+  vi.stubGlobal("window", { setTimeout: () => 0, clearTimeout: () => undefined });
+  resetRuntime();
+  const progress = newProgress();
+  progress.act2.started = progress.act2.descended = true;
+  progress.act2.tutorial = ["attack", "coins", "special", "eat", "rest", "switch"];
+  setGame({ screen: "game", mode: "explore", progress, settingsOpen: false, journalOpen: false, toasts: [] });
+  resetCombat();
+  Object.assign(rt.player, { x: mouth.portalX - .01, z: mouth.z, layer: "ground" });
+  rt.act2Scene = "done";
+  rt.camera.yaw = 0;
+  rt.camera.snap = true;
+  rt.camera.mode = "follow";
+  rt.joy.x = 1;
+  for (let i = 0; i < 30; i++) { rt.time += .1; tick(.1); }
+  expect(rt.player.layer).toBe("ground");
+  expect(rt.player.x).toBeLessThanOrEqual(mouth.portalX);
+  expect(getGame().toasts.filter(t => t.en === "It's too dark!")).toEqual([
+    expect.objectContaining({ en: "It's too dark!", ja: "くらすぎて はいれない!" })
+  ]);
+  rt.time += .2;
+  tick(.1);
+  expect(getGame().toasts.filter(t => t.en === "It's too dark!")).toHaveLength(2);
+});
 
 afterEach(() => {
   vi.useRealTimers();

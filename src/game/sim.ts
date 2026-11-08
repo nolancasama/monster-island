@@ -1,6 +1,6 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
 import { companions, gateOpen, objective } from "./logic/progress";
-import { getGame, setGame } from "./store";
+import { getGame, setGame, toast } from "./store";
 import { PICK_TIME, animate, effect, rt, type MonsterRt } from "./runtime";
 import { hopTarget, hopPosition } from "./logic/lilyHop";
 import { keyboardMove, keys } from "../input/keyboard";
@@ -21,6 +21,7 @@ import { bubboSeat } from "./ride";
 import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale, hooks } from "./combat";
 import { gatherParty, lumoHidden, startAct2Scene, switchPlayerLayer } from "./flow/act2";
 import { portalSwitch } from "./world/layers";
+import { darkCaveEntryBlocked } from "./world/cave";
 import { LEAF_STATE, UPPER_CHECKPOINTS, UPPER_LEAVES, refreshUpperHazards, stepLeaf } from "./world/upperCanopy";
 import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
@@ -285,6 +286,12 @@ function movePlayer(dt: number, canMove: boolean) {
     const nx = p.x + (p.vx + kx) * dt;
     const nz = p.z + (p.vz + kz) * dt;
     const q = moveCircle(p.x, p.z, nx, nz, playerRadius(), gatesOf(getGame().progress), false, monsterObstacles(), moveResult);
+    if (canMove && p.layer === "ground" && progress.act3.world !== "cloud" && wx > 0
+      && darkCaveEntryBlocked(nx, nz, playerRadius(), progress.solved) && q.x < nx - 1e-5
+      && rt.time - rt.darkCaveWarningAt >= 3) {
+      rt.darkCaveWarningAt = rt.time;
+      toast({ en: "It's too dark!", ja: "くらすぎて はいれない!", icon: "star", tone: "info" }, 2400);
+    }
     p.vx = (q.x - p.x) / dt - kx;
     p.vz = (q.z - p.z) / dt - kz;
     updateEdge(dt, canMove, wx, wz, walk, q.x - p.x, q.z - p.z, Math.abs(kx) + Math.abs(kz));

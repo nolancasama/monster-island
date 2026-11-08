@@ -189,6 +189,7 @@ export const rt = {
   groveStreamFerry: { start: null as Vec2 | null },
   /** The cave's ancient lights: spread 0..1 along the route; a scripted flame jet. */
   caveTorches: { spread: 0, originS: 0, animating: false, jet: null as null | { from: Vec3; to: Vec3; until: number } },
+  darkCaveWarningAt: -Infinity,
   /** Bubbo's bubble descent from the summit (the scene draws it from this). */
   bubbleRide: {
     phase: "idle" as "idle" | "forming" | "flying" | "popping",
@@ -248,6 +249,7 @@ export function resetRuntime() {
   rt.caveTorches.originS = 0;
   rt.caveTorches.animating = false;
   rt.caveTorches.jet = null;
+  rt.darkCaveWarningAt = -Infinity;
   rt.bubbleRide.phase = "idle";
   rt.player.floatY = null;
   rt.world = "home";

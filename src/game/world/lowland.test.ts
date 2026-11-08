@@ -130,8 +130,8 @@ describe("the lowland below the sanctuary", () => {
     }
   });
   it("keeps a 3.2m swing circle at every Causeway home clear of solids and internal ground cuts", () => {
-    const spawns = ENEMY_SPAWNS.filter(e => e.zone === "causeway");
-    expect(spawns).toHaveLength(14);
+    const spawns = ENEMY_SPAWNS.filter(e => e.zone === "causeway" && !e.retired);
+    expect(spawns).toHaveLength(8);
     for (const e of spawns) {
       for (const s of lowlandSolids()) {
         let distance: number;
@@ -176,6 +176,16 @@ describe("the lowland below the sanctuary", () => {
     for (const z of [GROVE_DOOR.z - 6.9, GROVE_DOOR.z + 6.9]) expect(groveDoorOpen(true, Math.abs(z - GROVE_DOOR.z), false)).toBe(true);
     expect(groveDoorOpen(true, 20, true)).toBe(true);
     expect(groveDoorOpen(true, 20, false, true)).toBe(true);
+  });
+
+  it("assigns the whole door passage at its plane without a null zone gap", () => {
+    for (const x of [54.5, 56, 57.5]) {
+      for (let i = 0; i <= 80; i++) {
+        const z = -247 + i / 10;
+        expect(zoneAt(x, z), `${x},${z}`).toBe(z > GROVE_DOOR.z ? "grove" : "causeway");
+      }
+      expect(zoneAt(x, GROVE_DOOR.z)).toBe("causeway");
+    }
   });
 
   it("fits the real mounted body on the widened flat combat shoulders", () => {
@@ -317,8 +327,8 @@ describe("the lowland below the sanctuary", () => {
   });
 
   it("replaces forest and coast/causeway spawns without changing stage-clear totals", () => {
-    expect(STAGES.map(zone => [zone, ENEMY_SPAWNS.filter(e => e.zone === zone && !e.optional).length])).toEqual([
-      ["forest1", 5], ["grove", 10], ["canopy", 9], ["causeway", 14], ["coast", 4],
+    expect(STAGES.map(zone => [zone, ENEMY_SPAWNS.filter(e => e.zone === zone && !e.optional && !e.retired).length])).toEqual([
+      ["forest1", 5], ["grove", 10], ["canopy", 9], ["causeway", 8], ["coast", 4],
     ]);
     for (const zone of ["forest1", "grove", "canopy"] as const) {
       const ranged = ENEMY_SPAWNS.filter(e => e.zone === zone && e.kind === "forestSpitter");
@@ -332,9 +342,13 @@ describe("the lowland below the sanctuary", () => {
     }
   });
 
-  it("requires all fourteen Causeway enemies and keeps their homes walkable", () => {
-    const ids = ENEMY_SPAWNS.flatMap((e, i) => e.zone === "causeway" ? [i] : []);
-    expect(ids).toEqual([17, 18, 19, 20, 21, 22, 23, 41, 42, 43, 44, 45, 46, 47]);
+  it("requires the eight live Causeway enemies and keeps their homes walkable", () => {
+    const ids = ENEMY_SPAWNS.flatMap((e, i) => e.zone === "causeway" && !e.retired ? [i] : []);
+    expect(ids).toEqual([18, 19, 22, 23, 41, 42, 43, 45]);
+    const retired = ENEMY_SPAWNS.flatMap((e, i) => e.retired ? [i] : []);
+    expect(retired).toEqual([17, 20, 21, 44, 46, 47]);
+    expect(ENEMY_SPAWNS.filter(e => e.zone === "causeway" && !e.retired).reduce((counts, e) => ({ ...counts, [e.kind]: (counts[e.kind] ?? 0) + 1 }), {} as Record<string, number>))
+      .toEqual({ shellback: 2, raiderShooter: 2, snapjaw: 2, gloomlet: 2 });
     const progress = newProgress(); progress.act2.started = true;
     for (const i of ids) {
       const e = ENEMY_SPAWNS[i];
@@ -346,6 +360,8 @@ describe("the lowland below the sanctuary", () => {
       expect(clearStage(progress, "causeway", defeated).act2.cleared).not.toContain("causeway");
     }
     expect(clearStage(progress, "causeway", ids).act2.cleared).toContain("causeway");
+    expect(remainingEnemies("causeway", retired)).toBe(8);
+    expect(clearStage(progress, "causeway", [...ids, ...retired]).act2.cleared).toContain("causeway");
   });
 
   it("removes every Causeway pillar collision while retaining the three off-route forest and Grove stones", () => {
@@ -365,7 +381,7 @@ describe("the lowland below the sanctuary", () => {
     // Slice A moves these homes away from the passage rim and shrine chest;
     // restore only their old coordinates when checking all other saved indices.
     const oldGroveZ: Record<number, number> = { 5: -211, 6: -211.6, 7: -211.8, 35: -210 };
-    const original = ENEMY_SPAWNS.slice(0, 41).map((e, i) => oldGroveZ[i] !== undefined ? { ...e, x: i === 5 ? 57 : e.x, z: oldGroveZ[i] } : i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
+    const original = ENEMY_SPAWNS.slice(0, 41).map(({ retired: _retired, ...e }, i) => oldGroveZ[i] !== undefined ? { ...e, x: i === 5 ? 57 : e.x, z: oldGroveZ[i] } : i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
       .toBe("18654bf281508a56bd02a112c48e294fa1c0c0b75a4a13de8f74ed7662868d28");
   });

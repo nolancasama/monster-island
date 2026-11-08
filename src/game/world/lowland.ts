@@ -449,6 +449,8 @@ export function zoneAt(x: number, z: number, layer: Layer = "ground"): ZoneId | 
   if (layer !== "ground") return LAYER_WORLDS[layer]?.zoneAt(x, z) ?? null;
   if (z > CLIFF_FOOT_Z + 0.5) return null;
   if (inMesa(x, z, 1.5)) return null;
+  // The door owns the continuous passage, including the overlap of both banks.
+  if (inGroveDoorPassage(x, z)) return z > GROVE_DOOR.z ? "grove" : "causeway";
   if (x >= 83 && x <= 119 && z >= -237 && z <= -205) return "canopy";
   for (const id of ZONE_ORDER) if (ZONES[id].walk.some((sh) => inWalk(sh, x, z, 0))) return id;
   return null;
@@ -826,6 +828,8 @@ export interface EnemySpawn {
   replaces?: "gloomlet" | "snapjaw" | "shellback";
   /** Arm encounters respawn normally but never count toward the first clear. */
   optional?: true;
+  /** Keep this saved spawn index, but never create or count its encounter. */
+  retired?: true;
   x: number;
   z: number;
 }
@@ -851,11 +855,11 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "canopy", kind: "forestSpitter", replaces: "gloomlet", x: 105.2, z: -230.6 },
   { zone: "canopy", kind: "snapjaw", x: 112, z: -235 },
   // The causeway: tougher pairs, and the shrine's guards.
-  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 62, z: -249.3 },
+  { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 62, z: -249.3, retired: true },
   { zone: "causeway", kind: "shellback", x: 61.4, z: -258.4 },
   { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 85, z: -247.4 },
-  { zone: "causeway", kind: "shellback", x: 91.6, z: -260.1 },
-  { zone: "causeway", kind: "gloomlet", x: 103, z: -247.5 },
+  { zone: "causeway", kind: "shellback", x: 91.6, z: -260.1, retired: true },
+  { zone: "causeway", kind: "gloomlet", x: 103, z: -247.5, retired: true },
   { zone: "causeway", kind: "shellback", x: 103.4, z: -251.8 },
   { zone: "causeway", kind: "snapjaw", x: 107.4, z: -248.8 },
   // The coast: a lighter last stretch.
@@ -880,10 +884,10 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "causeway", kind: "gloomlet", x: 88, z: -248 },
   { zone: "causeway", kind: "raiderShooter", replaces: "snapjaw", x: 96, z: -257 },
   { zone: "causeway", kind: "snapjaw", x: 73, z: -247.5 },
-  { zone: "causeway", kind: "shellback", x: 78, z: -259 },
+  { zone: "causeway", kind: "shellback", x: 78, z: -259, retired: true },
   { zone: "causeway", kind: "gloomlet", x: 68, z: -261 },
-  { zone: "causeway", kind: "snapjaw", x: 54, z: -252 },
-  { zone: "causeway", kind: "gloomlet", x: 101, z: -259 },
+  { zone: "causeway", kind: "snapjaw", x: 54, z: -252, retired: true },
+  { zone: "causeway", kind: "gloomlet", x: 101, z: -259, retired: true },
   // The optional cave (cave layer): two gloomlets in the head's bend, far from the chamber.
   { zone: "cave", kind: "gloomlet", x: 83.2, z: -197.3, optional: true },
   { zone: "cave", kind: "gloomlet", x: 80.8, z: -192.3, optional: true },
@@ -1059,3 +1063,9 @@ export const STAGE_PASSAGES = [
   },
 ];
 const inPassageBand = (t: (typeof STAGE_PASSAGES)[number], x: number, z: number) => x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1;
+const GROVE_DOOR_PASSAGE_BOUNDS = shapeBounds(STAGE_PASSAGES[0].walk);
+
+/** Bounds of the first passage's authored trail (including its 1.85 m banks). */
+export function inGroveDoorPassage(x: number, z: number): boolean {
+  return boundsContain(GROVE_DOOR_PASSAGE_BOUNDS, x, z);
+}

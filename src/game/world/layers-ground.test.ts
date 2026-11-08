@@ -7,21 +7,23 @@ import { isWalkable, obstaclesFor, solidsFor, standY, type Gates } from "./colli
  * heights; the shape JSON preserves the complete ordered solid definitions.
  * No rounded heights or tolerance comparisons. */
 const BEFORE_LAYERS: Record<string, string> = {
-  // Recorded at 405a5be (slice C), before any layer code existed.
-  closed: "7c7a0b873e746f302a367b013149120afe610ce95207892e2084238f8dbe0624",
-  grove: "8dcb2b9f8ee01ead6dfd92f80f2216daec62f93079007d4bc944a637958a2120",
-  open: "248788df64985bf4c854a53e48cdf544e0796d4a30360ba56d788f2521746893",
+  // Slice C ground without mouth pockets, re-recorded for the Act 2 door plane.
+  closed: "e01a3ba9c38817dbab9f9bbb1936b657d8ac372ddba6760b9e1ecf50a5f22c98",
+  grove: "0485065db0ed9aeb5550eebc9766570df09318cf0d01aa6705d07856f263515d",
+  open: "9ec1480220e34795943ec431f115855ececb68b7366bf82d68bab8acf32aa1e6",
 };
-/** Slice D's ground, with mouth A's original approach pocket. */
+/** Mouth A ground, re-recorded for the Act 2 door plane. */
 const GOLDEN: Record<string, string> = {
-  closed: "a624baab5400a01ac460db59c894ad9cce95759b86dfcf6e70b3ab74e7c7cb02",
-  grove: "415049ab9864c0e961ec33ab0794eedee0bd8b54c71a6dcaf7aa4962ab904e33",
-  open: "d9910051b53900b8be3006392a4a71836a2b35fa48b88ee048bfd28ee16a904e",
+  closed: "df4f4f04bd085af3f5b845a435f2b794d503868963d906d73bf9d7df329f7b93",
+  grove: "f7211a08d2bf30236afed8f414bebfd29d246192abcb2a79d2abaecb34715ad3",
+  open: "90daa998fcdc5310583f2c1a99fe66af8a1fdf7da77ed10c13a8ceee8b7d474a",
 };
 const STATES: Record<string, Gates> = {
-  closed: { solved: [], act2: true },
-  grove: { solved: ["groveStream", "groveLilies"], act2: true, cleared: ["forest1", "grove"] },
-  open: { solved: ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveStream", "groveLilies", "canopyVines", "canopyRope"], forest: true, volcano: true, act2: true, cleared: [...STAGES], secrets: ["emberThicket", "leafyStatues"] },
+  // Keep the dark-mouth gate open here to isolate the intended zone-boundary
+  // change; cave.test.ts exercises the closed and permanently opened mouths.
+  closed: { solved: ["caveTorches"], act2: true },
+  grove: { solved: ["caveTorches", "groveStream", "groveLilies"], act2: true, cleared: ["forest1", "grove"] },
+  open: { solved: ["caveTorches", "fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveStream", "groveLilies", "canopyVines", "canopyRope"], forest: true, volcano: true, act2: true, cleared: [...STAGES], secrets: ["emberThicket", "leafyStatues"] },
 };
 
 function digest(gates: Gates): string {
@@ -57,14 +59,14 @@ function withoutPockets(mouths: typeof CAVE_MOUTHS, check: () => void) {
   }
 }
 
-it("preserves every original mouth-A ground query when the new mouth-B pocket is removed", () => {
+it("matches the door-plane ground golden with the mouth-B pocket removed", () => {
   withoutPockets(CAVE_MOUTHS.slice(1), () => {
-    for (const [name, gates] of Object.entries(STATES)) expect(digest(gates), name).toBe(GOLDEN[name]);
+    expect(Object.fromEntries(Object.entries(STATES).map(([name, gates]) => [name, digest(gates)]))).toEqual(GOLDEN);
   });
 }, 120_000);
 
-it("differs from the ground before layers only by the two cave-mouth pockets", () => {
+it("matches the door-plane ground golden without either cave-mouth pocket", () => {
   withoutPockets(CAVE_MOUTHS, () => {
-    for (const [name, gates] of Object.entries(STATES)) expect(digest(gates), name).toBe(BEFORE_LAYERS[name]);
+    expect(Object.fromEntries(Object.entries(STATES).map(([name, gates]) => [name, digest(gates)]))).toEqual(BEFORE_LAYERS);
   });
 }, 120_000);

@@ -24,7 +24,7 @@ describe("Ember's cave torches", () => {
     expect(ACT2_OBSTACLES).toContain("caveTorches");
   });
 
-  it("lights from any brazier or torch hit by fire, on its own layer, without a secret", () => {
+  it("allows local fire reactions on each layer without granting the environmental solve", () => {
     const braziers = ELEMENT_OBJECTS.filter(o => o.id.startsWith("caveBrazier"));
     const torches = ELEMENT_OBJECTS.filter(o => o.id.startsWith("caveTorch"));
     expect(braziers).toHaveLength(CAVE_BRAZIERS.length);
@@ -36,6 +36,7 @@ describe("Ember's cave torches", () => {
       const next = secretEvent(o.id, "burn", { secrets: [], objects: {} });
       expect(next.objects[o.id]).toEqual({ state: "lit" });
       expect(next.secrets).toEqual([]);
+      expect(isWalkable(70.1, -227, { solved: [], act2: true }, .35, false, "ground")).toBe(false);
     }
     expect(isCaveFlame("emberThicket")).toBe(false);
     expect(isCaveFlame("comboFurnace")).toBe(false);

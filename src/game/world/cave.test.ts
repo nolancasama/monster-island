@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { CAVE_CHAMBER, CAVE_CHAMBER_S, CAVE_ENTRY, CAVE_ROUTE, CAVE_ROUTE_LENGTH, CAVE_STALAGMITES, caveRouteS, caveWalkable, inCaveMouthStrip } from "./cave";
-import { gatesOf, isWalkable, standY } from "./collision";
+import { gatesOf, isWalkable, moveCircle, standY } from "./collision";
 import { CAVE_MOUTH, CAVE_MOUTHS, ENEMY_SPAWNS, MESA_OUTLINE, STAGES, inMesa, nearestOnTrail, trailPoint, zoneAt } from "./lowland";
 import { HAZARDS } from "./hazards";
 import { SECRET_SITES } from "./elementObjects";
@@ -63,9 +63,10 @@ describe("the cave under the mountain", () => {
   });
 
   it("is entered through the mouth from the Grove, on foot and mounted, and the rock stays solid", () => {
+    const lit = { ...gates, solved: ["caveTorches"] as const };
     for (const mouth of CAVE_MOUTHS) for (const r of [.35, .55]) {
       // The ground pocket reaches past the portal's dead band.
-      expect(isWalkable(mouth.portalX + .5, mouth.z, gates, r, false, "ground"), `ground ${mouth.z} ${r}`).toBe(true);
+      expect(isWalkable(mouth.portalX + .5, mouth.z, lit, r, false, "ground"), `ground ${mouth.z} ${r}`).toBe(true);
       expect(isWalkable(mouth.portalX - .5, mouth.z, gates, r, false, "cave"), `cave ${mouth.z} ${r}`).toBe(true);
       expect(zoneAt(mouth.portalX + .5, mouth.z)).toBe("grove");
       expect(portalSwitch("ground", mouth.portalX + .5, mouth.z)).toBe("cave");
@@ -79,6 +80,34 @@ describe("the cave under the mountain", () => {
     for (let z = CAVE_MOUTH.z0; z <= CAVE_MOUTH.z1; z += .2) expect(isWalkable(71.2, z, gates, .35, false, "ground")).toBe(false);
     expect(zoneAt(76, -215)).toBeNull();
     expect(zoneAt(74.5, -215, "cave")).toBe("cave"); // the new west arm
+  });
+
+  it("holds dark entrances on the ground side and opens both permanently after a saved solve", () => {
+    const p = newProgress();
+    for (const id of ["leafy", "bubbo", "puff", "ember", "lumo"] as const)
+      p.monsters[id] = { discovered: true, friend: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true }, invited: true };
+    p.active = "ember"; p.metMaple = true; p.endings = 3;
+    p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveStream"];
+    p.act2.started = p.act2.descended = true;
+    const dark = gatesOf(p);
+    p.solved = [...p.solved, "caveTorches"];
+    const lit = gatesOf(p);
+    expect(lit.solved).toContain("caveTorches"); // Distinct from the cached dark gates.
+    const loaded = decodeSave(JSON.stringify({ v: 4, progress: p, player: { x: 65, z: -227, yaw: 0 }, seconds: 1 }))!;
+    const savedLit = gatesOf(loaded.progress);
+    for (const mouth of CAVE_MOUTHS) for (const r of [.35, .55]) {
+      const held = moveCircle(mouth.portalX - 1, mouth.z, mouth.portalX + .55, mouth.z, r, dark, false, [], undefined, "ground");
+      expect(held.x).toBeLessThanOrEqual(mouth.portalX);
+      expect(portalSwitch("ground", held.x, held.z)).toBeNull();
+      for (const open of [lit, savedLit]) {
+        const through = moveCircle(held.x, held.z, mouth.portalX + .55, mouth.z, r, open, false, [], undefined, "ground");
+        expect(portalSwitch("ground", through.x, through.z)).toBe("cave");
+      }
+      // Darkness never enters cave walk queries, including a legacy cave save's exit.
+      const out = moveCircle(mouth.portalX + .55, mouth.z, mouth.portalX - .6, mouth.z, r, dark, false, [], undefined, "cave");
+      expect(portalSwitch("cave", out.x, out.z)).toBe("ground");
+      expect(isWalkable(out.x, out.z, dark, r, false, "ground")).toBe(true);
+    }
   });
 
   it("keeps the second ground pocket clear of the east pool and dry reeds", () => {
@@ -136,6 +165,7 @@ describe("the cave under the mountain", () => {
     const loaded = decodeSave(JSON.stringify({ v: 4, progress: p, player: { x: CAVE_CHAMBER.x, z: CAVE_CHAMBER.z, yaw: 0, layer: "cave" }, seconds: 1 }))!;
     expect(loaded.player).toMatchObject({ x: CAVE_CHAMBER.x, z: CAVE_CHAMBER.z, layer: "cave" });
     expect(loaded.progress.act2.zone).toBe("cave");
+    expect(loaded.progress.solved).not.toContain("caveTorches");
     // Without its layer the same point is inside the mesa: it loads on the Grove floor instead.
     const ground = decodeSave(JSON.stringify({ v: 4, progress: p, player: { x: CAVE_CHAMBER.x, z: CAVE_CHAMBER.z, yaw: 0 }, seconds: 1 }))!;
     expect(ground.player.layer).toBeUndefined();

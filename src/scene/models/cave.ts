@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { makeRng } from "../../game/logic/rng";
 import { CAVE_ALCOVE, CAVE_BRAZIERS, CAVE_CHAMBER, CAVE_ROUTE, CAVE_ROUTE_LENGTH, CAVE_SEAL, CAVE_STALAGMITES, CAVE_TORCHES, caveClearance, caveFloorY, caveRouteS, caveWalkable } from "../../game/world/cave";
-import { CAVE_MOUTHS } from "../../game/world/lowland";
+import { CAVE_MOUTHS, MESA_OUTLINE } from "../../game/world/lowland";
 import { groundY } from "../../game/world/island";
 
 /**
@@ -19,7 +19,6 @@ import { groundY } from "../../game/world/island";
 const STEP = .3;
 const LIP = .55;
 export const CAVE_WALL_H = 3.6;
-const ROCK = ["#4a4540", "#56504a", "#3f3b37", "#5d554c"];
 
 function field() {
   const x0 = Math.floor(63 / STEP) * STEP, x1 = 90, z0 = -233, z1 = -185;
@@ -247,19 +246,97 @@ export function caveGlowGeometry(): THREE.BufferGeometry {
   return tagged(b.build());
 }
 
-/** Both outside arches and their dark openings, merged into the static ground props. */
-export function caveMouthGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0);
-  for (const mouth of CAVE_MOUTHS) {
-    const fx = 72.5, z = mouth.z, y = groundY(70.4, z);
-    for (const side of [-1, 1]) {
-      for (let k = 0; k < 3; k++) b.add(new THREE.DodecahedronGeometry(.75 - k * .12), ROCK[k], [fx - .5 - k * .1, y + .5 + k * 1.05, z + side * (1.85 + k * .05)], [k, side, k * .7], [1.2, 1, .9]);
-    }
-    for (let k = 0; k < 4; k++) b.add(new THREE.DodecahedronGeometry(.6), ROCK[(k + 1) % 4], [fx - .45, y + 3.35 + (k % 2) * .15, z - 1.5 + k], [k, k * .5, 0], [1.1, .7, 1.1]);
-    b.add(new THREE.DodecahedronGeometry(.5), "#587d43", [fx - .7, y + 3.85, z + .3], [0, 0, 0], [1.6, .3, 1.2]);
-    b.add(new THREE.PlaneGeometry(3.3, 3.3), "#040506", [fx - .2, y + 1.55, z], [0, -Math.PI / 2, 0], [1, 1, 1], { vary: false, flatAo: true });
+type MouthVertex = [number, number, number];
+type Mouth = typeof CAVE_MOUTHS[number];
+
+/** West-face intersection, rather than one shared x for the two differently sloped mouths. */
+function mouthFaceX(z: number): number {
+  let x = Infinity;
+  MESA_OUTLINE.forEach(([ax, az], i) => {
+    const [bx, bz] = MESA_OUTLINE[(i + 1) % MESA_OUTLINE.length];
+    if (az === bz || z < Math.min(az, bz) || z > Math.max(az, bz)) return;
+    x = Math.min(x, ax + (bx - ax) * (z - az) / (bz - az));
+  });
+  return x;
+}
+
+/** The full approach width stays clear; only the upper shoulders taper inward. */
+function mouthRoof(mouth: Mouth): Array<[number, number]> {
+  const half = (mouth.z1 - mouth.z0) / 2 + .1;
+  return [[-half, 2.05], [-half + .28, 2.65], [-.72, 3.05], [.12, 3.15], [half - .35, 2.8], [half, 2.2]];
+}
+
+/** Cut only the visible base wall, using the very same roof knots as the reveal.
+ * The buried strip remains closed, and all retained vertices stay on the original wall. */
+export function caveMouthWallQuads(a: MouthVertex, b: MouthVertex, c: MouthVertex, d: MouthVertex): MouthVertex[][] {
+  const mouth = CAVE_MOUTHS.find(m => Math.max(a[2], b[2]) >= m.z0 - .1 && Math.min(a[2], b[2]) <= m.z1 + .1 &&
+    Math.abs((a[0] + b[0]) / 2 - mouthFaceX((a[2] + b[2]) / 2)) < .01);
+  if (!mouth || Math.abs(a[2] - b[2]) < 1e-7) return [[a, b, c, d]];
+  const y = groundY(70.4, mouth.z), roof = mouthRoof(mouth);
+  const ts = [0, 1, ...roof.map(([z]) => (mouth.z + z - a[2]) / (b[2] - a[2])).filter(t => t > 0 && t < 1)].sort((u, v) => u - v);
+  const lerp = (u: MouthVertex, v: MouthVertex, t: number): MouthVertex => u.map((n, k) => n + (v[k] - n) * t) as MouthVertex;
+  const height = (z: number) => {
+    const k = roof.findIndex((p, i) => i > 0 && z <= p[0] + 1e-7);
+    const [az, ay] = roof[Math.max(0, k - 1)], [bz, by] = roof[Math.max(1, k)];
+    return y + ay + (by - ay) * (z - az) / (bz - az);
+  };
+  const out: MouthVertex[][] = [];
+  for (let i = 1; i < ts.length; i++) {
+    const aa = lerp(a, b, ts[i - 1]), bb = lerp(a, b, ts[i]), cc = lerp(d, c, ts[i]), dd = lerp(d, c, ts[i - 1]);
+    const z = (aa[2] + bb[2]) / 2 - mouth.z;
+    if (z < roof[0][0] || z > roof[roof.length - 1][0]) { out.push([aa, bb, cc, dd]); continue; }
+    const lowerA = Math.min(dd[1], y - .45), lowerB = Math.min(cc[1], y - .45);
+    if (lowerA > aa[1] || lowerB > bb[1]) out.push([aa, bb, [bb[0], Math.max(bb[1], lowerB), bb[2]], [aa[0], Math.max(aa[1], lowerA), aa[2]]]);
+    const upperA = Math.max(aa[1], height(aa[2] - mouth.z)), upperB = Math.max(bb[1], height(bb[2] - mouth.z));
+    if (upperA < dd[1] || upperB < cc[1]) out.push([[aa[0], Math.min(dd[1], upperA), aa[2]], [bb[0], Math.min(cc[1], upperB), bb[2]], cc, dd]);
   }
-  return b.build();
+  return out;
+}
+
+/** Shaped rock lips, 2.2 m deep reveals and shaded throats, all in the static props batch. */
+export function caveMouthGeometry(): THREE.BufferGeometry {
+  const positions: number[] = [], colors: number[] = [];
+  const tri = (a: MouthVertex, b: MouthVertex, c: MouthVertex, shade: number, bShade = shade, cShade = shade) => {
+    [a, b, c].forEach((v, i) => {
+      positions.push(...v);
+      const color = rockColor(v[0], v[1], v[2], [shade, bShade, cShade][i]);
+      colors.push(color.r, color.g, color.b);
+    });
+  };
+  const quad = (a: MouthVertex, b: MouthVertex, c: MouthVertex, d: MouthVertex, shade: number, backShade = shade) => {
+    tri(a, b, c, shade, shade, backShade); tri(a, c, d, shade, backShade, backShade);
+  };
+  for (const mouth of CAVE_MOUTHS) {
+    const y = groundY(70.4, mouth.z), roof = mouthRoof(mouth), half = roof[roof.length - 1][0];
+    // Counterclockwise in (z,y): viewed from the Grove, the front faces point west.
+    const profile: Array<[number, number]> = [[-half, -.45], [half, -.45], ...roof.slice().reverse()];
+    const inner = (i: number, depth: number): MouthVertex => {
+      const [z, h] = profile[i];
+      return [mouthFaceX(mouth.z + z) + depth, y + h, mouth.z + z];
+    };
+    const outer = (i: number, depth: number): MouthVertex => {
+      const [z, h] = profile[i], zz = z + (z < 0 ? -.42 : .42);
+      return [mouthFaceX(mouth.z + zz) + depth, y + h + (h < 0 ? -.16 : .42 + .06 * Math.sin(i * 2.1)), mouth.z + zz];
+    };
+    for (let i = 1; i < profile.length; i++) {
+      const j = (i + 1) % profile.length;
+      // No threshold stone across the floor. Side and ceiling pieces form one continuous arch.
+      quad(inner(i, -.45), outer(i, -.57), outer(j, -.57), inner(j, -.45), .92);
+      quad(outer(i, -.57), outer(i, .12), outer(j, .12), outer(j, -.57), .8);
+      // Shared rings prevent cracks; colour fades continuously away from daylight.
+      quad(inner(i, -.45), inner(j, -.45), inner(j, .55), inner(i, .55), .62, .28);
+      quad(inner(i, .55), inner(j, .55), inner(j, 1.75), inner(i, 1.75), .28, .009);
+    }
+    const contour = profile.map(([z, h]) => new THREE.Vector2(z, h));
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(contour, [])) tri(inner(a, 1.75), inner(b, 1.75), inner(c, 1.75), .009);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(positions.length / 3 * 2), 2));
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
 }
 
 /** The cave's own material: ignores scene lights (no sun leaks through rock). */

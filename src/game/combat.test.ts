@@ -7,7 +7,7 @@ import { region } from "./world/region";
 import { COMBAT, ENEMIES, MP_REGEN, type CompanionId, type EnemyKind } from "./data/combat";
 import { BEACON_PYLONS } from "./logic/beacon";
 import { BEACON, CLOUD_ENEMY_SPAWNS, cloudY } from "./world/cloudisle";
-import { ENEMY_SPAWNS, POND } from "./world/lowland";
+import { ENEMY_SPAWNS, GROVE_DOOR, POND } from "./world/lowland";
 import { MONSTERS } from "./data/monsters";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/collision";
 import { run } from "./flow/script";
@@ -192,6 +192,62 @@ function advanceCombat(seconds: number) {
     combatTick(1 / 60);
   }
 }
+
+describe("Grove door combat boundary and retired Causeway encounters", () => {
+  it.each([
+    { from: -247, to: -239, before: "causeway", after: "grove", threshold: GROVE_DOOR.z + 1, direction: 1 },
+    { from: -239, to: -247, before: "grove", after: "causeway", threshold: GROVE_DOOR.z - 1, direction: -1 },
+  ] as const)("retains $before until one metre through the door toward $after", ({ from, to, before, after, threshold, direction }) => {
+    changeWorld("home");
+    region.layer = "ground";
+    setGame({ settingsOpen: true }); // Zone transitions still run; enemy AI stays paused.
+    Object.assign(rt.player, { x: 56, z: from });
+    cb.zones.current = before;
+    const e = cb.enemies.find(e => e.zone === before && !e.retired)!;
+    Object.assign(e, { state: "idle", x: e.homeX + .5, hp: 1 });
+    for (let i = 0; i <= 80; i++) {
+      const z = from + (to - from) * i / 80;
+      rt.player.z = z;
+      combatTick(0);
+      expect(cb.zones.current, `${z}`).toBe((z - threshold) * direction > 1e-9 ? after : before);
+      if ((z - threshold) * direction <= 1e-9) expect(e.hp).toBe(1);
+    }
+    expect(e.x).toBe(e.homeX);
+    expect(e.hp).toBe(ENEMIES[e.kind].hp);
+    e.hp = 2;
+    // Returning to and hovering on the plane retains the new zone without sendHome.
+    for (const z of [GROVE_DOOR.z, GROVE_DOOR.z + .01, GROVE_DOOR.z - .01, GROVE_DOOR.z]) {
+      rt.player.z = z;
+      combatTick(0);
+      expect(cb.zones.current).toBe(after);
+      expect(e.hp).toBe(2);
+    }
+  });
+
+  it("keeps retired slots inert through reset, zone activation, respawn and world travel", () => {
+    changeWorld("home");
+    region.layer = "ground";
+    resetCombat();
+    const retired = cb.enemies.filter(e => e.retired);
+    expect(retired.map(e => e.i)).toEqual([17, 20, 21, 44, 46, 47]);
+    for (const e of retired) {
+      Object.assign(rt.player, { x: e.x, z: e.z });
+      combatTick(.2);
+      expect(e.state).toBe("gone");
+      expect(e.spawnT).toBeNull();
+      expect(enemyRevealScale(e)).toBe(0);
+    }
+    cb.zones.current = "grove";
+    cb.zones.leftAt.causeway = rt.playTime - 13;
+    cb.zones.defeated.causeway = retired.map(e => e.i);
+    Object.assign(rt.player, { x: 84.5, z: -254.5 });
+    combatTick(0);
+    expect(cb.enemies.filter(e => e.retired).every(e => e.state === "gone")).toBe(true);
+    changeWorld("cloud");
+    changeWorld("home");
+    expect(cb.enemies.filter(e => e.retired).every(e => e.state === "gone")).toBe(true);
+  });
+});
 
 function loneEnemy(kind: EnemyKind = "stormCrab", x = 0, z = 27) {
   for (const e of cb.enemies) e.state = "gone";

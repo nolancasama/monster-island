@@ -5,7 +5,7 @@ import { clearStage, remainingEnemies, addCoins, addFood, addItem, afterKnockout
 import { getGame, setGame, toast, updateProgress, type HintKey } from "./store";
 import { effect, rt } from "./runtime";
 import { isRunning } from "./flow/script";
-import { ENEMY_SPAWNS, ZONES, zoneAt, type StageId, type ZoneId } from "./world/lowland";
+import { ENEMY_SPAWNS, GROVE_DOOR, inGroveDoorPassage, ZONES, zoneAt, type StageId, type ZoneId } from "./world/lowland";
 import { region, type Layer } from "./world/region";
 import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, electricPanelActive, cloudWindAt, cloudZoneAt, type CloudAreaId, type CloudStageId } from "./world/cloudisle";
 import { clearCloudStage } from "./logic/act3";
@@ -69,6 +69,8 @@ function projectileWind(x: number, z: number): { x: number; z: number } {
 }
 
 export interface EnemyRt {
+  /** Inert placeholder preserving the spawn-index lookup used by saves and renderers. */
+  retired?: true;
   /** Index into ENEMY_SPAWNS. */
   i: number;
   kind: EnemyKind;
@@ -237,9 +239,11 @@ let worldEnemies: Partial<Record<"home" | "cloud", EnemyRt[]>> = {};
 
 function spawnEnemy(i: number, cloud = false): EnemyRt {
   const s = (cloud ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS)[i];
+  const retired = cloud ? undefined : ENEMY_SPAWNS[i].retired;
   return {
+    ...(retired ? { retired } : {}),
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, lastGround: { x: s.x, z: s.z }, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
-    hp: ENEMIES[s.replaces ?? s.kind].hp, state: "dormant", spawnT: null, waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
+    hp: ENEMIES[s.replaces ?? s.kind].hp, state: retired ? "gone" : "dormant", spawnT: null, waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
     hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, wade: null, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, step: 0
   };
 }
@@ -589,6 +593,7 @@ const alive = (e: EnemyRt) => undefeated(e) && e.state !== "dormant" && e.state 
 
 /** Fight fixtures bypass the reveal without pretending an unseen enemy is defeated. */
 export function wakeEnemy(e: EnemyRt) {
+  if (e.retired) return;
   if (e.state === "dormant" || e.state === "materialising") e.state = "idle";
   e.spawnT = null;
 }
@@ -695,7 +700,7 @@ function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) =
       if (next !== before) {
         applySecretProgress(next);
         selected = o;
-        // Any brazier or torch lights the cave's whole ancient system.
+        // Combat flames may flicker locally; only Ember's ask lights the cave.
         if (isCaveFlame(o.id)) hooks.caveFlame?.(o.id);
       }
     }
@@ -1859,7 +1864,12 @@ export function combatTick(dt: number) {
   const p = rt.player;
   // Areas (null on the rope and anywhere south of the cliff).
   // A falling player stays in the stage; the void below belongs to no zone.
-  const zone = p.fall ? currentCombatZone() : p.climbY === null ? combatZoneAt(p.x, p.z) : null;
+  let zone = p.fall ? currentCombatZone() : p.climbY === null ? combatZoneAt(p.x, p.z) : null;
+  if (world === "home" && region.layer === "ground" && inGroveDoorPassage(p.x, p.z)) {
+    // Match the camera's one-metre door retention; the exact threshold stays put.
+    if (cb.zones.current === "causeway" && zone === "grove" && p.z <= GROVE_DOOR.z + 1) zone = "causeway";
+    if (cb.zones.current === "grove" && zone === "causeway" && p.z >= GROVE_DOOR.z - 1) zone = "grove";
+  }
   if (world === "cloud" && zone !== cb.cloudZones.current) {
     const mem = cb.cloudZones;
     if (mem.current) {

@@ -107,7 +107,7 @@ export function installE2eHook(seed: number) {
           })),
           cyclone: cb.cyclone ? { ...cb.cyclone, bubbles: [...cb.cyclone.bubbles], carried: cb.enemies.filter(e => e.control?.kind === "carried" && e.control.source === cb.cyclone!.id).map(e => e.i) } : null,
           bombChain: cb.bombChain ? { ...cb.bombChain, pops: cb.bombChain.pops.map(p => ({ ...p })), victims: [...cb.bombChain.victims] } : null,
-          enemies: cb.enemies.map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, plunge: e.plunge !== null, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, burn: e.burn ? { ...e.burn } : null, panic: e.panic ? { ...e.panic } : null, panicResistUntil: e.panicResistUntil, fireTicks: e.fireTicks, lastFireT: e.lastFireT, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
+          enemies: cb.enemies.filter(e => !e.retired).map((e) => ({ i: e.i, zone: e.zone, kind: e.kind, state: e.state, plunge: e.plunge !== null, air: e.air, control: e.control?.kind ?? null, controlUntil: e.control?.until ?? null, burning: e.burn !== null, burn: e.burn ? { ...e.burn } : null, panic: e.panic ? { ...e.panic } : null, panicResistUntil: e.panicResistUntil, fireTicks: e.fireTicks, lastFireT: e.lastFireT, resistUntil: e.resistUntil, slowUntil: e.slowUntil, hp: e.hp, x: e.x, z: e.z, yaw: e.yaw, timer: e.timer })),
           drops: cb.drops.length,
           shots: cb.shots.length,
           projectiles: cb.shots.map(s => ({ id: s.id, shape: s.shape, damage: s.damage, hostile: Boolean(s.hostile), source: s.source, x: s.x, y: s.y, z: s.z, vx: s.vx, vz: s.vz, age: s.age, life: s.life, radius: s.radius })),
@@ -229,6 +229,7 @@ export function installE2eHook(seed: number) {
     /** Act 2: stand near an enemy (by spawn index), facing it. */
     nearEnemy(i: number, dist = 3) {
       const e = cb.enemies[i];
+      if (e.retired) throw new Error("This enemy spawn is retired");
       wakeEnemy(e);
       const a = Math.atan2(rt.player.x - e.x, rt.player.z - e.z);
       return placePlayer(e.x + Math.sin(a) * dist, e.z + Math.cos(a) * dist, e.x, e.z);
@@ -236,6 +237,7 @@ export function installE2eHook(seed: number) {
     /** Isolate existing spawns for repeatable combat captures; no kills or rewards. */
     combatFixture(fixture: { enemies: Array<{ i: number; x: number; z: number; state?: EnemyState; timer?: number; yaw?: number }>; clearShots?: boolean }) {
       for (const e of cb.enemies) {
+        if (e.retired) continue;
         const f = fixture.enemies.find(f => f.i === e.i);
         e.state = f?.state ?? (f ? "chase" : "gone");
         e.air = e.resistUntil = e.slowUntil = 0; e.burn = e.control = e.flight = e.fall = null;

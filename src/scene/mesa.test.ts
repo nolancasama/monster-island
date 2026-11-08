@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { groundY } from "../game/world/island";
-import { inMesa, MESA_BOUNDS, MESA_OUTLINE } from "../game/world/lowland";
+import { CAVE_MOUTHS, inMesa, MESA_BOUNDS, MESA_OUTLINE } from "../game/world/lowland";
 import { MESA_CENTER, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesaCameraLift, mesaFloorY } from "../game/world/mesa";
 import { mesaGeometry } from "./models/lowland";
 
 describe("central mesa", () => {
-  it("derives its bounds from a keyhole outline star-shaped about the mesh fan centre", () => {
+  it("derives its bounds from a keyhole outline star-shaped about the plateau centre", () => {
     expect(MESA_BOUNDS).toEqual({
       x0: Math.min(...MESA_OUTLINE.map(p => p[0])), x1: Math.max(...MESA_OUTLINE.map(p => p[0])),
       z0: Math.min(...MESA_OUTLINE.map(p => p[1])), z1: Math.max(...MESA_OUTLINE.map(p => p[1])),
@@ -61,7 +61,12 @@ describe("central mesa", () => {
         // Check actual front faces both below the terrain and at eye height.
         // Banks can bury the first ledge; a higher stratum there rightly retreats from the foot.
         for (const y of [terrain - .3, terrain + .15, 4.6].filter(y => y < 4.8)) {
-          const ray = new THREE.Raycaster(new THREE.Vector3(x + nx * .5, y, z + nz * .5), new THREE.Vector3(-nx, 0, -nz), 0, 1);
+          // The two intentional west-face apertures are checked through to
+          // their recessed throats by cave-mouths.test.ts. Probe below them
+          // here so the original buried skirt still has to be watertight.
+          const mouth = CAVE_MOUTHS.find(m => x < 74 && z >= m.z0 - .1 && z <= m.z1 + .1);
+          const probeY = mouth ? Math.min(y, groundY(70.4, mouth.z) - .6) : y;
+          const ray = new THREE.Raycaster(new THREE.Vector3(x + nx * .5, probeY, z + nz * .5), new THREE.Vector3(-nx, 0, -nz), 0, 1);
           const hit = ray.intersectObject(mesh)[0];
           expect(hit, `${x},${y},${z}`).toBeDefined();
           expect(hit.distance).toBeCloseTo(.5, 3);

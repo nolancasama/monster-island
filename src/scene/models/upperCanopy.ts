@@ -196,6 +196,11 @@ export function summitGeometry(): THREE.BufferGeometry {
   }
   for (const s of SUMMIT_STONES) {
     const y = summitY(s.x, s.z);
+    // Low, weathered fragments stay within each standing stone's solid footprint.
+    for (const side of [-1, 1]) {
+      b.add(new THREE.DodecahedronGeometry(s.r * .36), "#8c8975",
+        [s.x + side * s.r * .55, y + .035, s.z + s.r * .4], [0, s.x + side, .15], [1, .4, .8]);
+    }
     b.add(new THREE.CylinderGeometry(s.r * .7, s.r, s.h, 6), "#9a9484", [s.x, y + s.h / 2 - .05, s.z], [0, s.x, .06]);
     b.sphere(s.r * .5, s.x + .1, y + s.h * .7, s.z + .15, "#6d8f4a", [1.2, .5, 1], 5);
   }

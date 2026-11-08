@@ -18,6 +18,8 @@ import {
 import { ropeCoilGeometry } from "./models/forest";
 import { groveDoorFrameGeometry, groveDoorGeometry } from "./models/groveDoor";
 import { GROVE_DOOR } from "../game/world/lowland";
+import { SUMMIT_OUTLINE } from "../game/world/upperCanopy";
+import { mesaTopGeometry } from "./models/mesaTop";
 
 const TILE = 96, FOG_FAR = 260;
 type Draw = { name: string; bounds: THREE.Sphere; triangles: number; far: number; spots?: Spot[] };
@@ -126,6 +128,13 @@ function cameraAt(x: number, z: number, width: number, height: number) {
 }
 
 describe("lowland submitted triangle budget", () => {
+  it("bakes the natural summit into the mesa draw with at most twice the old cap triangles", () => {
+    const top = mesaTopGeometry();
+    expect(triangles(top)).toBeLessThanOrEqual(SUMMIT_OUTLINE.length * 2);
+    expect(draws.filter(draw => draw.name === "mesa")).toHaveLength(1);
+    expect(top.groups).toHaveLength(0);
+    top.dispose();
+  });
   const views: Array<[string, number, number]> = [
     ["sanctuary basin", 87, -129], ["forest base", 75.5, -176],
     ["left neck", 47, -175], ["left arm", 42, -190], ["left approach", 42, -203],

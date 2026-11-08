@@ -386,7 +386,7 @@ describe("Act 2 English", () => {
 describe("persistent stage clears and pre-expansion saves",()=>{
   it("requires every required enemy; duplicates and other stages cannot satisfy the count",()=>{
     for(const zone of STAGES){
-      const ids=ENEMY_SPAWNS.flatMap((e,i)=>e.zone===zone&&!e.optional?[i]:[]),p=startAct2(done());
+      const ids=ENEMY_SPAWNS.flatMap((e,i)=>e.zone===zone&&!e.optional&&!e.retired?[i]:[]),p=startAct2(done());
       expect(remainingEnemies(zone,[])).toBe(ids.length);
       expect(clearStage(p,zone,[...ids.slice(1),...ids.slice(1),999])).toBe(p);
       const cleared=clearStage(p,zone,ids);
@@ -401,6 +401,18 @@ describe("persistent stage clears and pre-expansion saves",()=>{
       const loaded=decodeSave(encodeSave(cleared,{x:75.5,z:-154.4,yaw:0},20))!;
       expect(loaded.progress.act2.cleared).toEqual([zone]);
     }
+  });
+  it("accepts old retired defeat indices without counting them or changing the v4 save", () => {
+    const retired = ENEMY_SPAWNS.flatMap((e, i) => e.retired ? [i] : []);
+    const live = ENEMY_SPAWNS.flatMap((e, i) => e.zone === "causeway" && !e.retired ? [i] : []);
+    const memory = retired.reduce((mem, i) => noteDefeat(mem, "causeway", i), newZoneMemory());
+    expect(remainingEnemies("causeway", memory.defeated.causeway!)).toBe(8);
+    const p = clearStage(startAct2(done()), "causeway", [...memory.defeated.causeway!, ...live]);
+    const raw = JSON.parse(encodeSave(p, { x: 84.5, z: -254.5, yaw: 0 }, 20));
+    // Defeat memory is transient today; tolerate older/additive snapshots listing it.
+    raw.progress.act2.defeated = { causeway: [...retired, ...live] };
+    expect(raw.v).toBe(4);
+    expect(decodeSave(JSON.stringify(raw))!.progress.act2.cleared).toContain("causeway");
   });
   it("optional arm enemies do not count, and clearing the base retains the cliff checkpoint without healing",()=>{
     const p=startAct2(done());p.act2.hp=12;p.act2.mp=v(12,8).mp;

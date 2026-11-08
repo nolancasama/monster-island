@@ -115,6 +115,13 @@ export const CAVE_PORTALS: LayerPortal[] = CAVE_MOUTHS.map((mouth, i) => ({
   at: { x: mouth.portalX, z: mouth.z }, n: { x: 1, z: 0 }, enter: .45, half: (mouth.z1 - mouth.z0) / 2,
 }));
 export const CAVE_PORTAL = CAVE_PORTALS[0];
+/** Darkness holds ground walkers at the mouth's plane. This is a traversal
+ * boundary for the walker's centre, so cave exits remain clear at either body
+ * radius, even inside the portal's dead band. Cave-layer queries never use it. */
+export function darkCaveEntryBlocked(x: number, z: number, m: number, solved: readonly string[]): boolean {
+  return !solved.includes("caveTorches") && CAVE_MOUTHS.some(mouth =>
+    x > mouth.portalX && x <= mouth.groundX1 + m && z >= mouth.z0 - m && z <= mouth.z1 + m);
+}
 /** Just inside the mouth, past the portal's dead band. */
 export const CAVE_ENTRY: Vec2 = { x: 72.4, z: -227.2 };
 

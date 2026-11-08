@@ -398,7 +398,7 @@ export function Lowland() {
       <mesh geometry={cliff} material={flatMat} />
       <DistanceMesh geometry={canopyDecks} material={canopySolidMat} />
       <DistanceMesh geometry={canopyFaces} material={canopyOccluderMat} />
-      <DistanceMesh geometry={mesa} material={flatMat} />
+      <DistanceMesh geometry={mesa} material={smoothMat} />
       {props.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={occluderMat} />
       ))}

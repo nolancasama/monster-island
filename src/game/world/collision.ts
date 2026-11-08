@@ -2,7 +2,7 @@ import type { ObstacleId } from "../types";
 import { region, type Layer } from "./region";
 import { LAYER_WORLDS } from "./layers";
 // Layer content registers itself with the layer registry on import.
-import "./cave";
+import { darkCaveEntryBlocked } from "./cave";
 import "./upperCanopy";
 import { cloudMove, cloudNearestWalkable, cloudSolids, cloudWalkable, cloudY, type CloudGates } from "./cloudisle";
 import {
@@ -106,6 +106,8 @@ function stateKey(solved: readonly ObstacleId[], forest = false, volcano = false
   let key = (forest ? 1 << 14 : 0) | (volcano ? 1 << 15 : 0) | (act2 ? 1 << 16 : 0);
   for (let i = 0; i < GATE_IDS.length; i++) if (solved.includes(GATE_IDS[i])) key |= 1 << i;
   STAGES.forEach((id, i) => { if (cleared.includes(id)) key |= 1 << (17 + i); });
+  // The original fourteen obstacle bits and the stage bits already have owners.
+  if (solved.includes("caveTorches")) key |= 1 << (17 + STAGES.length);
   return key;
 }
 const keyOf = (g: Gates) => stateKey(g.solved, g.forest, g.volcano, g.act2, g.cleared);
@@ -208,7 +210,7 @@ export function onPier(x: number, z: number, m = 0): boolean {
 function onLand(x: number, z: number, gates: Gates, m: number, swimmer: boolean): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
   // North of the sanctuary's cliff: the Act 2 lowland (reached only by its rope).
-  if (z < CLIFF_FOOT_Z + 1) return gates.act2 === true && lowlandWalkable(x, z, gates, m);
+  if (z < CLIFF_FOOT_Z + 1) return gates.act2 === true && !darkCaveEntryBlocked(x, z, m, gates.solved) && lowlandWalkable(x, z, gates, m);
   if (onPier(x, z, m)) return true;
   const ridgeBand = x > RIDGE.x0 && x < RIDGE.x1;
   // Ridge rocks are solid except for the pass itself.

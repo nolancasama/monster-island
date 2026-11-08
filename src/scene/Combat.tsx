@@ -139,11 +139,11 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
 function Enemies() {
   const world = useGame((g) => g.progress.act3.world);
   const spawns = world === "cloud" ? CLOUD_ENEMY_SPAWNS : ENEMY_SPAWNS;
-  // Bodies have one slot per spawn, so the 14-enemy Causeway has no instance cap.
+  // Retired descriptors preserve their saved indices without creating a body.
   // cb.enemies is replaced on reset: render by spawn index and look the live record up each frame.
   return (
     <>
-      {spawns.map((s, i) => (
+      {spawns.map((s, i) => "retired" in s && s.retired ? null : (
         <EnemySlot key={`${world}-${i}`} i={i} kind={s.kind} />
       ))}
     </>

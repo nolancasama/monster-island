@@ -35,7 +35,7 @@ function nearestCaveBrazier() {
 /** Act 2's unlocks: where to stand, and what is said when no friend can help. */
 export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
   groveStream: { ...A2.groveStream, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
-  caveTorches: { get x() { return caveTorchApproach().x; }, get z() { return caveTorchApproach().z; }, alone: { en: "It's dark in there!", ja: "なかは まっくら! ひを だせる ともだちに きこう" } },
+  caveTorches: { get x() { return caveTorchApproach().x; }, get z() { return caveTorchApproach().z; }, alone: { en: "It's too dark!", ja: "くらすぎて はいれない! ひを だせる ともだちに きこう" } },
   summitBubble: { ...A2.summitBubble, alone: { en: "It's a long way down!", ja: "したまで とおいね! たすけて くれる ともだちに きこう" } },
   canopyAscentRope: { x: A2.canopyAscentRope.x, z: A2.canopyAscentRope.z, alone: { en: "The deck is too high! Who can fly the rope up?", ja: "こずえは たかいね！ とべる ともだちに きこう" } },
   groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
@@ -910,8 +910,7 @@ async function ferry(id: MonsterId) {
 
 // ------------------------------------------------------------ Ember's torches (the cave)
 
-/** Solve the cave's lights and start the flame running in along the route.
- * Shared by the English route and by any Fire Breath or Inferno on a brazier or torch. */
+/** Ember's English ask solves the lights and starts the flame along the route. */
 export function lightCaveTorches(originS = 0): boolean {
   if (isSolved(getGame().progress, "caveTorches")) return false;
   updateProgress(p => solve(p, "caveTorches"));
@@ -923,8 +922,8 @@ export function lightCaveTorches(originS = 0): boolean {
 }
 
 hooks.caveFlame = (id) => {
-  const origin = CAVE_BRAZIERS.find(b => b.id === id) ?? CAVE_TORCHES.find(t => t.id === id);
-  if (lightCaveTorches(origin?.s ?? 0)) toast({ en: "The cave lights up!", ja: "どうくつに あかりが ついた!", icon: "star", tone: "good" }, 2600);
+  const object = CAVE_BRAZIERS.find(b => b.id === id) ?? CAVE_TORCHES.find(t => t.id === id);
+  if (object) effect("sparkle", object.x, walkY(object) + 1.1, object.z);
 };
 
 /** "Can you make fire?": Ember breathes on the nearest brazier at either mouth;

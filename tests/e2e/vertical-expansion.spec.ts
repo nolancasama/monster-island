@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
-import type { CompanionId } from "../../src/game/data/combat";
-import { CAVE_MOUTHS, CHESTS, type StageId } from "../../src/game/world/lowland";
-import { CAVE_ALCOVE, CAVE_CHAMBER, CAVE_CHEST, CAVE_ENTRY, CAVE_PORTALS, CAVE_SEAL, CAVE_TORCHES } from "../../src/game/world/cave";
+import { COMBAT, type CompanionId } from "../../src/game/data/combat";
+import { CAVE_MOUTHS, CHESTS, trailPoint, type StageId } from "../../src/game/world/lowland";
+import { CAVE_ALCOVE, CAVE_BRAZIERS, CAVE_CHAMBER, CAVE_CHEST, CAVE_ENTRY, CAVE_PORTALS, CAVE_ROUTE, CAVE_SEAL, CAVE_TORCHES } from "../../src/game/world/cave";
 import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";
 
 /** Act 2 vertical expansion (docs/ACT2_VERTICAL_EXPANSION.md): every new place,
@@ -123,23 +123,51 @@ async function walkIntoCave(page: Page, mouthIndex: number) {
   return waitFor(page, s => s.player.layer === "cave" && s.act2.cave.k >= 1, 20_000, `inside via ${portal.id}`);
 }
 
-test("the cave: enter through mouth B on the Grove south bank", async ({ page }) => {
-  const mouth = CAVE_MOUTHS[1];
-  const errors = await enter(page, save(["forest1"], mouth.portalX - 1, mouth.z, "leafy", p => p.solved.push("groveStream")));
-  const inside = await walkIntoCave(page, 1);
-  expect(inside.lowland.visible).toBe(false);
+for (const index of [0, 1]) {
+test(`the dark cave blocks mouth ${index + 1} and offers Ember's ask in front`, async ({ page }) => {
+  const mouth = CAVE_MOUTHS[index];
+  const errors = await enter(page, save(["forest1"], mouth.portalX - 1, mouth.z, "ember", p => p.solved.push("groveStream")));
+  await hook(page, "moveTo", mouth.portalX + 1, mouth.z);
+  const blocked = await state(page);
+  expect(blocked.player.layer).toBe("ground");
+  expect(blocked.player.x).toBeLessThanOrEqual(mouth.portalX);
+  await waitFor(page, s => s.focus?.id === "caveTorches", 20_000, "ask from the blocked opening");
+  // Select the screen direction that pushes east, using the actual follow camera.
+  const yaw = (await state(page)).camera.yaw;
+  const key = Math.abs(Math.cos(yaw)) >= Math.abs(Math.sin(yaw))
+    ? (Math.cos(yaw) >= 0 ? "KeyD" : "KeyA")
+    : (Math.sin(yaw) >= 0 ? "KeyS" : "KeyW");
+  await page.keyboard.down(key);
+  await expect(page.getByText("It's too dark!", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.up(key);
+  expect((await state(page)).player.layer).toBe("ground");
+  await shots(page, `cave-blocked-${index + 1}`);
+  await page.keyboard.press("KeyE");
+  await tap(page, "canFire");
+  await waitFor(page, s => Boolean(s.prompt?.choices.includes("thankYou")), 60_000, "thank Ember");
+  await tap(page, "thankYou");
+  await waitFor(page, s => s.mode === "explore" && s.progress.solved.includes("caveTorches"), 30_000, "mouths unlocked");
+  expect((await walkIntoCave(page, index)).lowland.visible).toBe(false);
   expect(errors).toEqual([]);
 });
+}
 
-test("the cave: walk in through the mouth, explore it dark, pull the seal, open the chest", async ({ page }) => {
-  const mouth = CAVE_MOUTHS[0];
+test("a legacy dark-cave save stays inside, can exit, pull the seal and open the chest", async ({ page }) => {
   const chest = CHESTS.find(c => c.layer === "cave" && c.x === CAVE_CHEST.x && c.z === CAVE_CHEST.z)!;
-  const errors = await enter(page, save(["forest1"], mouth.portalX - 1, mouth.z, "leafy", p => p.solved.push("groveStream")));
-  const inside = await walkIntoCave(page, 0);
+  const errors = await enter(page, save(["forest1"], CAVE_ENTRY.x, CAVE_ENTRY.z, "leafy", p => p.solved.push("groveStream"), "cave"));
+  const inside = await waitFor(page, s => s.player.layer === "cave" && s.act2.cave.k >= 1, 20_000, "legacy save inside");
   expect(inside.act2.cave.spread).toBe(0);
   expect(inside.act2.cave.eyes).toBeGreaterThan(0);
   expect(inside.lowland.visible).toBe(false);
   await shots(page, "cave-dark");
+  for (const mouth of CAVE_MOUTHS) {
+    await hook(page, "teleport", mouth.portalX + 1, mouth.z, -Math.PI / 2, true, "cave");
+    // Portal transitions run during actual movement, not the moveTo collision probe.
+    await page.keyboard.down("KeyA");
+    await waitFor(page, s => s.player.layer === "ground", 20_000, "exit remains open in the dark");
+    await page.keyboard.up("KeyA");
+    expect((await state(page)).progress.solved).not.toContain("caveTorches");
+  }
   await hook(page, "teleport", CAVE_CHAMBER.x, CAVE_CHAMBER.z, Math.atan2(CAVE_SEAL.x - CAVE_CHAMBER.x, CAVE_SEAL.z - CAVE_CHAMBER.z), true, "cave");
   await hook(page, "renderFrames", 10);
   await page.keyboard.press("KeyJ");
@@ -151,6 +179,37 @@ test("the cave: walk in through the mouth, explore it dark, pull the seal, open 
   const rich = await waitFor(page, s => s.progress.act2.relics.includes(chest.relic!), 30_000, "Glow Crystal");
   expect(rich.progress.act2.coins).toBeGreaterThanOrEqual(chest.coins);
   await shots(page, "cave-chest-dark");
+  expect(errors).toEqual([]);
+});
+
+test("Fire Breath and Inferno on cave lighting objects leave the cave dark", async ({ page }) => {
+  const errors = await enter(page, save(["forest1"], CAVE_ENTRY.x, CAVE_ENTRY.z, "ember", p => p.solved.push("groveStream"), "cave"));
+  let specialReadyAt = 0;
+  // Distinct targets let each attack prove a fresh element hit, on both layers.
+  for (const [object, layer, key] of [
+    [CAVE_BRAZIERS[0], "ground", "KeyJ"], [CAVE_BRAZIERS[1], "ground", "KeyK"],
+    [CAVE_TORCHES[0], "cave", "KeyJ"], [CAVE_TORCHES[1], "cave", "KeyK"],
+  ] as const) {
+    const at = layer === "ground" ? { x: 68, z: CAVE_MOUTHS[0].z } : trailPoint(CAVE_ROUTE, object.s);
+    await hook(page, "teleport", at.x, at.z, Math.atan2(object.x - at.x, object.z - at.z), true, layer);
+    await waitFor(page, s => s.act2.stance.friend === "ember" && s.act2.stance.k >= .99, 20_000, "Ember ready");
+    await hook(page, "setMp", "ember", 100);
+    if (key === "KeyK") await waitFor(page, s => s.time >= specialReadyAt, 20_000, "Inferno cooldown");
+    await page.keyboard.down(key);
+    if (key === "KeyK") {
+      const fired = await waitFor(page, s => s.act2.inferno !== null, 10_000, "Inferno launched");
+      specialReadyAt = fired.time + COMBAT.ember.special.cooldown;
+    }
+    await waitFor(page, s => {
+      const objects = (s.act2 as typeof s.act2 & { elementObjects: Array<{ id: string; state: string }> }).elementObjects;
+      return objects.some(o => o.id === object.id && o.state === "lit");
+    }, 20_000, `${key} hits ${object.id}`);
+    await page.keyboard.up(key);
+    await waitFor(page, s => s.act2.breath === null && s.act2.inferno === null, 15_000, "attack finished");
+    const dark = await state(page);
+    expect(dark.progress.solved).not.toContain("caveTorches");
+    expect(dark.act2.cave.spread).toBe(0);
+  }
   expect(errors).toEqual([]);
 });
 
@@ -171,7 +230,8 @@ test("Can you make fire? lights the cave, and the lights persist after reloading
   await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, s => s.mode === "explore", 90_000, "reloaded");
-  await hook(page, "teleport", CAVE_ENTRY.x, CAVE_ENTRY.z, Math.PI, true, "cave");
+  // The saved solve permanently opens both real portals.
+  for (const index of [0, 1]) await walkIntoCave(page, index);
   const lit = await waitFor(page, s => s.act2.cave.spread >= 1 && s.act2.cave.litTorches === CAVE_TORCHES.length, 20_000, "fully lit after reload");
   expect(lit.progress.solved).toContain("caveTorches");
   await shots(page, "cave-lit");

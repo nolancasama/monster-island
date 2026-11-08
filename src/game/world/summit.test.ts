@@ -61,7 +61,9 @@ describe("Bubbo's bubble descent", () => {
     const c = BUBBLE_LANDING.causeway;
     expect(zoneAt(c.x, c.z)).toBe("causeway");
     expect(isWalkable(c.x, c.z, gatesOf({ ...newProgress(), act2: { ...newProgress().act2, started: true } }), .55, false, "ground")).toBe(true);
-    for (const s of ENEMY_SPAWNS.filter(s => s.zone === "causeway")) expect(Math.hypot(s.x - c.x, s.z - c.z), `${s.x},${s.z}`).toBeGreaterThanOrEqual(7);
+    const live = ENEMY_SPAWNS.filter(s => s.zone === "causeway" && !s.retired);
+    expect(live).toHaveLength(8);
+    for (const s of live) expect(Math.hypot(s.x - c.x, s.z - c.z), `${s.x},${s.z}`).toBeGreaterThanOrEqual(7);
     expect(zoneAt(BUBBLE_LANDING.canopy.x, BUBBLE_LANDING.canopy.z)).toBe("canopy");
   });
 
