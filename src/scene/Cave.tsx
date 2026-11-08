@@ -7,15 +7,13 @@ import { cb } from "../game/combat";
 import { companions } from "../game/logic/progress";
 import { monsterRootY } from "../game/ride";
 import { standY } from "../game/world/collision";
-import { CAVE_MOUTH } from "../game/world/lowland";
 import { CAVE_BRAZIERS, CAVE_ROUTE_LENGTH, CAVE_SEAL, CAVE_TORCHES, caveFloorY, caveRouteS } from "../game/world/cave";
 import { audio } from "../audio/audio";
-import { flatMat } from "./materials";
 import { caveAtmosphere } from "./layerView";
 import { Chest } from "./Chest";
 import {
-  brazierFlameY, caveBrazierGeometry, caveChannelGeometry, caveDecorGeometry, caveFloorGeometry, caveGlowGeometry, caveMaterial,
-  caveMouthGeometry, caveSealGeometry, caveSealGlowGeometry, caveTorchGeometry, caveTorchLight, caveWallGeometry, flameGeometry, tagged, torchFlameY,
+  brazierFlameY, caveChannelGeometry, caveDecorGeometry, caveFloorGeometry, caveGlowGeometry, caveMaterial,
+  caveSealGeometry, caveSealGlowGeometry, caveTorchGeometry, caveTorchLight, caveWallGeometry, flameGeometry, tagged, torchFlameY,
 } from "./models/cave";
 import type { MonsterId } from "../game/types";
 
@@ -30,23 +28,22 @@ const litReach = (spread: number) => spread * (CAVE_ROUTE_LENGTH + 6) - 2;
 export const caveView = { inside: false, k: 0, eyes: 0, spread: 0, litTorches: 0, sealOpen: 0 };
 
 /** The optional cave inside the mesa: drawn only for a walker on the cave layer
- * (plus the carved mouth and braziers outside). Its light ignores the sun;
+ * (plus the brazier flames and fire jet outside). Its light ignores the sun;
  * unlit, only eyes, mushrooms, crystals and the seal's moss glow. Ember's
- * torches light it along the route from the mouth inward. */
+ * torches light it along the route from either entrance or a burning torch. */
 export function Cave() {
   const inside = useRef<THREE.Group>(null), mouth = useRef<THREE.Group>(null), seal = useRef<THREE.Group>(null);
-  const mat = useMemo(caveMaterial, []);
+  const mat = useMemo(caveMaterial, []), channelMat = useMemo(caveMaterial, []);
   const glowMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false }), []);
   const flameMat = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false, transparent: true, opacity: .92, depthWrite: false }), []);
-  const darkMat = useMemo(() => new THREE.MeshBasicMaterial({ color: "#040506", fog: false }), []);
   const geos = useMemo(() => {
     const sealMatrix = new THREE.Matrix4().compose(
       new THREE.Vector3(CAVE_SEAL.x, caveFloorY(CAVE_SEAL.x, CAVE_SEAL.z) - .05, CAVE_SEAL.z),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(0, CAVE_SEAL.yaw, 0)), new THREE.Vector3(1, 1, 1));
     const sealStone = caveSealGeometry().applyMatrix4(sealMatrix), sealGlow = caveSealGlowGeometry().applyMatrix4(sealMatrix);
     return {
-      floor: caveFloorGeometry(), walls: caveWallGeometry(), decor: caveDecorGeometry(), glow: caveGlowGeometry(), mouth: caveMouthGeometry(),
-      torches: caveTorchGeometry(), channel: caveChannelGeometry(), braziers: caveBrazierGeometry(), flame: flameGeometry(),
+      floor: caveFloorGeometry(), walls: caveWallGeometry(), decor: caveDecorGeometry(), glow: caveGlowGeometry(),
+      torches: caveTorchGeometry(), channel: caveChannelGeometry(), flame: flameGeometry(),
       sealStone: tagged(sealStone), sealGlow,
     };
   }, []);
@@ -89,7 +86,7 @@ export function Cave() {
     caveView.inside = isIn;
     caveView.k = caveAtmosphere.k;
     if (inside.current) inside.current.visible = isIn;
-    if (mouth.current) mouth.current.visible = playing && p.layer === "ground" && Math.hypot(p.x - 70, p.z - CAVE_MOUTH.z) < 30;
+    if (mouth.current) mouth.current.visible = playing && p.layer === "ground";
 
     // Ember's torches: the flame runs in from the mouth over about six seconds.
     const lit = g.progress.solved.includes("caveTorches"), t = rt.caveTorches;
@@ -99,17 +96,27 @@ export function Cave() {
     const reach = lit ? litReach(t.spread) : -1e4;
     caveView.spread = t.spread;
     mat.uniforms.uLitS.value = reach;
-    mat.uniforms.uAmbient.value = lit ? .05 + .05 * t.spread : .05;
-    mat.uniforms.uSil.value = lit ? .2 - .1 * t.spread : .2;
+    mat.uniforms.uLightOriginS.value = t.originS;
+    mat.uniforms.uAmbient.value = lit ? .01 + .09 * t.spread : .01;
+    mat.uniforms.uSil.value = lit ? .045 + .055 * t.spread : .045;
+    glowMat.color.setScalar(lit ? .03 + .97 * t.spread : .03);
     mat.uniforms.uPlayer.value.set(p.x, p.y, p.z);
+    // The bright channel would trace the route in the dark: it takes no ambient
+    // and a faint silhouette until the flame has run along it.
+    const cu = channelMat.uniforms;
+    cu.uLitS.value = reach;
+    cu.uLightOriginS.value = t.originS;
+    cu.uAmbient.value = lit ? mat.uniforms.uAmbient.value : 0;
+    cu.uSil.value = lit ? mat.uniforms.uSil.value : .012;
+    cu.uPlayer.value.set(p.x, p.y, p.z);
     const playerS = isIn ? caveRouteS(p.x, p.z) : 0;
-    const warm = isIn && lit && playerS <= reach ? Math.min(1, caveTorchLight(p.x, p.z, playerS)) : 0;
+    const warm = isIn && lit && Math.abs(playerS - t.originS) <= reach ? Math.min(1, caveTorchLight(p.x, p.z, playerS)) : 0;
     caveAtmosphere.warm += (warm - caveAtmosphere.warm) * Math.min(1, dt * 4);
     mat.uniforms.uWarm.value = 0;
     const time = rt.time;
     let litCount = 0;
     CAVE_TORCHES.forEach((torch, i) => {
-      const on = lit && torch.s <= reach;
+      const on = lit && Math.abs(torch.s - t.originS) <= reach;
       if (on) litCount++;
       const f = on ? 1 + .14 * Math.sin(time * 13 + i * 1.7) + .08 * Math.sin(time * 23 + i) : 0;
       m4.compose(v.set(torch.x, torchFlameY(torch), torch.z), q.identity(), one.set(f, f * (1 + .1 * Math.sin(time * 17 + i)), f));
@@ -189,7 +196,7 @@ export function Cave() {
       <mesh geometry={geos.walls} material={mat} />
       <mesh geometry={geos.decor} material={mat} />
       <mesh geometry={geos.torches} material={mat} />
-      <mesh geometry={geos.channel} material={mat} />
+      <mesh geometry={geos.channel} material={channelMat} />
       <mesh geometry={geos.glow} material={glowMat} />
       <group ref={seal}>
         <mesh geometry={geos.sealStone} material={mat} />
@@ -201,9 +208,6 @@ export function Cave() {
       <primitive object={enemyEyes} />
     </group>
     <group ref={mouth} visible={false}>
-      <mesh geometry={geos.mouth.arch} material={flatMat} />
-      <mesh geometry={geos.mouth.dark} material={darkMat} />
-      <mesh geometry={geos.braziers} material={flatMat} />
       <primitive object={brazierFlames} />
       <primitive object={jet} />
     </group>

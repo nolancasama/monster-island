@@ -290,7 +290,7 @@ export const cb = {
 };
 
 /** Called with the live fight when a knock-out happens (the flow owns the scene). */
-export const hooks = { knockout: null as null | (() => void), caveFlame: null as null | (() => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void), playerFall: null as null | ((ux: number, uz: number) => void) };
+export const hooks = { knockout: null as null | (() => void), caveFlame: null as null | ((id: string) => void), enterZone: null as null | ((zone: ZoneId) => void), cloudEnterZone: null as null | ((zone: CloudAreaId) => void), beaconDefeated: null as null | (() => void), playerFall: null as null | ((ux: number, uz: number) => void) };
 
 /** No per-attempt boss progress is saved; checkpoints and lamps live in act3. */
 export function resetBeaconFight() {
@@ -696,7 +696,7 @@ function dispatchObjects(shape: MoveDef["shape"], contains: (o: ElementObject) =
         applySecretProgress(next);
         selected = o;
         // Any brazier or torch lights the cave's whole ancient system.
-        if (isCaveFlame(o.id)) hooks.caveFlame?.();
+        if (isCaveFlame(o.id)) hooks.caveFlame?.(o.id);
       }
     }
     return selected;

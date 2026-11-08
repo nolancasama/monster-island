@@ -11,21 +11,31 @@ import { companionSpot, poofTo } from "./companion";
 import { cliffTopEnding } from "./story";
 import { audio } from "../../audio/audio";
 import type { AbilityId, MonsterId, ObstacleId, Vec2 } from "../types";
-import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, CANOPY_ROPES, GROVE_CROSSING, LILY_PADS, POND_Y, type ClimbRope } from "../world/lowland";
+import { ACT2_OBSTACLE_PLACE, CANOPY_GAPS, CANOPY_ROPES, CAVE_MOUTHS, GROVE_CROSSING, LILY_PADS, POND_Y, type ClimbRope } from "../world/lowland";
 import { streamY } from "../world/lowland";
 import { GROVE_STREAM_FERRY, groveStreamSide } from "../world/groveStream";
 import { gatherParty } from "./act2";
 import { hooks } from "../combat";
-import { CAVE_BRAZIERS } from "../world/cave";
+import { CAVE_BRAZIERS, CAVE_TORCHES } from "../world/cave";
 import { bubbleDescent } from "./summit";
 import { DebugScriptCancelled, onDebugScriptCancel } from "../debugLifecycle";
 
 type Act2Obstacle = keyof typeof ACT2_OBSTACLE_PLACE;
 const A2 = ACT2_OBSTACLE_PLACE;
+/** Focus reads these coordinates each frame, so both mouths offer the same English obstacle. */
+function caveTorchApproach(): Vec2 {
+  const mouth = CAVE_MOUTHS.reduce((best, m) =>
+    Math.hypot(m.portalX - rt.player.x, m.z - rt.player.z) < Math.hypot(best.portalX - rt.player.x, best.z - rt.player.z) ? m : best);
+  return { x: A2.caveTorches.x, z: mouth.z + (A2.caveTorches.z - CAVE_MOUTHS[0].z) };
+}
+function nearestCaveBrazier() {
+  return CAVE_BRAZIERS.reduce((best, b) =>
+    Math.hypot(b.x - rt.player.x, b.z - rt.player.z) < Math.hypot(best.x - rt.player.x, best.z - rt.player.z) ? b : best);
+}
 /** Act 2's unlocks: where to stand, and what is said when no friend can help. */
 export const ACT2_PLACE: Record<Act2Obstacle, { x: number; z: number; alone: { en: string; ja: string } }> = {
   groveStream: { ...A2.groveStream, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
-  caveTorches: { ...A2.caveTorches, alone: { en: "It's dark in there!", ja: "なかは まっくら! ひを だせる ともだちに きこう" } },
+  caveTorches: { get x() { return caveTorchApproach().x; }, get z() { return caveTorchApproach().z; }, alone: { en: "It's dark in there!", ja: "なかは まっくら! ひを だせる ともだちに きこう" } },
   summitBubble: { ...A2.summitBubble, alone: { en: "It's a long way down!", ja: "したまで とおいね! たすけて くれる ともだちに きこう" } },
   canopyAscentRope: { x: A2.canopyAscentRope.x, z: A2.canopyAscentRope.z, alone: { en: "The deck is too high! Who can fly the rope up?", ja: "こずえは たかいね！ とべる ともだちに きこう" } },
   groveLilies: { x: A2.groveLilies.x, z: A2.groveLilies.z, alone: { en: "The water is too deep!", ja: "みずが ふかい! およげる ともだちに きこう" } },
@@ -141,7 +151,8 @@ export function useObstacle(id: ObstacleId): Promise<void> {
       await say("self", place.alone.en, place.alone.ja);
       return;
     }
-    facePlayer(FACE[id]);
+    const face = id === "caveTorches" ? nearestCaveBrazier() : FACE[id];
+    facePlayer(face);
     if (id === "lava") {
       frameTwo(rt.player, FRAME[id], 1.1);
       await say("maple", "It's hot!", "あつい! ともだちに たすけて もらおう!");
@@ -156,7 +167,7 @@ export function useObstacle(id: ObstacleId): Promise<void> {
       return;
     }
     // Frame the obstacle beyond the player, then bring the companion into view.
-    frameTwo(rt.player, FRAME[id], 1.1);
+    frameTwo(rt.player, id === "caveTorches" ? face : FRAME[id], 1.1);
     await companionCloser(active);
     const m = rt.monsters[active];
     try {
@@ -714,7 +725,7 @@ onDebugScriptCancel(cancelGroveStream);
 
 async function streamFerry(repeat: boolean) {
   const p = rt.player, m = rt.monsters.bubbo;
-  const side = repeat ? groveStreamSide(p.x, p.z) : "north";
+  const side = groveStreamSide(p.x, p.z);
   const from = GROVE_STREAM_FERRY[side];
   const to = GROVE_STREAM_FERRY[side === "north" ? "south" : "north"];
   const generation = ++streamGeneration;
@@ -901,28 +912,30 @@ async function ferry(id: MonsterId) {
 
 /** Solve the cave's lights and start the flame running in along the route.
  * Shared by the English route and by any Fire Breath or Inferno on a brazier or torch. */
-export function lightCaveTorches(): boolean {
+export function lightCaveTorches(originS = 0): boolean {
   if (isSolved(getGame().progress, "caveTorches")) return false;
   updateProgress(p => solve(p, "caveTorches"));
   rt.caveTorches.spread = 0;
+  rt.caveTorches.originS = originS;
   rt.caveTorches.animating = true;
   audio.play("whoosh");
   return true;
 }
 
-hooks.caveFlame = () => {
-  if (lightCaveTorches()) toast({ en: "The cave lights up!", ja: "どうくつに あかりが ついた!", icon: "star", tone: "good" }, 2600);
+hooks.caveFlame = (id) => {
+  const origin = CAVE_BRAZIERS.find(b => b.id === id) ?? CAVE_TORCHES.find(t => t.id === id);
+  if (lightCaveTorches(origin?.s ?? 0)) toast({ en: "The cave lights up!", ja: "どうくつに あかりが ついた!", icon: "star", tone: "good" }, 2600);
 };
 
-/** "Can you make fire?": Ember walks to the north brazier and breathes on it; the
- * flame runs along a carved channel into the mountain and lights every torch. */
+/** "Can you make fire?": Ember breathes on the nearest brazier at either mouth;
+ * the flame runs from that entrance along the carved channel and lights every torch. */
 async function emberLightsTorches(id: MonsterId) {
-  const m = rt.monsters[id], b = CAVE_BRAZIERS[0];
+  const m = rt.monsters[id], b = nearestCaveBrazier();
   m.mode = "script";
   m.look = null;
   m.air = m.airTarget = 0;
   const by = walkY(b);
-  shot({ x: 63.6, y: by + 4.4, z: -219.8 }, { x: 69.2, y: by + 1, z: -226.6 });
+  shot({ x: b.x - 6.3, y: by + 4.4, z: b.z + 4.75 }, { x: b.x - .7, y: by + 1, z: b.z - 2.05 });
   await glideWalk(m, { x: b.x - 1.75, z: b.z - .25 }, .8);
   m.yaw = Math.atan2(b.x - m.x, b.z - m.z);
   animate(id, "power");
@@ -934,7 +947,7 @@ async function emberLightsTorches(id: MonsterId) {
     until: rt.time + 1.2,
   };
   await wait(950);
-  lightCaveTorches();
+  lightCaveTorches(b.s);
   effect("sparkle", b.x, by + 1.3, b.z);
   // Watch the flame cross to the second brazier and run into the mouth.
   await wait(1600);

@@ -11,10 +11,16 @@ import { region } from "./world/region";
 import { cb, resetCombat } from "./combat";
 import { isAttackHeld, pressAttack, releaseAttack, releaseAllAttacks } from "../input/attackInput";
 import type { CompanionId } from "./data/combat";
+import { bubbleDescent, pathPoint } from "./flow/summit";
+import * as ask from "./flow/ask";
+import { BUBBLE_LANDING, SUMMIT_DEPARTURE, summitY } from "./world/upperCanopy";
+import { encodeSave } from "./logic/save";
 
 vi.mock("../audio/audio", () => ({ audio: { setNearness: vi.fn(), voice: vi.fn(), play: vi.fn(), startMusic: vi.fn(), setScene: vi.fn() } }));
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   for (const slot of ["basic", "special"] as const) for (const source of ["key", "mouse", "touch"] as const) releaseAttack(slot, source);
   releaseAllAttacks();
   vi.unstubAllGlobals();
@@ -22,6 +28,64 @@ afterEach(() => {
   resetRuntime();
   setGame({ screen: "title", progress: newProgress() });
 });
+
+for (const first of [true, false]) for (const to of ["causeway", "canopy"] as const) {
+  it(`ticks a complete ${first ? "first" : "repeat"} bubble ride to ${to} without script timer updates`, async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { setTimeout, clearTimeout });
+    vi.spyOn(ask, "say").mockResolvedValue(undefined);
+    resetRuntime();
+    resetCombat();
+    const progress = newProgress();
+    progress.act2.started = progress.act2.descended = true;
+    progress.act2.cleared = to === "causeway" ? ["grove"] : [];
+    progress.active = "bubbo";
+    progress.monsters.bubbo.friend = true;
+    setGame({ screen: "game", mode: "busy", settingsOpen: false, journalOpen: false, progress });
+    rt.time = 30;
+    Object.assign(rt.player, { x: SUMMIT_DEPARTURE.x, z: SUMMIT_DEPARTURE.z,
+      y: summitY(SUMMIT_DEPARTURE.x, SUMMIT_DEPARTURE.z), layer: "high" });
+    const script = bubbleDescent(first);
+    await Promise.resolve(); // The fallback's opening dialogue finishes before takeoff.
+    const ride = rt.bubbleRide;
+    expect(ride.phase).toBe("forming");
+    rt.time = ride.t0 + ride.growDur / 2;
+    tick(.01);
+    expect(ride.k).toBeCloseTo(.5);
+    rt.time = ride.t0 + ride.formDur + ride.dur / 2;
+    tick(.01);
+    const halfway = pathPoint(ride.pts, .5);
+    expect(ride.phase).toBe("flying");
+    expect(rt.player.x).toBeCloseTo(halfway[0]);
+    expect(rt.player.z).toBeCloseTo(halfway[2]);
+    expect(rt.player.y).toBe(rt.player.floatY);
+    expect(ride.y).toBe(rt.player.y);
+    expect(rt.monsters.bubbo.x).toBeCloseTo(ride.x + 1.3);
+    expect(ride.bubbo.y).toBeCloseTo(ride.y + .2);
+    expect(JSON.parse(encodeSave(progress, rt.player, 1)).player).toMatchObject({
+      x: SUMMIT_DEPARTURE.x, z: SUMMIT_DEPARTURE.z, layer: "high"
+    });
+    // Uneven frames advance the rest of the flight without waking the async script.
+    const landingTime = ride.t0 + ride.formDur + ride.dur;
+    for (const dt of [.007, .043, .016]) {
+      rt.time += dt;
+      tick(dt);
+      expect(rt.player.x).not.toBe(halfway[0]);
+    }
+    rt.time = landingTime;
+    tick(.01);
+    expect(ride.phase).toBe("popping");
+    expect(rt.player).toMatchObject({ ...BUBBLE_LANDING[to], layer: "ground", floatY: null });
+    rt.time = landingTime + .51;
+    tick(.01);
+    expect(ride.phase).toBe("idle");
+    expect(ride.k).toBe(0);
+    await vi.runOnlyPendingTimersAsync();
+    await script;
+    expect(rt.player.frozen).toBe(false);
+    expect(rt.camera.mode).toBe("follow");
+  });
+}
 
 function inputFight(friend: CompanionId = "ember") {
   vi.stubGlobal("window", { setTimeout: () => 0, clearTimeout: () => undefined });

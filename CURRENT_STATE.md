@@ -5,69 +5,48 @@
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
 fields only). Cloud Isle still locked as Coming Soon. https://nolancasama.github.io/monster-island/
 
-## Act 2 vertical expansion (branch `feature/act2-vertical-expansion`, fast-forwarded into `main`)
-Slices A–H are built; decisions per slice are in `DESIGN_DECISIONS.md` (2026-11-07 entries). Codex hit its usage
-limit during slice L, so L–H were built by the controller.
+## Pending on `feature/act2-vertical-expansion` (2026-11-08, uncommitted, not deployed)
+Fixes for the 2026-11-07 playtest list; decisions in `DESIGN_DECISIONS.md` (2026-11-08 entries).
+- **Summit camera:** `upper-canopy` profile is `fixed: true` (`scene/cameraProfiles.ts`).
+- **Bubble flight:** advanced per frame in `sim.ts` (`advanceBubbleRide`) from `rt.bubbleRide` timing;
+  `bubbleDescent` only starts it and waits.
+- **Cave mouths:** both arches, openings and braziers are baked into `lowlandPropsGeometry` (no pop).
+- **First stream crossing:** `groveStream` granted on read only for a Grove save south of the stream; the ask
+  is offered at both banks and the first ferry starts from the player's bank.
+- **U cave:** mouth B at (68.6, -216.4) with its own pocket and portal (`caveMouthWest`); west arm along
+  x ≈ 74.6; alcove, seal and chest moved to the chamber's west (67.6, -196.6). Light spreads from the
+  entrance or torch that was lit.
+- **Dark cave:** unlit ambient .01, silhouette .045, glow at 3%; the fire channel has its own material
+  (no ambient, .012 silhouette) so it does not trace the route.
+- **Render budget:** Upper Canopy draws only on the high layer or while the lowland draws within 70 m.
+- **Specs:** `camera.spec.ts` expects `ruined-causeway` at the Causeway point; `vertical-expansion.spec.ts`
+  compiles (it had blocked `npm run build`), covers mouth B and both-bank asks, and was checked with a
+  known-bad build (mouth B portal removed, ferry forced north: both new tests failed).
 
-- **A/B Causeway:** arches gone, shrine statues off the floor, NE-corner boulders. One fixed camera,
-  `ruined-causeway` (yaw 0, pitch .8, dist 10.5); `causeway-exit-rope` is climbing-only, and the Canopy mass
-  behind the lens is cut away (`causeway-visibility.test.ts`). The Grove–Causeway stone door opens on approach
-  once `grove` is cleared.
-- **C Grove stream:** a deep channel across the Grove entrance (`world/groveStream.ts`), crossed by the
-  `groveStream` Bubbo ferry ("Can you swim?"), with short repeat rides.
-- **L Layers:** `region.layer` (`ground | cave | high`) is the default for collision and height queries; layer
-  content registers a `LayerWorld` (`world/layers.ts`). The golden test `layers-ground.test.ts` proves ground
-  behaviour is unchanged apart from the cave-mouth pocket.
-- **D/E Cave** (`world/cave.ts`, `scene/Cave.tsx`, `scene/models/cave.ts`): a J-shaped route inside the mesa,
-  one mouth at z -227. The `caveTorches` obstacle (Ember, "Can you make fire?") or fire on a brazier or torch
-  lights it along the route. The Leafy root seal (`caveRootSeal`, in `CAVE_SECRET_IDS`) opens the chest:
-  45 coins, 2 amber, and the Glow Crystal (`act2.relics`).
-- **F/G Upper Canopy** (`world/upperCanopy.ts`, `scene/UpperCanopy.tsx`): giant disc leaves 20–23 m up, reached
-  by `UPPER_ROPE` from the lower Canopy. It has real falls back to checkpoints, two unstable leaves, and 11
-  optional enemies.
-- **H Summit and bubble** (`flow/summit.ts`): plateau (zone `summit`) with the Summit Star chest. `summitBubble`
-  (Bubbo, "Can you help me?") floats you to the Causeway landing (84.5, -254.5), or to the upper rope foot
-  until `grove` or `canopy` is cleared.
-- Verified: tsc, 914 unit tests, build, and per-slice browser renders at both sizes. The core browser specs
-  (`act2 save camera grove-canopy`): 17 passed, 2 failed (below). The full suite has not been run.
+Verified so far: tsc and build, 925 unit tests, `vertical-expansion` 12/13 then the one race fixed in the spec
+(zone is assigned a frame after the layer switch), cave/stream/summit renders at 1366×768 judged by Claude.
+Full suite: running (`MI_LONG_TIMEOUT=3600000 npm run e2e`).
 
-## Known problems: fix these next (user playtest 2026-11-07, plus the smoke run)
-1. **Summit camera "zooms into the sky" walking over things.** The `upper-canopy` profile runs the lowland
-   bank, floor and mesa adjustments. Fix: give it `fixed: true` in `scene/cameraProfiles.ts`; the lens is 7.7 m
-   above, clear of every leaf and the summit.
-2. **Bubble descent stutters.** `bubbleDescent` moves the player in an async `wait(16)` loop. Fix: drive the
-   flight from the per-frame sim tick (store t0, dur and pts in `rt.bubbleRide`; advance in `sim.ts`) and keep the
-   script only to start it and wait for landing.
-3. **Cave mouth pops in and out** (its group draws only within 30 m, in `Cave.tsx`). Fix: build
-   `caveMouthGeometry` and the braziers into `lowlandPropsGeometry` (no draw-call cost, no pop); keep only the
-   flames and jet dynamic.
-4. **First Grove crossing must be a "Can you swim?" moment.** `logic/save.ts` grants `groveStream` on read to
-   anyone past the Grove, so existing players only see "Ride Bubbo". Fix: grant it only for a saved position
-   south of the stream, and offer the unsolved ask at both banks (`flow/focus.ts`; `streamFerry(false)`
-   currently always starts north).
-5. **User decision: the cave becomes a true U with two entrances**, both on the Grove's south bank, with the
-   chamber at the bottom of the U. Plan: keep mouth A (z -227, up the east arm, bend, chamber), and add a west arm
-   from the chamber south along x ≈ 74.6 to mouth B at about (68.6, -216.4). Keep the ground pocket clear of
-   `groveEastPool` and `groveDryReeds`; add a second `LAYER_PORTALS` entry. Move the alcove to the chamber's
-   west, about (67.6, -196.6) r .85, because the new arm leaves where the alcove is now. Extend `CAVE_ROUTE`
-   and fix `caveRouteS` (the chamber is no longer the route end). Update the golden pocket-removal test to
-   remove both pockets.
-6. **User decision: unlit cave pitch black, almost unplayable.** `uAmbient` about .01, silhouette about .045,
-   mushrooms and crystals tinted down until lit (`scene/models/cave.ts` `caveMaterial`, `Cave.tsx`).
-7. **Render budget regression:** the Upper Canopy draws whenever the camera is within 120 m, which includes
-   the volcano tunnel (68 calls vs ≤ 60) and the Sanctuary courtyard (125 vs ≤ 120) in `camera.spec.ts`. Fix:
-   show it only when `lowlandView.visible` and the player is within about 70 m of (95, -215).
-8. `camera.spec.ts:158` expects the old `lowland` profile at a Causeway point; it should expect
-   `ruined-causeway` (an intended change).
-9. Flaky, not a regression: `water-ropes` "entrance rope … safe landing" (safe ground cleared within 0.2 s).
+## Next steps
+1. Finish the full suite; fix or triage failures (`water-ropes` "entrance rope … safe landing" is known flaky).
+2. With the user's OK: commit, fast-forward `main`, push (Pages deploys).
+3. Optional polish: the root-seal chest sits at the left edge of the fixed cave view, partly behind the wall
+   lip (`.tmp/shots/vertical/after/seal-open-chest-*.png`). It works; it just isn't showcased.
 
-## Tests to run after the fixes
-- `tests/e2e/vertical-expansion.spec.ts`: written, **never run** (8 scenarios; it will need updates for items
-  4–5).
-- `tests/e2e/zz-vertical-shots.spec.ts`: controller screenshot tool (`SHOT_TAG=after npx playwright test
-  zz-vertical-shots`), skipped otherwise. Before shots come from `.tmp/pw-before.config.ts`, which serves a
-  build of the old `main`.
-- Then the full suite: `MI_LONG_TIMEOUT=3600000 npm run e2e` (about 1.5 h). Then push to `main`.
+## Act 2 vertical expansion (live, slices A–H)
+- **Causeway:** one fixed camera `ruined-causeway`; Grove–Causeway stone door opens once `grove` is cleared.
+- **Grove stream:** `world/groveStream.ts`, Bubbo ferry ("Can you swim?").
+- **Layers:** `region.layer` (`ground | cave | high`); golden test `layers-ground.test.ts` (both mouth pockets
+  removed, otherwise unchanged).
+- **Cave:** `world/cave.ts`, `scene/Cave.tsx`, `scene/models/cave.ts`. `caveTorches` (Ember) or fire on any
+  brazier/torch; Leafy root seal → chest with 45 coins, 2 amber, Glow Crystal.
+- **Upper Canopy:** `world/upperCanopy.ts`, `scene/UpperCanopy.tsx`; falls to checkpoints, unstable leaves.
+- **Summit and bubble:** `flow/summit.ts`; Causeway landing (84.5, -254.5), or the upper rope foot until
+  `grove` or `canopy` is cleared.
+
+## Tools
+- `tests/e2e/zz-vertical-shots.spec.ts`: controller screenshots (`SHOT_TAG=after`, optional `SHOT_ONLY`),
+  skipped otherwise. `.tmp/pw-before.config.ts` serves an old `main` build for before shots.
 
 ## Earlier work (all merged and live)
 Water/MP/ropes (`docs/WATER_MP_CANOPY_ROPES.md`), seven improvements, Grove/Canopy expansion, U forest,
@@ -75,6 +54,6 @@ combat feel, elemental combat, Act 3 and Cloud Isle expansion. See their docs an
 entries. Still not tested on a real Chromebook.
 
 ## Codex / Delegated Work
-None in flight. Codex was out of usage until about 23:49 on 2026-11-07. Its partial slice L patch was discarded
-(saved only in the session scratchpad). Machine notes: vitest `--maxWorkers=4`; Playwright
+None in flight. Four Codex orders on 2026-11-08 (cave, bubble, ferry, spec) were reviewed and accepted by
+Claude; their output is in the uncommitted tree. Machine notes: vitest `--maxWorkers=4`; Playwright
 `MI_LONG_TIMEOUT=3600000`.

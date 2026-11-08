@@ -25,22 +25,22 @@ function load(p: ReturnType<typeof chapter>, position = GROVE_STREAM_FERRY.north
 }
 
 describe("Grove stream additive v4 save migration", () => {
-  it.each(["grove", "canopy", "causeway", "coast"] as const)("grants the stream after a prior %s clear", stage => {
+  it.each(["grove", "canopy", "causeway", "coast"] as const)("keeps the north-bank question after a prior %s clear", stage => {
     const p = chapter();
     p.act2.cleared.push(stage);
     const back = load(p);
     expect(back.v).toBe(4);
-    expect(back.progress.solved).toContain("groveStream");
+    expect(back.progress.solved).not.toContain("groveStream");
     expect(back.progress.solved).not.toContain("groveLilies");
     expect(back.progress.act2.cleared).toEqual(p.act2.cleared);
     expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
   });
 
-  it("grants the stream from the independently solved lily pond", () => {
+  it("keeps the north-bank question with an independently solved lily pond", () => {
     const p = chapter();
     p.solved.push("groveLilies");
     const back = load(p);
-    expect(back.progress.solved).toEqual([...p.solved, "groveStream"]);
+    expect(back.progress.solved).toEqual(p.solved);
     expect(back.progress.act2.cleared).toEqual(p.act2.cleared);
   });
 

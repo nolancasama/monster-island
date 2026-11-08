@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, it } from "vitest";
-import { BASIN, CAVE_MOUTH, ZONES, lowlandWalkable, STAGES, zoneAt, type WalkShape } from "./lowland";
+import { BASIN, CAVE_MOUTHS, ZONES, lowlandWalkable, STAGES, zoneAt } from "./lowland";
 import { isWalkable, obstaclesFor, solidsFor, standY, type Gates } from "./collision";
 
 /** SHA-256 fixtures of every ground query. IEEE-754 bytes preserve exact
@@ -12,7 +12,7 @@ const BEFORE_LAYERS: Record<string, string> = {
   grove: "8dcb2b9f8ee01ead6dfd92f80f2216daec62f93079007d4bc944a637958a2120",
   open: "248788df64985bf4c854a53e48cdf544e0796d4a30360ba56d788f2521746893",
 };
-/** The current ground: slice D's cave-mouth approach pocket is its only change. */
+/** Slice D's ground, with mouth A's original approach pocket. */
 const GOLDEN: Record<string, string> = {
   closed: "a624baab5400a01ac460db59c894ad9cce95759b86dfcf6e70b3ab74e7c7cb02",
   grove: "415049ab9864c0e961ec33ab0794eedee0bd8b54c71a6dcaf7aa4962ab904e33",
@@ -43,22 +43,28 @@ function digest(gates: Gates): string {
   return hash.digest("hex");
 }
 
-it("preserves every ground query on the complete 0.5 m BASIN grid", () => {
-  for (const [name, gates] of Object.entries(STATES)) {
-    const d = digest(gates);
-    if (!GOLDEN[name]) console.log(`GROUND_GOLDEN ${name} ${d}`);
-    else expect(d, name).toBe(GOLDEN[name]);
+/** Remove only authored pockets, restoring exact shape order even on failure. */
+function withoutPockets(mouths: typeof CAVE_MOUTHS, check: () => void) {
+  const walk = ZONES.grove.walk;
+  const pockets = mouths.map(mouth => {
+    const i = walk.findIndex(sh => sh.kind === "rect" && sh.x0 === mouth.groundX0 && sh.x1 === mouth.groundX1 && sh.z0 === mouth.z0 && sh.z1 === mouth.z1);
+    expect(i).toBeGreaterThanOrEqual(0);
+    return { i, shape: walk[i] };
+  });
+  for (const { i } of [...pockets].sort((a, b) => b.i - a.i)) walk.splice(i, 1);
+  try { check(); } finally {
+    for (const { i, shape } of pockets.sort((a, b) => a.i - b.i)) walk.splice(i, 0, shape);
   }
+}
+
+it("preserves every original mouth-A ground query when the new mouth-B pocket is removed", () => {
+  withoutPockets(CAVE_MOUTHS.slice(1), () => {
+    for (const [name, gates] of Object.entries(STATES)) expect(digest(gates), name).toBe(GOLDEN[name]);
+  });
 }, 120_000);
 
-it("differs from the ground before layers only by the cave mouth's pocket", () => {
-  const walk = ZONES.grove.walk;
-  const i = walk.findIndex((sh: WalkShape) => sh.kind === "rect" && sh.x1 === CAVE_MOUTH.groundX1 && sh.z0 === CAVE_MOUTH.z0);
-  expect(i).toBeGreaterThanOrEqual(0);
-  const [pocket] = walk.splice(i, 1);
-  try {
+it("differs from the ground before layers only by the two cave-mouth pockets", () => {
+  withoutPockets(CAVE_MOUTHS, () => {
     for (const [name, gates] of Object.entries(STATES)) expect(digest(gates), name).toBe(BEFORE_LAYERS[name]);
-  } finally {
-    walk.splice(i, 0, pocket);
-  }
+  });
 }, 120_000);

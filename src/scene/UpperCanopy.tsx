@@ -8,6 +8,7 @@ import { layerView } from "./layerView";
 import { summitGeometry, unstableLeafGeometry, upperCanopyGeometry, upperCanopyMaterial, upperRopeGeometry } from "./models/upperCanopy";
 import { Chest } from "./Chest";
 import { flatMat } from "./materials";
+import { lowlandView } from "./Lowland";
 
 /** Exposed for the browser capture hook. */
 export const upperView = { visible: false, cull: false };
@@ -27,7 +28,10 @@ export function UpperCanopy() {
 
   useFrame((_, dt) => {
     const playing = getGame().screen === "game";
-    const near = Math.hypot(camera.position.x - 101, camera.position.z + 219) < 120;
+    // Up top it always draws; from below only while the lowland itself draws and the
+    // player is close (keeps it out of the volcano tunnel and Sanctuary budgets).
+    const near = rt.player.layer === "high"
+      || (lowlandView.visible && Math.hypot(rt.player.x - 95, rt.player.z + 215) < 70);
     const show = playing && near && layerView(rt.player.layer).high && getGame().progress.act3.world !== "cloud";
     upperView.visible = show;
     if (group.current) group.current.visible = show;

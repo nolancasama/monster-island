@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { makeRng } from "../../game/logic/rng";
 import { CAVE_ALCOVE, CAVE_BRAZIERS, CAVE_CHAMBER, CAVE_ROUTE, CAVE_ROUTE_LENGTH, CAVE_SEAL, CAVE_STALAGMITES, CAVE_TORCHES, caveClearance, caveFloorY, caveRouteS, caveWalkable } from "../../game/world/cave";
-import { CAVE_MOUTH } from "../../game/world/lowland";
+import { CAVE_MOUTHS } from "../../game/world/lowland";
 import { groundY } from "../../game/world/island";
 
 /**
@@ -74,7 +74,7 @@ export function caveWallHeight(_nz: number, x: number, z: number): number {
 }
 
 /** Light sources: the torches, plus the mouth (fed by the braziers). */
-const LIGHT_SOURCES = [{ x: CAVE_MOUTH.portalX + 1.6, z: CAVE_MOUTH.z, s: 1.5 }, ...CAVE_TORCHES];
+const LIGHT_SOURCES = [...CAVE_MOUTHS.map(m => ({ x: m.portalX + 1.6, z: m.z, s: caveRouteS(m.portalX + 1.6, m.z) })), ...CAVE_TORCHES];
 /**
  * Baked warm light at a point: falls off with route distance as well as
  * straight-line distance, so it never crosses solid rock between tunnels.
@@ -225,7 +225,7 @@ export function caveDecorGeometry(): THREE.BufferGeometry {
   return tagged(b.build());
 }
 
-/** Glowing mushrooms and mineral crystals (an unlit, always-visible material). */
+/** Mushrooms and mineral crystals; their glow is tinted down until the cave is lit. */
 export function caveGlowGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   const rand = makeRng(5);
@@ -247,19 +247,19 @@ export function caveGlowGeometry(): THREE.BufferGeometry {
   return tagged(b.build());
 }
 
-/** Outside: the rock arch at the mesa face, with darkness inside (ground layer, flat material). */
-export function caveMouthGeometry(): { arch: THREE.BufferGeometry; dark: THREE.BufferGeometry } {
+/** Both outside arches and their dark openings, merged into the static ground props. */
+export function caveMouthGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  const fx = 72.5, z = CAVE_MOUTH.z, y = groundY(70.4, z);
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < 3; k++) b.add(new THREE.DodecahedronGeometry(.75 - k * .12), ROCK[k], [fx - .5 - k * .1, y + .5 + k * 1.05, z + side * (1.85 + k * .05)], [k, side, k * .7], [1.2, 1, .9]);
+  for (const mouth of CAVE_MOUTHS) {
+    const fx = 72.5, z = mouth.z, y = groundY(70.4, z);
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 3; k++) b.add(new THREE.DodecahedronGeometry(.75 - k * .12), ROCK[k], [fx - .5 - k * .1, y + .5 + k * 1.05, z + side * (1.85 + k * .05)], [k, side, k * .7], [1.2, 1, .9]);
+    }
+    for (let k = 0; k < 4; k++) b.add(new THREE.DodecahedronGeometry(.6), ROCK[(k + 1) % 4], [fx - .45, y + 3.35 + (k % 2) * .15, z - 1.5 + k], [k, k * .5, 0], [1.1, .7, 1.1]);
+    b.add(new THREE.DodecahedronGeometry(.5), "#587d43", [fx - .7, y + 3.85, z + .3], [0, 0, 0], [1.6, .3, 1.2]);
+    b.add(new THREE.PlaneGeometry(3.3, 3.3), "#040506", [fx - .2, y + 1.55, z], [0, -Math.PI / 2, 0], [1, 1, 1], { vary: false, flatAo: true });
   }
-  for (let k = 0; k < 4; k++) b.add(new THREE.DodecahedronGeometry(.6), ROCK[(k + 1) % 4], [fx - .45, y + 3.35 + (k % 2) * .15, z - 1.5 + k], [k, k * .5, 0], [1.1, .7, 1.1]);
-  b.add(new THREE.DodecahedronGeometry(.5), "#587d43", [fx - .7, y + 3.85, z + .3], [0, 0, 0], [1.6, .3, 1.2]);
-  const dark = new THREE.PlaneGeometry(3.3, 3.3);
-  dark.rotateY(-Math.PI / 2);
-  dark.translate(fx - .2, y + 1.55, z);
-  return { arch: b.build(), dark };
+  return b.build();
 }
 
 /** The cave's own material: ignores scene lights (no sun leaks through rock). */
@@ -269,10 +269,11 @@ export function caveMaterial(): THREE.ShaderMaterial {
     // Contour segments have no consistent winding; walls must show either face.
     side: THREE.DoubleSide,
     uniforms: {
-      uAmbient: { value: .05 },
+      uAmbient: { value: .01 },
       uPlayer: { value: new THREE.Vector3() },
-      uSil: { value: .2 },
+      uSil: { value: .045 },
       uLitS: { value: -1e4 },
+      uLightOriginS: { value: 0 },
       uWarm: { value: 0 },
     },
     vertexShader: `
@@ -295,6 +296,7 @@ uniform float uAmbient;
 uniform vec3 uPlayer;
 uniform float uSil;
 uniform float uLitS;
+uniform float uLightOriginS;
 uniform float uWarm;
 varying vec3 vColor;
 varying vec3 vWorld;
@@ -303,7 +305,7 @@ varying float vTorch;
 void main() {
   float d = distance(vWorld.xz, uPlayer.xz);
   float sil = uSil * (1.0 - smoothstep(0.6, 3.2, d));
-  float lit = vTorch * (1.0 - smoothstep(uLitS - 1.5, uLitS + 1.5, vS));
+  float lit = vTorch * (1.0 - smoothstep(uLitS - 1.5, uLitS + 1.5, abs(vS - uLightOriginS)));
   vec3 light = vec3(uAmbient + sil) + vec3(1.0, 0.72, 0.45) * (lit + uWarm);
   gl_FragColor = vec4(vColor * light, 1.0);
   #include <tonemapping_fragment>
@@ -334,8 +336,8 @@ export function caveChannelGeometry(): THREE.BufferGeometry {
   const c = new THREE.Color("#c8642a");
   const step = .35;
   let prev: [number, number] | null = null;
-  // The channel stops at the chamber's threshold; its own torches light the room.
-  for (let s = .8; s <= CAVE_ROUTE_LENGTH - 4.2; s += step) {
+  // Follow the full U between the entrances, including the chamber and west arm.
+  for (let s = .8; s <= CAVE_ROUTE_LENGTH - .8; s += step) {
     let best = CAVE_TORCHES[0], bestD = Infinity;
     for (const t of CAVE_TORCHES) if (Math.abs(t.s - s) < bestD) { bestD = Math.abs(t.s - s); best = t; }
     const p = routePoint(s), q = routePoint(Math.min(CAVE_ROUTE_LENGTH, s + .2));
@@ -372,7 +374,7 @@ function routePoint(s: number): [number, number] {
   return CAVE_ROUTE[CAVE_ROUTE.length - 1];
 }
 
-/** The two stone braziers outside the mouth (ground layer, ordinary lit material). */
+/** Stone braziers outside both mouths (merged with the static ground props). */
 export function caveBrazierGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   for (const br of CAVE_BRAZIERS) {

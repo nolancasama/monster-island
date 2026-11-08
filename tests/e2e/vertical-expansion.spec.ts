@@ -1,9 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import type { CompanionId } from "../../src/game/data/combat";
-import type { StageId } from "../../src/game/world/lowland";
+import { CAVE_MOUTHS, CHESTS, type StageId } from "../../src/game/world/lowland";
+import { CAVE_ALCOVE, CAVE_CHAMBER, CAVE_CHEST, CAVE_ENTRY, CAVE_PORTALS, CAVE_SEAL, CAVE_TORCHES } from "../../src/game/world/cave";
+import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";
 
 /** Act 2 vertical expansion (docs/ACT2_VERTICAL_EXPANSION.md): every new place,
  * asserted from semantic state; screenshots at both Chromebook sizes are evidence. */
@@ -39,7 +40,7 @@ async function shots(page: Page, name: string) {
   }
   if (previous) await page.setViewportSize(previous);
 }
-const S = async (page: Page) => await state(page) as any;
+const S = state;
 
 test("Grove door: closed before the Grove is cleared, open after; one fixed Causeway camera", async ({ page }) => {
   const errors = await enter(page, save(["forest1", "canopy"], 56, -245, "leafy"));
@@ -65,60 +66,102 @@ test("Grove door opens once the Grove is cleared", async ({ page }) => {
   await shots(page, "door-open");
 });
 
-test("Bubbo's stream ferry: Can you swim? the first time, a short ride afterwards", async ({ page }) => {
-  const errors = await enter(page, save(["forest1"], 46, -206, "bubbo"));
-  await hook(page, "goTo", "groveStream");
+for (const side of ["north", "south"] as const) {
+test(`Bubbo's stream ferry: first ask from ${side}, a short ride afterwards`, async ({ page }) => {
+  const from = GROVE_STREAM_FERRY[side];
+  const to = GROVE_STREAM_FERRY[side === "north" ? "south" : "north"];
+  // Load north so save migration does not grant the puzzle before the south-bank ask.
+  const errors = await enter(page, save(["forest1"], GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, "bubbo"));
+  expect((await state(page)).progress.solved).not.toContain("groveStream");
+  await hook(page, "teleport", from.x, from.z, Math.atan2(to.x - from.x, to.z - from.z), true);
   await waitFor(page, s => s.focus?.id === "groveStream", 20_000, "ask at the stream");
   await page.keyboard.press("KeyE");
   await tap(page, "canSwim");
-  await waitFor(page, s => (s as any).act2.groveStream === "swimming", 60_000, "first swim");
-  await shots(page, "ferry-first");
+  await waitFor(page, s => s.act2.groveStream === "swimming", 60_000, "first swim");
+  await shots(page, `ferry-first-${side}`);
   await waitFor(page, s => Boolean(s.prompt?.choices.includes("thankYou")), 60_000, "thank Bubbo");
   await tap(page, "thankYou");
-  const south = await waitFor(page, s => s.progress.solved.includes("groveStream") && s.mode === "explore", 60_000, "on the south bank");
-  expect(south.player.z).toBeLessThan(-213);
+  const crossed = await waitFor(page, s => s.progress.solved.includes("groveStream") && s.mode === "explore", 60_000, "on the opposite bank");
+  expect(Math.hypot(crossed.player.x - to.x, crossed.player.z - to.z)).toBeLessThan(.5);
   await waitFor(page, s => s.focus?.id === "groveStream", 20_000, "ride prompt");
   await page.keyboard.press("KeyE");
-  const north = await waitFor(page, s => (s as any).act2.groveStream !== "swimming" && s.mode === "explore" && s.player.z > -208, 30_000, "back on the north bank");
-  expect(north.player.frozen).toBe(false);
+  const returned = await waitFor(page, s => s.act2.groveStream !== "swimming" && s.mode === "explore" && Math.hypot(s.player.x - from.x, s.player.z - from.z) < .5, 30_000, "back on the starting bank");
+  expect(returned.player.frozen).toBe(false);
   expect(errors).toEqual([]);
 });
+}
 
-test("the cave: walk in through the mouth, explore it dark, pull the seal, open the chest", async ({ page }) => {
-  const errors = await enter(page, save(["forest1"], 68.6, -227, "leafy", p => p.solved.push("groveStream")));
-  await hook(page, "teleport", 68.6, -227, Math.PI / 2, true);
-  await hook(page, "renderFrames", 10);
+for (const fixture of [
+  { bank: "north", zone: "grove", granted: false },
+  { bank: "south", zone: "grove", granted: true },
+  { bank: "south", zone: "canopy", granted: false },
+] as const) {
+  test(`stream save migration: ${fixture.zone} save on ${fixture.bank} bank grants=${fixture.granted}`, async ({ page }) => {
+    const at = GROVE_STREAM_FERRY[fixture.bank];
+    const errors = await enter(page, save(["forest1", "grove", "canopy"], at.x, at.z, "bubbo", p => {
+      p.act2.zone = fixture.zone;
+      p.solved.push("groveLilies");
+    }));
+    expect((await state(page)).progress.solved.includes("groveStream")).toBe(fixture.granted);
+    expect(errors).toEqual([]);
+  });
+}
+
+async function walkIntoCave(page: Page, mouthIndex: number) {
+  const mouth = CAVE_MOUTHS[mouthIndex], portal = CAVE_PORTALS[mouthIndex];
+  const x = portal.at.x - portal.enter - .3;
+  await hook(page, "teleport", x, mouth.z, Math.PI / 2, true);
+  expect((await state(page)).player.layer).toBe("ground");
+  // Keyboard movement crosses the actual portal, without forcing a cave layer.
   for (const key of ["KeyD", "KeyW", "KeyS", "KeyA"]) {
     await page.keyboard.down(key);
     await page.waitForTimeout(900);
     await page.keyboard.up(key);
-    if ((await S(page)).player.layer === "cave") break;
+    if ((await state(page)).player.layer === "cave") break;
+    await hook(page, "teleport", x, mouth.z, Math.PI / 2, true);
   }
-  const inside = await waitFor(page, s => (s as any).player.layer === "cave" && (s as any).act2.cave.k >= 1, 20_000, "inside the cave");
+  return waitFor(page, s => s.player.layer === "cave" && s.act2.cave.k >= 1, 20_000, `inside via ${portal.id}`);
+}
+
+test("the cave: enter through mouth B on the Grove south bank", async ({ page }) => {
+  const mouth = CAVE_MOUTHS[1];
+  const errors = await enter(page, save(["forest1"], mouth.portalX - 1, mouth.z, "leafy", p => p.solved.push("groveStream")));
+  const inside = await walkIntoCave(page, 1);
+  expect(inside.lowland.visible).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("the cave: walk in through the mouth, explore it dark, pull the seal, open the chest", async ({ page }) => {
+  const mouth = CAVE_MOUTHS[0];
+  const chest = CHESTS.find(c => c.layer === "cave" && c.x === CAVE_CHEST.x && c.z === CAVE_CHEST.z)!;
+  const errors = await enter(page, save(["forest1"], mouth.portalX - 1, mouth.z, "leafy", p => p.solved.push("groveStream")));
+  const inside = await walkIntoCave(page, 0);
   expect(inside.act2.cave.spread).toBe(0);
   expect(inside.act2.cave.eyes).toBeGreaterThan(0);
   expect(inside.lowland.visible).toBe(false);
   await shots(page, "cave-dark");
-  await hook(page, "teleport", 71.6, -198.2, Math.atan2(2.2, -1), true, "cave");
+  await hook(page, "teleport", CAVE_CHAMBER.x, CAVE_CHAMBER.z, Math.atan2(CAVE_SEAL.x - CAVE_CHAMBER.x, CAVE_SEAL.z - CAVE_CHAMBER.z), true, "cave");
   await hook(page, "renderFrames", 10);
   await page.keyboard.press("KeyJ");
-  await waitFor(page, s => (s as any).progress.act2.secrets.includes("caveRootSeal"), 20_000, "seal pulled in the dark");
-  await hook(page, "teleport", 73, -198.8, Math.atan2(1.15, -.55), false, "cave");
-  await waitFor(page, s => s.focus?.id === "caveRootSealChest", 20_000, "chest in reach");
+  await waitFor(page, s => s.progress.act2.secrets.includes(chest.secret!), 20_000, "seal pulled in the dark");
+  const approach = { x: CAVE_ALCOVE.x + CAVE_ALCOVE.r, z: CAVE_ALCOVE.z };
+  await hook(page, "teleport", approach.x, approach.z, Math.atan2(CAVE_CHEST.x - approach.x, CAVE_CHEST.z - approach.z), false, "cave");
+  await waitFor(page, s => s.focus?.id === chest.id, 20_000, "chest in reach");
   await page.keyboard.press("KeyE");
-  const rich = await waitFor(page, s => (s as any).progress.act2.relics.includes("caveCrystal"), 30_000, "Glow Crystal");
-  expect(rich.progress.act2.coins).toBeGreaterThanOrEqual(45);
+  const rich = await waitFor(page, s => s.progress.act2.relics.includes(chest.relic!), 30_000, "Glow Crystal");
+  expect(rich.progress.act2.coins).toBeGreaterThanOrEqual(chest.coins);
   await shots(page, "cave-chest-dark");
   expect(errors).toEqual([]);
 });
 
 test("Can you make fire? lights the cave, and the lights persist after reloading", async ({ page }) => {
-  const errors = await enter(page, save(["forest1"], 64, -227, "ember", p => p.solved.push("groveStream")));
+  const mouth = CAVE_MOUTHS[0];
+  const errors = await enter(page, save(["forest1"], mouth.groundX0, mouth.z, "ember", p => p.solved.push("groveStream")));
   await hook(page, "goTo", "caveTorches");
   await waitFor(page, s => s.focus?.id === "caveTorches", 20_000, "ask at the mouth");
   await page.keyboard.press("KeyE");
   await tap(page, "canFire");
-  await waitFor(page, s => (s as any).act2.cave.spread > 0, 60_000, "brazier lit");
+  await waitFor(page, s => s.act2.cave.spread > 0, 60_000, "brazier lit");
   await shots(page, "torches-lighting");
   await waitFor(page, s => Boolean(s.prompt?.choices.includes("thankYou")), 60_000, "thank Ember");
   await tap(page, "thankYou");
@@ -128,8 +171,8 @@ test("Can you make fire? lights the cave, and the lights persist after reloading
   await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, s => s.mode === "explore", 90_000, "reloaded");
-  await hook(page, "teleport", 78.6, -214, Math.PI, true, "cave");
-  const lit = await waitFor(page, s => (s as any).act2.cave.spread >= 1 && (s as any).act2.cave.litTorches === 12, 20_000, "fully lit after reload");
+  await hook(page, "teleport", CAVE_ENTRY.x, CAVE_ENTRY.z, Math.PI, true, "cave");
+  const lit = await waitFor(page, s => s.act2.cave.spread >= 1 && s.act2.cave.litTorches === CAVE_TORCHES.length, 20_000, "fully lit after reload");
   expect(lit.progress.solved).toContain("caveTorches");
   await shots(page, "cave-lit");
   expect(errors).toEqual([]);
@@ -140,20 +183,21 @@ test("Upper Canopy: climb the rope, fall from an unstable leaf to a checkpoint, 
   await hook(page, "teleport", 96.9, -235.9, Math.PI, true);
   await waitFor(page, s => s.focus?.id === "upperCanopyUp", 15_000, "rope prompt");
   await page.keyboard.press("KeyE");
-  const top = await waitFor(page, s => s.mode === "explore" && !s.player.climbing && (s as any).player.layer === "high", 40_000, "on the leaves");
+  const top = await waitFor(page, s => s.mode === "explore" && !s.player.climbing && s.player.layer === "high", 40_000, "on the leaves");
   expect(top.player.y).toBeGreaterThan(19);
   expect(top.camera.profile).toBe("upper-canopy");
   await shots(page, "upper-top");
   await hook(page, "teleport", 104.4, -226.2, Math.PI, true, "high");
   await hook(page, "renderFrames", 10);
   await hook(page, "teleport", 98.4, -211.6, Math.PI, true, "high");
-  const back = await waitFor(page, s => s.act2.hp < 100 && !(s as any).player.falling && s.mode === "explore" && !s.player.frozen, 30_000, "fell and returned");
+  const back = await waitFor(page, s => s.act2.hp < 100 && !s.player.falling && s.mode === "explore" && !s.player.frozen, 30_000, "fell and returned");
   expect(back.player.layer).toBe("high");
   expect(Math.hypot(back.player.x - 104.4, back.player.z + 226.2)).toBeLessThan(.5);
   await hook(page, "teleport", 97, -234.3, Math.PI, true, "high");
   await waitFor(page, s => s.focus?.id === "upperCanopyDown", 15_000, "down prompt");
   await page.keyboard.press("KeyE");
-  const down = await waitFor(page, s => s.mode === "explore" && !s.player.climbing && (s as any).player.layer === "ground", 40_000, "back on the lower Canopy");
+  // The combat tick assigns the zone a frame after the layer switch.
+  const down = await waitFor(page, s => s.mode === "explore" && !s.player.climbing && s.player.layer === "ground" && s.act2.zone !== null, 40_000, "back on the lower Canopy");
   expect(down.act2.zone).toBe("canopy");
   expect(errors).toEqual([]);
 });
@@ -163,15 +207,15 @@ test("summit: the Summit Star, then Bubbo's bubble down to the Causeway", async 
   expect((await S(page)).player.layer).toBe("high");
   await waitFor(page, s => s.focus?.id === "summitChest", 15_000, "summit chest");
   await page.keyboard.press("KeyE");
-  await waitFor(page, s => (s as any).progress.act2.relics.includes("summitStar"), 30_000, "Summit Star");
+  await waitFor(page, s => s.progress.act2.relics.includes("summitStar"), 30_000, "Summit Star");
   await waitFor(page, s => s.mode === "explore", 30_000, "after the chest");
   await hook(page, "teleport", 76.8, -219.4, Math.PI, true, "high");
   await waitFor(page, s => s.focus?.id === "summitBubble", 15_000, "departure stone");
   await page.keyboard.press("KeyE");
   await tap(page, "canHelp");
-  await waitFor(page, s => (s as any).act2.bubble === "flying", 30_000, "floating");
+  await waitFor(page, s => s.act2.bubble === "flying", 30_000, "floating");
   await shots(page, "bubble-flying");
-  const landed = await waitFor(page, s => (s as any).act2.bubble === "idle" && s.mode === "explore" && !s.player.frozen, 60_000, "landed");
+  const landed = await waitFor(page, s => s.act2.bubble === "idle" && s.mode === "explore" && !s.player.frozen, 60_000, "landed");
   expect(landed.player.layer).toBe("ground");
   expect(landed.act2.zone).toBe("causeway");
   expect(Math.hypot(landed.player.x - 84.5, landed.player.z + 254.5)).toBeLessThan(.5);
@@ -185,7 +229,7 @@ test("the bubble lands in the lower Canopy until a walking route opens the Cause
   await enter(page, save(["forest1"], 76.8, -219.4, "bubbo", p => { p.act2.zone = "summit"; p.solved.push("summitBubble"); }, "high"));
   await waitFor(page, s => s.focus?.id === "summitBubble", 15_000, "departure stone");
   await page.keyboard.press("KeyE");
-  const landed = await waitFor(page, s => (s as any).act2.bubble === "idle" && s.mode === "explore" && !s.player.frozen && (s as any).player.layer === "ground", 90_000, "landed in the trees");
+  const landed = await waitFor(page, s => s.act2.bubble === "idle" && s.mode === "explore" && !s.player.frozen && s.player.layer === "ground", 90_000, "landed in the trees");
   expect(landed.act2.zone).toBe("canopy");
   expect(Math.hypot(landed.player.x - 96.9, landed.player.z + 235.9)).toBeLessThan(.5);
 });

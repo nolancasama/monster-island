@@ -133,7 +133,7 @@ const LAYER_PROFILES: readonly CameraProfile[] = [
   { ...DEFAULT_CAMERA, id: "cave", kind: "lowland", fixed: true, yaw: 0, pitch: 1.0, dist: 8, ahead: 1,
     contains: p => !p.cloud && p.layer === "cave" },
   // Treetops: the lower Canopy's angle, a little steeper over the drops.
-  { ...DEFAULT_CAMERA, id: "upper-canopy", kind: "lowland", yaw: .5, pitch: .7, dist: 12, ahead: 2,
+  { ...DEFAULT_CAMERA, id: "upper-canopy", kind: "lowland", fixed: true, yaw: .5, pitch: .7, dist: 12, ahead: 2,
     contains: p => !p.cloud && p.layer === "high" },
   // Fallback for any layer area without its own framing (never a ground view).
   { ...DEFAULT_CAMERA, id: "layer-default", kind: "lowland", contains: p => !p.cloud && (p.layer ?? "ground") !== "ground" },

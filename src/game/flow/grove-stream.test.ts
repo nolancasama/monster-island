@@ -42,7 +42,11 @@ beforeEach(() => {
 });
 afterEach(() => { resetRuntime(); setGame({ screen: "title", progress: newProgress() }); });
 
-it("asks, seats the rider for a three-second swim, and solves only after dismount", async () => {
+it.each(["north", "south"] as const)("asks on the %s bank, swims for three seconds, and solves only after dismount", async side => {
+  const from = GROVE_STREAM_FERRY[side], to = GROVE_STREAM_FERRY[side === "north" ? "south" : "north"];
+  Object.assign(rt.player, from);
+  Object.assign(rt.monsters.bubbo, from);
+  expect(findFocus()).toMatchObject({ id: "groveStream", verb: "Look at", noun: "the stream", ...from });
   expect(gatesOf(getGame().progress).solved).not.toContain("groveStream");
   await useObstacle("groveStream");
   expect(ask).toHaveBeenNthCalledWith(1, expect.objectContaining({ show: ["canSwim"] }));
@@ -51,7 +55,7 @@ it("asks, seats the rider for a three-second swim, and solves only after dismoun
   expect(swim.every(f => f.swimming && f.riding && !f.solved)).toBe(true);
   expect(swim.at(-1)!.time - swim[0].time).toBeCloseTo(3, 1);
   expect(swim.some(f => f.root < f.water && f.root > f.water - .4)).toBe(true);
-  expect(rt.player).toMatchObject({ ...GROVE_STREAM_FERRY.south, riding: false, frozen: false });
+  expect(rt.player).toMatchObject({ ...to, riding: false, frozen: false });
   expect(rt.monsters.bubbo.swimming).toBe(false);
   expect(getGame().progress.solved).toEqual(["groveStream"]);
   expect(gatesOf(getGame().progress).solved).toContain("groveStream");

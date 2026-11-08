@@ -13,12 +13,13 @@ import { CAVE, LAVA, MONSTER_STONE, RIVER, shoreZ } from "./world/island";
 import { findFocus } from "./flow/focus";
 import { talkTo } from "./flow/encounter";
 import { finaleEnding, stoneEnding } from "./flow/story";
-import { isRunning } from "./flow/script";
+import { isRunning, shot } from "./flow/script";
+import { bubbleCamera, pathPoint } from "./flow/summit";
 import { poofTo, companionSpot } from "./flow/companion";
 import { lookIntoDarkCave } from "./flow/obstacles";
 import { bubboSeat } from "./ride";
 import { canFight, companionVisible, cb, combatTick, inHostileZone, mountPose, mounted, playerRadius, rideK, riderSeatY, speedScale, hooks } from "./combat";
-import { lumoHidden, startAct2Scene, switchPlayerLayer } from "./flow/act2";
+import { gatherParty, lumoHidden, startAct2Scene, switchPlayerLayer } from "./flow/act2";
 import { portalSwitch } from "./world/layers";
 import { LEAF_STATE, UPPER_CHECKPOINTS, UPPER_LEAVES, refreshUpperHazards, stepLeaf } from "./world/upperCanopy";
 import { cloudTriggers } from "./flow/act3";
@@ -49,7 +50,7 @@ export function tick(dt: number) {
   if (!paused) rt.playTime += dt;
 
   const picking = rt.player.action?.kind === "pick" && rt.time - rt.player.action.t0 < PICK_TIME;
-  movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen && !picking);
+  if (rt.bubbleRide.phase === "idle") movePlayer(dt, g.mode === "explore" && !paused && !rt.player.frozen && !picking);
   if (debugEnabled && useDebug.getState().noclip) return;
 
   const act2 = g.progress.act2.started;
@@ -67,6 +68,9 @@ export function tick(dt: number) {
     if (MONSTERS[id].can.includes("fly") && (m.mode === "follow" || m.mode === "talk") && m.airTarget < 0.3) m.airTarget = 0.35;
     m.air += (m.airTarget - m.air) * Math.min(1, dt * 2.5);
   }
+
+  // Apply flight after monster behaviour so air easing cannot alter Bubbo's pose.
+  advanceBubbleRide();
 
   // Act 2's fights (held J repeats the basic attack).
   cb.hold = isAttackHeld("basic");
@@ -109,6 +113,51 @@ export function tick(dt: number) {
   if (g.progress.act3.world === "cloud") { audio.setNearness(.35, 0); return; }
   if (p.z < CLIFF_FOOT_Z + 1) audio.setNearness(1 - Math.min(1, Math.max(0, (p.z + 323) / 22)), 0);
   else audio.setNearness(1 - Math.min(1, Math.max(0, (shoreZ(p.x) - p.z) / 12)), 1 - Math.min(1, Math.abs(p.x - (RIVER.x0 + RIVER.x1) / 2) / 14));
+}
+
+/** Absolute simulation time keeps the flight continuous across variable frame lengths. */
+function advanceBubbleRide() {
+  const ride = rt.bubbleRide, p = rt.player, b = rt.monsters.bubbo;
+  if (ride.phase === "idle") return;
+  const elapsed = rt.time - ride.t0;
+  const flightStart = ride.t0 + ride.formDur, landingTime = flightStart + ride.dur;
+  p.vx = p.vz = p.speed = 0;
+  if (ride.phase === "forming") {
+    ride.k = Math.min(1, elapsed / ride.growDur);
+    if (rt.time < flightStart) return;
+    ride.phase = "flying";
+    audio.play("sparkle");
+  }
+  if (ride.phase === "flying") {
+    const u = rt.time >= landingTime ? 1 : (rt.time - flightStart) / ride.dur;
+    const e = u * u * (3 - 2 * u);
+    const [x, y, z] = pathPoint(ride.pts, e);
+    p.x = ride.x = x; p.z = ride.z = z;
+    p.y = p.floatY = ride.y = y + .12 * Math.sin(rt.time * 2.2) * (1 - e);
+    b.x = x + 1.3; b.z = z + .5;
+    b.air = Math.max(0, p.y - groundY(b.x, b.z) + .2);
+    ride.bubbo = { x: b.x, y: p.y + .2, z: b.z };
+    const view = bubbleCamera(ride.pts, e, ride.to);
+    shot({ x: view.cam[0], y: view.cam[1], z: view.cam[2] }, { x: view.look[0], y: view.look[1], z: view.look[2] });
+    if (u < 1) return;
+    const land = ride.pts[ride.pts.length - 1];
+    p.layer = "ground";
+    // Snap to the authored endpoint; spline arithmetic can retain tiny rounding errors.
+    p.x = ride.x = land[0]; p.z = ride.z = land[2];
+    p.y = ride.y = land[1]; p.floatY = null;
+    ride.phase = "popping";
+    audio.play("poof");
+    effect("sparkle", land[0], land[1] + 1.2, land[2]);
+    effect("poof", land[0], land[1] + .9, land[2]);
+    cb.safeUntil = Math.max(cb.safeUntil, rt.time + 2.5);
+    cb.calmUntil = rt.time + 2.5;
+    b.air = b.airTarget = 0;
+    gatherParty(true);
+  }
+  if (rt.time >= landingTime + .5) {
+    ride.phase = "idle";
+    ride.k = 0;
+  }
 }
 
 // ------------------------------------------------------------ player

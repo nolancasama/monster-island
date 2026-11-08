@@ -42,7 +42,7 @@ const HOME: Sample[] = [
   { profile: "forest-base", x: 75, z: -176 },
   { profile: "flooded-grove", x: 55, z: -225 },
   { profile: "ancient-canopy", x: 100, z: -212 },
-  { profile: "lowland", x: 76, z: -256 },
+  { profile: "ruined-causeway", x: 76, z: -256 },
   { profile: "port-gate", x: 76, z: -285 },
   { profile: "lowland-rope-foot", x: 75.5, z: -157.5 },
   { profile: "causeway-exit-rope", x: 96, z: -245 }

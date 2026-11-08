@@ -102,6 +102,8 @@ test("cave", async ({ page }) => {
   await enter(page, s);
   await hook(page, "combatFixture", { enemies: [] });
   await pose(page, "cave-mouth-outside", 64.5, -226.2, Math.PI / 2);
+  await pose(page, "cave-mouthB-outside", 65.5, -216.4, Math.PI / 2);
+  await pose(page, "cave-mouths-both", 62, -221.5, Math.PI / 2);
   // Walk in through the real portal.
   await hook(page, "teleport", 68.6, -227, Math.PI / 2, true);
   await hook(page, "renderFrames", 10);
@@ -116,7 +118,7 @@ test("cave", async ({ page }) => {
   await hook(page, "renderFrames", 30);
   await snap(page, "cave-walked-in");
   console.log("walked:", JSON.stringify((await state(page) as any).act2.cave), JSON.stringify((await state(page) as any).player));
-  for (const [name, x, z] of [["cave-mouth-tunnel", 74, -227.2], ["cave-east-arm", 78.6, -214], ["cave-bend", 81.6, -196.6], ["cave-head", 77, -191], ["cave-chamber", 71.2, -197.6]] as const) {
+  for (const [name, x, z] of [["cave-mouth-tunnel", 74, -227.2], ["cave-east-arm", 78.6, -214], ["cave-bend", 81.6, -196.6], ["cave-head", 77, -191], ["cave-chamber", 71.2, -197.6], ["cave-west-arm", 74.6, -208], ["cave-mouthB-tunnel", 72.4, -216.4]] as const) {
     if (ONLY && !name.includes(ONLY)) continue;
     await hook(page, "teleport", x, z, Math.PI, true, "cave");
     await hook(page, "renderFrames", 30);
@@ -156,7 +158,7 @@ test("cave puzzles", async ({ page }) => {
   await snap(page, "cave-spreading");
   await hook(page, "timeScale", 1);
   await waitFor(page, st => (st as any).act2.cave.spread >= 1, 30_000, "fully lit");
-  for (const [name, x, z] of [["lit-mouth-tunnel", 74, -227.2], ["lit-east-arm", 78.6, -214], ["lit-bend", 81.6, -196.6], ["lit-chamber", 71.2, -197.6]] as const) {
+  for (const [name, x, z] of [["lit-mouth-tunnel", 74, -227.2], ["lit-east-arm", 78.6, -214], ["lit-bend", 81.6, -196.6], ["lit-chamber", 71.2, -197.6], ["lit-west-arm", 74.6, -208], ["lit-mouthB-tunnel", 72.4, -216.4]] as const) {
     await hook(page, "teleport", x, z, Math.PI, true, "cave");
     await hook(page, "renderFrames", 30);
     await snap(page, name);
@@ -166,14 +168,14 @@ test("cave puzzles", async ({ page }) => {
   // Leafy pulls the root seal; the chest appears; it gives the Glow Crystal.
   await page.keyboard.press("Digit1");
   await waitFor(page, st => st.progress.active === "leafy", 10_000, "Leafy active");
-  await hook(page, "teleport", 71.6, -198.2, Math.atan2(73.8 - 71.6, -199.2 + 198.2), true, "cave");
+  await hook(page, "teleport", 70.2, -197.4, Math.atan2(67.6 - 70.2, -196.6 + 197.4), true, "cave");
   await hook(page, "renderFrames", 20);
   await snap(page, "seal-closed");
   await page.keyboard.press("KeyJ");
   await waitFor(page, st => (st as any).progress.act2.secrets.includes("caveRootSeal"), 20_000, "seal pulled");
   await hook(page, "renderFrames", 70);
   await snap(page, "seal-open-chest");
-  await hook(page, "teleport", 73.0, -198.8, Math.atan2(74.15 - 73, -199.35 + 198.8), false, "cave");
+  await hook(page, "teleport", 68.4, -196.9, Math.atan2(66.95 - 68.4, -196.35 + 196.9), false, "cave");
   await waitFor(page, st => st.focus?.id === "caveRootSealChest", 20_000, "chest in reach");
   await page.keyboard.press("KeyE");
   await waitFor(page, st => (st as any).progress.act2.relics.includes("caveCrystal"), 30_000, "relic granted");

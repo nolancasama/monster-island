@@ -129,8 +129,9 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
       continue;
     }
     if (isSolved(p, id) || !obstacleAvailable(p, id as ObstacleId)) continue;
-    const place = ACT2_PLACE[id];
-    add({ id, kind: "obstacle", verb: "Look at", noun: ACT2_NOUN[id], ...(id === "groveStream" ? { ja: "かわを みよう" } : id === "caveTorches" ? { ja: "たいまつを みよう" } : {}), x: place.x, z: place.z }, 2.6);
+    const places = id === "groveStream" ? Object.values(GROVE_STREAM_FERRY) : [ACT2_PLACE[id]];
+    for (const place of places)
+      add({ id, kind: "obstacle", verb: "Look at", noun: ACT2_NOUN[id], ...(id === "groveStream" ? { ja: "かわを みよう" } : id === "caveTorches" ? { ja: "たいまつを みよう" } : {}), x: place.x, z: place.z }, 2.6);
   }
   for (const s of Object.values(SERVICES)) add({ id: s.id, kind: "npc", ...SERVICE_FOCUS[s.id], x: s.keeper.x, z: s.keeper.z }, 2.8);
 }

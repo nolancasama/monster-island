@@ -188,9 +188,16 @@ export const rt = {
   /** Active stream rides save at their departure bank until dismount. */
   groveStreamFerry: { start: null as Vec2 | null },
   /** The cave's ancient lights: spread 0..1 along the route; a scripted flame jet. */
-  caveTorches: { spread: 0, animating: false, jet: null as null | { from: Vec3; to: Vec3; until: number } },
+  caveTorches: { spread: 0, originS: 0, animating: false, jet: null as null | { from: Vec3; to: Vec3; until: number } },
   /** Bubbo's bubble descent from the summit (the scene draws it from this). */
-  bubbleRide: { phase: "idle" as "idle" | "forming" | "flying" | "popping", k: 0, x: 0, y: 0, z: 0, bubbo: { x: 0, y: 0, z: 0 } },
+  bubbleRide: {
+    phase: "idle" as "idle" | "forming" | "flying" | "popping",
+    k: 0, x: 0, y: 0, z: 0, bubbo: { x: 0, y: 0, z: 0 },
+    /** Forming starts at t0; flight follows after formDur, then a half-second pop. */
+    t0: 0, dur: 0, formDur: 0, growDur: 0,
+    pts: [] as [number, number, number][],
+    to: "causeway" as "causeway" | "canopy"
+  },
   /** The bramble on the forest path: 1 = closed, 0 = gone. */
   bramble: 1,
   brambleTarget: 1,
@@ -238,6 +245,7 @@ export const PICK_TIME = 0.7;
 export function resetRuntime() {
   rt.groveStreamFerry.start = null;
   rt.caveTorches.spread = 0;
+  rt.caveTorches.originS = 0;
   rt.caveTorches.animating = false;
   rt.caveTorches.jet = null;
   rt.bubbleRide.phase = "idle";

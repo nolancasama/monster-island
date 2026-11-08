@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CAVE_CHAMBER, CAVE_ENTRY, CAVE_ROUTE_LENGTH, CAVE_STALAGMITES, caveWalkable, inCaveMouthStrip } from "./cave";
+import { CAVE_CHAMBER, CAVE_CHAMBER_S, CAVE_ENTRY, CAVE_ROUTE, CAVE_ROUTE_LENGTH, CAVE_STALAGMITES, caveRouteS, caveWalkable, inCaveMouthStrip } from "./cave";
 import { gatesOf, isWalkable, standY } from "./collision";
-import { CAVE_MOUTH, ENEMY_SPAWNS, MESA_OUTLINE, STAGES, inMesa, nearestOnTrail, zoneAt } from "./lowland";
+import { CAVE_MOUTH, CAVE_MOUTHS, ENEMY_SPAWNS, MESA_OUTLINE, STAGES, inMesa, nearestOnTrail, trailPoint, zoneAt } from "./lowland";
+import { HAZARDS } from "./hazards";
+import { SECRET_SITES } from "./elementObjects";
 import { portalSwitch } from "./layers";
 import { region } from "./region";
 import { decodeSave } from "../logic/save";
@@ -42,7 +44,7 @@ describe("the cave under the mountain", () => {
     expect(cells).toBeGreaterThan(2000);
   });
 
-  it("is a long route whose chamber is reached only along it", () => {
+  it("connects both entrances through the chamber, with rock between the arms", () => {
     expect(CAVE_ROUTE_LENGTH).toBeGreaterThanOrEqual(55);
     for (const r of [.35, .55]) {
       const { dist, step } = flood(r);
@@ -50,6 +52,9 @@ describe("the cave under the mountain", () => {
       expect(chamber, `radius ${r}`).toBeDefined();
       // 4-connected grid distance overestimates slightly; the route itself is >= 55 m.
       expect(chamber!).toBeGreaterThan(50);
+      const mouthB = CAVE_MOUTHS[1];
+      expect(dist.has(`${Math.round((mouthB.portalX + 1) / step)},${Math.round(mouthB.z / step)}`), `mouth B radius ${r}`).toBe(true);
+      expect(isWalkable(76.4, -210.4, gates, r, false, "cave")).toBe(false);
       for (const k of dist.keys()) {
         const [i, j] = k.split(",").map(Number), x = i * step, z = j * step;
         expect(zoneAt(x, z, "cave")).toBe("cave");
@@ -58,11 +63,14 @@ describe("the cave under the mountain", () => {
   });
 
   it("is entered through the mouth from the Grove, on foot and mounted, and the rock stays solid", () => {
-    for (const r of [.35, .55]) {
+    for (const mouth of CAVE_MOUTHS) for (const r of [.35, .55]) {
       // The ground pocket reaches past the portal's dead band.
-      expect(isWalkable(CAVE_MOUTH.portalX + .5, CAVE_MOUTH.z, gates, r, false, "ground"), `ground ${r}`).toBe(true);
-      expect(isWalkable(CAVE_MOUTH.portalX - .5, CAVE_MOUTH.z, gates, r, false, "cave"), `cave ${r}`).toBe(true);
-      expect(zoneAt(CAVE_MOUTH.portalX + .5, CAVE_MOUTH.z)).toBe("grove");
+      expect(isWalkable(mouth.portalX + .5, mouth.z, gates, r, false, "ground"), `ground ${mouth.z} ${r}`).toBe(true);
+      expect(isWalkable(mouth.portalX - .5, mouth.z, gates, r, false, "cave"), `cave ${mouth.z} ${r}`).toBe(true);
+      expect(zoneAt(mouth.portalX + .5, mouth.z)).toBe("grove");
+      expect(portalSwitch("ground", mouth.portalX + .5, mouth.z)).toBe("cave");
+      expect(portalSwitch("cave", mouth.portalX - .5, mouth.z)).toBe("ground");
+      expect(portalSwitch("cave", mouth.portalX, mouth.z)).toBeNull();
     }
     expect(portalSwitch("ground", CAVE_MOUTH.portalX + .5, CAVE_MOUTH.z)).toBe("cave");
     expect(portalSwitch("cave", CAVE_MOUTH.portalX - .5, CAVE_MOUTH.z)).toBe("ground");
@@ -70,12 +78,38 @@ describe("the cave under the mountain", () => {
     // Nobody on the ground walks into the rock, even beside the mouth.
     for (let z = CAVE_MOUTH.z0; z <= CAVE_MOUTH.z1; z += .2) expect(isWalkable(71.2, z, gates, .35, false, "ground")).toBe(false);
     expect(zoneAt(76, -215)).toBeNull();
-    expect(zoneAt(74.5, -215, "cave")).toBeNull(); // the solid stem west of the east arm
+    expect(zoneAt(74.5, -215, "cave")).toBe("cave"); // the new west arm
+  });
+
+  it("keeps the second ground pocket clear of the east pool and dry reeds", () => {
+    const mouth = CAVE_MOUTHS[1];
+    const pool = HAZARDS.find(h => h.id === "groveEastPool")!.shape;
+    expect(pool.kind).toBe("disc");
+    if (pool.kind !== "disc") return;
+    const dx = Math.max(mouth.groundX0 - pool.x, 0, pool.x - mouth.groundX1);
+    const dz = Math.max(mouth.z0 - pool.z, 0, pool.z - mouth.z1);
+    expect(Math.hypot(dx, dz)).toBeGreaterThan(pool.r);
+    const reeds = SECRET_SITES.groveDryReeds.blocker;
+    expect(reeds.kind).toBe("box");
+    if (reeds.kind !== "box") return;
+    expect(mouth.z0).toBeGreaterThan(reeds.z + reeds.hz);
+  });
+
+  it("maps chamber lighting to the middle of the route and continues down the west arm", () => {
+    expect(caveRouteS(CAVE_CHAMBER.x, CAVE_CHAMBER.z)).toBe(CAVE_CHAMBER_S);
+    expect(CAVE_CHAMBER_S).toBeLessThan(CAVE_ROUTE_LENGTH - 20);
+    const west = trailPoint(CAVE_ROUTE, CAVE_ROUTE_LENGTH - 10);
+    expect(caveRouteS(west.x, west.z)).toBeCloseTo(CAVE_ROUTE_LENGTH - 10);
+    expect(caveRouteS(68.6, -216.4)).toBeCloseTo(CAVE_ROUTE_LENGTH);
   });
 
   it("stands its floor near the Grove's height and its stalagmites are solid", () => {
     const y = standY(CAVE_CHAMBER.x, CAVE_CHAMBER.z, [], "cave");
     expect(Math.abs(y - standY(CAVE_MOUTH.portalX, CAVE_MOUTH.z, [], "ground"))).toBeLessThan(.6);
+    for (const mouth of CAVE_MOUTHS) {
+      const x = mouth.portalX + .5;
+      expect(Math.abs(standY(x, mouth.z, [], "cave") - standY(x, mouth.z, [], "ground")), `mouth ${mouth.z}`).toBeLessThan(.6);
+    }
     for (const s of CAVE_STALAGMITES) {
       expect(caveWalkable(s.x, s.z, 0)).toBe(true);
       expect(isWalkable(s.x, s.z, gates, .35, false, "cave")).toBe(false);

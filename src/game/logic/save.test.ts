@@ -319,7 +319,7 @@ describe("forest layout save migration", () => {
       const back = decodeSave(encodeSave(p, { ...position, yaw: .7 }, 87))!;
       expect(isWalkable(back.player.x, back.player.z, gatesOf(back.progress), PLAYER_R)).toBe(true);
       expect(Math.hypot(back.player.x - position.x, back.player.z - position.z)).toBeLessThan(8);
-      expect(back.progress).toEqual(solve(solve(p, "canopyAscentRope"), "groveStream"));
+      expect(back.progress).toEqual(solve(p, "canopyAscentRope"));
       expect(back.player.yaw).toBe(.7);
       expect(back.seconds).toBe(87);
     }
@@ -387,10 +387,10 @@ describe("forest layout save migration", () => {
   });
 
   it.each([
-    { zone: "grove", x: 66, z: -202 },
-    { zone: "grove", x: 59, z: -232 },
-    { zone: "canopy", x: 114, z: -233.25 },
-  ] as const)("projects removed $zone floor onto nearby ground in that same zone", ({ zone, x, z }) => {
+    { zone: "grove", x: 66, z: -202, streamSolved: false },
+    { zone: "grove", x: 59, z: -232, streamSolved: true },
+    { zone: "canopy", x: 114, z: -233.25, streamSolved: false },
+  ] as const)("projects removed $zone floor onto nearby ground in that same zone", ({ zone, x, z, streamSolved }) => {
     const p = chapter();
     p.act2.zone = zone; p.act2.cleared = [...STAGES];
     p.act2.secrets = [...SECRET_IDS];
@@ -405,7 +405,7 @@ describe("forest layout save migration", () => {
     expect(back.progress.act2.zone).toBe(zone);
     expect(back.progress.act2.secrets).toEqual(p.act2.secrets);
     expect(back.progress.act2.chests).toEqual(p.act2.chests);
-    expect(back.progress.solved).toEqual([...p.solved, "canopyAscentRope", "groveStream"]);
+    expect(back.progress.solved).toEqual([...p.solved, "canopyAscentRope", ...(streamSolved ? ["groveStream"] : [])]);
     expect(decodeSave(encodeSave(back.progress, back.player, back.seconds))).toEqual(back);
   });
 

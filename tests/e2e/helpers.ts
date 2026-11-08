@@ -19,6 +19,7 @@ export interface MiState {
       cleared: string[]; started: boolean; lumoTaken: boolean; descended: boolean; hp: number; mp: Record<string, number>; coins: number;
       items: { amber?: number }; upgrades: string[]; chests: string[]; tutorial: string[]; checkpoint: string;
       portFound: boolean; bought: boolean; harbor: boolean; trained: string[]; zone: string | null;
+      secrets: string[]; relics: string[];
     };
   };
   objective: { id: string; [k: string]: unknown };
@@ -37,7 +38,7 @@ export interface MiState {
     question: string | null;
   } | null;
   line: { by: string; en: string } | null;
-  player: { x: number; z: number; y: number; yaw: number; ground: number; riding: boolean; climbing: boolean; frozen: boolean; safeGround: { x: number; z: number } | null };
+  player: { layer: "ground" | "cave" | "high"; falling: boolean; x: number; z: number; y: number; yaw: number; ground: number; riding: boolean; climbing: boolean; frozen: boolean; safeGround: { x: number; z: number } | null };
   monsters: Record<string, { x: number; z: number; mode: string; visible: boolean; air: number }>;
   palm: number;
   stones: number;
@@ -51,10 +52,14 @@ export interface MiState {
   gate: number;
   starGlow: number;
   finale: "idle" | "rise" | "maple" | "complete";
-  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; mode: string };
+  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; mode: string; profile: string; yaw: number };
+  lowland: { visible: boolean };
   perf: { calls: number; triangles: number; fps: number };
   playTime: number;
   act2: {
+    groveStream: "idle" | "boarding" | "swimming" | "dismounting" | "complete";
+    cave: { inside: boolean; k: number; eyes: number; spread: number; litTorches: number; sealOpen: number };
+    bubble: "idle" | "forming" | "flying" | "popping";
     scene: string;
     zone: string | null;
     stance: { friend: string | null; k: number };

@@ -303,11 +303,10 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
     || p.act2.zone === "canopy" || onDeck || entranceStair || exitStair) && !p.solved.includes("canopyAscentRope")) {
     p.solved.push("canopyAscentRope");
   }
-  // Grant access on read for players already beyond this new entrance puzzle.
-  // The lily pond's own unlock is only a migration precedent, never a ferry flag.
-  if (p.act2.started && !p.solved.includes("groveStream") && (p.act2.cleared.some(id => id !== "forest1")
-    || p.solved.includes("groveLilies") || (p.act2.zone === "grove" && Number.isFinite(savedX)
-      && Number.isFinite(savedZ) && groveStreamSide(savedX, savedZ) === "south"))) {
+  // Only a saved position beyond the stream grants this new entrance puzzle.
+  // Earlier clears and the independent lily pond leave the first question intact.
+  if (p.act2.started && !p.solved.includes("groveStream") && p.act2.zone === "grove" && Number.isFinite(savedX)
+    && Number.isFinite(savedZ) && groveStreamSide(savedX, savedZ) === "south") {
     p.solved.push("groveStream");
   }
   // Validate position after migration and progression sanitization, against the

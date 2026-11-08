@@ -3,7 +3,7 @@ import { OBSTACLES, newProgress, type Progress } from "./progress";
 import { ACT2_OBSTACLES, openChest } from "./act2";
 import { secretEvent } from "./secrets";
 import { decodeSave, encodeSave } from "./save";
-import { CAVE_BRAZIERS, CAVE_CHEST, CAVE_SEAL, CAVE_TORCHES, CAVE_ROUTE_LENGTH, caveWalkable, isCaveFlame } from "../world/cave";
+import { CAVE_BRAZIERS, CAVE_CHEST, CAVE_SEAL, CAVE_TORCHES, CAVE_CHAMBER_S, CAVE_ROUTE_LENGTH, caveWalkable, isCaveFlame } from "../world/cave";
 import { ELEMENT_OBJECTS } from "../world/elementObjects";
 import { isWalkable, type Gates } from "../world/collision";
 import { CHESTS } from "../world/lowland";
@@ -48,7 +48,9 @@ describe("Ember's cave torches", () => {
     }
     const s = CAVE_TORCHES.map(t => t.s);
     expect([...s].sort((a, b) => a - b)).toEqual(s);
-    expect(s.filter(v => v === CAVE_ROUTE_LENGTH)).toHaveLength(2);
+    expect(s.filter(v => v === CAVE_CHAMBER_S)).toHaveLength(2);
+    expect(s.some(v => v > CAVE_CHAMBER_S + 15)).toBe(true);
+    expect(CAVE_BRAZIERS.map(b => b.s)).toEqual([0, 0, CAVE_ROUTE_LENGTH, CAVE_ROUTE_LENGTH]);
   });
 });
 
@@ -60,11 +62,12 @@ describe("Leafy's root seal and the cave chest", () => {
     expect(pulled.secrets).toEqual(["caveRootSeal"]);
     // Fire and wind do nothing to it.
     expect(secretEvent("caveRootSeal", "burn", { secrets: [], objects: {} }).secrets).toEqual([]);
-    const behind = { x: CAVE_CHEST.x - .9 * Math.cos(CAVE_CHEST.yaw), z: CAVE_CHEST.z };
     const shut: Gates = { solved: [], act2: true, secrets: [] };
-    expect(isWalkable(CAVE_SEAL.x + .5 * Math.sin(CAVE_SEAL.yaw), CAVE_SEAL.z + .5 * Math.cos(CAVE_SEAL.yaw), shut, .35, false, "cave")).toBe(false);
-    expect(isWalkable(CAVE_SEAL.x + .5 * Math.sin(CAVE_SEAL.yaw), CAVE_SEAL.z + .5 * Math.cos(CAVE_SEAL.yaw), { ...shut, secrets: ["caveRootSeal"] }, .35, false, "cave")).toBe(true);
-    expect(behind).toBeDefined();
+    const stand = { x: CAVE_SEAL.x + .5 * Math.sin(CAVE_SEAL.yaw), z: CAVE_SEAL.z + .5 * Math.cos(CAVE_SEAL.yaw) };
+    expect(isWalkable(stand.x, stand.z, shut, .35, false, "cave")).toBe(false);
+    expect(isWalkable(stand.x, stand.z, { ...shut, secrets: ["caveRootSeal"] }, .35, false, "cave")).toBe(true);
+    expect(Math.hypot(stand.x - CAVE_CHEST.x, stand.z - CAVE_CHEST.z)).toBeLessThan(1);
+    expect(CHESTS.find(c => c.id === "caveRootSealChest")).toMatchObject(CAVE_CHEST);
   });
 
   it("hides its treasure until the seal is open, and gives the Glow Crystal once", () => {

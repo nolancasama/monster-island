@@ -216,7 +216,12 @@ export const groveDoorOpen = (cleared: boolean, distance: number, wasOpen: boole
 /** The cave mouth on the mesa's west face (Grove south bank). The ground pocket
  * reaches the rock's 1.5 m clearance; the cave layer's floor overlaps it from
  * x0, and the portal line at portalX switches layer (world/cave.ts). */
-export const CAVE_MOUTH = { z: -227, portalX: 69.6, x0: 67, x1: 73.6, z0: -229, z1: -225, groundX1: 70.8 };
+export const CAVE_MOUTH = { z: -227, portalX: 69.6, x0: 67, x1: 73.6, z0: -229, z1: -225, groundX0: 66.5, groundX1: 70.8 };
+/** Both west-face entrances open onto the Grove's south bank. Mouth B's
+ * approach starts east of the pool and north of the dry-reed reward pocket. */
+export const CAVE_MOUTHS = [CAVE_MOUTH,
+  { z: -216.4, portalX: 69.3, x0: 67, x1: 73.6, z0: -218.1, z1: -214.7, groundX0: 67.8, groundX1: 70.4 },
+];
 
 /** Central rock footprint shared by the landmark and collision. Never add walk shapes here. */
 export const MESA_OUTLINE: Array<[number, number]> = [
@@ -329,8 +334,8 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       disc(48, -232.5, 11.6),
       rect(48.5, 63.4, -207, -186),
       rect(51, 69, -240, -205),
-      // The cave mouth's approach, up to the mesa's clearance (it stays solid rock).
-      rect(66.5, CAVE_MOUTH.groundX1, CAVE_MOUTH.z0, CAVE_MOUTH.z1),
+      // The cave approaches stop at the mesa's clearance (it stays solid rock).
+      ...CAVE_MOUTHS.map(mouth => rect(mouth.groundX0, mouth.groundX1, mouth.z0, mouth.z1)),
       rect(32, 51.5, -240, -203),
       rect(51, 67.8, -205, -203),
       rect(51, 65.8, -203, -201),
@@ -661,7 +666,7 @@ export const CHESTS: ChestDef[] = [
   { id: "canopyTreasureLedge", close: true, x: 85.5, z: -210, yaw: -.5, coins: 25, amber: 1 },
   ...SECRET_IDS.map(secret => ({ id: `${secret}Chest`, secret, ...SECRET_SITES[secret].chest, yaw: 0, coins: 20, amber: 1 })),
   // Behind Leafy's root seal at the back of the cave (cave layer; see world/cave.ts CAVE_CHEST).
-  { id: "caveRootSealChest", secret: "caveRootSeal", layer: "cave", close: true, x: 74.15, z: -199.35, yaw: -1.13, coins: 45, amber: 2, relic: "caveCrystal" },
+  { id: "caveRootSealChest", secret: "caveRootSeal", layer: "cave", close: true, x: 66.95, z: -196.35, yaw: 1.91, coins: 45, amber: 2, relic: "caveCrystal" },
   // The ornate chest on the mountain summit (high layer; see world/upperCanopy.ts SUMMIT_CHEST).
   { id: "summitChest", layer: "high", close: true, x: 77.6, z: -207.2, yaw: .4, coins: 60, amber: 3, relic: "summitStar" },
 ];

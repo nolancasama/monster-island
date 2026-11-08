@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PartBuilder } from "../partBuilder";
 import { bridgeDeck } from "./bridge";
+import { caveBrazierGeometry, caveMouthGeometry } from "./cave";
 import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
 import { armGeometry, bodyGeometry, KNEE_Y, shinGeometry, thighGeometry, type Outfit } from "./people";
@@ -794,7 +795,12 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
       b.cyl(0.11, 0.14, 1.3, g.x + dx, y - 0.1, z, "#7a5532", 6);
   }
   canopyRim(b);
-  return b.build();
+  // Keep both cave mouths in the existing scenery tiles, with no separate draw or near gate.
+  const parts = [b.build(), caveMouthGeometry(), caveBrazierGeometry()];
+  const merged = mergeGeometries(parts, false);
+  parts.forEach(g => g.dispose());
+  merged.computeBoundingSphere();
+  return merged;
 }
 
 /** A joined channel ribbon: shared banks at bends and tapered, rounded ends. */

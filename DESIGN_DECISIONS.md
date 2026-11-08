@@ -1,5 +1,42 @@
 # Design Decisions
 
+## 2026-11-08: Two-entrance U cave and darkness
+
+- The cave is a true U with both mouths on the Grove's south bank. Mouth A at z -227 retains its east
+  arm and bend; the chamber connects south along the new west arm (x about 74.6) to mouth B at
+  (68.6, -216.4). This implements the November 7 playtest decision and replaces the single-ended J.
+  Mouth B has a separate ground pocket and layer portal; its pocket stays clear of the east pool
+  and dry reeds. Both pockets are removed in the golden baseline test to prove other ground behavior
+  remains unchanged.
+- The root-seal/chest alcove moves west of the chamber to (67.6, -196.6), radius .85, clearing the new
+  arm's departure. Route distance continues through the chamber and along the west arm. Both mouths
+  offer Ember's existing English interaction; direct fire on any brazier or torch starts light spread
+  from that object's route position in both directions. Save v4 and existing puzzle/reward IDs remain.
+- Both arches, dark openings and brazier bodies join the static lowland props geometry and its existing
+  tiles. Only the outside flames and scripted fire jet remain dynamic; the independent 30 m mouth
+  visibility gate is removed, with no additional scenery draw.
+- The unlit cave is deliberately pitch black and almost unplayable: ambient .01, local silhouette .045,
+  and mushroom/crystal/seal-moss glow at 3%. The fully lit appearance retains ambient .1, silhouette .1
+  and full glow. The fixed camera and floor-derived camera-side wall lips apply to both arms.
+- The carved fire channel has its own material instance: no ambient and a .012 silhouette until lit.
+  With the shared cave material it traced the whole route in the dark (judged from captures), which
+  undercut "almost unplayable".
+
+## 2026-11-08: First stream crossing, bubble flight, treetop camera
+
+- An old save gets `groveStream` on read only if it was saved in the Grove south of the stream. Earlier
+  clears and the lily pond no longer grant it, so existing players meet "Can you swim?" once. The unsolved
+  ask is offered at both banks, and the first ferry starts from the bank the player is on. Rejected:
+  granting it to anyone past the Grove (the old rule), which hid the English moment from everyone who had
+  already played.
+- Bubbo's bubble flight is advanced by the per-frame sim tick from absolute time (`rt.bubbleRide` holds
+  t0, durations and path). The script only starts it and waits for landing. The old async `wait(16)` loop
+  stuttered at uneven frame rates.
+- The `upper-canopy` camera is `fixed`: the lowland bank, floor and mesa lifts made it zoom into the sky over
+  leaves and the summit. The Upper Canopy draws when the player is on the high layer, or while the lowland
+  draws and the player is within 70 m of (95, -215), replacing a 120 m camera radius that reached the
+  volcano tunnel and Sanctuary.
+
 ## 2026-10-30 — Opt-in playtest debug controls
 
 - The debug menu and DEBUG badge are available only with `?debug=1` or in

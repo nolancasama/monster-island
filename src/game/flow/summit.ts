@@ -1,11 +1,8 @@
 import { getGame, setGame, toast } from "../store";
-import { animate, effect, rt } from "../runtime";
-import { cb } from "../combat";
+import { animate, rt } from "../runtime";
 import { say, wait } from "./ask";
 import { shot } from "./script";
-import { gatherParty } from "./act2";
 import { audio } from "../../audio/audio";
-import { groundY } from "../world/island";
 import { standY } from "../world/collision";
 import { mesaCameraLift } from "../world/mesa";
 import { BUBBLE_LANDING, SUMMIT_DEPARTURE } from "../world/upperCanopy";
@@ -79,43 +76,14 @@ export async function bubbleDescent(first: boolean) {
   audio.play("whoosh");
   // The bubble grows around the player.
   ride.phase = "forming"; ride.x = p.x; ride.y = p.y; ride.z = p.z; ride.k = 0;
-  const t0 = rt.time;
-  while (rt.time - t0 < (first ? 1.4 : .8)) {
-    ride.k = Math.min(1, (rt.time - t0) / (first ? 1.2 : .7));
-    await wait(16);
-  }
-  ride.k = 1;
-  ride.phase = "flying";
-  audio.play("sparkle");
-  const dur = first ? 9.5 : 8, t1 = rt.time;
-  for (;;) {
-    const u = Math.min(1, (rt.time - t1) / dur), e = u * u * (3 - 2 * u);
-    const [x, y, z] = pathPoint(pts, e);
-    p.x = x; p.z = z; p.floatY = y + .12 * Math.sin(rt.time * 2.2) * (1 - e);
-    ride.x = x; ride.y = p.floatY; ride.z = z;
-    // Bubbo floats alongside in his own small bubble.
-    b.x = x + 1.3; b.z = z + .5; b.air = Math.max(0, p.floatY - groundY(b.x, b.z) + .2);
-    ride.bubbo = { x: b.x, y: p.floatY + .2, z: b.z };
-    const view = bubbleCamera(pts, e, to);
-    shot({ x: view.cam[0], y: view.cam[1], z: view.cam[2] }, { x: view.look[0], y: view.look[1], z: view.look[2] });
-    if (u >= 1) break;
-    await wait(16);
-  }
-  // Land, pop, and return to ordinary play with a short calm.
-  const land = pts[pts.length - 1];
-  p.layer = "ground";
-  p.x = land[0]; p.z = land[2]; p.floatY = null;
-  ride.phase = "popping";
-  audio.play("poof");
-  effect("sparkle", land[0], land[1] + 1.2, land[2]);
-  effect("poof", land[0], land[1] + .9, land[2]);
-  cb.safeUntil = Math.max(cb.safeUntil, rt.time + 2.5);
-  cb.calmUntil = rt.time + 2.5;
-  b.air = b.airTarget = 0;
-  gatherParty(true);
-  await wait(500);
-  ride.phase = "idle";
-  ride.k = 0;
+  ride.t0 = rt.time;
+  ride.dur = first ? 9.5 : 8;
+  ride.formDur = first ? 1.4 : .8;
+  ride.growDur = first ? 1.2 : .7;
+  ride.pts = pts;
+  ride.to = to;
+  // The simulation owns all ride motion and phase transitions.
+  while (rt.bubbleRide.phase !== "idle") await wait(16);
   p.frozen = false;
   rt.camera.mode = "follow";
   rt.camera.shot = null;
