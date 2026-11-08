@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PartBuilder } from "../partBuilder";
 import { bridgeDeck } from "./bridge";
-import { caveBrazierGeometry, caveMouthGeometry, caveMouthWallQuads } from "./cave";
+import { caveBrazierGeometry, caveMouthGeometry, caveMouthWallQuads, caveMouthTerrainPolygons } from "./cave";
 import { mesaTopGeometry } from "./mesaTop";
 import { DECK_HALF } from "../../game/world/lowland";
 import { between, rockGeometry } from "./nature";
@@ -359,8 +359,11 @@ export function lowlandTerrainTiles(size = 48): THREE.BufferGeometry[] {
           my = (a.y + b.y + cc.y) / 3,
           mz = (a.z + b.z + cc.z) / 3;
         groundColor(mx, mz, my, steep, col);
-        for (const v of [a, b, cc]) {
-          bucket.p.push(v.x, v.y, v.z);
+        const vertices = [a, b, cc].map(v => [v.x, v.y, v.z] as [number, number, number]);
+        // Only triangles next to the two mouths need the render-only cavity cut.
+        const polygons = x >= 70 && x <= 76 && z >= -232 && z <= -212 ? caveMouthTerrainPolygons(vertices) : [vertices];
+        for (const polygon of polygons) for (let k = 1; k + 1 < polygon.length; k++) for (const v of [polygon[0], polygon[k], polygon[k + 1]]) {
+          bucket.p.push(...v);
           bucket.c.push(col.r, col.g, col.b);
         }
       }

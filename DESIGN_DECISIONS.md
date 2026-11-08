@@ -2573,10 +2573,13 @@ Causeway door, Causeway 14 → 8 enemies, enemies vanish only past the door. Acc
   It merges into the existing mesa draw; the rest of that batch retains faceted normals. Existing
   summit furniture, rim, strata, elevation and root bridge stay in place. Small weathered fragments
   sit within the existing standing stones' solid footprints and join the existing summit batch.
-- **Both cave mouths:** shaped rock lips follow each mouth's actual west mesa face, projecting about
-  half a metre. Shared arch profiles cut matching apertures in the base-stratum wall, with side and
-  ceiling reveals running 2.2 m from the lip into a nearly black throat. This replaces the uncut wall
-  and flat dark facade, including at mouth B. The buried skirt stays closed. Mouths and braziers remain
+- **Both cave mouths (rev2 correction):** uneven faceted wedges and overlapping rock lumps follow each
+  mouth's actual west mesa face, with varied widths, heavier side bases and the mesa's warm/cool rock
+  palette. Their outer edges bury into the wall, replacing the uniform dark beam and its light seam.
+  Shared arch profiles cut matching apertures in the base-stratum wall, with side and ceiling reveals
+  running 2.2 m from the inner lip into a nearly black throat. The render terrain is clipped precisely
+  out of each recess and a black floor closes its bottom: the sloped green/brown ground no longer fills
+  the arch from the Grove gameplay lens. The buried mesa skirt stays closed. Mouths and braziers remain
   baked into the same lowland props tiles, with no additional draws or visibility gates. All new rock
   stays east of the complete ground approach pockets; portals, walk heights, collision and braziers
   are unchanged. Geometry tests cover the recesses and Grove camera-to-player sight lines.

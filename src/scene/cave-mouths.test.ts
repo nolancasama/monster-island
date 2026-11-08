@@ -4,13 +4,14 @@ import { groundY } from "../game/world/island";
 import { CAVE_MOUTHS } from "../game/world/lowland";
 import { CAMERA_PROFILES } from "./cameraProfiles";
 import { caveMouthGeometry } from "./models/cave";
-import { mesaGeometry } from "./models/lowland";
+import { lowlandTerrainTiles, mesaGeometry } from "./models/lowland";
 
 const material = new THREE.MeshBasicMaterial();
 const mouthGeometry = caveMouthGeometry();
 const mouths = new THREE.Mesh(mouthGeometry, material), mesa = new THREE.Mesh(mesaGeometry(), material);
 mouths.updateMatrixWorld(); mesa.updateMatrixWorld();
-afterAll(() => { mouthGeometry.dispose(); mesa.geometry.dispose(); material.dispose(); });
+const terrain = lowlandTerrainTiles().map(g => { const mesh = new THREE.Mesh(g, material); mesh.updateMatrixWorld(); return mesh; });
+afterAll(() => { mouthGeometry.dispose(); mesa.geometry.dispose(); terrain.forEach(m => m.geometry.dispose()); material.dispose(); });
 const faceX = (z: number) => z < -222 ? 72 + (-222 - z) / 9 : 72;
 
 describe("static recessed Grove cave mouths", () => {
@@ -32,9 +33,27 @@ describe("static recessed Grove cave mouths", () => {
       const p = mouthGeometry.getAttribute("position");
       const depths = Array.from({ length: p.count }, (_, i) => i).filter(i => Math.abs(p.getZ(i) - mouth.z) < 3)
         .map(i => p.getX(i) - faceX(p.getZ(i)));
-      expect(Math.min(...depths)).toBeCloseTo(-.57, 4);
+      expect(Math.min(...depths)).toBeLessThan(-.7);
       expect(depths.some(d => Math.abs(d - .55) < .001)).toBe(true);
-      expect(Math.max(...depths)).toBeCloseTo(1.75, 4);
+      expect(Math.max(...depths)).toBeCloseTo(1.8, 4);
+    });
+
+    it(`mouth ${index + 1} has no terrain rising through its opening from the Grove lens`, () => {
+      const frame = CAMERA_PROFILES.find(p => p.id === "flooded-grove")!;
+      const y = groundY(70.4, mouth.z);
+      for (const dz of [-.8, 0, .8]) for (const h of [.15, .7, 1.4, 2]) {
+        // Follow the Grove viewing direction from the aperture into the recess.
+        // Ground before the lip is the retained approach, not an interior obstruction.
+        const target = new THREE.Vector3(faceX(mouth.z + dz) - .45, y + h, mouth.z + dz);
+        const direction = new THREE.Vector3(-Math.sin(frame.yaw), -Math.tan(frame.pitch), -Math.cos(frame.yaw)).normalize();
+        const ray = new THREE.Raycaster(target, direction);
+        const hit = ray.intersectObjects([mouths, mesa, ...terrain])[0];
+        expect(hit?.object === mouths, `height ${h}, offset ${dz}; hit ${hit?.point.toArray()}`).toBe(true);
+      }
+      const floor = new THREE.Raycaster(new THREE.Vector3(faceX(mouth.z) + .5, y, mouth.z), new THREE.Vector3(0, -1, 0));
+      const hit = floor.intersectObjects([mouths, ...terrain])[0];
+      expect(hit?.object === mouths).toBe(true);
+      expect(hit.point.y).toBeCloseTo(y - .45, 4);
     });
 
     it(`mouth ${index + 1} keeps the complete approach pocket and Grove player sight lines clear`, () => {
@@ -54,7 +73,7 @@ describe("static recessed Grove cave mouths", () => {
   }
 
   it("keeps both mouths in a single small static geometry with the props' attributes", () => {
-    expect(mouthGeometry.getAttribute("position").count / 3).toBeLessThan(200);
+    expect(mouthGeometry.getAttribute("position").count / 3).toBeLessThan(600);
     for (const name of ["normal", "color", "uv"]) expect(mouthGeometry.getAttribute(name).count).toBe(mouthGeometry.getAttribute("position").count);
     expect(mouthGeometry.groups).toEqual([]);
   });

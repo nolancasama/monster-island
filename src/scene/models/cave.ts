@@ -4,6 +4,7 @@ import { makeRng } from "../../game/logic/rng";
 import { CAVE_ALCOVE, CAVE_BRAZIERS, CAVE_CHAMBER, CAVE_ROUTE, CAVE_ROUTE_LENGTH, CAVE_SEAL, CAVE_STALAGMITES, CAVE_TORCHES, caveClearance, caveFloorY, caveRouteS, caveWalkable } from "../../game/world/cave";
 import { CAVE_MOUTHS, MESA_OUTLINE } from "../../game/world/lowland";
 import { groundY } from "../../game/world/island";
+import { rockGeometry } from "./nature";
 
 /**
  * The cave's meshes. Floor and walls follow the walkable clearance field
@@ -293,9 +294,46 @@ export function caveMouthWallQuads(a: MouthVertex, b: MouthVertex, c: MouthVerte
   return out;
 }
 
-/** Shaped rock lips, 2.2 m deep reveals and shaded throats, all in the static props batch. */
+/** Clip the render terrain out of the recess, without changing groundY or collision.
+ * Partition at each cavity edge so neighbouring terrain retains its original planes. */
+export function caveMouthTerrainPolygons(triangle: MouthVertex[]): MouthVertex[][] {
+  let polygons = [triangle];
+  for (const mouth of CAVE_MOUTHS) {
+    const half = (mouth.z1 - mouth.z0) / 2 + .1;
+    const edges = [
+      (v: MouthVertex) => v[2] - mouth.z + half,
+      (v: MouthVertex) => mouth.z + half - v[2],
+      (v: MouthVertex) => v[0] - mouthFaceX(v[2]) + .45,
+      (v: MouthVertex) => mouthFaceX(v[2]) + 1.8 - v[0],
+    ];
+    const kept: MouthVertex[][] = [];
+    for (const polygon of polygons) {
+      let inside = polygon;
+      for (const edge of edges) {
+        const positive: MouthVertex[] = [], negative: MouthVertex[] = [];
+        inside.forEach((a, i) => {
+          const b = inside[(i + 1) % inside.length], da = edge(a), db = edge(b);
+          (da >= 0 ? positive : negative).push(a);
+          if ((da >= 0) !== (db >= 0)) {
+            const t = da / (da - db);
+            const crossing = a.map((n, k) => n + (b[k] - n) * t) as MouthVertex;
+            positive.push(crossing); negative.push(crossing);
+          }
+        });
+        if (negative.length >= 3) kept.push(negative);
+        inside = positive;
+      }
+      // The remaining polygon is inside the cavity and is deliberately omitted.
+    }
+    polygons = kept;
+  }
+  return polygons;
+}
+
+/** Chunky rock lips, deep reveals and shaded throats in the static props batch. */
 export function caveMouthGeometry(): THREE.BufferGeometry {
   const positions: number[] = [], colors: number[] = [];
+  const lumps = new PartBuilder(0);
   const tri = (a: MouthVertex, b: MouthVertex, c: MouthVertex, shade: number, bShade = shade, cShade = shade) => {
     [a, b, c].forEach((v, i) => {
       positions.push(...v);
@@ -309,27 +347,52 @@ export function caveMouthGeometry(): THREE.BufferGeometry {
   for (const mouth of CAVE_MOUTHS) {
     const y = groundY(70.4, mouth.z), roof = mouthRoof(mouth), half = roof[roof.length - 1][0];
     // Counterclockwise in (z,y): viewed from the Grove, the front faces point west.
-    const profile: Array<[number, number]> = [[-half, -.45], [half, -.45], ...roof.slice().reverse()];
+    const profile: Array<[number, number]> = [[-half, -.45], [half, -.45], [half, .65], [half, 1.4], ...roof.slice().reverse(), [-half, 1.25], [-half, .4]];
     const inner = (i: number, depth: number): MouthVertex => {
       const [z, h] = profile[i];
       return [mouthFaceX(mouth.z + z) + depth, y + h, mouth.z + z];
     };
     const outer = (i: number, depth: number): MouthVertex => {
-      const [z, h] = profile[i], zz = z + (z < 0 ? -.42 : .42);
-      return [mouthFaceX(mouth.z + zz) + depth, y + h + (h < 0 ? -.16 : .42 + .06 * Math.sin(i * 2.1)), mouth.z + zz];
+      const [z, h] = profile[i], width = h < 1.5 ? .85 : .45 + .25 * (1 + Math.sin(i * 2.1));
+      const zz = z + (z < 0 ? -width : width);
+      return [mouthFaceX(mouth.z + zz) + depth, y + h + (h < 0 ? -.25 : h < 1.5 ? 0 : .45 + .2 * Math.cos(i * 1.7)), mouth.z + zz];
     };
     for (let i = 1; i < profile.length; i++) {
       const j = (i + 1) % profile.length;
-      // No threshold stone across the floor. Side and ceiling pieces form one continuous arch.
-      quad(inner(i, -.45), outer(i, -.57), outer(j, -.57), inner(j, -.45), .92);
-      quad(outer(i, -.57), outer(i, .12), outer(j, .12), outer(j, -.57), .8);
+      // Uneven rock wedges disappear into the mesa instead of ending at a bright seam.
+      const ridge = (k: number): MouthVertex => {
+        const a = inner(k, -.45), b = outer(k, .18);
+        return [mouthFaceX((a[2] + b[2]) / 2) - .65 - .22 * Math.sin(k * 2.3), (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+      };
+      const rockFace = (a: MouthVertex, b: MouthVertex, c: MouthVertex, k: number) => {
+        const col = new THREE.Color("#b39478").lerp(new THREE.Color("#78838b"), .08 + .12 * (1 + Math.sin(k * 3.7))).multiplyScalar(.84 + .12 * Math.sin(k));
+        for (const v of [a, b, c]) { positions.push(...v); colors.push(col.r, col.g, col.b); }
+      };
+      rockFace(inner(i, -.45), ridge(i), ridge(j), i);
+      rockFace(inner(i, -.45), ridge(j), inner(j, -.45), i + .7);
+      rockFace(ridge(i), outer(i, .18), outer(j, .18), i + 1.2);
+      rockFace(ridge(i), outer(j, .18), ridge(j), i + 1.8);
       // Shared rings prevent cracks; colour fades continuously away from daylight.
       quad(inner(i, -.45), inner(j, -.45), inner(j, .55), inner(i, .55), .62, .28);
       quad(inner(i, .55), inner(j, .55), inner(j, 1.75), inner(i, 1.75), .28, .009);
     }
     const contour = profile.map(([z, h]) => new THREE.Vector2(z, h));
     for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(contour, [])) tri(inner(a, 1.75), inner(b, 1.75), inner(c, 1.75), .009);
+    // A black floor closes the recess below the cut terrain, including oblique Grove views.
+    quad(inner(0, -.45), inner(1, -.45), inner(1, 1.8), inner(0, 1.8), .009);
+    for (const [k, z, h, radius, height] of [
+      [0, -half - .35, .15, .85, 1.15], [1, half + .4, .2, .95, 1.3],
+      [2, -half - .28, 1.35, .6, .9], [3, half + .3, 1.6, .65, .8],
+      [4, -half + .12, 2.65, .7, .75], [5, -.65, 3.35, .65, .65],
+      [6, .4, 3.5, .8, .6], [7, half - .1, 2.95, .65, .8],
+    ]) {
+      lumps.add(rockGeometry(radius, height, 83 + k, 0), k % 3 ? "#ac9078" : "#8e8b80",
+        [mouthFaceX(mouth.z + z) + .02, y + h, mouth.z + z], [0, k * .8, 0], [1, 1, 1]);
+    }
   }
+  const rocks = lumps.build(), rp = rocks.getAttribute("position"), rc = rocks.getAttribute("color");
+  for (let i = 0; i < rp.count; i++) { positions.push(rp.getX(i), rp.getY(i), rp.getZ(i)); colors.push(rc.getX(i), rc.getY(i), rc.getZ(i)); }
+  rocks.dispose();
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
