@@ -303,8 +303,8 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
     || p.act2.zone === "canopy" || onDeck || entranceStair || exitStair) && !p.solved.includes("canopyAscentRope")) {
     p.solved.push("canopyAscentRope");
   }
-  // Only a saved position beyond the stream grants this new entrance puzzle.
-  // Earlier clears and the independent lily pond leave the first question intact.
+  // Only a Grove position south of the NEW door stream grants the crossing.
+  // Old entrance/south-bank saves and the independent lily pond keep the ask.
   if (p.act2.started && !p.solved.includes("groveStream") && p.act2.zone === "grove" && Number.isFinite(savedX)
     && Number.isFinite(savedZ) && groveStreamSide(savedX, savedZ) === "south") {
     p.solved.push("groveStream");
@@ -377,7 +377,9 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
     // save across the crossing. Search from the saved point on its original side.
     const movedStreamScenery = GROVE_STREAM_MOVED_SCENERY.some(shape => shape.kind === "circle"
       ? Math.hypot(x - shape.x, z - shape.z) <= shape.r + PLAYER_R
-      : shape.kind === "capsule" && nearestOnTrail([[shape.ax, shape.az], [shape.bx, shape.bz]], x, z).d <= shape.r + PLAYER_R);
+      : shape.kind === "capsule" ? nearestOnTrail([[shape.ax, shape.az], [shape.bx, shape.bz]], x, z).d <= shape.r + PLAYER_R
+      : Math.abs((x - shape.x) * Math.cos(shape.yaw) - (z - shape.z) * Math.sin(shape.yaw)) <= shape.hx + PLAYER_R
+        && Math.abs((x - shape.x) * Math.sin(shape.yaw) + (z - shape.z) * Math.cos(shape.yaw)) <= shape.hz + PLAYER_R);
     const nearStream = p.act2.zone === "grove" && (nearestOnTrail(GROVE_STREAM.pts, x, z).d <= GROVE_STREAM.w + PLAYER_R || movedStreamScenery);
     const nearby = lowlandSave && !legacyRelocation && (removedFloor || nearStream) && !isWalkable(x, z, gates, PLAYER_R)
       ? nearbySavedFloor(x, z, p.act2.zone, gates, nearStream ? groveStreamSide(x, z) : undefined) : null;

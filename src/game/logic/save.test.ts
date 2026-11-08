@@ -266,7 +266,7 @@ describe("forest layout save migration", () => {
   });
 
   it("keeps the puzzle for Grove-only players and new saves at its unsolved foot", () => {
-    for (const position of [{ x: 49, z: -235 }, CANOPY_ROPES.entrance.foot]) {
+    for (const position of [{ x: 56, z: -230 }, CANOPY_ROPES.entrance.foot]) {
       const { back } = ropeSave(position, p => { p.act2.cleared.push("grove"); p.act2.zone = "grove"; });
       expect(back.progress.solved).not.toContain("canopyAscentRope");
       expect(back.player).toEqual({ ...position, yaw: .7 });
@@ -388,7 +388,7 @@ describe("forest layout save migration", () => {
 
   it.each([
     { zone: "grove", x: 66, z: -202, streamSolved: false },
-    { zone: "grove", x: 59, z: -232, streamSolved: true },
+    { zone: "grove", x: 59, z: -232, streamSolved: false },
     { zone: "canopy", x: 114, z: -233.25, streamSolved: false },
   ] as const)("projects removed $zone floor onto nearby ground in that same zone", ({ zone, x, z, streamSolved }) => {
     const p = chapter();

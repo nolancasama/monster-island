@@ -7,7 +7,7 @@ import {
   FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, RUIN_PILLARS, lowlandSolids,
   GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY, CANOPY_ROPES,
-  CAUSEWAY, GROVE_DOOR, groveDoorOpen,
+  CAUSEWAY, CAVE_MOUTHS, GROVE_DOOR, groveDoorOpen,
 } from "./lowland";
 import type { ObstacleId } from "../types";
 import { ENEMIES } from "../data/combat";
@@ -21,7 +21,7 @@ import { clearStage, remainingEnemies } from "../logic/act2";
 import { newProgress } from "../logic/progress";
 import { createHash } from "node:crypto";
 import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
-import { GROVE_STREAM, GROVE_STREAM_FERRY } from "./groveStream";
+import { GROVE_STREAM, GROVE_STREAM_FERRY, groveStreamSide } from "./groveStream";
 import { waterAt } from "../logic/water";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
@@ -85,35 +85,74 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
 }
 
 describe("the lowland below the sanctuary", () => {
-  it("seals the deep entrance channel for walking, mounts and long knock-back steps", () => {
-    const g: Gates = { ...gates(), solved: PROLOGUE, cleared: ["forest1"] };
-    for (const radius of [PLAYER_R, .55]) {
-      const flood = reachable(g, [], radius, { x: 45.5, z: -207 });
-      expect(flood.near(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, 1)).toBe(false);
-      for (const key of flood.seen) {
-        const [i, j] = key.split(",").map(Number);
-        if (i * .6 < 26 || i * .6 > 76 || j * .6 > -205) continue;
-        const moved = moveCircle(i * .6, j * .6, i * .6, j * .6 - 12, radius, g);
-        expect(moved.z, `${radius} at ${key}`).toBeGreaterThan(-214);
+  it("seals the door channel at every body radius with or without the separate lily puzzle", () => {
+    // Clear the Grove door as well: the stream itself must stop the route, rather
+    // than an uncleared stage gate hiding an end-around through the Causeway.
+    for (const lilies of [false, true]) for (const radius of [0, PLAYER_R, .55]) {
+      const g: Gates = { ...gates(), solved: [...PROLOGUE, ...(lilies ? ["groveLilies" as const] : [])] };
+      for (const origin of [{ x: 45.5, z: -207 }, GROVE_STREAM_FERRY.north]) {
+        const flood = reachable(g, [], radius, origin);
+        expect(flood.near(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, .8)).toBe(true);
+        expect(flood.near(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, 1), `${radius}, lilies=${lilies}`).toBe(false);
+        expect(flood.near(GROVE_DOOR.x, GROVE_DOOR.z, 1), `${radius}, lilies=${lilies}`).toBe(false);
+        for (const enemy of ENEMY_SPAWNS.filter(e => e.zone === "grove"))
+          expect(flood.near(enemy.x, enemy.z, 1), `home ${enemy.x},${enemy.z}, radius=${radius}, lilies=${lilies}`).toBe(true);
       }
+      const moved = moveCircle(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z,
+        GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, radius, g);
+      expect(groveStreamSide(moved.x, moved.z)).toBe("north");
     }
-    expect(GROVE_STREAM.pts[0][0]).toBeLessThanOrEqual(31);
-    expect(GROVE_STREAM.pts[GROVE_STREAM.pts.length - 1][0]).toBeGreaterThanOrEqual(70.5);
+    expect(GROVE_STREAM.pts[0][0]).toBeLessThanOrEqual(28);
+    expect(GROVE_STREAM.pts[GROVE_STREAM.pts.length - 1][0]).toBeGreaterThanOrEqual(74);
+    expect(new Set(GROVE_STREAM.pts.map(p => p[1])).size).toBeGreaterThan(2);
   }, 60000);
 
   it("uses one splash footprint with a shallow rim, deep centre and dry near bank", () => {
-    expect(hazardAt(46, -210.85, "home")?.id).toBe("groveStream");
-    expect(waterAt(46, -210.85, "home")).toBe("deep");
-    expect(waterAt(46, -208.45, "home")).toBe("shallow");
-    expect(hazardAt(46, -208.1, "home")).toBeNull();
+    expect(hazardAt(56, -233.8, "home")?.id).toBe("groveStream");
+    expect(waterAt(56, -233.8, "home")).toBe("deep");
+    expect(waterAt(54, -231, "home")).toBe("shallow");
+    expect(hazardAt(54, -230.5, "home")).toBeNull();
     for (const radius of [0, PLAYER_R, .55]) {
-      expect(isWalkable(46, -210.85, gates(), radius, true)).toBe(false);
+      expect(isWalkable(56, -233.8, gates(), radius, true)).toBe(false);
       expect(isWalkable(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, gates(), radius)).toBe(true);
       expect(isWalkable(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, gates(), radius)).toBe(true);
     }
   });
 
-  it("renders the same capsule footprint used by the entrance stream hazard", () => {
+  it("restores ordinary dry walking ground where the entrance stream used to be", () => {
+    for (const [x, z] of [[36, -210.5], [46, -210.85], [54, -210], [46, -208.45]]) {
+      expect(hazardAt(x, z, "home"), `${x},${z}`).toBeNull();
+      expect(waterAt(x, z, "home"), `${x},${z}`).toBe("none");
+      for (const radius of [0, PLAYER_R, .55]) expect(isWalkable(x, z, gates(), radius), `${x},${z}, radius=${radius}`).toBe(true);
+    }
+  });
+
+  it("keeps both cave mouths, the lily puzzle and Bubbo reward north and clear of the door channel", () => {
+    const points = [GROVE_CROSSING.near, GROVE_CROSSING.landing, GROVE_CROSSING.friendLanding, ...LILY_PADS,
+      SECRET_SITES.bubboLedgeKey.chest, { x: 60, z: -212.9 },
+      ...CAVE_MOUTHS.flatMap(mouth => [mouth.groundX0, mouth.groundX1].flatMap(x =>
+        [mouth.z0, mouth.z1].map(z => ({ x, z }))))];
+    for (const p of points) {
+      expect(groveStreamSide(p.x, p.z), JSON.stringify(p)).toBe("north");
+      expect(nearestOnTrail(GROVE_STREAM.pts, p.x, p.z).d - GROVE_STREAM.w, JSON.stringify(p)).toBeGreaterThanOrEqual(1.5);
+    }
+    for (const disc of [ISLET, POND]) expect(nearestOnTrail(GROVE_STREAM.pts, disc.x, disc.z).d - GROVE_STREAM.w - disc.r).toBeGreaterThanOrEqual(1.5);
+    expect(Math.abs(GROVE_STREAM_FERRY.north.x - GROVE_CROSSING.near.x)).toBeGreaterThan(5);
+  });
+
+  it("leaves at least 4.5m of dry landing between the water and the door approach", () => {
+    expect(GROVE_STREAM_FERRY.south.z).toBeGreaterThan(GROVE_DOOR.z);
+    for (const x of [GROVE_DOOR.x - 1.5, GROVE_DOOR.x, GROVE_DOOR.x + 1.5]) {
+      expect(nearestOnTrail(GROVE_STREAM.pts, x, GROVE_DOOR.z).d - GROVE_STREAM.w).toBeGreaterThanOrEqual(4.5);
+      for (let depth = .6; depth <= 4.5; depth += .3) {
+        const z = GROVE_DOOR.z + depth;
+        expect(hazardAt(x, z, "home")).toBeNull();
+        expect(isWalkable(x, z, gates(), PLAYER_R), `${x},${z}`).toBe(true);
+      }
+    }
+  });
+
+  it("renders the same capsule footprint used by the door stream hazard", () => {
     const geometry = groveStreamWaterGeometry(), vertices = geometry.getAttribute("position");
     for (let i = 0; i < vertices.count; i++) {
       expect(nearestOnTrail(GROVE_STREAM.pts, vertices.getX(i), vertices.getZ(i)).d).toBeLessThanOrEqual(GROVE_STREAM.w + .00002);
@@ -121,11 +160,12 @@ describe("the lowland below the sanctuary", () => {
     geometry.dispose();
   });
 
-  it("retains Grove spawn indices and keeps every home at least 1.5m outside the entrance water", () => {
-    for (const [index, x, z] of [[5, 53, -216.5], [6, 38.8, -215.5], [7, 51.5, -215.5], [35, 62, -216.5]]) {
+  it("retains Grove spawn indices and keeps every home north and at least 1.5m outside the door water", () => {
+    for (const [index, x, z] of [[5, 53, -216.5], [6, 38.8, -215.5], [7, 51.5, -215.5], [10, 48.5, -229], [11, 34, -230], [12, 56, -224], [35, 62, -216.5]]) {
       expect(ENEMY_SPAWNS[index]).toMatchObject({ zone: "grove", x, z });
     }
     for (const e of ENEMY_SPAWNS.filter(e => e.zone === "grove")) {
+      expect(groveStreamSide(e.x, e.z)).toBe("north");
       expect(nearestOnTrail(GROVE_STREAM.pts, e.x, e.z).d - GROVE_STREAM.w, `${e.x},${e.z}`).toBeGreaterThan(1.5);
     }
   });
@@ -380,8 +420,12 @@ describe("the lowland below the sanctuary", () => {
     expect(ENEMY_SPAWNS[23]).toMatchObject({ x: 107.4, z: -248.8 });
     // Slice A moves these homes away from the passage rim and shrine chest;
     // restore only their old coordinates when checking all other saved indices.
-    const oldGroveZ: Record<number, number> = { 5: -211, 6: -211.6, 7: -211.8, 35: -210 };
-    const original = ENEMY_SPAWNS.slice(0, 41).map(({ retired: _retired, ...e }, i) => oldGroveZ[i] !== undefined ? { ...e, x: i === 5 ? 57 : e.x, z: oldGroveZ[i] } : i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
+    // Door-channel relocation also changes only Grove homes 10–12.
+    const oldGrove: Record<number, { x: number; z: number }> = {
+      5: { x: 57, z: -211 }, 6: { x: 38.8, z: -211.6 }, 7: { x: 51.5, z: -211.8 },
+      10: { x: 48.5, z: -232.2 }, 11: { x: 37.8, z: -233.8 }, 12: { x: 56, z: -239.5 }, 35: { x: 62, z: -210 },
+    };
+    const original = ENEMY_SPAWNS.slice(0, 41).map(({ retired: _retired, ...e }, i) => oldGrove[i] ? { ...e, ...oldGrove[i] } : i === 17 ? { ...e, z: -248.2 } : i === 23 ? { ...e, z: -249.2 } : e);
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
       .toBe("18654bf281508a56bd02a112c48e294fa1c0c0b75a4a13de8f74ed7662868d28");
   });

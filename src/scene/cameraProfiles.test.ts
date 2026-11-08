@@ -1,13 +1,47 @@
 import { describe, expect, it } from "vitest";
 import { BEACON } from "../game/world/cloudisle";
 import { CAMERA_PROFILES, DEFAULT_CAMERA, cameraProfileAt, type CameraPoint } from "./cameraProfiles";
-import { CANOPY_ROPES, CLIFF_ROPE, zoneAt } from "../game/world/lowland";
+import { CANOPY_ROPES, CLIFF_ROPE, GROVE_DOOR, zoneAt } from "../game/world/lowland";
+import { GROVE_STREAM_FERRY } from "../game/world/groveStream";
 import { GATE_PILLARS, groundY } from "../game/world/island";
 import * as THREE from "three";
 
 const point = (x: number, z: number, cloud = false, y = 0): CameraPoint => ({ x, z, y, cloud, climbing: false });
 
 describe("authored camera profiles", () => {
+  it("frames both ferry banks, Bubbo's route and the stone door throughout the Grove crossing", () => {
+    const north = GROVE_STREAM_FERRY.north, south = GROVE_STREAM_FERRY.south;
+    const middle = { x: (north.x + south.x) / 2, z: (north.z + south.z) / 2 };
+    const expected = cameraProfileAt(point(north.x, north.z));
+    expect(expected.id).toBe("flooded-grove");
+    expect(expected.resolve).toBeUndefined();
+    expect(expected.trackYaw).toBeUndefined();
+    for (const aspect of [1366 / 768, 1280 / 800]) for (const stand of [north, middle, south]) {
+      const p = point(stand.x, stand.z, false, groundY(stand.x, stand.z));
+      const profile = cameraProfileAt(p, expected);
+      expect(profile).toBe(expected);
+      const frame = profile.resolve?.(p, DEFAULT_CAMERA) ?? profile;
+      const focus = typeof profile.anchor === "function" ? profile.anchor(p, frame) : profile.anchor ?? p;
+      const y = groundY(focus.x, focus.z) + 1.1, horizontal = frame.dist * Math.cos(frame.pitch);
+      const camera = new THREE.PerspectiveCamera(profile.fov ?? 55, aspect, .1, 900);
+      camera.position.set(focus.x + Math.sin(frame.yaw) * (horizontal - frame.ahead), y + Math.sin(frame.pitch) * frame.dist, focus.z + Math.cos(frame.yaw) * (horizontal - frame.ahead));
+      camera.lookAt(focus.x - Math.sin(frame.yaw) * frame.ahead, y, focus.z - Math.cos(frame.yaw) * frame.ahead);
+      camera.updateMatrixWorld();
+      for (const sample of [
+        { ...north, height: .1 }, { ...south, height: .1 }, { ...middle, height: 1.2 },
+        { x: GROVE_DOOR.x - GROVE_DOOR.half, z: GROVE_DOOR.z, height: 0 },
+        { x: GROVE_DOOR.x + GROVE_DOOR.half, z: GROVE_DOOR.z, height: 3 },
+      ]) {
+        const projected = new THREE.Vector3(sample.x, groundY(sample.x, sample.z) + sample.height, sample.z).project(camera);
+        const context = `stand=${JSON.stringify(stand)}, aspect=${aspect}, sample=${JSON.stringify(sample)}`;
+        expect(Math.abs(projected.x), context).toBeLessThan(.98);
+        expect(Math.abs(projected.y), context).toBeLessThan(.98);
+        expect(projected.z, context).toBeGreaterThan(-1);
+        expect(projected.z, context).toBeLessThan(1);
+      }
+    }
+  });
+
   it("uses identical fixed framing throughout the Causeway and its rope-foot pocket", () => {
     const expected = { yaw: 0, pitch: .8, dist: 10.5, ahead: 1 };
     let samples = 0;

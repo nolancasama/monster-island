@@ -32,7 +32,7 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "ropeFoot", label: "Cliff rope foot", target: "cliffUp", step: 9, act: "Act 2", world: "home" },
   { id: "forestEntrance", label: "Forest entrance", target: "forestEntrance", step: 9, zone: "forest1", act: "Act 2", world: "home" },
   { id: "canopyAscentRope", label: "Canopy rope puzzle", target: "canopyAscentRope", step: 9, zone: "forest1", act: "Act 2", world: "home" },
-  { id: "groveStream", label: "Grove stream north bank", target: "groveStream", step: 9, zone: "grove", act: "Act 2", world: "home" },
+  { id: "groveStream", label: "Grove door stream north bank", target: "groveStream", step: 9, zone: "grove", act: "Act 2", world: "home" },
   { id: "caveMouth", label: "Cave mouth", target: "caveMouth", step: 9, zone: "grove", act: "Act 2", world: "home" },
   { id: "caveChamber", label: "Cave chamber", target: "caveChamber", step: 9, zone: "cave", layer: "cave", act: "Act 2", world: "home" },
   { id: "upperRopeFoot", label: "Upper Canopy rope foot", target: "upperRopeFoot", step: 9, zone: "canopy", act: "Act 2", world: "home" },

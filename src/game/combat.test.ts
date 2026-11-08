@@ -340,8 +340,8 @@ describe("water extinguishing", () => {
     const e = pondEnemy(.2);
     e.kx = -12;
     if (water === "stream") {
-      Object.assign(e, { x: 46, z: -207.9, homeX: 46, homeZ: -207.9, lastGround: { x: 46, z: -207.9 }, kx: 0, kz: -28 });
-      Object.assign(rt.player, { x: 46, z: -205.9 });
+      Object.assign(e, { x: 56, z: -230.45, homeX: 56, homeZ: -230.45, lastGround: { x: 56, z: -230.45 }, kx: 0, kz: -28 });
+      Object.assign(rt.player, { x: 56, z: -228.45 });
     }
     rt.time += .1; combatTick(.1);
     expect(e.state).toBe("ko");
@@ -353,8 +353,10 @@ describe("water extinguishing", () => {
 
   it("uses the existing panic wade and extinguish rules at the new stream rim", () => {
     const e = pondEnemy(.2);
-    Object.assign(e, { x: 46, z: -207.6, homeX: 46, homeZ: -207.6, lastGround: { x: 46, z: -207.6 } });
-    Object.assign(rt.player, { x: 46, z: -205.6 });
+    // The east bank has a dry approach. Beside the ferry, the separate
+    // walkable tributary extinguishes fire before the enemy reaches this lip.
+    Object.assign(e, { x: 66, z: -231.5, homeX: 66, homeZ: -231.5, lastGround: { x: 66, z: -231.5 } });
+    Object.assign(rt.player, { x: 66, z: -229.5 });
     Object.assign(e.panic!, { hx: 0, hz: -1, turnAt: rt.time + 10 });
     for (let i = 0; i < 60 && !e.wade; i++) { rt.time += 1 / 60; combatTick(1 / 60); }
     expect(e.wade).not.toBeNull();
@@ -369,8 +371,8 @@ describe("water extinguishing", () => {
 
   it("blocks both fire ignitions in walkable stream water while preserving direct damage", () => {
     changeWorld("home");
-    // A submerged point on the first stream's southern segment. The entrance
-    // segment is now deep ferry water and must not serve as a walkable fixture.
+    // A submerged point on the first tributary's southern segment, separate
+    // from the deep ferry channel at the door.
     let wet: { x: number; z: number } | undefined;
     for (let t = 0; t <= 1; t += .05) {
       const point = { x: 49 + 7 * t, z: -216 + t };

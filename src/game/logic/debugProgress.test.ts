@@ -5,6 +5,8 @@ import { encodeSave, decodeSave } from "./save";
 import { CLOUD_SPAWNS } from "../world/cloudisle";
 import { SPAWN } from "../world/island";
 import { region } from "../world/region";
+import { ACT2_OBSTACLE_PLACE } from "../world/lowland";
+import { GROVE_STREAM_FERRY } from "../world/groveStream";
 
 describe("debug destination progress", () => {
   it("creates the appropriate prologue prerequisites without completing its encounter", () => {
@@ -44,6 +46,8 @@ describe("debug destination progress", () => {
   it("offers the unsolved Grove ferry at its north bank and keeps later fixtures crossed", () => {
     const ferry = DEBUG_DESTINATIONS.find(d => d.id === "groveStream")!;
     expect(ferry.target).toBe("groveStream");
+    expect(ACT2_OBSTACLE_PLACE.groveStream).toEqual({ ...GROVE_STREAM_FERRY.north, face: GROVE_STREAM_FERRY.south });
+    expect(ACT2_OBSTACLE_PLACE.groveStream).toMatchObject({ x: 56, z: -230 });
     const p = progressForDestination(ferry.id);
     expect(p.act2.zone).toBe("grove");
     expect(p.act2.cleared).toEqual(["forest1"]);

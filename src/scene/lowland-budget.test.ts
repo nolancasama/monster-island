@@ -139,7 +139,7 @@ describe("lowland submitted triangle budget", () => {
     ["sanctuary basin", 87, -129], ["forest base", 75.5, -176],
     ["left neck", 47, -175], ["left arm", 42, -190], ["left approach", 42, -203],
     ["right neck", 104, -174], ["right arm", 113, -189], ["right approach", 104, -200],
-    ["grove", 49, -215], ["grove north", 49, -234], ["grove east", 66, -217],
+    ["grove", 49, -215], ["grove north bank", 56, -230], ["grove south landing", 56, -237.6], ["grove east", 66, -217],
     ["canopy", 106, -211], ["canopy north", 109, -233], ["canopy west", 88, -213],
     ["canopy broken bridge", 106, -222.4], ["canopy upper root", 118, -233],
     ["causeway", 76, -251], ["coast", 70, -274], ["port", 76, -304],

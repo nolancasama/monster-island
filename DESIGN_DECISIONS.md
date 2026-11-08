@@ -2586,3 +2586,53 @@ Causeway door, Causeway 14 → 8 enemies, enemies vanish only past the door. Acc
 - **Verification:** summit render tests raycast a dense walkable grid, check all height-crease
   intersections, and verify shared normals/colours, a watertight cap and its triangle budget. Existing
   mesa skirt checks now probe below the intentional cave apertures, which have separate throat tests.
+
+## 2026-11-08: Grove stream moved to the door (as built)
+
+- The shared 5.2 m capsule channel now follows (26,-234.6), (38,-235.4),
+  (48,-233.4), (56,-233.4), (65,-235.2), (77,-231.5). Its curved ends continue
+  into the west hills and mesa; the central northward shoulder leaves at least
+  4.5 m of dry, body-clear landing across the door approach. Both cave mouth
+  pockets, the entire lily pond/islet and Bubbo's key reward remain north with
+  at least 1.5 m clearance. Rejected: shortening the channel to the trail, or
+  letting the old shallow landing tributary cross the ferry's dismount stand.
+- Ferry stands are (56,-230) north and (56,-237.6) south. Existing first asks
+  from either bank, three-second swim, dismount solve and short repeat ferry
+  are unchanged. The old entrance channel, aquatic stones/leaves and bank reeds
+  move south; nearby decorative tributary heads retreat from its former wet
+  footprint, leaving ordinary grassy Grove floor. Rendering retains the same
+  water, props and vegetation batches. The wider stream uses metre water cells
+  to keep its longer course within the existing Chromebook triangle budget.
+- Enemy slots 10, 11 and 12 move to (48.5,-229), (34,-230) and (56,-224).
+  Every Grove enemy remains north and reachable before the ferry, preserving
+  array order, kinds, saved identities and clear counts. The flooded tree and
+  two logs move with their collisions; the crate-lift pocket moves as one unit
+  to blocker (52,-207), chest (52,-206.5), approach (53,-204), target (53,-202).
+  This keeps its grab/lift ray inside one existing floor rectangle rather than
+  crossing an inset rectangle seam. Door, zone planes, Causeway encounters,
+  cave logic and summit are unchanged.
+- Save format stays additive v4 with the same `groveStream` solve. Side tests
+  use the new local centreline (continued beyond the buried ends). Newly flooded
+  positions search 0.1 m rings for nearest valid floor on their saved side;
+  relocated solid footprints also get local recovery. Only Grove saves south
+  of the new stream receive the existing grant; former entrance/south-bank
+  saves retain the question. Active-ferry saves still use their departure bank.
+- The Grove keeps one fixed yaw/pitch/distance frame, widened to pitch .8,
+  distance 17 and ahead 0 to hold both banks, Bubbo and the door throughout
+  the crossing. The existing door-plane profile selection remains unchanged.
+  Collision flood fills cover zero, on-foot and mounted radii with and without
+  lilies; projection checks cover both Chromebook aspect ratios. Ground golden
+  hashes are re-recorded for the intended channel, tributary and scenery move,
+  retaining both cave-pocket exclusions and the existing door-plane geometry.
+
+## 2026-11-08: Act 2 revision acceptance (controller)
+
+- Judged at 1366×768 from fresh builds: natural summit top, recessed dark cave mouths (after one correction:
+  the first arches were smooth beams with the mesa skirt showing through), "It's too dark!" at the dark mouth,
+  Ember's ask lights the cave and mouth B is then enterable, Causeway shows 8 enemies, and walking through the
+  door both ways switches combat zone and camera together about 1 m past the door plane.
+- **Removed the shallow decorative tributary** that the stream slice had moved to (33…60, -230…-232): it lay
+  along the new north bank and drew a pale, round-ended strip across the deep channel. Ground golden hashes
+  re-recorded for it.
+- The Grove's fixed camera is now pitch .8, distance 17 (from the stream slice) to keep both banks, Bubbo and
+  the door in frame; accepted from the renders.

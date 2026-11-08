@@ -86,8 +86,9 @@ const GROUND_PROFILES: readonly CameraProfile[] = [
   // A little more height exposes the bark faces beneath the authored platform lips.
   { ...DEFAULT_CAMERA, id: "ancient-canopy", kind: "lowland", yaw: .5, pitch: .66, dist: 12.5, ahead: 2.3,
     contains: p => !p.cloud && zoneAt(p.x, p.z) === "canopy" },
-  // The expanded east bank needs its lens west of the mesa's broad head.
-  { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55,
+  // Keep the lens west of the mesa and both door-stream banks in view even
+  // from the south landing, with the Causeway door visible beyond the ferry.
+  { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55, pitch: .8, dist: 17, ahead: 0,
     contains: (p, m) => !p.cloud && (grovePassage(p) ? p.z >= GROVE_DOOR_Z - doorMargin(m) : zoneAt(p.x, p.z) === "grove") },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,

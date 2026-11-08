@@ -12,7 +12,7 @@ import { MESA_CENTER, MESA_FOOT, MESA_PLATEAU_Y, MESA_SKIRT_Y, MESA_STRATA, mesa
 import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import { CANOPY_VOIDS, HAZARDS } from "../../game/world/hazards";
 import { STREAM_WIDTH, streamBanks } from "../../game/world/streams";
-import { GROVE_STREAM } from "../../game/world/groveStream";
+import { GROVE_STREAM, GROVE_STREAM_FERRY } from "../../game/world/groveStream";
 import {
   STAGES,
   STAGE_EXITS,
@@ -509,7 +509,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
             continue;
           }
           if (near) {
-            if (id === "grove" && rand() < 0.45) reeds.push({ x, z, s: 0.9 + rand() * 0.5, r: rand() * 6.28, tint: 0.9 + rand() * 0.2 });
+            if (id === "grove" && rand() < 0.45 && !(z > -214 && z < -207)) reeds.push({ x, z, s: 0.9 + rand() * 0.5, r: rand() * 6.28, tint: 0.9 + rand() * 0.2 });
             else ferns.push({ x, z, s: 0.8 + rand() * 0.7, r: rand() * 6.28, tint: 0.85 + rand() * 0.3 });
             // The forest's longer edge after the camp went keeps its old tree count and the sanctuary's budget.
           } else if (rand() < (id === "forest1" ? 0.3 : 0.42)) trees.push({ x, z, s: 0.75 + rand() * 0.55, r: rand() * 6.28, tint: 0.85 + rand() * 0.25 });
@@ -533,19 +533,26 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     const pool = hazard.shape;
     for (let i = 0; i < 16; i++) {
       const angle = i * Math.PI / 8, r = pool.r + .1;
-      reeds.push({ x: pool.x + Math.cos(angle) * r, z: pool.z + Math.sin(angle) * r,
+      const x = pool.x + Math.cos(angle) * r, z = pool.z + Math.sin(angle) * r;
+      if (nearestOnTrail(GROVE_STREAM.pts, x, z).d < GROVE_STREAM.w + .25) continue;
+      reeds.push({ x, z,
         s: .8 + .3 * (i % 3), r: angle, tint: .85 + .06 * (i % 4) });
     }
   }
-  // Thin out overlaps: one big tree per 5 m.
+  // Bank reeds leave the entire ferry / door approach open.
   for (let i = 1; i < GROVE_STREAM.pts.length; i++) {
     const a = GROVE_STREAM.pts[i - 1], b = GROVE_STREAM.pts[i];
     for (let t = .1; t < 1; t += .22) for (const side of [-1, 1]) {
-      const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t + side * 2.4;
-      if (x < 32 || x > 68 || (x > 43.5 && x < 48.5)) continue;
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const offset = side * (GROVE_STREAM.w + .35);
+      const x = a[0] + (b[0] - a[0]) * t - (b[1] - a[1]) / length * offset;
+      const z = a[1] + (b[1] - a[1]) * t + (b[0] - a[0]) / length * offset;
+      if (x < 32 || x > 68 || Math.abs(x - GROVE_STREAM_FERRY.north.x) < 2.8
+        || nearestOnTrail(GROVE_STREAM.pts, x, z).d < GROVE_STREAM.w + .2) continue;
       reeds.push({ x, z, s: .65 + (i % 3) * .13, r: i + t, tint: .9 });
     }
   }
+  // Thin out overlaps: one big tree per 5 m.
   const kept: Spot[] = [];
   for (const t of trees) if (kept.every((k) => Math.hypot(k.x - t.x, k.z - t.z) > 5 * Math.max(k.s, t.s))) kept.push(t);
   for (const t of GIANT_TREES) if (!inMesa(t.x, t.z) && !canopyTrunk(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
@@ -681,7 +688,7 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const gy = lowlandSceneryY;
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
   // Low submerged stones and floating leaves stay in the existing merged batch.
-  for (const [x, z] of [[34, -210], [41, -212.5], [53, -210], [61, -213.7], [67, -211]] as const) {
+  for (const [x, z] of [[34, -235], [41, -234.8], [49, -234], [63, -235], [67, -234.5]] as const) {
     b.add(rockGeometry(.45, .55, Math.round(x), 1), "#697a72", [x, streamY(x, z) - .4, z]);
     b.sphere(.3, x + .6, streamY(x, z) + .018, z + .3, "#618f54", [1, .08, .7], 5);
   }
@@ -818,12 +825,15 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
 /** A joined channel ribbon: shared banks at bends and tapered, rounded ends. */
 export function streamRibbonGeometry(points: Array<[number, number]>, width: number, height: (x: number, z: number) => number): THREE.BufferGeometry {
   const banks = streamBanks(points, width);
+  // The broad ferry channel has a smooth surface: metre cells keep its
+  // longer course within the existing triangle budget, below the 2m ground grid.
+  const spacing = width > STREAM_WIDTH ? 1 : .65;
   const positions: number[] = [];
   const vertex = (x: number, z: number) => positions.push(x, height(x, z), z);
   for (let i = 1; i < banks.length; i++) {
     const a = banks[i - 1], b = banks[i];
-    const steps = Math.ceil(Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]) / .65);
-    const across = Math.ceil(width / .65);
+    const steps = Math.ceil(Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]) / spacing);
+    const across = Math.ceil(width / spacing);
     for (let j = 0; j < steps; j++) for (let k = 0; k < across; k++) {
       const at = (t: number, u: number): [number, number] => {
         const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;

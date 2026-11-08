@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { COMBAT, type CompanionId } from "../../src/game/data/combat";
-import { CAVE_MOUTHS, CHESTS, trailPoint, type StageId } from "../../src/game/world/lowland";
+import { CAVE_MOUTHS, CHESTS, GROVE_DOOR, trailPoint, type StageId } from "../../src/game/world/lowland";
 import { CAVE_ALCOVE, CAVE_BRAZIERS, CAVE_CHAMBER, CAVE_CHEST, CAVE_ENTRY, CAVE_PORTALS, CAVE_ROUTE, CAVE_SEAL, CAVE_TORCHES } from "../../src/game/world/cave";
 import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";
 
@@ -67,9 +67,11 @@ test("Grove door opens once the Grove is cleared", async ({ page }) => {
 });
 
 for (const side of ["north", "south"] as const) {
-test(`Bubbo's stream ferry: first ask from ${side}, a short ride afterwards`, async ({ page }) => {
+test(`Bubbo's door-stream ferry: first ask from ${side}, a short ride afterwards`, async ({ page }) => {
   const from = GROVE_STREAM_FERRY[side];
   const to = GROVE_STREAM_FERRY[side === "north" ? "south" : "north"];
+  expect(from.x).toBe(GROVE_DOOR.x);
+  expect(from.z).toBeGreaterThan(GROVE_DOOR.z);
   // Load north so save migration does not grant the puzzle before the south-bank ask.
   const errors = await enter(page, save(["forest1"], GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, "bubbo"));
   expect((await state(page)).progress.solved).not.toContain("groveStream");
@@ -83,6 +85,8 @@ test(`Bubbo's stream ferry: first ask from ${side}, a short ride afterwards`, as
   await tap(page, "thankYou");
   const crossed = await waitFor(page, s => s.progress.solved.includes("groveStream") && s.mode === "explore", 60_000, "on the opposite bank");
   expect(Math.hypot(crossed.player.x - to.x, crossed.player.z - to.z)).toBeLessThan(.5);
+  expect(crossed.progress.solved).not.toContain("groveLilies");
+  expect(crossed.camera.profile).toBe("flooded-grove");
   await waitFor(page, s => s.focus?.id === "groveStream", 20_000, "ride prompt");
   await page.keyboard.press("KeyE");
   const returned = await waitFor(page, s => s.act2.groveStream !== "swimming" && s.mode === "explore" && Math.hypot(s.player.x - from.x, s.player.z - from.z) < .5, 30_000, "back on the starting bank");

@@ -68,8 +68,8 @@ export function measureAreas() {
 }
 it("preserves the base and downstream floor budgets, accounting for the removed branch approaches and new arms", () => {
   const a = measureAreas();
-  // Slice C replaces dry entrance floor with a deep channel; explicit ferry
-  // edges retain every remaining ground pocket and the optional lily route.
+  // The deep channel now gates the door rather than the entrance; explicit
+  // ferry edges retain every remaining ground pocket and the optional lily route.
   let groveFloor = 0;
   const groveGates = { solved: ["groveStream", "groveLilies", "canopyAscentRope", "canopyVines", "canopyRope"] as const, secrets: SECRET_IDS, act2: true, cleared: STAGES };
   for (let x = 20; x < 134; x += .5) for (let z = -338; z < -153.6; z += .5)

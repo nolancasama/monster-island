@@ -117,14 +117,15 @@ describe("shared move/object dispatch", () => {
   it("Vine Grab chooses a closer object, and chooses an enemy when it is closer", () => {
     approach("comboCrateLift", "leafy");
     const e = cb.enemies[9];
-    Object.assign(e, { state: "chase", zone: "grove", x: 43, z: -227, hp: 100 });
+    const crate = ELEMENT_OBJECTS.find(o => o.id === "comboCrateLift")!;
+    Object.assign(e, { state: "chase", zone: "grove", x: crate.x, z: crate.z + 2, hp: 100 });
     expect(basicAttack()).toBe(true);
     advance(.15);
     expect(state("comboCrateLift").state).toBe("onPad");
     expect(e.hp).toBe(100);
     cb.elementObjects = {};
     rt.time += 1;
-    e.x = 43; e.z = -230;
+    e.x = crate.x; e.z = crate.z - 1;
     expect(basicAttack()).toBe(true);
     advance(.15);
     expect(state("comboCrateLift").state).toBe("intact");

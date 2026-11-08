@@ -5,21 +5,27 @@ import { isWalkable, obstaclesFor, solidsFor, standY, type Gates } from "./colli
 
 /** SHA-256 fixtures of every ground query. IEEE-754 bytes preserve exact
  * heights; the shape JSON preserves the complete ordered solid definitions.
- * No rounded heights or tolerance comparisons. */
+ * No rounded heights or tolerance comparisons. Re-recorded 2026-11-08 for
+ * the intentional Grove entrance → door stream move: its channel/tributaries
+ * change ground heights and walking cuts; relocated tree/log/crate solids
+ * change the ordered collision definitions. The shallow tributary that lay
+ * along the new north bank was removed (it drew a pale strip over the deep
+ * water). Door planes and cave pockets stay
+ * unchanged. Both historical pocket variants include this new Grove layout. */
 const BEFORE_LAYERS: Record<string, string> = {
-  // Slice C ground without mouth pockets, re-recorded for the Act 2 door plane.
-  closed: "e01a3ba9c38817dbab9f9bbb1936b657d8ac372ddba6760b9e1ecf50a5f22c98",
-  grove: "0485065db0ed9aeb5550eebc9766570df09318cf0d01aa6705d07856f263515d",
-  open: "9ec1480220e34795943ec431f115855ececb68b7366bf82d68bab8acf32aa1e6",
+  // Ground without mouth pockets, including the relocated door stream.
+  closed: "ea1d06321e0b9a856bc03167c4fcf9511c8e331fe42d90f5a96be849aa39a577",
+  grove: "f848d5bd2ab20f6a0584b3fd8521c03e24754dde07cbb85856280819a706e113",
+  open: "289826e8612f6a6e59feb13ea5789cc73736b4649c71b7f4e0fa7f8547f9549f",
 };
-/** Mouth A ground, re-recorded for the Act 2 door plane. */
+/** Mouth A ground, including the relocated door stream. */
 const GOLDEN: Record<string, string> = {
-  closed: "df4f4f04bd085af3f5b845a435f2b794d503868963d906d73bf9d7df329f7b93",
-  grove: "f7211a08d2bf30236afed8f414bebfd29d246192abcb2a79d2abaecb34715ad3",
-  open: "90daa998fcdc5310583f2c1a99fe66af8a1fdf7da77ed10c13a8ceee8b7d474a",
+  closed: "72c306d0902fd30e30364d065c11dbe42c8af7e8f103bcdb01c518a2e99af470",
+  grove: "5c4754067309483fc0a1d89b9771e604334963d4fc5ace0c2ecc73ffd6149116",
+  open: "5d5681292000813a83c170d552df115879b09b7f751426679fa43b66c03bd70b",
 };
 const STATES: Record<string, Gates> = {
-  // Keep the dark-mouth gate open here to isolate the intended zone-boundary
+  // Keep the dark-mouth gate open here to isolate the intended ground layout
   // change; cave.test.ts exercises the closed and permanently opened mouths.
   closed: { solved: ["caveTorches"], act2: true },
   grove: { solved: ["caveTorches", "groveStream", "groveLilies"], act2: true, cleared: ["forest1", "grove"] },
@@ -59,13 +65,13 @@ function withoutPockets(mouths: typeof CAVE_MOUTHS, check: () => void) {
   }
 }
 
-it("matches the door-plane ground golden with the mouth-B pocket removed", () => {
+it("matches the door-stream ground golden with the mouth-B pocket removed", () => {
   withoutPockets(CAVE_MOUTHS.slice(1), () => {
     expect(Object.fromEntries(Object.entries(STATES).map(([name, gates]) => [name, digest(gates)]))).toEqual(GOLDEN);
   });
 }, 120_000);
 
-it("matches the door-plane ground golden without either cave-mouth pocket", () => {
+it("matches the door-stream ground golden without either cave-mouth pocket", () => {
   withoutPockets(CAVE_MOUTHS, () => {
     expect(Object.fromEntries(Object.entries(STATES).map(([name, gates]) => [name, digest(gates)]))).toEqual(BEFORE_LAYERS);
   });

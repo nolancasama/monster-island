@@ -48,12 +48,13 @@ it("keeps existing enemy indices stable and appends the expanded stage encounter
   // Enemy array indices are persistent identities. These are the pre-Slice-C
   // homes, including optional arm encounters and the appended original Canopy foe.
   // Slice A adjusts homes 17 and 23 for the passage rim and shrine chest clearance.
+  // The door stream relocates homes 10–12 north, retaining their identities.
   const homes: Array<[string, string, number, number]> = [
     ["forest1", "gloomlet", 74.6, -162.8], ["forest1", "gloomlet", 75.6, -170.2],
     ["forest1", "forestSpitter", 66.4, -167.8], ["forest1", "snapjaw", 72.6, -178.6], ["forest1", "gloomlet", 85, -177.2],
     ["grove", "gloomlet", 53, -216.5], ["grove", "forestSpitter", 38.8, -215.5], ["grove", "snapjaw", 51.5, -215.5],
-    ["grove", "gloomlet", 48.6, -216.4], ["grove", "forestSpitter", 46.4, -226.8], ["grove", "snapjaw", 48.5, -232.2],
-    ["grove", "gloomlet", 37.8, -233.8], ["grove", "snapjaw", 56, -239.5],
+    ["grove", "gloomlet", 48.6, -216.4], ["grove", "forestSpitter", 46.4, -226.8], ["grove", "snapjaw", 48.5, -229],
+    ["grove", "gloomlet", 34, -230], ["grove", "snapjaw", 56, -224],
     ["canopy", "gloomlet", 97, -203.3], ["canopy", "snapjaw", 106, -208.6], ["canopy", "forestSpitter", 105.2, -230.6],
     ["canopy", "snapjaw", 112, -235], ["causeway", "raiderShooter", 62, -249.3], ["causeway", "shellback", 61.4, -258.4],
     // Same persistent gloomlet index; its former home is on the exit stairs.

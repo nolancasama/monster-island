@@ -5,6 +5,18 @@
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
 fields only). Cloud Isle still locked as Coming Soon. https://nolancasama.github.io/monster-island/
 
+## Act 2 revision: branch `feature/act2-revision`, awaiting user approval (NOT merged, NOT deployed)
+User plan of 2026-11-08; decisions in `DESIGN_DECISIONS.md` ("Act 2 revision plan" and the as-built entries).
+- Natural summit top (`scene/models/mesaTop.ts`); recessed rock cave mouths with dark throats.
+- Dark cave blocks entry at both mouths (`darkCaveEntryBlocked` in `world/cave.ts`, toast in `sim.ts`); only
+  Ember's "Can you make fire?" lights it (Fire Breath on braziers just sparkles).
+- Grove stream moved to just north of the Grove–Causeway door (`world/groveStream.ts`); old entrance channel dry.
+- Causeway: 8 live enemies (6 spawns `retired`, indices kept).
+- Door plane is the grove/causeway zone boundary, with 1 m retention in `combatTick`, matching the camera.
+- Verified: tsc, 965 unit tests, `zz-revision-shots.spec.ts` (3/3, evidence in `.tmp/shots/revision/rev/`).
+  The full e2e suite has NOT been run on this branch; `vertical-expansion.spec.ts` was updated by the workers
+  but only partly run (14/15 before the stream move).
+
 ## 2026-11-08 playtest fixes: live at `a2e691a` (Pages run 42431833731, success), deployed at the user's request before the full local suite finished
 Fixes for the 2026-11-07 playtest list; decisions in `DESIGN_DECISIONS.md` (2026-11-08 entries).
 - **Summit camera:** `upper-canopy` profile is `fixed: true` (`scene/cameraProfiles.ts`).
@@ -30,7 +42,8 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
-1. Optionally rerun the full suite (`MI_LONG_TIMEOUT=3600000 npm run e2e`, about 1.5 h). `water-ropes`
+1. Act 2 revision: get user approval, run `vertical-expansion.spec.ts` and ideally the full suite, then merge/deploy only when asked.
+1a. Optionally rerun the full suite (`MI_LONG_TIMEOUT=3600000 npm run e2e`, about 1.5 h). `water-ropes`
    "entrance rope … safe landing" is known flaky, and so is `act2` "forest tutorial" (bag held 3 apples
    instead of 2 once on 2026-11-08; passed twice on rerun).
 2. Play the live game on a real Chromebook (never done): frame rate near the Canopy and in the town.

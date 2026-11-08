@@ -213,11 +213,11 @@ export const GROVE_DOOR_RETURNS = [
 export const groveDoorOpen = (cleared: boolean, distance: number, wasOpen: boolean, loading = false) =>
   cleared && (loading || wasOpen || distance < 7);
 
-/** The cave mouth on the mesa's west face (Grove south bank). The ground pocket
+/** The cave mouth on the mesa's west face (north of the door stream). The ground pocket
  * reaches the rock's 1.5 m clearance; the cave layer's floor overlaps it from
  * x0, and the portal line at portalX switches layer (world/cave.ts). */
 export const CAVE_MOUTH = { z: -227, portalX: 69.6, x0: 67, x1: 73.6, z0: -229, z1: -225, groundX0: 66.5, groundX1: 70.8 };
-/** Both west-face entrances open onto the Grove's south bank. Mouth B's
+/** Both west-face entrances open north of the Grove's door stream. Mouth B's
  * approach starts east of the pool and north of the dry-reed reward pocket. */
 export const CAVE_MOUTHS = [CAVE_MOUTH,
   { z: -216.4, portalX: 69.3, x0: 67, x1: 73.6, z0: -218.1, z1: -214.7, groundX0: 67.8, groundX1: 70.4 },
@@ -546,8 +546,8 @@ export const canopySurfaceY = canopyDeckY;
 /** Shallow streams through the grove (decor water over a slight channel). */
 export const STREAMS: Array<Array<[number, number]>> = [
   [
-    [36, -212],
-    [42, -213],
+    [36, -214.8],
+    [42, -215.8],
     [49, -216],
     [56, -215],
   ],
@@ -559,13 +559,7 @@ export const STREAMS: Array<Array<[number, number]>> = [
   ],
   GROVE_STREAM.pts,
   [
-    [33, -239],
-    [44, -240.5],
-    [55, -237],
-    [63, -232],
-  ],
-  [
-    [44, -214],
+    [44, -215],
     [41.5, -219],
   ],
 ];
@@ -770,7 +764,7 @@ export const GIANT_TREES: Array<Vec2 & { r: number; h: number }> = [
   { x: 79.9, z: -180.3, r: 1, h: 14 },
   { x: 55, z: -203.5, r: 1.1, h: 16 },
   { x: 47.2, z: -217.6, r: 0.9, h: 13 },
-  { x: 43.6, z: -235.5, r: 1.15, h: 16 },
+  { x: 43.6, z: -229.5, r: 1.15, h: 16 },
   { x: 69.3, z: -194.6, r: 0.95, h: 14 },
   ...RIGHT_ARM_TREES,
   { x: 58, z: -189, r: 1.1, h: 17 },
@@ -798,10 +792,10 @@ export const MOSSY_BOULDERS: Array<Vec2 & { r: number; h: number }> = [
 ];
 export const LOGS: Array<{ ax: number; az: number; bx: number; bz: number; r: number }> = [
   { ax: 65, az: -163, bx: 67, bz: -161, r: 0.35 },
-  { ax: 39, az: -235, bx: 41, bz: -237, r: 0.35 },
+  { ax: 33, az: -209, bx: 35, bz: -211, r: 0.35 },
   { ax: 69.2, az: -175.4, bx: 71.4, bz: -181.4, r: 0.38 },
   { ax: 44.4, az: -204.3, bx: 49.3, bz: -202.1, r: 0.42 },
-  { ax: 50.6, az: -229.1, bx: 52.2, bz: -235.2, r: 0.4 },
+  { ax: 50.6, az: -221.1, bx: 52.2, bz: -227.2, r: 0.4 },
   { ax: 55, az: -192, bx: 59, bz: -194.3, r: .5 },
   { ax: 53, az: -220, bx: 57, bz: -222, r: .45 },
   { ax: 94.8, az: -232.8, bx: 98, bz: -235.5, r: .45 },
@@ -846,9 +840,9 @@ export const ENEMY_SPAWNS: EnemySpawn[] = [
   { zone: "grove", kind: "snapjaw", x: 51.5, z: -215.5 },
   { zone: "grove", kind: "gloomlet", x: 48.6, z: -216.4 },
   { zone: "grove", kind: "forestSpitter", replaces: "gloomlet", x: 46.4, z: -226.8 },
-  { zone: "grove", kind: "snapjaw", x: 48.5, z: -232.2 },
-  { zone: "grove", kind: "gloomlet", x: 37.8, z: -233.8 },
-  { zone: "grove", kind: "snapjaw", x: 56, z: -239.5 },
+  { zone: "grove", kind: "snapjaw", x: 48.5, z: -229 },
+  { zone: "grove", kind: "gloomlet", x: 34, z: -230 },
+  { zone: "grove", kind: "snapjaw", x: 56, z: -224 },
   // The canopy: fewer enemies, harder ground.
   { zone: "canopy", kind: "gloomlet", x: 97, z: -203.3 },
   { zone: "canopy", kind: "snapjaw", x: 106, z: -208.6 },
