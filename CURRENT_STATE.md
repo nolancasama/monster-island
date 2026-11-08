@@ -5,7 +5,7 @@
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
 fields only). Cloud Isle still locked as Coming Soon. https://nolancasama.github.io/monster-island/
 
-## Act 2 revision: branch `feature/act2-revision`, awaiting user approval (NOT merged, NOT deployed)
+## Act 2 revision: live 2026-11-08 at `938eda6` (Pages run 42470871185, success), deployed at the user's request
 User plan of 2026-11-08; decisions in `DESIGN_DECISIONS.md` ("Act 2 revision plan" and the as-built entries).
 - Natural summit top (`scene/models/mesaTop.ts`); recessed rock cave mouths with dark throats.
 - Dark cave blocks entry at both mouths (`darkCaveEntryBlocked` in `world/cave.ts`, toast in `sim.ts`); only
@@ -42,7 +42,7 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
-1. Act 2 revision: get user approval, run `vertical-expansion.spec.ts` and ideally the full suite, then merge/deploy only when asked.
+1. Act 2 revision is live: run `vertical-expansion.spec.ts` and ideally the full suite, and fix anything found.
 1a. Optionally rerun the full suite (`MI_LONG_TIMEOUT=3600000 npm run e2e`, about 1.5 h). `water-ropes`
    "entrance rope … safe landing" is known flaky, and so is `act2` "forest tutorial" (bag held 3 apples
    instead of 2 once on 2026-11-08; passed twice on rerun).
