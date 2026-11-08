@@ -58,7 +58,8 @@ async function gates(page: Page, open: boolean) {
   } });
   await hook(page, "settleAct2Unlocks");
   await precondition(page, open ? "all gates withdrawn" : "all gates obstructing", s =>
-    stages.every(id => open ? s.lowland.barriers[id] > .995 : s.lowland.barriers[id] < .005));
+    // The Grove's stone door (2026-11-07) opens only on approach, so it stays shut from afar.
+    stages.every(id => open ? id === "grove" || s.lowland.barriers[id] > .995 : s.lowland.barriers[id] < .005));
 }
 
 async function stand(page: Page, x: number, z: number) {

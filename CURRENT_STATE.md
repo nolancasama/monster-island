@@ -5,7 +5,7 @@
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
 fields only). Cloud Isle still locked as Coming Soon. https://nolancasama.github.io/monster-island/
 
-## Pending on `feature/act2-vertical-expansion` (2026-11-08, uncommitted, not deployed)
+## 2026-11-08 playtest fixes: live at `a2e691a` (Pages run 42431833731, success), deployed at the user's request before the full local suite finished
 Fixes for the 2026-11-07 playtest list; decisions in `DESIGN_DECISIONS.md` (2026-11-08 entries).
 - **Summit camera:** `upper-canopy` profile is `fixed: true` (`scene/cameraProfiles.ts`).
 - **Bubble flight:** advanced per frame in `sim.ts` (`advanceBubbleRide`) from `rt.bubbleRide` timing;
@@ -23,13 +23,17 @@ Fixes for the 2026-11-07 playtest list; decisions in `DESIGN_DECISIONS.md` (2026
   compiles (it had blocked `npm run build`), covers mouth B and both-bank asks, and was checked with a
   known-bad build (mouth B portal removed, ferry forced north: both new tests failed).
 
-Verified so far: tsc and build, 925 unit tests, `vertical-expansion` 12/13 then the one race fixed in the spec
-(zone is assigned a frame after the layer switch), cave/stream/summit renders at 1366×768 judged by Claude.
-Full suite: running (`MI_LONG_TIMEOUT=3600000 npm run e2e`).
+Verified: tsc and build, 925 unit tests, `vertical-expansion` 13/13, cave/stream/summit renders at 1366×768
+judged by Claude. The full suite on `a2e691a` (113 passed, 6 failed) found render-budget overruns and stale
+spec expectations; fixed in the follow-up commit (chests and brazier flames drawn within 90 m, summit hidden
+from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the vertical expansion").
+The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
-1. Finish the full suite; fix or triage failures (`water-ropes` "entrance rope … safe landing" is known flaky).
-2. With the user's OK: commit, fast-forward `main`, push (Pages deploys).
+1. Optionally rerun the full suite (`MI_LONG_TIMEOUT=3600000 npm run e2e`, about 1.5 h). `water-ropes`
+   "entrance rope … safe landing" is known flaky, and so is `act2` "forest tutorial" (bag held 3 apples
+   instead of 2 once on 2026-11-08; passed twice on rerun).
+2. Play the live game on a real Chromebook (never done): frame rate near the Canopy and in the town.
 3. Optional polish: the root-seal chest sits at the left edge of the fixed cave view, partly behind the wall
    lip (`.tmp/shots/vertical/after/seal-open-chest-*.png`). It works; it just isn't showcased.
 

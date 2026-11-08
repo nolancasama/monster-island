@@ -22,6 +22,24 @@
   With the shared cave material it traced the whole route in the dark (judged from captures), which
   undercut "almost unplayable".
 
+## 2026-11-08: Render budget after the vertical expansion (first full suite since 11-07)
+
+- Chests draw only within 90 m of the lens (`scene/Chest.tsx`), like the Storm Beacon's small parts. Each
+  chest is three calls (base, lid, glow sprite), and about nine were drawn up to the fog's far edge (266 m)
+  as specks; that pushed the Sanctuary courtyard to 124 calls (≤120).
+- Cave brazier flames draw only when lit and within 90 m; unlit, the instanced mesh still cost a call
+  everywhere on the ground.
+- The summit plateau mesh and its chest draw only when the lens is above 21.5 m: the plateau (about 22.3 m)
+  cannot be seen from below (before/after shots from the lower Canopy match). Saves 3k triangles and 4 calls
+  near the Canopy.
+- `canopy-entrance-rope` may reach 146k triangles (others ≤140k): the lens faces the Canopy wall up close,
+  and the Upper Canopy behind it is depth-rejected. Rejected: hiding the Upper Canopy during that climb,
+  which would pop it in at the top.
+- Spec corrections for 2026-11-07 decisions: `causeway-exit-rope` is captured while climbing (its ground
+  sample now belongs to `ruined-causeway`); the continuity spec no longer expects the Grove door (opens on
+  approach) to read open from afar; `cave` and `upper-canopy` are captured; `lowland` and `layer-default`
+  are exempt from coverage as pure fallbacks (no walkable ground point resolves to `lowland`).
+
 ## 2026-11-08: First stream crossing, bubble flight, treetop camera
 
 - An old save gets `groveStream` on read only if it was saved in the Grove south of the stream. Earlier

@@ -132,6 +132,8 @@ export function Cave() {
     });
     brazierFlames.count = CAVE_BRAZIERS.length;
     brazierFlames.instanceMatrix.needsUpdate = true;
+    // Unlit braziers have no flame; lit ones are specks beyond 90 m (one draw call saved elsewhere).
+    brazierFlames.visible = lit && Math.hypot(rt.camera.pos.x - 70, rt.camera.pos.z + 221.7) < 90;
     one.set(1, 1, 1);
     // The scripted jet of fire from Ember's mouth to the brazier.
     const j = t.jet;

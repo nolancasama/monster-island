@@ -12,12 +12,14 @@ import { lowlandView } from "./Lowland";
 
 /** Exposed for the browser capture hook. */
 export const upperView = { visible: false, cull: false };
+/** The summit plateau's walking surface is about 22.3 m up; below this lens height none of it shows. */
+const SUMMIT_LENS_Y = 21.5;
 
 /** The Upper Canopy: drawn whenever the lens is near the Canopy and not in the
  * cave. Seen from below, leaves near the lens are cut away (no transparency). */
 export function UpperCanopy() {
   const { camera } = useThree();
-  const group = useRef<THREE.Group>(null);
+  const group = useRef<THREE.Group>(null), summitRef = useRef<THREE.Mesh>(null);
   const mat = useMemo(upperCanopyMaterial, []);
   const main = useMemo(upperCanopyGeometry, []);
   const rope = useMemo(upperRopeGeometry, []);
@@ -36,6 +38,7 @@ export function UpperCanopy() {
     upperView.visible = show;
     if (group.current) group.current.visible = show;
     if (!show) return;
+    if (summitRef.current) summitRef.current.visible = camera.position.y > SUMMIT_LENS_Y;
     const cull = rt.player.layer !== "high";
     upperView.cull = cull;
     mat.userData.cull.value = cull ? 1 : 0;
@@ -61,8 +64,9 @@ export function UpperCanopy() {
   return <group ref={group} visible={false}>
     <mesh geometry={main} material={mat} />
     <mesh geometry={rope} material={flatMat} />
-    <mesh geometry={summit} material={flatMat} />
-    <Chest id="summitChest" visible={() => true} />
+    {/* The plateau (about 22.3 m) cannot be seen from a lens below it: 3k triangles and 4 calls saved from below. */}
+    <mesh ref={summitRef} geometry={summit} material={flatMat} />
+    <Chest id="summitChest" visible={() => camera.position.y > SUMMIT_LENS_Y} />
     {unstable.map(({ leaf, geometry }, i) => {
       // Re-centre on the leaf so it can tilt and fall about itself.
       const g = geometry.clone();

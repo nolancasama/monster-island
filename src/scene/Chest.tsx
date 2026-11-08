@@ -9,6 +9,11 @@ import { revealSmoke } from "../game/smoke";
 import { additiveSprite, flatMat } from "./materials";
 import { CHEST_HINGE, CHEST_OPEN_ANGLE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 
+/** A chest is a speck beyond this (in the fog), yet costs three draw calls: like the
+ * Storm Beacon's small parts, it is drawn only near the lens. */
+const CHEST_DRAW = 90;
+const nearLens = (x: number, z: number) => Math.hypot(rt.camera.pos.x - x, rt.camera.pos.z - z) < CHEST_DRAW;
+
 /** A treasure chest. Whether it is drawn at all is decided by the lowland's visibility rules (`visible`). */
 export function Chest({ id, visible }: { id: string; visible: (x: number, z: number) => boolean }) {
   const c = CHESTS.find((x) => x.id === id)!;
@@ -33,7 +38,7 @@ export function Chest({ id, visible }: { id: string; visible: (x: number, z: num
     if (revealed && !wasDiscovered.current && wasPlaying.current) revealSmoke(c.x, standY(c.x, c.z, getGame().progress.solved, c.layer ?? "ground") + .4, c.z);
     wasDiscovered.current = revealed;
     wasPlaying.current = getGame().screen === "game";
-    if (root.current) root.current.visible = revealed && visible(c.x, c.z);
+    if (root.current) root.current.visible = revealed && visible(c.x, c.z) && nearLens(c.x, c.z);
     const k = THREE.MathUtils.clamp(rt.chestLid.get(id) ?? 0, 0, 1);
     const open = getGame().progress.act2.chests.includes(id);
     if (!openingSeen.current && previousLid.current === 0 && k > 0) {
