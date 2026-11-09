@@ -26,7 +26,7 @@ import { hpAfterFall } from "./logic/falls";
 import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
 import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, type Swing } from "./logic/swing";
 import { revealSmoke } from "./smoke";
-import { waterAt } from "./logic/water";
+import { shallowSpeedFactor, waterAt } from "./logic/water";
 
 /**
  * Act 2's real-time fights, in the explorable world (no battle screen).
@@ -1994,7 +1994,7 @@ function moveEnemy(e: EnemyRt, tx: number, tz: number, speed: number, dt: number
   const dx = tx - e.x, dz = tz - e.z;
   const d = Math.hypot(dx, dz);
   if (d < 0.05) return 0;
-  const step = Math.min(d, speed * dt);
+  const step = Math.min(d, speed * shallowSpeedFactor(e.x, e.z, cb.world) * dt);
   return stepTo(e, e.x + (dx / d) * step, e.z + (dz / d) * step, dt, Math.atan2(dx, dz));
 }
 
@@ -2088,7 +2088,8 @@ function updateRanged(e: EnemyRt, dt: number, distance: number) {
   // Recovery is a full pause between shots; backing away is still permitted.
   if (distance < 3 && ["chase", "windup", "recover"].includes(e.state)) {
     if (e.state === "windup") { e.state = "chase"; e.timer = 0; }
-    stepTo(e, e.x - dx * def.speed * dt, e.z - dz * def.speed * dt, dt, Math.atan2(dx, dz));
+    const step = def.speed * shallowSpeedFactor(e.x, e.z, cb.world) * dt;
+    stepTo(e, e.x - dx * step, e.z - dz * step, dt, Math.atan2(dx, dz));
     if (e.state === "recover" && e.timer <= 0) e.state = "chase";
     return;
   }
@@ -2102,7 +2103,7 @@ function updateRanged(e: EnemyRt, dt: number, distance: number) {
       return;
     }
     if (distance < 6) {
-      const step = Math.min(6 - distance, def.speed * dt);
+      const step = Math.min(6 - distance, def.speed * shallowSpeedFactor(e.x, e.z, cb.world) * dt);
       stepTo(e, e.x - dx * step, e.z - dz * step, dt, Math.atan2(dx, dz));
     } else if (distance > 9) moveEnemy(e, p.x, p.z, def.speed, dt);
     else if (rangedClear(e) && rt.time >= cb.calmUntil) {

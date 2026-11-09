@@ -13,6 +13,8 @@ import { SEA_Y, groundY, volcanoMask } from "../../game/world/island";
 import { CANOPY_VOIDS, HAZARDS } from "../../game/world/hazards";
 import { STREAM_WIDTH, streamBanks } from "../../game/world/streams";
 import { GROVE_STREAM, GROVE_STREAM_FERRY } from "../../game/world/groveStream";
+import { SHALLOW_DRY_ISLANDS, inGroveSwamp, shallowWaterAt } from "../../game/world/groveShallows";
+import { groveShallowsGeometry } from "./groveShallows";
 import {
   STAGES,
   STAGE_EXITS,
@@ -310,6 +312,7 @@ function groundColor(x: number, z: number, y: number, steep: number, c: THREE.Co
   if (inRect(PORT, 0)) c.lerp(COBBLE, 0.92);
   if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.6 && Math.hypot(x - ISLET.x, z - ISLET.z) > ISLET.r) c.lerp(MUD, 0.85);
   if (x < 75 && z < -200 && z > -246) for (const s of STREAMS) if (nearestOnTrail(s, x, z).d < (s === GROVE_STREAM.pts ? GROVE_STREAM.w + .8 : 1.6)) c.lerp(MUD, 0.6);
+  if (shallowWaterAt(x, z)) c.lerp(MUD, .6);
   c.lerp(ROCK, steep);
   if (y < SEA_Y + 0.9) c.lerp(SAND, (1 - steep) * 0.85);
   if (y < SEA_Y - 0.3) c.lerp(SEABED, 0.7);
@@ -337,8 +340,20 @@ export function lowlandTerrainTiles(size = 48): THREE.BufferGeometry[] {
       const key = `${Math.floor(x / size)},${Math.floor(z / size)}`;
       let bucket = buckets.get(key);
       if (!bucket) buckets.set(key, (bucket = { p: [], c: [] }));
-      const at = (di: number, dj: number, v: THREE.Vector3) => v.set(x + di * STEP, vy[(j + dj) * (nx + 1) + i + di], z + dj * STEP);
-      for (const tri of [
+      const at = (di: number, dj: number, v: THREE.Vector3) => v.set(x + di * STEP, Number.isInteger(di) && Number.isInteger(dj)
+        ? vy[(j + dj) * (nx + 1) + i + di] : surface(x + di * STEP, z + dj * STEP), z + dj * STEP);
+      // Old narrow tributary beds can sit below a two-metre terrain chord.
+      // Refine only wet cells with significant curvature, keeping the standing
+      // height unchanged and the ankle-water surface visible above its bed.
+      const floorAt = (u: number, v: number) => u + v <= 1
+        ? vy[ids[0]] * (1 - u - v) + vy[ids[1]] * u + vy[ids[2]] * v
+        : vy[ids[3]] * (u + v - 1) + vy[ids[1]] * (1 - v) + vy[ids[2]] * (1 - u);
+      const refine = inGroveSwamp(x + STEP / 2, z + STEP / 2) && [[.5, 0], [0, .5], [.5, .5], [1, .5], [.5, 1]].some(([u, v]) =>
+        shallowWaterAt(x + u * STEP, z + v * STEP) && Math.abs(surface(x + u * STEP, z + v * STEP) - floorAt(u, v)) > .08);
+      const triangles = refine ? [0, .5].flatMap(u => [0, .5].flatMap(v => [
+        [[u, v], [u, v + .5], [u + .5, v]],
+        [[u + .5, v], [u, v + .5], [u + .5, v + .5]],
+      ])) : [
         [
           [0, 0],
           [0, 1],
@@ -349,7 +364,8 @@ export function lowlandTerrainTiles(size = 48): THREE.BufferGeometry[] {
           [0, 1],
           [1, 1],
         ],
-      ]) {
+      ];
+      for (const tri of triangles) {
         at(tri[0][0], tri[0][1], a);
         at(tri[1][0], tri[1][1], b);
         at(tri[2][0], tri[2][1], cc);
@@ -553,6 +569,13 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     }
   }
   // Thin out overlaps: one big tree per 5 m.
+  // Short, sparse horsetails use the existing reed tiles. Their low silhouettes
+  // leave combat tells and the feet of wading characters visible.
+  for (let z = -238; z < -213; z += 4.3) for (let x = 33; x < 69; x += 4.7) {
+    const xx = x + hash(z, x) * 1.2, zz = z + hash(x, z) * 1.2;
+    if (!shallowWaterAt(xx, zz) || hash(xx, zz) < .8) continue;
+    reeds.push({ x: xx, z: zz, s: .34 + hash(xx, zz) * .12, r: x + z, tint: .85 });
+  }
   const kept: Spot[] = [];
   for (const t of trees) if (kept.every((k) => Math.hypot(k.x - t.x, k.z - t.z) > 5 * Math.max(k.s, t.s))) kept.push(t);
   for (const t of GIANT_TREES) if (!inMesa(t.x, t.z) && !canopyTrunk(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
@@ -687,6 +710,28 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const rand = makeRng(31);
   const gy = lowlandSceneryY;
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
+  // Grass-topped root mounds follow the authored dry cuts. Their shallow lips
+  // sit within normal floor tolerance, so existing stands and movement agree.
+  for (const island of SHALLOW_DRY_ISLANDS) {
+    const y = lowlandY(island.x, island.z);
+    b.cyl(island.r * .84, island.r, .08, island.x, y - .015, island.z, "#69914b", 12);
+    between(b, [island.x - .8, y + .02, island.z], [island.x + .7, y + .09, island.z + .3], .09, .06, "#6c5939", 5);
+    b.add(new THREE.CircleGeometry(.4, 7).rotateX(-Math.PI / 2), "#89a75a", [island.x + .2, y + .07, island.z - .3], [0, .4, 0], [1.4, 1, 1], { flatAo: true });
+  }
+  // Tiny submerged stones, moss and knee roots emerge from the swamp. These
+  // stay lower than an ankle and add no collision or separate scene objects.
+  for (let z = -237.5; z < -213; z += 4.8) for (let x = 33.5; x < 69; x += 5.2) {
+    const xx = x + hash(z, x), zz = z + hash(x, z);
+    if (!shallowWaterAt(xx, zz) || !shallowWaterAt(xx + .8, zz + .4)) continue;
+    const y = lowlandY(xx, zz), n = hash(xx, zz);
+    b.add(rockGeometry(.22 + n * .12, .1, 4200 + Math.round(xx + zz), 0), "#777d62", [xx, y - .035, zz]);
+    if (n > .55) {
+      between(b, [xx - .4, y + .035, zz], [xx + .3, y + .18, zz + .2], .08, .05, "#68593b", 4);
+      between(b, [xx + .3, y + .18, zz + .2], [xx + .7, y + .025, zz + .35], .05, .025, "#68593b", 4);
+    } else {
+      b.add(new THREE.CircleGeometry(.22, 6).rotateX(-Math.PI / 2), "#71874b", [xx + .08, y + .08, zz], [0, n * 4, 0], [1.4, 1, .8], { flatAo: true });
+    }
+  }
   // Low submerged stones and floating leaves stay in the existing merged batch.
   for (const [x, z] of [[34, -210], [41, -212.5], [53, -210], [61, -211], [67, -211]] as const) {
     b.add(rockGeometry(.45, .55, Math.round(x), 1), "#697a72", [x, streamY(x, z) - .4, z]);
@@ -885,7 +930,11 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
       // Each segment uses the hazard's circular-distance footprint. Overlapping
       // capsule joins are merged into the existing tiled water draw.
       b.add(groveStreamWaterGeometry(), "#1b5568", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
-    } else b.add(streamRibbonGeometry(s, STREAM_WIDTH, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+    } else if (!s.every(([x, z]) => inGroveSwamp(x, z))) {
+      // The authored swamp replaces the old decorative tributaries, including
+      // their dry interaction pockets. Never layer blue ribbons across it.
+      b.add(streamRibbonGeometry(s, STREAM_WIDTH, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+    }
   }
   // Conform visual water to the rendered 2 m terrain triangles. This shares
   // water's existing tiled draw and never cuts a channel into walking ground.
@@ -907,8 +956,9 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
   const wet = decor.build(), positions = wet.getAttribute("position");
   for (let i = 0; i < positions.count; i++) positions.setY(i, waterY(positions.getX(i), positions.getZ(i)));
   wet.computeVertexNormals();
-  const existing = b.build(), merged = mergeGeometries([existing, wet], false);
-  existing.dispose(); wet.dispose();
+  const existing = b.build(), shallows = groveShallowsGeometry();
+  const merged = mergeGeometries([existing, wet, shallows], false);
+  existing.dispose(); wet.dispose(); shallows.dispose();
   return merged;
 }
 

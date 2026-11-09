@@ -13,6 +13,8 @@ import { foodGeometry } from "./models/props";
 import { monsterTop } from "./Monsters";
 import type { FoodId } from "../game/types";
 import { splashParticle } from "./splashParticle";
+import { WadingEffects } from "./WadingEffects";
+import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
 
 function canvasTexture(draw: (g: CanvasRenderingContext2D) => void, size = 64): THREE.CanvasTexture {
   const c = document.createElement("canvas");
@@ -315,13 +317,14 @@ function FocusRing() {
     const f = getGame().focus;
     m.visible = Boolean(f) && getGame().mode === "explore";
     if (!f) return;
-    m.position.set(f.x, standY(f.x, f.z, getGame().progress.solved) + 0.06, f.z);
+    const wade = rt.world === "home" && rt.player.layer === "ground" && shallowWaterAt(f.x, f.z);
+    m.position.set(f.x, standY(f.x, f.z, getGame().progress.solved) + (wade ? SHALLOW_WATER_DEPTH : 0) + 0.06, f.z);
     const s = 1 + Math.sin(rt.time * 4) * 0.06;
     m.scale.set(s, s, s);
     mat.opacity = 0.5 + Math.sin(rt.time * 4) * 0.2;
   });
   return (
-    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} material={mat}>
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} material={mat} renderOrder={3}>
       <ringGeometry args={[0.75, 0.9, 32]} />
     </mesh>
   );
@@ -460,6 +463,7 @@ export function Effects() {
     <group>
       <Particles />
       <Smoke />
+      <WadingEffects />
       <StarMarker />
       <FocusRing />
       <MonsterBubbles />

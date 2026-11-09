@@ -4,6 +4,7 @@ import { lowlandY, STREAMS, streamY } from "../world/lowland";
 import { STREAM_WIDTH, streamBanks } from "../world/streams";
 import { POND_WADE, waterAt } from "./water";
 import { hazardAt } from "./elements";
+import { inGroveSwamp, shallowWaterAt } from "../world/groveShallows";
 
 describe("water classification", () => {
   it("distinguishes pond rim, deep water and the dry bank", () => {
@@ -38,7 +39,10 @@ describe("water classification", () => {
         const z = leftZ + (a[3] + (b[3] - a[3]) * t - leftZ) * u;
         const submerged = lowlandY(x, z) < streamY(x, z);
         // Deep authored hazards take priority where a tributary meets a pool.
-        if (!hazardAt(x, z, "home")) expect(waterAt(x, z, "home")).toBe(submerged ? "shallow" : "none");
+        // Authored swamp floor replaces the former decorative ribbons here;
+        // its dry puzzle banks take priority even over a submerged old bed.
+        const renderedWet = inGroveSwamp(x, z) ? shallowWaterAt(x, z) : submerged;
+        if (!hazardAt(x, z, "home")) expect(waterAt(x, z, "home")).toBe(renderedWet ? "shallow" : "none");
         expect(waterAt(x, z, "cloud")).toBe("none");
         if (submerged) wet++; else exposed++;
       }
@@ -46,7 +50,7 @@ describe("water classification", () => {
     expect(wet).toBeGreaterThan(0);
     expect(exposed).toBeGreaterThan(0);
     // Beyond the visible bank, even though the terrain channel is wider.
-    expect(waterAt(38, -213.7, "home")).toBe("none");
-    expect(waterAt(55.9, -215.85, "home")).toBe("none");
+    for (const [x, z] of [[38, -213.7], [55.9, -215.85]])
+      expect(waterAt(x, z, "home")).toBe(shallowWaterAt(x, z) ? "shallow" : "none");
   });
 });

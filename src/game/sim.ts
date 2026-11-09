@@ -1,4 +1,5 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
+import { shallowSpeedFactor } from "./logic/water";
 import { companions, gateOpen, objective } from "./logic/progress";
 import { getGame, setGame, toast } from "./store";
 import { PICK_TIME, animate, effect, rt, type MonsterRt } from "./runtime";
@@ -263,7 +264,7 @@ function movePlayer(dt: number, canMove: boolean) {
     p.speed = Math.hypot(ix, iy) * speed;
     return;
   }
-  const walk = WALK * speedScale();
+  const walk = WALK * speedScale() * shallowSpeedFactor(p.x, p.z, getGame().progress.act3.world);
   const wx = (fx * iy + rx * ix) * walk;
   const wz = (fz * iy + rz * ix) * walk;
   const progress = getGame().progress;
@@ -441,7 +442,7 @@ function walkTo(m: MonsterRt, x: number, z: number, speed: number, dt: number): 
     return true;
   }
   const def = MONSTERS[m.id];
-  const step = Math.min(d, speed * dt);
+  const step = Math.min(d, speed * shallowSpeedFactor(m.x, m.z, getGame().progress.act3.world) * dt);
   const q = moveCircle(m.x, m.z, m.x + (dx / d) * step, m.z + (dz / d) * step, def.radius, gatesOf(getGame().progress), def.can.includes("swim"), noExtraObstacles, moveResult);
   const moved = Math.hypot(q.x - m.x, q.z - m.z);
   m.x = q.x;

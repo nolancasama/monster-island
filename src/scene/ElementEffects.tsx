@@ -13,6 +13,8 @@ import { emptyBodyPose, enemyBodyPose, PANIC_LIMBS } from "./panicPose";
 import { whipPoints } from "../game/logic/whip";
 import { createWindFrame, stepWindFrame } from "../game/logic/wind";
 import { inCone } from "../game/logic/elements";
+import { groundY } from "../game/world/island";
+import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
 
 // Shared batches, including a separate translucent steam batch; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
@@ -223,7 +225,7 @@ function makePool() {
   const shell = new THREE.ConeGeometry(1, 1, 24, 1, true);
   const ring = new THREE.RingGeometry(.88, 1, 40);
   ring.rotateX(-Math.PI / 2);
-  return {
+  const pool = {
     sprites: new Batch(new THREE.PlaneGeometry(1, 1), spriteMaterial()),
     steam: new Batch(new THREE.PlaneGeometry(1, 1), steamMaterial()),
     bubbles: new Batch(new THREE.SphereGeometry(1, 20, 12), bubbleMaterial()),
@@ -235,6 +237,8 @@ function makePool() {
     limbs: new Batch(new THREE.CapsuleGeometry(1, 1, 1, 3), new THREE.MeshLambertMaterial({ color: "#ffffff", flatShading: true })),
     speech: new Batch(new THREE.PlaneGeometry(1, 1), panicSpeechMaterial())
   };
+  pool.rings.mesh.renderOrder = 3;
+  return pool;
 }
 
 export function ElementEffects() {
@@ -276,6 +280,8 @@ export function ElementEffects() {
       pool.sprites.put(o, color.set(tint), alpha, flame === 2 ? 2 : flame ? 1 : 0);
     },
     ring(x: number, y: number, z: number, radius: number, tint: string, alpha: number, upright = false) {
+      if (!upright && rt.world === "home" && rt.player.layer === "ground" && shallowWaterAt(x, z))
+        y = Math.max(y, groundY(x, z) + SHALLOW_WATER_DEPTH + .035);
       o.position.set(x, y, z); o.rotation.set(upright ? Math.PI / 2 : 0, 0, 0); o.scale.setScalar(radius);
       pool.rings.put(o, color.set(tint), alpha);
     },

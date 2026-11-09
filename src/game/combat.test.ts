@@ -428,8 +428,8 @@ describe("water extinguishing", () => {
 
   it("blocks both fire ignitions in walkable stream water while preserving direct damage", () => {
     changeWorld("home");
-    // A submerged point on the first tributary's southern segment, separate
-    // from the deep ferry channel at the door.
+    // A submerged point on the former tributary's southern segment, now
+    // part of the authored walkable swamp below the entrance ferry.
     let wet: { x: number; z: number } | undefined;
     for (let t = 0; t <= 1; t += .05) {
       const point = { x: 49 + 7 * t, z: -216 + t };
@@ -452,6 +452,7 @@ describe("water extinguishing", () => {
     expect(e.burn).toBeNull(); expect(e.panic).toBeNull(); expect(e.infernoBlueUntil).toBe(0);
     expect(cb.fx.some(f => f.kind === "steam")).toBe(false);
     // The same attacks ignite normally once back on dry ground.
+    Object.assign(rt.player, { x: POND.x - 2.2, z: POND.z - .7 });
     e.x = rt.player.x; e.z = rt.player.z - .9;
     expect(waterAt(e.x, e.z, "home")).toBe("none");
     cb.ready.special = 0; cb.inferno = null; specialAttack();

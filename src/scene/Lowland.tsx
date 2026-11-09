@@ -363,11 +363,15 @@ export function Lowland() {
     const material = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false });
     material.onBeforeCompile = shader => {
       shader.uniforms.uWaterTime = waterTime;
-      shader.vertexShader = "varying vec3 vWaterPosition;\n" + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvWaterPosition = position;");
-      shader.fragmentShader = "uniform float uWaterTime; varying vec3 vWaterPosition;\n" + shader.fragmentShader;
+      shader.vertexShader = "varying vec3 vWaterPosition; varying float vShallowWater;\n" + shader.vertexShader;
+      // Only the ankle-water batch uses warm olive vertex colours. Share the
+      // existing material while letting its muddy floor show through more.
+      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvWaterPosition = position; vShallowWater = step(color.b, color.r) * step(color.b, color.g);");
+      shader.fragmentShader = "uniform float uWaterTime; varying vec3 vWaterPosition; varying float vShallowWater;\n" + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
         float channel = step(28.0, vWaterPosition.x) * step(vWaterPosition.x, 75.0) * step(-215.0, vWaterPosition.z) * step(vWaterPosition.z, -207.0);
+        channel = max(channel, vShallowWater * .35);
+        diffuseColor.a *= mix(1.0, .72, vShallowWater);
         // Flow scrolls east; two crossing wavelengths give low broad ripples.
         float flow = sin(vWaterPosition.x * 3.8 + vWaterPosition.z * 1.7 - uWaterTime * 3.0);
         float ripple = sin(vWaterPosition.x * 1.3 - vWaterPosition.z * 6.0 - uWaterTime * 2.0);

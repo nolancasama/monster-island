@@ -16,6 +16,7 @@ import { airshipGeometry, cageGeometry, coinGeometry, enemyGeometry, propellerGe
 import { foodGeometry } from "./models/props";
 import { cloudEnemyGeometry } from "./models/cloudEnemies";
 import type { FoodId } from "../game/types";
+import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
 
 /**
  * Act 2's fight on screen: enemies (each its own small material so a hit
@@ -92,6 +93,8 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     const singe = e.burn ? 0.22 : 0;
     mat.emissive.setRGB(flash + singe + warn * (seed ? 0.55 : wind ? 0.35 : 1), flash * 0.9 + singe * 0.35 + warn * (seed ? 1 : wind || ring ? 0.8 : 0), flash * 0.9 + warn * (wind ? 1 : ring ? 0.6 : 0));
     if (tell.current) {
+      tell.current.position.y = .06 + (rt.world === "home" && layerOfZone(e.zone) === "ground"
+        && shallowWaterAt(e.x, e.z) ? SHALLOW_WATER_DEPTH : 0);
       tell.current.visible = !e.panic && (e.state === "windup" || (ring && e.state === "lunge"));
       if (ring) {
         tell.current.scale.setScalar(def.reach);
@@ -119,7 +122,7 @@ function Enemy({ e, kind }: { e: EnemyRt; kind: EnemyKind }) {
     <group ref={root} visible={false}>
       <mesh ref={body} geometry={geo} material={mat} />
       {(ring || kind === "raiderDrone" || kind === "stormCrab") && (
-        <mesh ref={tell} geometry={tellGeo} position={[0, 0.06, 0]} visible={false}>
+        <mesh ref={tell} geometry={tellGeo} position={[0, 0.06, 0]} visible={false} renderOrder={3}>
           <meshBasicMaterial color={ring ? "#aadeff" : kind === "raiderDrone" ? "#ff3e4b" : "#ffbb6b"} transparent opacity={0.6} depthWrite={false} side={THREE.DoubleSide} />
         </mesh>
       )}

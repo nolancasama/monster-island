@@ -32,6 +32,7 @@ export type SfxName =
   | "vines"
   | "thud"
   | "splash"
+  | "wade"
   | "stones"
   | "drip"
   | "creak"
@@ -354,6 +355,10 @@ class AudioEngine {
       case "splash":
         this.noiseBurst(t, { filter: "bandpass", freq: 2200, to: 500, q: 0.6, peak: 0.22, attack: 0.015, decay: 0.4 });
         [460, 620, 780].forEach((f, i) => this.tone(f, t + i * 0.05, { to: f * 0.45, peak: 0.06, decay: 0.12 }));
+        break;
+      case "wade":
+        // A quiet, short footfall using the same filtered splash noise.
+        this.noiseBurst(t, { filter: "bandpass", freq: 1700, to: 650, q: 0.6, peak: 0.035, attack: 0.004, decay: 0.09 });
         break;
       case "creak":
         // An old leaf bending: a slow, wobbling low groan.

@@ -23,6 +23,7 @@ import { createHash } from "node:crypto";
 import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
 import { GROVE_STREAM, GROVE_STREAM_FERRY, groveStreamSide } from "./groveStream";
 import { waterAt } from "../logic/water";
+import { shallowWaterAt } from "./groveShallows";
 
 const PROLOGUE: ObstacleId[] = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
 const gates = (extra: ObstacleId[] = []): Gates => ({ solved: [...PROLOGUE, "groveStream", ...extra], forest: true, volcano: true, act2: true, cleared: [...STAGES] });
@@ -126,10 +127,12 @@ describe("the lowland below the sanctuary", () => {
     }
   });
 
-  it("restores ordinary dry walking ground where the door stream used to be", () => {
+  it("keeps ordinary walking floor where the door stream used to be, including the new ankle water", () => {
     for (const [x, z] of [[56, -233.4], [56, -230], [56, -237.6], [64, -235.4]]) {
       expect(hazardAt(x, z, "home"), `${x},${z}`).toBeNull();
-      expect(waterAt(x, z, "home"), `${x},${z}`).toBe("none");
+      // Authored ankle water may cover this old channel; it adds no hazard
+      // and preserves the same player and mounted walking clearances.
+      expect(waterAt(x, z, "home"), `${x},${z}`).toBe(shallowWaterAt(x, z) ? "shallow" : "none");
       for (const radius of [0, PLAYER_R, .55]) expect(isWalkable(x, z, gates(), radius), `${x},${z}, radius=${radius}`).toBe(true);
     }
   });
