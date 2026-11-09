@@ -29,6 +29,7 @@ import { standY } from "../game/world/collision";
 import { GROVE_STREAM } from "../game/world/groveStream";
 import { nearestOnTrail } from "../game/world/lowland";
 import { ropeCoilGeometry } from "./models/forest";
+import { GROVE_SHALLOWS_FAR, groveShallowsGeometry } from "./models/groveShallows";
 import { layerView } from "./layerView";
 import { flatMat, occluderMat, smoothMat, canopySolidMat, canopyOccluderMat, causewayOccluderMat } from "./materials";
 import { conformBridge } from "./models/bridge";
@@ -358,6 +359,7 @@ export function Lowland() {
   const cliff = useMemo(cliffFaceGeometry, []);
   const mesa = useMemo(mesaGeometry, []);
   const water = useMemo(() => spatialGeometry(lowlandWaterGeometry(), TILE), []);
+  const shallows = useMemo(groveShallowsGeometry, []);
   const waterTime = useMemo(() => ({ value: 0 }), []);
   const waterMat = useMemo(() => {
     const material = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false });
@@ -409,6 +411,7 @@ export function Lowland() {
       {water.map((geometry, i) => (
         <DistanceMesh key={i} geometry={geometry} material={waterMat} />
       ))}
+      <DistanceMesh geometry={shallows} material={waterMat} far={GROVE_SHALLOWS_FAR} />
       <DistanceMesh geometry={town} material={flatMat} />
       <DistanceMesh geometry={portWall} material={occluderMat} far={PORT_WALL_FAR} />
       <PortGate />

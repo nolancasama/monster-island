@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
 import { CANOPY_ROPES, CLIFF_ROPE, ENEMY_SPAWNS, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
+import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";
 
 const friends = Object.fromEntries(
   ["leafy", "bubbo", "puff", "ember", "lumo"].map((id) => [
@@ -161,6 +162,19 @@ for (const branch of ["grove", "canopy"])
       await hook(page, "setHp", 100);
       const at = await hook(page, "moveTo", x, z) as { x: number; z: number };
       expect(Math.hypot(at.x - x, at.z - z), `${branch} arm waypoint`).toBeLessThan(.1);
+    }
+    if (branch === "grove") {
+      // The left arm ends on the forest bank of the deep entrance stream; Bubbo ferries across.
+      const { north, south } = GROVE_STREAM_FERRY;
+      await page.keyboard.press("Digit2"); // only Bubbo can swim
+      await waitFor(page, s => s.progress.active === "bubbo", 10000, "Bubbo active");
+      await hook(page, "teleport", north.x, north.z, Math.atan2(south.x - north.x, south.z - north.z), true);
+      await waitFor(page, s => s.focus?.id === "groveStream", 15000, "entrance stream ask");
+      await page.keyboard.press("KeyE");
+      await tap(page, "canSwim");
+      await waitFor(page, s => Boolean(s.prompt?.choices.includes("thankYou")), 60000, "ferried across");
+      await tap(page, "thankYou");
+      await waitFor(page, s => s.mode === "explore" && s.progress.solved.includes("groveStream"), 30000, "landed in the Grove");
     }
     if (branch === "canopy") {
       // The right arm ends on the forest floor; only the rope reaches the deck.

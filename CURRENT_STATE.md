@@ -16,7 +16,14 @@ User plan "Microphone UX, Flooded Grove Redesign, Bubbo Swimming, Fire Extinguis
 - Water extinguish: white steam puffs + "TSSSS" (`combat.ts`, `ElementEffects.tsx`, `audio.ts`).
 - Verified: tsc, 1006 unit tests, build, `speech.spec.ts` 3/3 (incl. new 10× toggle test),
   `zz-grove-water-shots.spec.ts` renders judged by Claude (`.tmp/shots/grove-water/w1`, `w8`; `.tmp/shots/mic/m1`).
-  Full e2e suite: see Next steps.
+- Full e2e suite (2026-11-09, `.ai/e2e-mgw.log`): 116 passed, 7 failed. Fixed and rerun green: stale Causeway
+  14→8 and retired-shellback specs, water-ropes extinguish fixture (moved to the ankle-water edge), camera
+  `sanctuary-garden` triangle budget (ankle water is now its own mesh, drawn within `GROVE_SHALLOWS_FAR`).
+  `expansion` grove route now rides Bubbo's ferry. **Still failing, pre-existing** (also fail on the 2026-11-08
+  live build `9617b57`): `act2` "town in English" (times out on "hit" at the coast enemy near (67,-272)) and
+  `expansion` "grove/canopy alone…" (the `defeat()` teleport-around loop strands the player on canopy decks over
+  the Causeway, e.g. raider 42 at (96,-257); the stage never clears). Test-helper problems, not gameplay ones,
+  but unverified.
 - Known evidence-spec artifact: the ripple-trail frame (time frozen inside a rAF poll) can drop the rider; a
   normal wet walk shows the rider.
 
@@ -57,7 +64,8 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
-0. Mic / Grove water is live: finish the full e2e suite run (log `.ai/e2e-mgw.log`) and fix anything found. Real-Chromebook
+0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway
+   canopy; diagnose the coast "hit" timeout in `act2.spec.ts:341`). Real-Chromebook
    check of the mic level meter and ankle-water frame rate.
 1. Act 2 revision is live: run `vertical-expansion.spec.ts` and ideally the full suite, and fix anything found.
 1a. Optionally rerun the full suite (`MI_LONG_TIMEOUT=3600000 npm run e2e`, about 1.5 h). `water-ropes`

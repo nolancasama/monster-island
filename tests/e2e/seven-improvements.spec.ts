@@ -139,10 +139,11 @@ test("three separate pads rise, and normal movement hops across and back", async
   expect(errors).toEqual([]);
 });
 
-test("the Causeway holds 14 enemies, materialising in smoke by encounter pocket", async ({ page }) => {
+test("the Causeway holds 8 live enemies, materialising in smoke by encounter pocket", async ({ page }) => {
   const errors = await enter(page, 60, -252, p => { p.act2.cleared = ["forest1", "grove", "canopy"]; p.act2.zone = "causeway"; });
   const causeway = async () => (await state(page)).act2.enemies.filter(e => e.zone === "causeway");
-  expect((await causeway()).length).toBe(14);
+  // Six Causeway spawns are retired (2026-11-08 revision); indices are kept.
+  expect((await causeway()).length).toBe(8);
   await waitFor(page, s => s.act2.enemies.some(e => e.zone === "causeway" && e.state === "materialising"), 30_000, "first smoke");
   await hook(page, "timeScale", .15);
   await page.waitForTimeout(500);
@@ -188,10 +189,11 @@ test("every secret conceals its chest before discovery", async ({ page }) => {
 });
 
 test("smoke close-up, at quarter speed", async ({ page }) => {
-  await enter(page, 80, -258, p => { p.act2.cleared = ["forest1", "grove", "canopy"]; p.act2.zone = "causeway"; });
+  // The live western shellback (61.4, -258.4); the old (78, -259) one is retired.
+  await enter(page, 63.4, -257.4, p => { p.act2.cleared = ["forest1", "grove", "canopy"]; p.act2.zone = "causeway"; });
   await hook(page, "timeScale", .25);
-  await hook(page, "look", [84, 6.5, -253], [78, 2.6, -259]);
-  await waitFor(page, s => s.act2.enemies.some(e => e.state === "materialising" && Math.hypot(e.x - 78, e.z + 259) < .1), 30_000, "smoke at the shellback");
+  await hook(page, "look", [67.4, 6.5, -252.4], [61.4, 2.6, -258.4]);
+  await waitFor(page, s => s.act2.enemies.some(e => e.state === "materialising" && Math.hypot(e.x - 61.4, e.z + 258.4) < .1), 30_000, "smoke at the shellback");
   for (let i = 0; i < 4; i++) {
     await page.screenshot({ path: `${SHOTS}/smoke-${i}.png` });
     await page.waitForTimeout(350);

@@ -157,12 +157,12 @@ test("a burning enemy runs into a rendered stream and extinguishes alive", async
   const errors = await enter(page, lowlandSave("ember"));
   const i = ENEMY_SPAWNS.findIndex(e => e.zone === "grove" && e.kind === "gloomlet");
   expect(i).toBeGreaterThanOrEqual(0);
-  // Aim the deterministic first panic heading into the southern stream, away
-  // from the intersecting ribbons near the Grove entrance.
-  const enemy = { x: 48, z: -233.05 }, away = -Math.sin(i * 1.73) * 1.2;
+  // The first panic heading is due north (+z): start on the dry southern
+  // edge of the Grove's ankle water (2026-11-09 flooded Grove), which lies just north.
+  const enemy = { x: 48, z: -236.75 }, away = -Math.sin(i * 1.73) * 1.2;
   const player = { x: enemy.x - Math.sin(away) * 2.2, z: enemy.z - Math.cos(away) * 2.2 };
   expect(waterAt(enemy.x, enemy.z, "home")).toBe("none");
-  expect(waterAt(48, -231.75, "home")).toBe("shallow");
+  expect(waterAt(48, -235.25, "home")).toBe("shallow");
   await hook(page, "timeScale", 0);
   await hook(page, "combatFixture", { enemies: [{ i, ...enemy, state: "recover", timer: 30 }] });
   await hook(page, "teleport", player.x, player.z, Math.atan2(enemy.x - player.x, enemy.z - player.z));

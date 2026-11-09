@@ -14,7 +14,6 @@ import { CANOPY_VOIDS, HAZARDS } from "../../game/world/hazards";
 import { STREAM_WIDTH, streamBanks } from "../../game/world/streams";
 import { GROVE_STREAM, GROVE_STREAM_FERRY } from "../../game/world/groveStream";
 import { SHALLOW_DRY_ISLANDS, inGroveSwamp, shallowWaterAt } from "../../game/world/groveShallows";
-import { groveShallowsGeometry } from "./groveShallows";
 import {
   STAGES,
   STAGE_EXITS,
@@ -956,9 +955,10 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
   const wet = decor.build(), positions = wet.getAttribute("position");
   for (let i = 0; i < positions.count; i++) positions.setY(i, waterY(positions.getX(i), positions.getZ(i)));
   wet.computeVertexNormals();
-  const existing = b.build(), shallows = groveShallowsGeometry();
-  const merged = mergeGeometries([existing, wet, shallows], false);
-  existing.dispose(); wet.dispose(); shallows.dispose();
+  // The Grove ankle water is drawn separately (groveShallowsGeometry), culled by distance.
+  const existing = b.build();
+  const merged = mergeGeometries([existing, wet], false);
+  existing.dispose(); wet.dispose();
   return merged;
 }
 

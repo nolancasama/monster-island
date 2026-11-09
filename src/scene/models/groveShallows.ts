@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { SHALLOW_WATER, SHALLOW_WATER_DEPTH, shallowWaterAt } from "../../game/world/groveShallows";
 import { lowlandY } from "../../game/world/lowland";
 
+/** The ankle water is its own draw, culled by distance: from the sanctuary and
+ * town it otherwise rides the island-wide water tiles into every southward view. */
+export const GROVE_SHALLOWS_FAR = 55;
+
 /** One union surface, rather than overlapping transparent pool primitives.
  * Marching triangles follow the authored winding edges and cut out dry islands.
  * A small inset keeps boundary chords out of protected banks and puzzle pockets. */

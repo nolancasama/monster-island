@@ -16,6 +16,7 @@ import {
   type Spot,
 } from "./models/lowland";
 import { ropeCoilGeometry } from "./models/forest";
+import { GROVE_SHALLOWS_FAR, groveShallowsGeometry } from "./models/groveShallows";
 import { groveDoorFrameGeometry, groveDoorGeometry } from "./models/groveDoor";
 import { GROVE_DOOR } from "../game/world/lowland";
 import { SUMMIT_OUTLINE } from "../game/world/upperCanopy";
@@ -75,6 +76,7 @@ beforeAll(() => {
   updateCanopyPayingRope(paying, new THREE.Vector3(entrance.x, lowlandSceneryY(entrance.top.x, entrance.top.z) + 2, entrance.stakeZ));
   add("canopy paying rope", paying, 0, 0, 0, 0, 40);
   for (const geometry of spatialGeometry(lowlandWaterGeometry(), TILE)) add("water", geometry);
+  add("grove ankle water", groveShallowsGeometry(), 0, 0, 0, 0, GROVE_SHALLOWS_FAR);
   add("cliff", cliffFaceGeometry(), 0, 0, 0, 0, Infinity);
   add("rope", cliffRopeGeometry(), 0, 0, 0, 0, Infinity);
   add("mesa", mesaGeometry());
