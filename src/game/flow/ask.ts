@@ -274,7 +274,8 @@ export function micPress() {
     const handle = a.listening;
     a.listening = null;
     a.stopRequested = null;
-    a.lastTransition = Date.now();
+    // No debounce re-arm here: the debounce guards rapid presses only, so a
+    // student may try again the moment a session ends on its own.
     audio.setListening(false);
     update({ outcome, soundDetected: false, speechDetected: false, inputLevel: undefined });
     if (outcome === "success" && j.kind === "match") {

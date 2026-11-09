@@ -2636,3 +2636,55 @@ Causeway door, Causeway 14 → 8 enemies, enemies vanish only past the door. Acc
   re-recorded for it.
 - The Grove's fixed camera is now pitch .8, distance 17 (from the stream slice) to keep both banks, Bubbo and
   the door in frame; accepted from the renders.
+
+## 2026-11-09: Microphone sessions and states (user plan "Microphone UX …")
+
+- Each listening session ends in exactly one guarded outcome: success, mismatch, unclear, silence, userStopped
+  or hardware (`decide()` in `flow/ask.ts`). Only mismatch/unclear add a miss; three misses still unlock the
+  tap rescue, the second still reads the sentences aloud. Silence (`no-speech`/`aborted`/`network`), stopping
+  with nothing heard and hardware errors never count. Why: students toggled the mic and reached multiple
+  choice without attempting English. Rejected: counting silence (it was the exploit).
+- Pressing the mic while listening means "I'm done": `rec.stop()` with a 1 s grace for a late final result,
+  then the best transcript seen is judged. `abort()` only for real cancellation (prompt closed, debug pause).
+- After two silent/stopped sessions the sentence is modelled aloud once; buttons are never unlocked by silence.
+  Buttons stay a rescue, not a choice (sibling-game lesson: students pick a mic-free path when offered).
+- Debounce of 350 ms applies to presses only, not to sessions ending on their own (a wrong answer must allow
+  an immediate retry; found by the speech e2e test).
+- UI: READY "Tap the mic and speak!", LISTENING green Stop button with pulse ring, a level meter driven by the
+  recogniser's sound/speech events, and "Just speak! It stops automatically."; PROCESSING "Checking…";
+  MIC OFF (teacher setting) with "Turn on mic"; BLOCKED shows the tap choices. All with Japanese lines.
+  No second getUserMedia stream for the meter (Chromebook risk); recogniser events are enough.
+
+## 2026-11-09: Deep stream back at the Forest–Grove entrance
+
+- `GROVE_STREAM` now runs (28,-211)…(74,-211.5) with ferry stands (46,-207.2) forest side and (46,-214.5)
+  Grove side; the door channel is gone and the Grove–Causeway door connects directly. Both cave mouths, the lily
+  pond and all Grove enemies are on the Grove (south) side. Why: the user wants "Can you swim?" as the way
+  into the swamp, not an obstacle before the Causeway.
+- First crossing ≈ 1.2 s board, 5 s swim, 1 s landing; repeats ≈ 3.4 s, both directions, never a teleport.
+  A fixed side-on lens (FOV 55, ~0.95 s blend in and out) holds both banks, Bubbo and the rider. The departure
+  zone is held until dismount, so Grove enemies wake only after landing.
+- Saves (v4, additive): `groveStream` solves are kept; Grove saves south of the new stream get the solve;
+  positions inside the moved channel or scenery are moved to nearest floor on their saved side.
+
+## 2026-11-09: Flooded Grove ankle water
+
+- One authored list (`world/groveShallows.ts`) drives walking, rendering and `waterAt() === "shallow"`; it is
+  walkable floor, not a hazard (no collision or save change). Speed ×0.93 in it for players, monsters, enemies.
+- Coverage is ~51% of walkable Grove floor, below the plan's ~60% target. Nearly all remaining dry floor is
+  deliberately protected: the deep stream's 0.6 m dry rim, lily pond bank, crate-lift pocket, cave approaches,
+  dry reeds (fire puzzle), Bubbo's key pocket, the door funnel and the raised cliff-top walk. Rejected: flooding
+  those (would change puzzles); water up the southern cliff (z < -236.2 climbs the slope visibly).
+- Look: one shared surface with green-teal vertex colours and a pale shoreline band, 0.15 m above the floor.
+  The shared water shader marks ankle water by green exceeding blue by .06 (all other water is blue ≥ green).
+  Rejected: the first pass's olive/sage tint, which read as grey fog.
+- Footsteps (player, mounts, up to 3 visible enemies): pooled white ripple rings and droplets, one draw.
+
+## 2026-11-09: Water extinguishing
+
+- Burn length is unchanged (2.5 s). The "burns end early" report came from heavy enemies' panic ending at 2 s
+  and shrinking the flames; flames now stay until the burn ends, then fade silently.
+- Water extinguish is the only path with steam and hiss: once per burning→wet transition, grounded only
+  (thrown/bubbled enemies trigger on landing). Five white puffs from the top of the body plus a surface ring,
+  ~0.85 s, max 6 at once (oldest reused). "TSSSS" is a synthesized two-layer high-band noise burst (~0.7 s).
+  No burn can start while an enemy stands in water; direct fire damage still applies.

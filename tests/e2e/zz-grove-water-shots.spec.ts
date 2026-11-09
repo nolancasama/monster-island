@@ -138,6 +138,11 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 800
     }
     const trail = await state(page);
     expect(shallowWaterAt(trail.player.x, trail.player.z)).toBe(true);
+    // Re-aim the fixed evidence lens at the player so the trail is in frame.
+    // Known artifact: freezing time inside the rAF poll can drop the rider from
+    // this frame; an unfrozen wet walk shows the rider normally (checked 2026-11-09).
+    const tg = lowlandY(trail.player.x, trail.player.z);
+    await hook(page, "look", [trail.player.x + 1.5, tg + 3.2, trail.player.z + 5.5], [trail.player.x, tg + .45, trail.player.z]);
     await snap("ripple-trail");
 
     await hook(page, "combatFixture", { enemies: [{ i: 5, x: start.x + .8, z: start.z, state: "chase" }] });
@@ -148,6 +153,15 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 800
     expect(shallowWaterAt(enemy.x, enemy.z)).toBe(true);
     expect(enemy.state).not.toBe("ko");
     await snap("enemy-wading");
+
+    // A burning enemy in ankle water: one white steam burst (and one hiss).
+    await hook(page, "combatFixture", { enemies: [{ i: 5, x: enemy.x, z: enemy.z, state: "chase", burn: true }] });
+    await hook(page, "timeScale", .35);
+    await hook(page, "renderFrames", 12);
+    await hook(page, "timeScale", 0);
+    const steamed = (await state(page)).act2.enemies.find(e => e.i === 5)!;
+    expect(steamed.burn).toBeNull();
+    await snap("steam-extinguish");
     await hook(page, "combatFixture", { enemies: [] });
 
     await hook(page, "teleport", GROVE_CROSSING.near.x, GROVE_CROSSING.near.z, Math.PI, true);

@@ -5,6 +5,21 @@
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
 fields only). Cloud Isle still locked as Coming Soon. https://nolancasama.github.io/monster-island/
 
+## Branch `feature/mic-grove-water` (2026-11-09, pushed, NOT merged or deployed)
+User plan "Microphone UX, Flooded Grove Redesign, Bubbo Swimming, Fire Extinguishing"; decisions in
+`DESIGN_DECISIONS.md` (four 2026-11-09 entries).
+- Mic: toggling/silence/hardware never count as misses; Stop keeps captured speech; clear bilingual states
+  (`flow/ask.ts`, `audio/recognition.ts`, `ui/Talk.tsx` + `Talk.css`).
+- Deep stream moved back to the Forest–Grove entrance (`world/groveStream.ts`); slow side-on Bubbo ferry.
+- Flooded Grove ankle water (`world/groveShallows.ts`, `scene/models/groveShallows.ts`, `scene/WadingEffects.tsx`),
+  ~51% of walkable Grove floor (target was ~60%; rest is protected puzzle/approach floor).
+- Water extinguish: white steam puffs + "TSSSS" (`combat.ts`, `ElementEffects.tsx`, `audio.ts`).
+- Verified: tsc, 1006 unit tests, build, `speech.spec.ts` 3/3 (incl. new 10× toggle test),
+  `zz-grove-water-shots.spec.ts` renders judged by Claude (`.tmp/shots/grove-water/w1`, `w8`; `.tmp/shots/mic/m1`).
+  Full e2e suite: see Next steps.
+- Known evidence-spec artifact: the ripple-trail frame (time frozen inside a rAF poll) can drop the rider; a
+  normal wet walk shows the rider.
+
 ## Act 2 revision: live 2026-11-08 at `938eda6` (Pages run 42470871185, success), deployed at the user's request
 User plan of 2026-11-08; decisions in `DESIGN_DECISIONS.md` ("Act 2 revision plan" and the as-built entries).
 - Natural summit top (`scene/models/mesaTop.ts`); recessed rock cave mouths with dark throats.
@@ -42,6 +57,8 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
+0. `feature/mic-grove-water`: full e2e suite run and fixes, then the user decides on merge/deploy. Real-Chromebook
+   check of the mic level meter and ankle-water frame rate.
 1. Act 2 revision is live: run `vertical-expansion.spec.ts` and ideally the full suite, and fix anything found.
 1a. Optionally rerun the full suite (`MI_LONG_TIMEOUT=3600000 npm run e2e`, about 1.5 h). `water-ropes`
    "entrance rope … safe landing" is known flaky, and so is `act2` "forest tutorial" (bag held 3 apples
@@ -71,6 +88,7 @@ combat feel, elemental combat, Act 3 and Cloud Isle expansion. See their docs an
 entries. Still not tested on a real Chromebook.
 
 ## Codex / Delegated Work
-None in flight. Four Codex orders on 2026-11-08 (cave, bubble, ferry, spec) were reviewed and accepted by
+None in flight. 2026-11-09: Codex did mic, fire, stream and swamp first pass (reviewed, accepted); Codex hit its
+usage limit (until 2026-11-12) on the swamp correction, which Claude finished. Four Codex orders on 2026-11-08 were reviewed and accepted by
 Claude; their output is in the uncommitted tree. Machine notes: vitest `--maxWorkers=4`; Playwright
 `MI_LONG_TIMEOUT=3600000`.

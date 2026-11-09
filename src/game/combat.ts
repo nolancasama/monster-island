@@ -1103,7 +1103,7 @@ export function extinguish(e: EnemyRt) {
   endEnemyPanic(e);
   e.state = "recover";
   e.timer = .35;
-  pushFx("steam", e.x, standY(e.x, e.z, getGame().progress.solved) + .4, e.z, 0, 0, 0, .6);
+  pushFx("steam", e.x, standY(e.x, e.z, getGame().progress.solved) + .75, e.z, 0, 0, 0, .85); // from the top of the body, so the puffs are not hidden inside it
   audio.play("sizzle");
   audio.cancelPanic?.();
 }

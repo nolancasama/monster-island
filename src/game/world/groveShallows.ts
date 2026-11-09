@@ -23,13 +23,15 @@ export const SHALLOW_WATER: readonly WalkShape[] = [
   { kind: "disc", x: 37, z: -232, r: 7.5 },
   { kind: "disc", x: 63, z: -218, r: 8 },
   { kind: "trail", pts: [[34, -215], [34, -231], [48, -237], [62, -235]], w: 3.4 },
+  // South-west flats up to the foot of the southern cliff.
+  { kind: "rect", x0: 29, x1: 47.5, z0: -236.2, z1: -232 },
 ];
 
 /** Dry banks, root mounds, and complete interaction/approach pockets. Keeping
  * these cuts in the water data protects them in both queries and the mesh. */
 export const SHALLOW_KEEP_OUTS: readonly WalkShape[] = [
   // The deep crossing retains a distinct dry rim; neither ferry stand is wet.
-  { ...GROVE_STREAM, w: GROVE_STREAM.w + .8 },
+  { ...GROVE_STREAM, w: GROVE_STREAM.w + .6 },
   { kind: "disc", ...GROVE_STREAM_FERRY.south, r: .9 },
   ...HOME_PONDS.filter(p => p.id !== "groveStream").map(p => p.shape.kind === "disc"
     ? { ...p.shape, r: p.shape.r + .8 } : p.shape),
@@ -47,9 +49,11 @@ export const SHALLOW_KEEP_OUTS: readonly WalkShape[] = [
   { kind: "rect", x0: 39.5, x1: 45.2, z0: -236.6, z1: -227.3 },
   // Dry door funnel and the last bank before the Causeway passage.
   { kind: "rect", x0: 48, x1: 65, z0: -248, z1: -237.2 },
-  // The steep southern bank begins at the passage's hard z=-237 band.
-  // Its rendered two-metre shoulders stay dry as well as the door funnel.
-  { kind: "rect", x0: 29, x1: 72, z0: -249, z1: -236 },
+  // The steep southern bank: west of the door funnel the floor stays gentle
+  // to z≈-236.2 (the rendered cliff lip starts near -237), so ankle water runs up to it;
+  // east of the funnel the rendered two-metre shoulders stay dry.
+  { kind: "rect", x0: 29, x1: 47.5, z0: -249, z1: -236.2 },
+  { kind: "rect", x0: 47.5, x1: 72, z0: -249, z1: -236 },
   // Small grassy islands/root mounds, deliberately away from interaction sites.
   ...SHALLOW_DRY_ISLANDS,
 ];

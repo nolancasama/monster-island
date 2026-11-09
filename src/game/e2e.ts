@@ -18,6 +18,7 @@ import { cb, companionVisible, elementObjectStates, stageStatus, wakeEnemy, type
 import { ELEMENT_OBJECTS, SECRET_SITES, secretOf } from "./world/elementObjects";
 import { ENEMIES } from "./data/combat";
 import { travelCombat } from "./combat";
+import { ignite } from "./logic/elements";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_ELECTRIC_PANELS, electricPanelActive, electricPanelPhase, type CloudAreaId } from "./world/cloudisle";
 import { newAct3, type Act3 } from "./logic/act3";
 import { decodeSave, encodeSave, writeSave } from "./logic/save";
@@ -235,7 +236,7 @@ export function installE2eHook(seed: number) {
       return placePlayer(e.x + Math.sin(a) * dist, e.z + Math.cos(a) * dist, e.x, e.z);
     },
     /** Isolate existing spawns for repeatable combat captures; no kills or rewards. */
-    combatFixture(fixture: { enemies: Array<{ i: number; x: number; z: number; state?: EnemyState; timer?: number; yaw?: number }>; clearShots?: boolean }) {
+    combatFixture(fixture: { enemies: Array<{ i: number; x: number; z: number; state?: EnemyState; timer?: number; yaw?: number; burn?: boolean }>; clearShots?: boolean }) {
       for (const e of cb.enemies) {
         if (e.retired) continue;
         const f = fixture.enemies.find(f => f.i === e.i);
@@ -248,6 +249,8 @@ export function installE2eHook(seed: number) {
         e.hp = ENEMIES[e.kind].hp; e.timer = f.timer ?? 0;
         e.yaw = f.yaw ?? 0; e.kx = e.kz = 0; e.waiting = false;
         e.wander = null; e.struck = false;
+        // Evidence: a burning enemy (placing it in water shows the extinguish steam).
+        if (f.burn) e.burn = ignite(null, rt.time);
       }
       if (fixture.clearShots !== false) cb.shots.length = 0;
       cb.inferno = cb.cyclone = cb.bombChain = null;

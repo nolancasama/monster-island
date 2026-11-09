@@ -23,7 +23,26 @@ export function groveShallowsGeometry(): THREE.BufferGeometry {
     && shallowWaterAt(x - inset, z) && shallowWaterAt(x + inset, z)
     && shallowWaterAt(x, z - inset) && shallowWaterAt(x, z + inset);
   const positions: number[] = [], colors: number[] = [];
-  const olive = new THREE.Color("#9cad79"), pale = new THREE.Color("#a4bea0");
+  // Clear green-teal swamp water. Green exceeds blue in every shallow colour:
+  // the shared water shader keys ankle water on that (every other water is
+  // blue ≥ green), so keep that property when changing these.
+  const deep = new THREE.Color("#3fa58f"), light = new THREE.Color("#5cbca3"), foam = new THREE.Color("#d2f5df");
+  // Pale shoreline band: vertices with dry floor within ~.7 m.
+  const shoreCache = new Map<string, number>();
+  const shore = (x: number, z: number) => {
+    const key = `${x.toFixed(3)},${z.toFixed(3)}`;
+    let v = shoreCache.get(key);
+    if (v === undefined) {
+      v = 0;
+      for (let i = 0; i < 6 && v < 1; i++) {
+        const a = i * Math.PI / 3;
+        if (!shallowWaterAt(x + Math.cos(a) * .35, z + Math.sin(a) * .35)) v = 1;
+        else if (!shallowWaterAt(x + Math.cos(a) * .75, z + Math.sin(a) * .75)) v = Math.max(v, .2);
+      }
+      shoreCache.set(key, v);
+    }
+    return v;
+  };
   const edge = (a: Point, b: Point, inside: boolean): Point => {
     let lo = a, hi = b;
     for (let i = 0; i < 8; i++) {
@@ -61,9 +80,8 @@ export function groveShallowsGeometry(): THREE.BufferGeometry {
     }
     for (let i = 1; i + 1 < clipped.length; i++) {
       const verts = [clipped[0], clipped[i], clipped[i + 1]];
-      const [x, z] = verts[0];
-      const color = olive.clone().lerp(pale, .45 + .25 * Math.sin(x * .23 + Math.sin(z * .19)));
       for (const [xx, zz] of verts) {
+        const color = deep.clone().lerp(light, .5 + .5 * Math.sin(xx * .23 + Math.sin(zz * .19))).lerp(foam, .7 * shore(xx, zz));
         positions.push(xx, lowlandY(xx, zz) + SHALLOW_WATER_DEPTH, zz);
         colors.push(color.r, color.g, color.b);
       }

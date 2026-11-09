@@ -10,7 +10,7 @@
 export const BROWSER_STUBS = `
 (() => {
   const w = window;
-  w.__speech = { say: null, error: null, starts: 0 };
+  w.__speech = { say: null, error: null, hold: false, starts: 0 };
   const synth = w.speechSynthesis;
   if (synth) {
     // Like Chrome: speaking ends after a while, and cancel() ends it at once.
@@ -25,6 +25,8 @@ export const BROWSER_STUBS = `
     start() {
       w.__speech.starts++;
       const plan = { ...w.__speech };
+      // { hold: true }: the mic stays open, hearing nothing, until stop()/abort().
+      if (plan.hold) { setTimeout(() => { if (!this._done) { this.onaudiostart && this.onaudiostart(); this.onsoundstart && this.onsoundstart(); } }, 200); return; }
       setTimeout(() => {
         if (this._done) return;
         if (plan.error) {
