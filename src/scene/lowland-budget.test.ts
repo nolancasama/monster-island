@@ -5,7 +5,7 @@ import { blocked } from "../game/world/collision";
 import { CANOPY_ROPES, CANOPY_GAPS, CHESTS, LILY_PADS, POND_Y, SERVICES, STAGES, STAGE_EXITS, gapDeck, lowlandBridgeY, lowlandRegionVisible, lowlandWalkable } from "../game/world/lowland";
 import { mesaCameraLift } from "../game/world/mesa";
 import { NPCS, NPC_OF } from "../game/data/town";
-import { cameraProfileAt, DEFAULT_CAMERA } from "./cameraProfiles";
+import { cameraProfileAt, DEFAULT_CAMERA, GROVE_FERRY_SHOT } from "./cameraProfiles";
 import { conformBridge } from "./models/bridge";
 import { CHEST_HINGE, chestBaseGeometry, chestLidGeometry } from "./models/chest";
 import {
@@ -114,7 +114,15 @@ beforeAll(() => {
 
 afterAll(() => { for (const geometry of geometries) geometry.dispose(); });
 
-function cameraAt(x: number, z: number, width: number, height: number) {
+function cameraAt(x: number, z: number, width: number, height: number, ferry = false) {
+  if (ferry) {
+    const camera = new THREE.PerspectiveCamera(GROVE_FERRY_SHOT.fov, width / height, .1, 400);
+    const { pos, target } = GROVE_FERRY_SHOT;
+    camera.position.set(pos.x, pos.y, pos.z);
+    camera.lookAt(target.x, target.y, target.z);
+    camera.updateMatrixWorld();
+    return camera;
+  }
   const point = { x, y: lowlandSceneryY(x, z), z, cloud: false, climbing: false };
   const profile = cameraProfileAt(point), frame = profile.resolve?.(point, DEFAULT_CAMERA) ?? profile;
   const focus = typeof profile.anchor === "function" ? profile.anchor(point, frame) : profile.anchor ?? point;
@@ -139,7 +147,7 @@ describe("lowland submitted triangle budget", () => {
     ["sanctuary basin", 87, -129], ["forest base", 75.5, -176],
     ["left neck", 47, -175], ["left arm", 42, -190], ["left approach", 42, -203],
     ["right neck", 104, -174], ["right arm", 113, -189], ["right approach", 104, -200],
-    ["grove", 49, -215], ["grove north bank", 56, -230], ["grove south landing", 56, -237.6], ["grove east", 66, -217],
+    ["grove", 49, -215], ["grove forest bank", 46, -207.2], ["grove ferry", 46, -207.2], ["grove landing", 46, -214.5], ["grove east", 66, -217],
     ["canopy", 106, -211], ["canopy north", 109, -233], ["canopy west", 88, -213],
     ["canopy broken bridge", 106, -222.4], ["canopy upper root", 118, -233],
     ["causeway", 76, -251], ["coast", 70, -274], ["port", 76, -304],
@@ -147,7 +155,7 @@ describe("lowland submitted triangle budget", () => {
   for (const [width, height] of [[1366, 768], [1280, 800]])
   for (const [name, x, z] of views) it(`${name} at ${width}×${height} leaves room for actors and effects`, () => {
     expect(lowlandRegionVisible(x, z)).toBe(true);
-    const camera = cameraAt(x, z, width, height);
+    const camera = cameraAt(x, z, width, height, name === "grove ferry");
     const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const visible = draws.filter(draw => {
       if (camera.position.distanceTo(draw.bounds.center) >= draw.far + draw.bounds.radius || !frustum.intersectsSphere(draw.bounds)) return false;

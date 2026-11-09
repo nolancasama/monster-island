@@ -509,7 +509,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
             continue;
           }
           if (near) {
-            if (id === "grove" && rand() < 0.45 && !(z > -214 && z < -207)) reeds.push({ x, z, s: 0.9 + rand() * 0.5, r: rand() * 6.28, tint: 0.9 + rand() * 0.2 });
+            if (id === "grove" && rand() < 0.45) reeds.push({ x, z, s: 0.9 + rand() * 0.5, r: rand() * 6.28, tint: 0.9 + rand() * 0.2 });
             else ferns.push({ x, z, s: 0.8 + rand() * 0.7, r: rand() * 6.28, tint: 0.85 + rand() * 0.3 });
             // The forest's longer edge after the camp went keeps its old tree count and the sanctuary's budget.
           } else if (rand() < (id === "forest1" ? 0.3 : 0.42)) trees.push({ x, z, s: 0.75 + rand() * 0.55, r: rand() * 6.28, tint: 0.85 + rand() * 0.25 });
@@ -539,7 +539,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
         s: .8 + .3 * (i % 3), r: angle, tint: .85 + .06 * (i % 4) });
     }
   }
-  // Bank reeds leave the entire ferry / door approach open.
+  // Bank reeds leave the entrance ferry and its side-on sight line open.
   for (let i = 1; i < GROVE_STREAM.pts.length; i++) {
     const a = GROVE_STREAM.pts[i - 1], b = GROVE_STREAM.pts[i];
     for (let t = .1; t < 1; t += .22) for (const side of [-1, 1]) {
@@ -688,7 +688,7 @@ export function lowlandPropsGeometry(): THREE.BufferGeometry {
   const gy = lowlandSceneryY;
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
   // Low submerged stones and floating leaves stay in the existing merged batch.
-  for (const [x, z] of [[34, -235], [41, -234.8], [49, -234], [63, -235], [67, -234.5]] as const) {
+  for (const [x, z] of [[34, -210], [41, -212.5], [53, -210], [61, -211], [67, -211]] as const) {
     b.add(rockGeometry(.45, .55, Math.round(x), 1), "#697a72", [x, streamY(x, z) - .4, z]);
     b.sphere(.3, x + .6, streamY(x, z) + .018, z + .3, "#618f54", [1, .08, .7], 5);
   }
@@ -869,7 +869,7 @@ export function streamRibbonGeometry(points: Array<[number, number]>, width: num
 export function groveStreamWaterGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0), s = GROVE_STREAM.pts;
   // The union of these capsules is precisely the trail-distance hazard shape.
-  for (let i = 1; i < s.length; i++) b.add(streamRibbonGeometry([s[i - 1], s[i]], GROVE_STREAM.w * 2, streamY), "#358f9b", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+  for (let i = 1; i < s.length; i++) b.add(streamRibbonGeometry([s[i - 1], s[i]], GROVE_STREAM.w * 2, streamY), "#1b5568", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   return b.build();
 }
 
@@ -884,7 +884,7 @@ export function lowlandWaterGeometry(): THREE.BufferGeometry {
     if (s === GROVE_STREAM.pts) {
       // Each segment uses the hazard's circular-distance footprint. Overlapping
       // capsule joins are merged into the existing tiled water draw.
-      b.add(groveStreamWaterGeometry(), "#358f9b", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+      b.add(groveStreamWaterGeometry(), "#1b5568", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
     } else b.add(streamRibbonGeometry(s, STREAM_WIDTH, streamY), "#5cc6d6", [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
   }
   // Conform visual water to the rendered 2 m terrain triangles. This shares

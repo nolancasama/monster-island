@@ -11,7 +11,7 @@ import { CLIFF_FOOT_Z, CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, CHESTS, ZONES, ST
 import { ALL_SECRET_IDS } from "../world/elementObjects";
 import { newAct3, observatoryReached, observatoryLiftReady, type Act3 } from "./act3";
 import { rt } from "../runtime";
-import { GROVE_STREAM, GROVE_STREAM_MOVED_SCENERY, groveStreamSide } from "../world/groveStream";
+import { GROVE_STREAM, GROVE_STREAM_FERRY, GROVE_STREAM_MOVED_SCENERY, groveStreamSide } from "../world/groveStream";
 import { nearestOnTrail } from "../world/lowland";
 import { region, type Layer } from "../world/region";
 import { LAYER_ENTRY } from "../world/layers";
@@ -303,8 +303,8 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
     || p.act2.zone === "canopy" || onDeck || entranceStair || exitStair) && !p.solved.includes("canopyAscentRope")) {
     p.solved.push("canopyAscentRope");
   }
-  // Only a Grove position south of the NEW door stream grants the crossing.
-  // Old entrance/south-bank saves and the independent lily pond keep the ask.
+  // The entrance stream now precedes the Grove. A Grove save already beyond
+  // its south bank keeps access; clears or independent lilies never grant it.
   if (p.act2.started && !p.solved.includes("groveStream") && p.act2.zone === "grove" && Number.isFinite(savedX)
     && Number.isFinite(savedZ) && groveStreamSide(savedX, savedZ) === "south") {
     p.solved.push("groveStream");
@@ -380,11 +380,17 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
       : shape.kind === "capsule" ? nearestOnTrail([[shape.ax, shape.az], [shape.bx, shape.bz]], x, z).d <= shape.r + PLAYER_R
       : Math.abs((x - shape.x) * Math.cos(shape.yaw) - (z - shape.z) * Math.sin(shape.yaw)) <= shape.hx + PLAYER_R
         && Math.abs((x - shape.x) * Math.sin(shape.yaw) + (z - shape.z) * Math.cos(shape.yaw)) <= shape.hz + PLAYER_R);
-    const nearStream = p.act2.zone === "grove" && (nearestOnTrail(GROVE_STREAM.pts, x, z).d <= GROVE_STREAM.w + PLAYER_R || movedStreamScenery);
+    const streamSide = groveStreamSide(x, z);
+    const nearStream = (p.act2.zone === "forest1" || p.act2.zone === "grove")
+      && (nearestOnTrail(GROVE_STREAM.pts, x, z).d <= GROVE_STREAM.w + 1.5 || movedStreamScenery);
+    // The relocated crossing straddles two areas. Older Grove-labelled north
+    // bank saves must search forest floor, never the opposite bank's Grove.
+    const recoveryZone = nearStream ? zoneAt(GROVE_STREAM_FERRY[streamSide].x, GROVE_STREAM_FERRY[streamSide].z) : p.act2.zone;
     const nearby = lowlandSave && !legacyRelocation && (removedFloor || nearStream) && !isWalkable(x, z, gates, PLAYER_R)
-      ? nearbySavedFloor(x, z, p.act2.zone, gates, nearStream ? groveStreamSide(x, z) : undefined) : null;
+      ? nearbySavedFloor(x, z, recoveryZone, gates, nearStream ? streamSide : undefined) : null;
     if (nearby) {
       safe = nearby;
+      if (nearStream) p.act2.zone = recoveryZone;
     } else if (lowlandSave && (legacyRelocation || !isWalkable(x, z, gates, PLAYER_R))) {
       ({ x, z } = CLIFF_ROPE.foot);
       // These authored wake points are tested against the same gates and solids
@@ -393,6 +399,7 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
       p.act2.zone = "forest1";
     } else {
       safe = nearestWalkable(x, z, PLAYER_R, gates, false, true);
+      if (nearStream) p.act2.zone = recoveryZone;
     }
   }
   return {

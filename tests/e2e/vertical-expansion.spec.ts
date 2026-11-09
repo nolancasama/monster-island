@@ -67,26 +67,30 @@ test("Grove door opens once the Grove is cleared", async ({ page }) => {
 });
 
 for (const side of ["north", "south"] as const) {
-test(`Bubbo's door-stream ferry: first ask from ${side}, a short ride afterwards`, async ({ page }) => {
+test(`Bubbo's entrance-stream ferry: first ask from ${side}, a short ride afterwards`, async ({ page }) => {
   const from = GROVE_STREAM_FERRY[side];
   const to = GROVE_STREAM_FERRY[side === "north" ? "south" : "north"];
-  expect(from.x).toBe(GROVE_DOOR.x);
-  expect(from.z).toBeGreaterThan(GROVE_DOOR.z);
+  expect(from.z - GROVE_DOOR.z).toBeGreaterThan(20);
   // Load north so save migration does not grant the puzzle before the south-bank ask.
   const errors = await enter(page, save(["forest1"], GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, "bubbo"));
   expect((await state(page)).progress.solved).not.toContain("groveStream");
   await hook(page, "teleport", from.x, from.z, Math.atan2(to.x - from.x, to.z - from.z), true);
   await waitFor(page, s => s.focus?.id === "groveStream", 20_000, "ask at the stream");
+  const departureZone = side === "north" ? "forest1" : "grove";
+  await waitFor(page, s => s.act2.zone === departureZone, 20_000, "departure bank zone");
   await page.keyboard.press("KeyE");
   await tap(page, "canSwim");
-  await waitFor(page, s => s.act2.groveStream === "swimming", 60_000, "first swim");
+  const swimming = await waitFor(page, s => s.act2.groveStream === "swimming", 60_000, "first swim");
+  expect(swimming.act2.zone).toBe(departureZone);
+  expect(swimming.camera.profile).toBe("grove-stream-ferry");
   await shots(page, `ferry-first-${side}`);
   await waitFor(page, s => Boolean(s.prompt?.choices.includes("thankYou")), 60_000, "thank Bubbo");
   await tap(page, "thankYou");
   const crossed = await waitFor(page, s => s.progress.solved.includes("groveStream") && s.mode === "explore", 60_000, "on the opposite bank");
   expect(Math.hypot(crossed.player.x - to.x, crossed.player.z - to.z)).toBeLessThan(.5);
   expect(crossed.progress.solved).not.toContain("groveLilies");
-  expect(crossed.camera.profile).toBe("flooded-grove");
+  await waitFor(page, s => s.camera.profile === (side === "north" ? "flooded-grove" : "forest-left-arm"), 20_000, "landing bank camera");
+  expect(crossed.act2.zone).toBe(side === "north" ? "grove" : "forest1");
   await waitFor(page, s => s.focus?.id === "groveStream", 20_000, "ride prompt");
   await page.keyboard.press("KeyE");
   const returned = await waitFor(page, s => s.act2.groveStream !== "swimming" && s.mode === "explore" && Math.hypot(s.player.x - from.x, s.player.z - from.z) < .5, 30_000, "back on the starting bank");
@@ -96,6 +100,7 @@ test(`Bubbo's door-stream ferry: first ask from ${side}, a short ride afterwards
 }
 
 for (const fixture of [
+  { bank: "north", zone: "forest1", granted: false },
   { bank: "north", zone: "grove", granted: false },
   { bank: "south", zone: "grove", granted: true },
   { bank: "south", zone: "canopy", granted: false },

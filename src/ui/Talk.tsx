@@ -1,5 +1,7 @@
-import { useGame, type Speaker } from "../game/store";
-import { cancelAsk, choose, micPress, micUsable, nextLine, replay } from "../game/flow/ask";
+import { useEffect, useState } from "react";
+import { getGame, saveSettings, setGame, useGame, type Speaker } from "../game/store";
+import { cancelAsk, choose, discardSpeech, micPress, micUsable, nextLine, replay } from "../game/flow/ask";
+import { recognition, requestMicPermission } from "../audio/recognition";
 import { MONSTERS } from "../game/data/monsters";
 import { Icon } from "./icons";
 import { MaplePortrait, NpcPortrait, Portrait, SelfPortrait } from "./Portraits";
@@ -7,6 +9,7 @@ import { NPCS, type NpcId } from "../game/data/town";
 import { UI } from "./i18n";
 import type { MonsterId } from "../game/types";
 import { FAMILY, type FamilyId } from "../game/data/family";
+import "./Talk.css";
 
 export function Ja({ children }: { children: React.ReactNode }) {
   const on = useGame((s) => s.settings.japanese);
@@ -42,13 +45,40 @@ export function SpeakerFace({ by, size }: { by: Speaker; size: number }) {
 export function PromptPanel() {
   const p = useGame((s) => s.prompt);
   const touch = useGame((s) => s.touch);
-  useGame((s) => s.micState); // re-render when the mic gets blocked
+  const micEnabled = useGame((s) => s.settings.mic);
+  const micState = useGame((s) => s.micState);
+  const [requesting, setRequesting] = useState(false);
+  useEffect(() => () => discardSpeech(), []);
+  useEffect(() => {
+    if (!micEnabled || micState === "blocked" || micState === "unsupported") discardSpeech();
+  }, [micEnabled, micState]);
   if (!p) return null;
   const mic = micUsable();
-  const speakHint = touch ? UI.speakTouch : UI.speakKeys;
+  const showChoices = p.buttons || !mic;
+  const listening = p.status === "listening";
+  const processing = p.status === "processing";
+  const activity = p.soundDetected || p.speechDetected;
+  const level = Math.max(0, Math.min(1, p.inputLevel ?? (activity ? 0.75 : 0)));
+  const blocked = micEnabled && (micState === "blocked" || micState === "unsupported" || !recognition.supported);
+  const enableMic = async () => {
+    if (requesting) return;
+    setRequesting(true);
+    const settings = { ...getGame().settings, mic: true };
+    saveSettings(settings);
+    setGame({ settings });
+    const permission = await requestMicPermission();
+    setGame({ micState: !recognition.supported || permission === "unavailable" ? "unsupported" : permission === "denied" ? "blocked" : permission === "granted" ? "ready" : "unknown" });
+    setRequesting(false);
+  };
   const status =
-    p.status === "listening"
-      ? UI.listening
+    !micEnabled
+      ? { en: "Microphone OFF", ja: "マイク オフ" }
+      : blocked
+        ? { en: "Microphone unavailable. Tap an answer!", ja: "マイクが つかえないよ。こたえを タップしてね！" }
+        : listening
+      ? { en: "Listening... Speak now!", ja: "きいているよ！ はなしてね！" }
+      : processing
+        ? { en: "Checking...", ja: "かくにんちゅう…" }
       : p.status === "miss"
         ? p.misses === 2
           ? UI.listen
@@ -59,9 +89,9 @@ export function PromptPanel() {
           ? UI.unclear
           : p.status === "wrong"
             ? UI.wrong
-            : p.buttons
-              ? UI.choose
-              : speakHint;
+            : p.speechHint
+              ? { en: "Let's try! Tap the mic and speak.", ja: "もういちど！ マイクを おして はなそう！" }
+              : { en: "Tap the mic and speak!", ja: "マイクを おして はなそう！" };
   return (
     <div className={`panel prompt ui ${p.status}`} data-testid="prompt" role="dialog" aria-label="English">
       {p.question && (
@@ -79,7 +109,7 @@ export function PromptPanel() {
       )}
       <div className="prompt-main">
         <div className="prompt-body">
-          {!p.buttons && p.frame && (
+          {!showChoices && p.frame && (
             <div className="frame" data-testid="frame">
               <span className="frame-text">{p.frame.before}</span>
               <span className="slots">
@@ -94,7 +124,7 @@ export function PromptPanel() {
               <span className="frame-text">{p.frame.after}</span>
             </div>
           )}
-          {!p.buttons && !p.frame && (
+          {!showChoices && !p.frame && (
             <ol className={`sentences ${p.sentences.length > 1 ? "many" : "one"}`}>
               {p.sentences.map((s) => (
                 <li key={s.id} className={`sentence ${p.matched === s.id ? "matched" : ""} ${p.reading ? "reading" : ""}`} data-testid="sentence">
@@ -104,7 +134,7 @@ export function PromptPanel() {
               ))}
             </ol>
           )}
-          {p.buttons && (
+          {showChoices && (
             <div className={`choices n${p.choices.length}`} role="group">
               {p.choices.map((c, i) => (
                 <button
@@ -124,15 +154,25 @@ export function PromptPanel() {
           )}
           <div className="prompt-controls">
             {mic && p.status !== "correct" && (
-              <button className={`mic ${p.status === "listening" ? "on" : ""}`} onClick={() => micPress()} aria-label="Speak" data-testid="mic">
+              <button className={`mic prompt-mic ${listening ? "on" : ""}`} onClick={() => micPress()} aria-label={listening ? "Stop listening" : processing ? "Checking speech" : "Speak"} disabled={processing || requesting} data-testid="mic">
                 <Icon id="mic" size={30} />
-                {!touch && <kbd>SPACE</kbd>}
+                <span className="mic-label">{listening ? "Stop" : processing ? "…" : "Speak"}</span>
+                {listening && <Ja>とめる</Ja>}
+                {!touch && !listening && <kbd>SPACE</kbd>}
+              </button>
+            )}
+            {!mic && p.status !== "correct" && (
+              <span className="mic-unavailable" aria-hidden="true"><Icon id="mic" size={34} /><span className="mic-slash" /></span>
+            )}
+            {!micEnabled && p.status !== "correct" && (
+              <button className="enable-mic" onClick={() => void enableMic()} disabled={requesting} data-testid="enable-mic">
+                {requesting ? "Checking..." : "Turn on mic"}<Ja>{requesting ? "かくにんちゅう…" : "マイクを オンにする"}</Ja>
               </button>
             )}
             <button className="speaker" onClick={() => void replay()} aria-label="Listen again" data-testid="replay">
               <Icon id="speaker" size={26} />
             </button>
-            <div className="prompt-status" data-testid="prompt-status">
+            <div className="prompt-status" data-testid="prompt-status" role="status" aria-live="polite">
               {p.status === "correct" ? (
                 <span className="good">
                   <Icon id="check" size={26} /> Great!
@@ -140,7 +180,16 @@ export function PromptPanel() {
               ) : (
                 <>
                   <span>{status.en}</span>
-                  <Ja>{p.status === "ready" && p.help ? p.help : status.ja}</Ja>
+                  <Ja>{status.ja}</Ja>
+                  {p.status === "ready" && mic && p.help && <Ja>{p.help}</Ja>}
+                  {listening && (
+                    <>
+                      <span className={`mic-level ${activity ? "detected" : ""}`} role="meter" aria-label="Microphone sound level" aria-valuemin={0} aria-valuemax={1} aria-valuenow={level} data-testid="mic-level">
+                        {[0.12, 0.3, 0.48, 0.66, 0.84].map((threshold, i) => <i key={threshold} className={level >= threshold ? "lit" : ""} style={{ height: `${7 + i * 3}px` }} />)}
+                      </span>
+                      <span className="mic-auto-hint">Just speak! It stops automatically.<Ja>はなすだけで OK！</Ja></span>
+                    </>
+                  )}
                 </>
               )}
               {p.heard && p.status !== "ready" && (

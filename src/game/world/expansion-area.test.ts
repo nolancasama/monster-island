@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { isWalkable, moveCircle, PLAYER_R } from "./collision";
-import { CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, STAGES, STAGE_EXITS, zoneAt } from "./lowland";
+import { CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, STAGES, STAGE_EXITS, ZONES, nearestOnTrail, zoneAt } from "./lowland";
 import { SECRET_IDS } from "./elementObjects";
 import { LILY_ROUTE, hopTarget } from "../logic/lilyHop";
 import { GROVE_STREAM_FERRY } from "./groveStream";
@@ -59,7 +59,13 @@ export function measureAreas() {
         if (zone === "causeway" && x >= 92 && x <= 100 && z >= -252 && z <= -239)
           areas.causewayFormerStairs = (areas.causewayFormerStairs ?? 0) + .25;
         if (zone === "forest1") {
-          const part = x < necks[0] ? "forestLeftArm" : x > necks[1] ? "forestRightArm" : "forestBase";
+          // The approach inherited the old Grove's overlapping raw shapes;
+          // it now belongs to Forest until the entrance ferry lands.
+          const entrance = ZONES.grove.walk.some(sh => sh.kind === "rect"
+            ? x >= sh.x0 && x <= sh.x1 && z >= sh.z0 && z <= sh.z1
+            : sh.kind === "disc" ? Math.hypot(x - sh.x, z - sh.z) <= sh.r
+              : nearestOnTrail(sh.pts, x, z).d <= sh.w);
+          const part = entrance ? "forestEntrance" : x < necks[0] ? "forestLeftArm" : x > necks[1] ? "forestRightArm" : "forestBase";
           areas[part] = (areas[part] ?? 0) + 0.25;
         }
       }
@@ -68,15 +74,15 @@ export function measureAreas() {
 }
 it("preserves the base and downstream floor budgets, accounting for the removed branch approaches and new arms", () => {
   const a = measureAreas();
-  // The deep channel now gates the door rather than the entrance; explicit
+  // The deep channel gates the entrance; explicit
   // ferry edges retain every remaining ground pocket and the optional lily route.
   let groveFloor = 0;
   const groveGates = { solved: ["groveStream", "groveLilies", "canopyAscentRope", "canopyVines", "canopyRope"] as const, secrets: SECRET_IDS, act2: true, cleared: STAGES };
   for (let x = 20; x < 134; x += .5) for (let z = -338; z < -153.6; z += .5)
     if (zoneAt(x, z) === "grove" && isWalkable(x, z, groveGates, PLAYER_R)) groveFloor += .25;
   expect(a.grove).toBe(groveFloor);
-  expect(1423 - a.grove).toBeGreaterThan(150);
-  expect(1423 - a.grove).toBeLessThan(260);
+  expect(1423 - a.grove - a.forestEntrance).toBeGreaterThan(150);
+  expect(1423 - a.grove - a.forestEntrance).toBeLessThan(260);
   // Slice 4 removes stair area; only the authored raised decks remain Canopy.
   // Compare flood-fill reachability against independently sampled deck floor.
   let canopyFloor = 0;
@@ -101,5 +107,5 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
   }
   expect(a.forestLeftArm).toBeGreaterThan(200);
   expect(a.forestRightArm).toBeGreaterThan(200);
-  expect(a.forest1).toBe(a.forestBase + a.forestLeftArm + a.forestRightArm);
+  expect(a.forest1).toBe(a.forestBase + a.forestLeftArm + a.forestRightArm + a.forestEntrance);
 });

@@ -7,6 +7,7 @@ import { CAMERA_PROFILES } from "../../src/scene/cameraProfiles";
 import { BEACON_ARENA } from "../../src/game/logic/beacon";
 import { GATE_PILLARS, groundY } from "../../src/game/world/island";
 import { CANOPY_ROPES, FOREST_ARMS } from "../../src/game/world/lowland";
+import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";
 
 type Vec = { x: number; y: number; z: number };
 type CameraState = MiState & { camera: MiState["camera"] & {
@@ -37,7 +38,7 @@ const HOME: Sample[] = [
   { profile: "volcano-tunnel", x: 64, z: -113 },
   { profile: "sanctuary-courtyard", x: 70, z: -127.2 },
   { profile: "sanctuary-garden", x: 64, z: -137 },
-  { profile: "forest-left-arm", x: FOREST_ARMS.left[3][0], z: FOREST_ARMS.left[3][1] },
+  { profile: "forest-left-arm", x: FOREST_ARMS.left[3][0], z: FOREST_ARMS.left[3][1], shot: [GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z] },
   { profile: "forest-right-arm", x: FOREST_ARMS.right[3][0], z: FOREST_ARMS.right[3][1] },
   { profile: "forest-base", x: 75, z: -176 },
   { profile: "flooded-grove", x: 55, z: -225 },
@@ -63,7 +64,7 @@ function fixture() {
   for (const id of ["leafy", "bubbo", "puff", "ember", "lumo"] as const)
     p.monsters[id] = { discovered: true, friend: true, invited: true, asked: {}, canKnown: {}, described: { name: true, size: true, part: true } };
   p.metMaple = true; p.endings = 3; p.active = "leafy";
-  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveLilies", "canopyVines", "canopyRope"];
+  p.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame", "groveStream", "groveLilies", "canopyVines", "canopyRope"];
   p.act2 = { ...p.act2, started: true, lumoTaken: true, descended: true, portFound: true, harbor: true,
     cleared: ["forest1", "grove", "canopy", "causeway", "coast"], tutorial: ["attack", "coins", "special", "eat", "rest", "switch"] };
   p.act3 = { ...p.act3, voyageDone: true, hollowFound: true, cleared: [...CLOUD_STAGES], puzzles: [...CLOUD_PUZZLES],

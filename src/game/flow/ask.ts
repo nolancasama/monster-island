@@ -7,7 +7,7 @@ import { MONSTERS } from "../data/monsters";
 import { NPCS, type NpcId } from "../data/town";
 import { FAMILY, type FamilyId } from "../data/family";
 import type { MonsterId } from "../types";
-import { recognition, HARD_ERRORS } from "../../audio/recognition";
+import { recognition, HARD_ERRORS, type ListenHandle } from "../../audio/recognition";
 import { tts } from "../../audio/tts";
 import { audio } from "../../audio/audio";
 import { DebugScriptCancelled, debugGuard, debugInputPaused, debugWait, onDebugScriptCancel } from "../debugLifecycle";
@@ -22,7 +22,7 @@ import { DebugScriptCancelled, debugGuard, debugInputPaused, debugWait, onDebugS
  *    "Yes, I do. / No, I don't."); whichever is said or tapped is the answer.
  *
  * One press of Space / 🎤 = one bounded listening session. A valid interim
- * result is accepted at once; a session that ends without a match is a miss.
+ * result is accepted at once; only recognised wrong/unclear speech is a miss.
  * Miss 1: try again. Miss 2: the sentence is read aloud again. Miss 3: the
  * choices become tappable. Permission/hardware errors switch to tapping at once.
  */
@@ -59,7 +59,11 @@ interface Active {
   req: AskRequest;
   resolve: (id: PhraseId | null) => void;
   done: boolean;
-  stopListening: (() => void) | null;
+  listening: ListenHandle | null;
+  stopRequested: (() => void) | null;
+  lastTransition: number;
+  silentSessions: number;
+  silenceModelled: boolean;
   back: Mode;
   speechVersion: number;
 }
@@ -133,6 +137,8 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
     frame: req.frame ? { ...req.frame, slots: req.options.map((id) => choice(req, id)) } : null,
     choices: choicesFor(req),
     status: "ready",
+    soundDetected: false,
+    speechDetected: false,
     heard: "",
     misses: 0,
     buttons: !mic || req.tapAlways === true,
@@ -144,7 +150,8 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
   const back: Mode = g.mode === "busy" ? "busy" : "explore";
   setGame({ prompt, mode: "ask", line: null });
   return debugGuard(new Promise<PhraseId | null>((resolve) => {
-    active = { req, resolve, done: false, stopListening: null, back, speechVersion: 0 };
+    active = { req, resolve, done: false, listening: null, stopRequested: null, lastTransition: -Infinity,
+      silentSessions: 0, silenceModelled: false, back, speechVersion: 0 };
     void readOpening(req, prompt.id);
   }));
 }
@@ -172,7 +179,7 @@ async function readSentences(id: number) {
 export async function replay() {
   if (debugInputPaused()) return;
   const p = getGame().prompt;
-  if (!p || p.status === "listening") return;
+  if (!p || p.status === "listening" || p.status === "processing") return;
   tts.cancel();
   if (p.buttons) {
     if (p.question) await speak(p.question.en, p.question.by);
@@ -189,8 +196,11 @@ function finish(id: PhraseId | null) {
   const a = active;
   if (!a || a.done) return;
   a.done = true;
-  a.stopListening?.();
-  a.stopListening = null;
+  a.speechVersion++;
+  a.listening?.abort();
+  a.listening = null;
+  a.stopRequested = null;
+  audio.setListening(false);
   active = null;
   setGame({ prompt: null, mode: a.back });
   a.resolve(id);
@@ -201,12 +211,14 @@ function succeed(id: PhraseId) {
   if (!a || a.done) return;
   // One success = one action: everything after this is ignored.
   a.done = true;
-  a.stopListening?.();
-  a.stopListening = null;
+  a.speechVersion++;
+  a.listening?.abort();
+  a.listening = null;
+  a.stopRequested = null;
   audio.setListening(false);
   tts.cancel();
   audio.play("correct");
-  update({ status: "correct", matched: id, wrongId: null });
+  update({ status: "correct", matched: id, wrongId: null, soundDetected: false, speechDetected: false, inputLevel: undefined });
   updateProgress((p) => noteSaid(p, id));
   void debugWait(fastMode() ? 60 : 600).then(() => {
     if (active !== a) return;
@@ -228,8 +240,10 @@ export function micPress() {
   const a = active;
   const p = getGame().prompt;
   if (!a || a.done || !p) return;
+  if (Date.now() - a.lastTransition < 350 || p.status === "processing") return;
   if (p.status === "listening") {
-    a.stopListening?.();
+    a.lastTransition = Date.now();
+    a.stopRequested?.();
     return;
   }
   if (!micUsable()) {
@@ -238,52 +252,111 @@ export function micPress() {
   }
   tts.cancel();
   const speechOptions = [...new Set(a.req.kind === "choice" ? [...a.req.options, ...(a.req.speechAliases ?? [])] : [a.req.options[0]])].map((id) => PHRASES[id]);
-  let last: Judgement = { kind: "none", heard: "" };
-  let hard = false;
+  a.lastTransition = Date.now();
+  let best: string[] = [];
+  let hasFinal = false;
+  let error: string | null = null;
+  let userStopped = false;
+  let decided = false;
   const speechVersion = ++a.speechVersion;
+  const current = () => active === a && !a.done && !decided && a.speechVersion === speechVersion && getGame().prompt?.id === p.id && !debugInputPaused();
+  // Every terminal path uses this one guarded decision, including synchronous errors.
+  const decide = (match?: Extract<Judgement, { kind: "match" }>) => {
+    if (!current()) return;
+    const j = match ?? judgeSpeech(best, speechOptions);
+    const outcome: NonNullable<PromptUi["outcome"]> = error && HARD_ERRORS.has(error) ? "hardware"
+      : j.kind === "match" ? "success"
+      : error === "no-speech" || error === "aborted" || error === "network" ? "silence"
+      : best.some((s) => s.trim()) ? j.kind === "unclear" ? "unclear" : "mismatch"
+      : userStopped ? "userStopped" : "silence";
+    decided = true;
+    a.speechVersion++;
+    const handle = a.listening;
+    a.listening = null;
+    a.stopRequested = null;
+    a.lastTransition = Date.now();
+    audio.setListening(false);
+    update({ outcome, soundDetected: false, speechDetected: false, inputLevel: undefined });
+    if (outcome === "success" && j.kind === "match") {
+      handle?.stop();
+      heardForLast = j.heard;
+      succeed(j.id);
+      return;
+    }
+    applyOutcome(outcome);
+  };
   audio.setListening(true);
   audio.play("micOn");
-  update({ status: "listening", heard: "", reading: false, wrongId: null });
-  a.stopListening = recognition.listen(
+  update({ status: "listening", heard: "", reading: false, wrongId: null, speechHint: null, outcome: undefined,
+    soundDetected: false, speechDetected: false, inputLevel: undefined });
+  a.stopRequested = () => {
+    if (!current()) return;
+    userStopped = true;
+    update({ status: "processing" });
+    a.listening?.stop();
+  };
+  let handle: ListenHandle | undefined;
+  handle = recognition.listen(
     {
-      onResult(alts) {
-        if (a.done || a.speechVersion !== speechVersion || debugInputPaused()) return;
+      onResult(alts, isFinal) {
+        if (!current()) return;
         const j = judgeSpeech(alts, speechOptions);
         if (alts[0]) update({ heard: alts[0] });
         if (j.kind === "match" && accepted(j.id)) {
-          heardForLast = alts[0] ?? "";
-          succeed(j.id);
+          decide(j);
           return;
         }
-        last = j;
+        if (alts.some((s) => s.trim()) && (isFinal || !hasFinal)) best = alts;
+        if (isFinal && alts.some((s) => s.trim())) hasFinal = true;
       },
       onError(err) {
-        if (a.speechVersion !== speechVersion) return;
-        if (HARD_ERRORS.has(err)) hard = true;
+        if (!current()) return;
+        error = err;
+        update({ status: "processing" });
+        decide();
+        handle?.abort();
+      },
+      onStopping() {
+        if (current()) update({ status: "processing", soundDetected: false, speechDetected: false, inputLevel: undefined });
+      },
+      onActivity(activity) {
+        if (current()) update({ soundDetected: activity.sound, speechDetected: activity.speech, inputLevel: activity.level });
       },
       onEnd() {
-        audio.setListening(false);
-        if (a.done || a.speechVersion !== speechVersion || debugInputPaused()) return;
-        a.stopListening = null;
-        audio.play("micOff");
-        miss(last, hard);
+        if (!current()) return;
+        update({ status: "processing" });
+        decide();
       }
     },
     7000
   );
+  if (current()) a.listening = handle;
+  else handle.abort();
 }
 
-function miss(j: Judgement, hard: boolean) {
+function applyOutcome(outcome: NonNullable<PromptUi["outcome"]>) {
   const p = getGame().prompt;
-  if (!p) return;
-  if (hard) {
+  const a = active;
+  if (!p || !a) return;
+  if (outcome === "hardware") {
+    a.silentSessions = 0;
     setGame({ micState: "blocked", hint: "micBlocked" });
-    update({ status: "miss", buttons: true });
+    update({ status: "ready", buttons: true });
     return;
   }
+  if (outcome === "silence" || outcome === "userStopped") {
+    a.silentSessions++;
+    update({ status: "ready", speechHint: outcome });
+    if (a.silentSessions >= 2 && !a.silenceModelled) {
+      a.silenceModelled = true;
+      void readSentences(p.id);
+    }
+    return;
+  }
+  a.silentSessions = 0;
   const misses = p.misses + 1;
   audio.play("error");
-  update({ status: j.kind === "unclear" ? "unclear" : "miss", misses, buttons: p.buttons || misses >= 3 });
+  update({ status: outcome === "unclear" ? "unclear" : "miss", misses, buttons: p.buttons || misses >= 3 });
   if (misses === 2) void readSentences(p.id);
 }
 
@@ -292,7 +365,7 @@ export function choose(id: PhraseId) {
   if (debugInputPaused()) return;
   const a = active;
   const p = getGame().prompt;
-  if (!a || a.done || !p || !p.buttons || p.status === "listening") return;
+  if (!a || a.done || !p || (!p.buttons && micUsable()) || p.status === "listening" || p.status === "processing") return;
   if (accepted(id)) {
     heardForLast = "";
     succeed(id);
@@ -374,15 +447,23 @@ export function wait(ms: number): Promise<void> {
 /** Stop an in-flight microphone session when the tester opens the menu. */
 export function suspendDebugSpeech() {
   tts.cancel();
-  const stop = active?.stopListening;
+  discardSpeech();
+}
+
+/** Real cancellation: discard pending results when the prompt UI leaves. */
+export function discardSpeech() {
+  const handle = active?.listening;
   if (active) {
     active.speechVersion++;
-    active.stopListening = null;
+    active.listening = null;
+    active.stopRequested = null;
+    active.lastTransition = Date.now();
   }
-  stop?.();
+  handle?.abort();
   audio.setListening(false);
   const prompt = getGame().prompt;
-  if (prompt) update({ status: prompt.status === "listening" ? "ready" : prompt.status, reading: false });
+  if (prompt) update({ status: prompt.status === "listening" || prompt.status === "processing" ? "ready" : prompt.status,
+    reading: false, soundDetected: false, speechDetected: false, inputLevel: undefined });
 }
 
 function ignoreDebugCancellation(error: unknown) {
@@ -392,7 +473,8 @@ function ignoreDebugCancellation(error: unknown) {
 onDebugScriptCancel(() => {
   if (active) {
     active.done = true;
-    active.stopListening?.();
+    active.speechVersion++;
+    active.listening?.abort();
     active.resolve(null);
     active = null;
   }

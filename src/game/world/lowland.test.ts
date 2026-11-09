@@ -4,7 +4,7 @@ import { layerOfZone } from "./layers";
 import { groundY } from "./island";
 import {
   lowlandRegionVisible, forestBankY, STAGE_EXITS, STAGES, ACT2_OBSTACLE_PLACE, CHESTS, CLIFF_ROPE, ENEMY_SPAWNS, LILY_PADS, PIER2, SERVICES, ZONES, zoneAt, type ZoneId,
-  FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
+  FOREST_ARMS, inMesa, lowlandWalkable, lowlandY, streamY, nearestOnTrail, trailLength, trailPoint, routeMarker, CANOPY_GAPS, gapDeck,
   RIGHT_ARM_TREES, RIGHT_ARM_BOULDERS, RIGHT_ARM_ROOTS, RIGHT_ARM_SOLIDS, RUIN_PILLARS, lowlandSolids,
   GROVE_CROSSING, ISLET, POND, POND_Y, lilyPadRise, CANOPY_HEIGHT, canopyDeckY, CANOPY_ROPES,
   CAUSEWAY, CAVE_MOUTHS, GROVE_DOOR, groveDoorOpen,
@@ -85,7 +85,7 @@ function reachable(g: Gates, avoid: ZoneId[] = [], radius = PLAYER_R, origin = C
 }
 
 describe("the lowland below the sanctuary", () => {
-  it("seals the door channel at every body radius with or without the separate lily puzzle", () => {
+  it("seals the entrance channel at every body radius and connects each bank to its area", () => {
     // Clear the Grove door as well: the stream itself must stop the route, rather
     // than an uncleared stage gate hiding an end-around through the Causeway.
     for (const lilies of [false, true]) for (const radius of [0, PLAYER_R, .55]) {
@@ -95,9 +95,13 @@ describe("the lowland below the sanctuary", () => {
         expect(flood.near(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, .8)).toBe(true);
         expect(flood.near(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, 1), `${radius}, lilies=${lilies}`).toBe(false);
         expect(flood.near(GROVE_DOOR.x, GROVE_DOOR.z, 1), `${radius}, lilies=${lilies}`).toBe(false);
-        for (const enemy of ENEMY_SPAWNS.filter(e => e.zone === "grove"))
-          expect(flood.near(enemy.x, enemy.z, 1), `home ${enemy.x},${enemy.z}, radius=${radius}, lilies=${lilies}`).toBe(true);
+        expect(flood.near(42, -196, 1), `forest arm, radius=${radius}`).toBe(true);
       }
+      const grove = reachable(g, [], radius, GROVE_STREAM_FERRY.south);
+      expect(grove.near(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, 1)).toBe(false);
+      expect(grove.near(GROVE_DOOR.x, GROVE_DOOR.z, 1)).toBe(true);
+      for (const enemy of ENEMY_SPAWNS.filter(e => e.zone === "grove"))
+        expect(grove.near(enemy.x, enemy.z, 1), `home ${enemy.x},${enemy.z}, radius=${radius}, lilies=${lilies}`).toBe(true);
       const moved = moveCircle(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z,
         GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, radius, g);
       expect(groveStreamSide(moved.x, moved.z)).toBe("north");
@@ -108,36 +112,39 @@ describe("the lowland below the sanctuary", () => {
   }, 60000);
 
   it("uses one splash footprint with a shallow rim, deep centre and dry near bank", () => {
-    expect(hazardAt(56, -233.8, "home")?.id).toBe("groveStream");
-    expect(waterAt(56, -233.8, "home")).toBe("deep");
-    expect(waterAt(54, -231, "home")).toBe("shallow");
-    expect(hazardAt(54, -230.5, "home")).toBeNull();
+    expect(hazardAt(46, -210.85, "home")?.id).toBe("groveStream");
+    expect(waterAt(46, -210.85, "home")).toBe("deep");
+    expect(waterAt(46, -208.5, "home")).toBe("shallow");
+    expect(hazardAt(46, -207.2, "home")).toBeNull();
+    expect(lowlandY(46, -210.85)).toBeLessThan(streamY(46, -210.85) - 1.5);
+    expect(zoneAt(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z)).toBe("forest1");
+    expect(zoneAt(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z)).toBe("grove");
     for (const radius of [0, PLAYER_R, .55]) {
-      expect(isWalkable(56, -233.8, gates(), radius, true)).toBe(false);
+      expect(isWalkable(46, -210.85, gates(), radius, true)).toBe(false);
       expect(isWalkable(GROVE_STREAM_FERRY.north.x, GROVE_STREAM_FERRY.north.z, gates(), radius)).toBe(true);
       expect(isWalkable(GROVE_STREAM_FERRY.south.x, GROVE_STREAM_FERRY.south.z, gates(), radius)).toBe(true);
     }
   });
 
-  it("restores ordinary dry walking ground where the entrance stream used to be", () => {
-    for (const [x, z] of [[36, -210.5], [46, -210.85], [54, -210], [46, -208.45]]) {
+  it("restores ordinary dry walking ground where the door stream used to be", () => {
+    for (const [x, z] of [[56, -233.4], [56, -230], [56, -237.6], [64, -235.4]]) {
       expect(hazardAt(x, z, "home"), `${x},${z}`).toBeNull();
       expect(waterAt(x, z, "home"), `${x},${z}`).toBe("none");
       for (const radius of [0, PLAYER_R, .55]) expect(isWalkable(x, z, gates(), radius), `${x},${z}, radius=${radius}`).toBe(true);
     }
   });
 
-  it("keeps both cave mouths, the lily puzzle and Bubbo reward north and clear of the door channel", () => {
+  it("keeps both cave mouths, the lily puzzle and Bubbo reward on the Grove bank", () => {
     const points = [GROVE_CROSSING.near, GROVE_CROSSING.landing, GROVE_CROSSING.friendLanding, ...LILY_PADS,
-      SECRET_SITES.bubboLedgeKey.chest, { x: 60, z: -212.9 },
+      SECRET_SITES.bubboLedgeKey.chest,
       ...CAVE_MOUTHS.flatMap(mouth => [mouth.groundX0, mouth.groundX1].flatMap(x =>
         [mouth.z0, mouth.z1].map(z => ({ x, z }))))];
     for (const p of points) {
-      expect(groveStreamSide(p.x, p.z), JSON.stringify(p)).toBe("north");
-      expect(nearestOnTrail(GROVE_STREAM.pts, p.x, p.z).d - GROVE_STREAM.w, JSON.stringify(p)).toBeGreaterThanOrEqual(1.5);
+      expect(groveStreamSide(p.x, p.z), JSON.stringify(p)).toBe("south");
+      expect(nearestOnTrail(GROVE_STREAM.pts, p.x, p.z).d - GROVE_STREAM.w, JSON.stringify(p)).toBeGreaterThanOrEqual(.7);
     }
     for (const disc of [ISLET, POND]) expect(nearestOnTrail(GROVE_STREAM.pts, disc.x, disc.z).d - GROVE_STREAM.w - disc.r).toBeGreaterThanOrEqual(1.5);
-    expect(Math.abs(GROVE_STREAM_FERRY.north.x - GROVE_CROSSING.near.x)).toBeGreaterThan(5);
+    expect(Math.abs(GROVE_STREAM_FERRY.south.z - GROVE_CROSSING.near.z)).toBeGreaterThan(5);
   });
 
   it("leaves at least 4.5m of dry landing between the water and the door approach", () => {
@@ -152,7 +159,7 @@ describe("the lowland below the sanctuary", () => {
     }
   });
 
-  it("renders the same capsule footprint used by the door stream hazard", () => {
+  it("renders the same capsule footprint used by the entrance stream hazard", () => {
     const geometry = groveStreamWaterGeometry(), vertices = geometry.getAttribute("position");
     for (let i = 0; i < vertices.count; i++) {
       expect(nearestOnTrail(GROVE_STREAM.pts, vertices.getX(i), vertices.getZ(i)).d).toBeLessThanOrEqual(GROVE_STREAM.w + .00002);
@@ -160,12 +167,12 @@ describe("the lowland below the sanctuary", () => {
     geometry.dispose();
   });
 
-  it("retains Grove spawn indices and keeps every home north and at least 1.5m outside the door water", () => {
-    for (const [index, x, z] of [[5, 53, -216.5], [6, 38.8, -215.5], [7, 51.5, -215.5], [10, 48.5, -229], [11, 34, -230], [12, 56, -224], [35, 62, -216.5]]) {
+  it("retains Grove spawn indices and keeps every home on its Grove bank", () => {
+    for (const [index, x, z] of [[5, 53, -216.5], [6, 38.8, -215.5], [7, 51.5, -215.5], [10, 48.5, -232.2], [11, 37.8, -233.8], [12, 56, -239.5], [35, 62, -216.5]]) {
       expect(ENEMY_SPAWNS[index]).toMatchObject({ zone: "grove", x, z });
     }
     for (const e of ENEMY_SPAWNS.filter(e => e.zone === "grove")) {
-      expect(groveStreamSide(e.x, e.z)).toBe("north");
+      expect(groveStreamSide(e.x, e.z)).toBe("south");
       expect(nearestOnTrail(GROVE_STREAM.pts, e.x, e.z).d - GROVE_STREAM.w, `${e.x},${e.z}`).toBeGreaterThan(1.5);
     }
   });
@@ -420,7 +427,7 @@ describe("the lowland below the sanctuary", () => {
     expect(ENEMY_SPAWNS[23]).toMatchObject({ x: 107.4, z: -248.8 });
     // Slice A moves these homes away from the passage rim and shrine chest;
     // restore only their old coordinates when checking all other saved indices.
-    // Door-channel relocation also changes only Grove homes 10–12.
+    // The entrance restoration returns Grove homes 10–12 to their old points.
     const oldGrove: Record<number, { x: number; z: number }> = {
       5: { x: 57, z: -211 }, 6: { x: 38.8, z: -211.6 }, 7: { x: 51.5, z: -211.8 },
       10: { x: 48.5, z: -232.2 }, 11: { x: 37.8, z: -233.8 }, 12: { x: 56, z: -239.5 }, 35: { x: 62, z: -210 },

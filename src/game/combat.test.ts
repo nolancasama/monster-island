@@ -13,7 +13,7 @@ import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/
 import { run } from "./flow/script";
 import { audio } from "../audio/audio";
 import { pressAttack, releaseAttack } from "../input/attackInput";
-import { hazardAt } from "./logic/elements";
+import { hazardAt, ignite } from "./logic/elements";
 import { ELEMENT_OBJECTS } from "./world/elementObjects";
 import { waterAt } from "./logic/water";
 import { startPanic } from "./logic/panic";
@@ -284,6 +284,63 @@ describe("water extinguishing", () => {
     expect(vi.mocked(audio.play).mock.calls.filter(([s]) => s === "sizzle")).toHaveLength(1);
     advanceCombat(.4);
     expect(e.state).not.toBe("recover");
+    expect(vi.mocked(audio.play).mock.calls.filter(([s]) => s === "sizzle")).toHaveLength(1);
+    expect(cb.fx.filter(f => f.kind === "steam")).toHaveLength(1);
+  });
+
+  it.each(["pond bank", "stream bank"])("burns for all 2.5 seconds on a dry %s, silently expiring after heavy panic", bank => {
+    const e = pondEnemy(.05);
+    if (bank === "stream bank") Object.assign(e, { x: 55.9, z: -215.85 });
+    expect(waterAt(e.x, e.z, "home")).toBe("none");
+    e.kind = "shellback";
+    e.burn = ignite(null, rt.time);
+    e.panic = startPanic("heavy", rt.time);
+    e.control = { kind: "snared", t0: rt.time, until: rt.time + 10 };
+    const start = rt.time;
+    rt.time = start + 2; combatTick(2);
+    expect(e.panic).toBeNull();
+    expect(e.burn?.until).toBe(start + 2.5);
+    rt.time = start + 2.499; combatTick(.499);
+    expect(e.burn).not.toBeNull();
+    rt.time = start + 2.5; combatTick(.001);
+    expect(e.burn).toBeNull();
+    expect(cb.fx.some(f => f.kind === "steam")).toBe(false);
+    expect(vi.mocked(audio.play).mock.calls.some(([s]) => s === "sizzle")).toBe(false);
+  });
+
+  it("preserves the full remaining burn duration through a pause", () => {
+    const e = pondEnemy(2);
+    e.burn = ignite(null, rt.time); e.panic = null;
+    e.control = { kind: "snared", t0: rt.time, until: rt.time + 20 };
+    const start = rt.time;
+    setGame({ journalOpen: true });
+    rt.time += 3; combatTick(3);
+    expect(e.burn!.until).toBe(start + 5.5);
+    setGame({ journalOpen: false });
+    rt.time += 2.499; combatTick(2.499);
+    expect(e.burn).not.toBeNull();
+    rt.time += .002; combatTick(.002);
+    expect(e.burn).toBeNull();
+    expect(vi.mocked(audio.play).mock.calls.some(([s]) => s === "sizzle")).toBe(false);
+  });
+
+  it("defers forced water contact until a falling bubble victim lands", () => {
+    const e = pondEnemy(.2);
+    e.air = 1.2;
+    e.fall = { from: 1.2, t0: rt.time };
+    e.kx = -6;
+    rt.time += .1; combatTick(.1);
+    expect(waterAt(e.x, e.z, "home")).not.toBe("none");
+    expect(e.air).toBeGreaterThan(.3);
+    expect(e.burn).not.toBeNull();
+    expect(e.state).not.toBe("ko");
+    expect(cb.fx.some(f => f.kind === "steam")).toBe(false);
+    expect(vi.mocked(audio.play).mock.calls.some(([s]) => s === "sizzle")).toBe(false);
+    advanceCombat(.4);
+    expect(e.burn).toBeNull(); expect(e.panic).toBeNull();
+    expect(e.state).toBe("ko");
+    expect(cb.fx.filter(f => f.kind === "steam")).toHaveLength(1);
+    expect(vi.mocked(audio.play).mock.calls.filter(([s]) => s === "sizzle")).toHaveLength(1);
   });
 
   it.each(["air", "grabbed", "trapped", "carried"] as const)("waits for landing/release from %s", kind => {
@@ -340,8 +397,8 @@ describe("water extinguishing", () => {
     const e = pondEnemy(.2);
     e.kx = -12;
     if (water === "stream") {
-      Object.assign(e, { x: 56, z: -230.45, homeX: 56, homeZ: -230.45, lastGround: { x: 56, z: -230.45 }, kx: 0, kz: -28 });
-      Object.assign(rt.player, { x: 56, z: -228.45 });
+      Object.assign(e, { x: 46, z: -213.85, homeX: 46, homeZ: -213.85, lastGround: { x: 46, z: -213.85 }, kx: 0, kz: 28 });
+      Object.assign(rt.player, { x: 46, z: -215.85 });
     }
     rt.time += .1; combatTick(.1);
     expect(e.state).toBe("ko");
@@ -353,11 +410,11 @@ describe("water extinguishing", () => {
 
   it("uses the existing panic wade and extinguish rules at the new stream rim", () => {
     const e = pondEnemy(.2);
-    // The east bank has a dry approach. Beside the ferry, the separate
-    // walkable tributary extinguishes fire before the enemy reaches this lip.
-    Object.assign(e, { x: 66, z: -231.5, homeX: 66, homeZ: -231.5, lastGround: { x: 66, z: -231.5 } });
-    Object.assign(rt.player, { x: 66, z: -229.5 });
-    Object.assign(e.panic!, { hx: 0, hz: -1, turnAt: rt.time + 10 });
+    // Grove bank beside the ferry stand: a panicking enemy wades into the
+    // stream's shallow rim and is extinguished without a splash KO.
+    Object.assign(e, { x: 50, z: -213.6, homeX: 50, homeZ: -213.6, lastGround: { x: 50, z: -213.6 } });
+    Object.assign(rt.player, { x: 50, z: -215.6 });
+    Object.assign(e.panic!, { hx: 0, hz: 1, turnAt: rt.time + 10 });
     for (let i = 0; i < 60 && !e.wade; i++) { rt.time += 1 / 60; combatTick(1 / 60); }
     expect(e.wade).not.toBeNull();
     expect(e.burn).toBeNull(); expect(e.panic).toBeNull();
@@ -1092,13 +1149,15 @@ describe("elemental J simulation", () => {
     expect(e.flight!.victims).toEqual([victim.i, next.i]);
   });
 
-  it("ignores a real pond throughout the orbit and applies its hazard at release", () => {
+  it("ignores a real pond throughout the orbit and extinguishes the throw only on landing", () => {
     changeWorld("home");
     for (const enemy of cb.enemies) enemy.state = "gone";
     const e = cb.enemies.find(enemy => enemy.zone === "grove")!;
-    Object.assign(e, { kind: "snapjaw", x: POND.x + POND.r + .2, z: POND.z, hp: 100, state: "recover", timer: 99 });
+    Object.assign(e, { kind: "snapjaw", x: POND.x + POND.r + .2, z: POND.z, hp: 100, state: "recover", timer: 99,
+      burn: ignite(null, rt.time), panicResistUntil: Infinity });
     Object.assign(rt.player, { x: e.x + 2, z: e.z, yaw: -Math.PI / 2 });
     cb.zones.current = "grove";
+    vi.mocked(audio.play).mockClear();
     friend("leafy"); expect(basicAttack()).toBe(true); advanceCombat(.15);
     expect(e.control?.kind).toBe("grabbed");
     let crossedHazard = false;
@@ -1110,8 +1169,25 @@ describe("elemental J simulation", () => {
     }
     expect(crossedHazard).toBe(true);
     advanceCombat(1 / 60);
+    expect(e.state).not.toBe("ko");
+    expect(e.control?.kind).toBe("flung");
+    expect(e.air).toBeGreaterThan(.3);
+    expect(e.burn).not.toBeNull();
+    expect(cb.fx.some(f => f.kind === "steam")).toBe(false);
+    expect(vi.mocked(audio.play).mock.calls.some(([s]) => s === "sizzle")).toBe(false);
+    // Keep the released enemy above the pond until its flight ends; otherwise
+    // the horizontal throw can clear the water and legitimately land dry.
+    Object.assign(e, { x: POND.x + POND.r - .3, z: POND.z, kx: 0, kz: 0 });
+    advanceCombat(.55);
+    expect(e.control).toBeNull();
+    expect(e.fall).not.toBeNull();
+    expect(e.burn).not.toBeNull();
+    expect(cb.fx.some(f => f.kind === "steam")).toBe(false);
+    advanceCombat(.3);
     expect(e.state).toBe("ko");
     expect(cb.zones.defeated.grove).toContain(e.i);
+    expect(cb.fx.filter(f => f.kind === "steam")).toHaveLength(1);
+    expect(vi.mocked(audio.play).mock.calls.filter(([s]) => s === "sizzle")).toHaveLength(1);
   });
 
   it("rejects a new basic or special throughout the swing, including held J after its cooldown", () => {

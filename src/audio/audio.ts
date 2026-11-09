@@ -288,7 +288,9 @@ class AudioEngine {
         this.noiseBurst(t, { filter: "lowpass", freq: 1600, peak: .045, attack: .002, decay: .055 });
         break;
       case "sizzle":
-        this.noiseBurst(t, { filter: "highpass", freq: 2800, to: 900, peak: .075, attack: .008, decay: .22 });
+        // A crisp "T" followed by sustained, airy "SSSS": no bass or pitched impact.
+        this.noiseBurst(t, { filter: "highpass", freq: 7800, peak: .09, attack: .002, decay: .035 });
+        this.noiseBurst(t, { filter: "bandpass", freq: 6800, to: 3800, q: 1.1, peak: .19, attack: .006, decay: .7 });
         break;
       case "crackle":
         for (let i = 0; i < 4; i++) this.noiseBurst(t + i * .045, { filter: "highpass", freq: 2900, peak: .045, attack: .002, decay: .025 });

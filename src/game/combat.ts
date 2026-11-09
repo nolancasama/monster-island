@@ -1090,9 +1090,13 @@ function endEnemyPanic(e: EnemyRt) {
   e.timer = 0;
 }
 
-/** One transition owns the sound and steam, so wet fire cannot spam either. */
+function enemyGrounded(e: EnemyRt) {
+  return e.air < .3 && !["grabbed", "carried", "trapped"].includes(e.control?.kind ?? "");
+}
+
+/** Water-only transition. Natural expiry just clears burn in updateElements. */
 export function extinguish(e: EnemyRt) {
-  if (!e.burn && !e.panic) return;
+  if ((!e.burn && !e.panic) || !enemyGrounded(e) || enemyWater(e) === "none") return;
   e.burn = null;
   e.infernoBlueUntil = 0;
   e.fireTicks = 0;
@@ -1105,8 +1109,7 @@ export function extinguish(e: EnemyRt) {
 }
 
 function extinguishInWater(e: EnemyRt) {
-  if (alive(e) && (e.burn || e.panic) && e.air < .3
-    && !["grabbed", "carried", "trapped"].includes(e.control?.kind ?? "") && enemyWater(e) !== "none") extinguish(e);
+  if (alive(e) && (e.burn || e.panic)) extinguish(e);
 }
 
 function igniteEnemy(e: EnemyRt, now: number) {
@@ -1370,8 +1373,11 @@ function displaceEnemy(e: EnemyRt, x: number, z: number, collision?: (() => bool
     const hazard = hazardAt(nx, nz, cb.world, solved);
     if (blocked(nx, nz, radius, gates) || (!hazard && !isWalkable(nx, nz, gates, 0))) return false;
     e.x = nx; e.z = nz;
+    extinguishInWater(e);
     if (hazard) {
-      if (hazard.kind === "splash") extinguish(e);
+      // A bubble or airborne throw crosses water safely until it lands.
+      // Keep the last dry position for the existing splash KO/reward path.
+      if (hazard.kind === "splash" && !enemyGrounded(e)) continue;
       const plunges = hazard.kind === "fall" && cb.world === "home";
       const lip = standY(e.lastGround.x, e.lastGround.z, progress.solved) + e.air;
       const d = Math.hypot(nx - e.lastGround.x, nz - e.lastGround.z) || 1;
@@ -1511,8 +1517,7 @@ function updateSwing(e: EnemyRt, c: Control, flight: NonNullable<EnemyRt["flight
     c.kind = "flung"; c.t0 += SWING_DURATION; c.until = c.t0 + .55;
     flight.yaw = p.yaw;
     e.kx = Math.sin(p.yaw) * 11; e.kz = Math.cos(p.yaw) * 11;
-    // Test the release point itself: a tether can cross a gap safely, a released
-    // enemy already over that gap must immediately enter the normal hazard path.
+    // Test the release point itself for hazards; water waits for the throw to land.
     displaceEnemy(e, e.x, e.z);
     if (alive(e) && e.control === c) updateSwingFling(e, c, Math.max(0, rt.time - c.t0));
   }
@@ -1592,7 +1597,20 @@ function updateElements(e: EnemyRt, dt: number): boolean {
 const HEAVY_TUG_DAMAGE = 14;
 
 function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
-  const life = kind === "blast" ? .14 + size / 12 : kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+  const life = kind === "steam" ? .85 : kind === "blast" ? .14 + size / 12 : kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+  if (kind === "steam") {
+    let count = 0, oldest = -1;
+    for (let i = 0; i < cb.fx.length; i++) if (cb.fx[i].kind === "steam") {
+      if (oldest < 0) oldest = i;
+      count++;
+    }
+    if (count >= 6) {
+      const reused = cb.fx.splice(oldest, 1)[0];
+      Object.assign(reused, { id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
+      cb.fx.push(reused);
+      return;
+    }
+  }
   cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
   if (cb.fx.length > 24) cb.fx.shift();
 }
@@ -2166,8 +2184,14 @@ function updateEnemy(e: EnemyRt, dt: number, live: boolean) {
     return;
   }
   extinguishInWater(e);
+  const wasAirborne = !enemyGrounded(e);
   const controlled = updateElements(e, dt);
   extinguishInWater(e);
+  if (alive(e) && wasAirborne && enemyGrounded(e)
+    && hazardAt(e.x, e.z, cb.world, cb.world === "cloud" ? getGame().progress.act3.puzzles : getGame().progress.solved)?.kind === "splash") {
+    displaceEnemy(e, e.x, e.z);
+    if (!alive(e)) return;
+  }
   if (e.panic && rt.time >= e.panic.until - 1e-9) {
     endEnemyPanic(e);
   }

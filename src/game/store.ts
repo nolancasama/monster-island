@@ -56,7 +56,12 @@ export interface PromptUi {
   frame: Frame | null;
   /** Tappable sentences (mic-free, or the rescue after three misses). */
   choices: Choice[];
-  status: "ready" | "listening" | "miss" | "unclear" | "correct" | "wrong";
+  status: "ready" | "listening" | "processing" | "miss" | "unclear" | "correct" | "wrong";
+  soundDetected: boolean;
+  speechDetected: boolean;
+  inputLevel?: number;
+  speechHint?: "silence" | "userStopped" | null;
+  outcome?: "success" | "mismatch" | "unclear" | "silence" | "userStopped" | "hardware";
   heard: string;
   misses: number;
   buttons: boolean;

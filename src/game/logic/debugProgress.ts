@@ -32,7 +32,7 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "ropeFoot", label: "Cliff rope foot", target: "cliffUp", step: 9, act: "Act 2", world: "home" },
   { id: "forestEntrance", label: "Forest entrance", target: "forestEntrance", step: 9, zone: "forest1", act: "Act 2", world: "home" },
   { id: "canopyAscentRope", label: "Canopy rope puzzle", target: "canopyAscentRope", step: 9, zone: "forest1", act: "Act 2", world: "home" },
-  { id: "groveStream", label: "Grove door stream north bank", target: "groveStream", step: 9, zone: "grove", act: "Act 2", world: "home" },
+  { id: "groveStream", label: "Grove entrance stream north bank", target: "groveStream", step: 9, zone: "forest1", act: "Act 2", world: "home" },
   { id: "caveMouth", label: "Cave mouth", target: "caveMouth", step: 9, zone: "grove", act: "Act 2", world: "home" },
   { id: "caveChamber", label: "Cave chamber", target: "caveChamber", step: 9, zone: "cave", layer: "cave", act: "Act 2", world: "home" },
   { id: "upperRopeFoot", label: "Upper Canopy rope foot", target: "upperRopeFoot", step: 9, zone: "canopy", act: "Act 2", world: "home" },
@@ -75,7 +75,7 @@ export function progressForDestination(id: string, previous?: Progress): Progres
     p.act2.zone = zone ?? null;
     const before: Partial<Record<ZoneId, number>> = { forest1: 0, grove: 1, canopy: 1, causeway: 3, coast: 4, port: 5 };
     p.act2.cleared = STAGES.slice(0, before[zone ?? "forest1"] ?? 0);
-    if (d.id === "forestEntrance" || d.id === "canopyAscentRope") p.act2.cleared = ["forest1"];
+    if (d.id === "forestEntrance" || d.id === "canopyAscentRope" || d.id === "groveStream") p.act2.cleared = ["forest1"];
     if (zone && zone !== "forest1") p.act2.tutorial = ["attack", "coins", "special", "eat", "rest", "switch"];
     if (zone === "causeway" || zone === "coast" || zone === "port") solve("canopyVines", "canopyRope");
     if (zone === "canopy" || zone === "causeway" || zone === "coast" || zone === "port") solve("canopyAscentRope");

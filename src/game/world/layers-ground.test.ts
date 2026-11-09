@@ -5,24 +5,22 @@ import { isWalkable, obstaclesFor, solidsFor, standY, type Gates } from "./colli
 
 /** SHA-256 fixtures of every ground query. IEEE-754 bytes preserve exact
  * heights; the shape JSON preserves the complete ordered solid definitions.
- * No rounded heights or tolerance comparisons. Re-recorded 2026-11-08 for
- * the intentional Grove entrance → door stream move: its channel/tributaries
- * change ground heights and walking cuts; relocated tree/log/crate solids
- * change the ordered collision definitions. The shallow tributary that lay
- * along the new north bank was removed (it drew a pale strip over the deep
- * water). Door planes and cave pockets stay
- * unchanged. Both historical pocket variants include this new Grove layout. */
+ * No rounded heights or tolerance comparisons. Re-recorded 2026-11-09 only
+ * for the intended entrance ferry restoration: the deep channel/steeper bed,
+ * restored tree/log/crate solids, dry central door approach and Forest-side
+ * zone assignment. Door planes and cave pockets stay unchanged. Both
+ * historical pocket variants include this new Grove layout. */
 const BEFORE_LAYERS: Record<string, string> = {
-  // Ground without mouth pockets, including the relocated door stream.
-  closed: "ea1d06321e0b9a856bc03167c4fcf9511c8e331fe42d90f5a96be849aa39a577",
-  grove: "f848d5bd2ab20f6a0584b3fd8521c03e24754dde07cbb85856280819a706e113",
-  open: "289826e8612f6a6e59feb13ea5789cc73736b4649c71b7f4e0fa7f8547f9549f",
+  // Ground without mouth pockets, including the restored entrance stream.
+  closed: "75bf94a22ab0fcba6b1211a12b3b30200a56f1500a2a0b17916a5348477dc659",
+  grove: "ca0adb216ec0b7e58a419a7c4b97932ea7e0f911087489a397b57b4b25129df4",
+  open: "bf06fd3b0c21c154eb6c140b91656ba8a12c714647c80ecd1c2638ee9cdfd8fc",
 };
-/** Mouth A ground, including the relocated door stream. */
+/** Mouth A ground, including the restored entrance stream. */
 const GOLDEN: Record<string, string> = {
-  closed: "72c306d0902fd30e30364d065c11dbe42c8af7e8f103bcdb01c518a2e99af470",
-  grove: "5c4754067309483fc0a1d89b9771e604334963d4fc5ace0c2ecc73ffd6149116",
-  open: "5d5681292000813a83c170d552df115879b09b7f751426679fa43b66c03bd70b",
+  closed: "b8487bfa5e64f9241d30506ec9ef255fddd5ec29ec851304cb4d47aa92b04ee8",
+  grove: "aaf1168b43926dc33012ac80c8a63b90bb20f1ee43d65c3f3042d8e844e310fb",
+  open: "2f574a0f1ee6a749d399e3430b3ad1c90629814f6b3705825e09d7d34a470d2a",
 };
 const STATES: Record<string, Gates> = {
   // Keep the dark-mouth gate open here to isolate the intended ground layout
@@ -65,13 +63,13 @@ function withoutPockets(mouths: typeof CAVE_MOUTHS, check: () => void) {
   }
 }
 
-it("matches the door-stream ground golden with the mouth-B pocket removed", () => {
+it("matches the entrance-stream ground golden with the mouth-B pocket removed", () => {
   withoutPockets(CAVE_MOUTHS.slice(1), () => {
     expect(Object.fromEntries(Object.entries(STATES).map(([name, gates]) => [name, digest(gates)]))).toEqual(GOLDEN);
   });
 }, 120_000);
 
-it("matches the door-stream ground golden without either cave-mouth pocket", () => {
+it("matches the entrance-stream ground golden without either cave-mouth pocket", () => {
   withoutPockets(CAVE_MOUTHS, () => {
     expect(Object.fromEntries(Object.entries(STATES).map(([name, gates]) => [name, digest(gates)]))).toEqual(BEFORE_LAYERS);
   });

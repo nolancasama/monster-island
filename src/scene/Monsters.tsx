@@ -124,7 +124,10 @@ function MonsterBody({ id }: { id: MonsterId }) {
     if (id === "puff") anchors.puffBeakValid = false;
     if (id === "leafy") anchors.leafyHandLValid = anchors.leafyHandRValid = false;
     if (!g || !r) return;
-    g.visible = companionVisible(id);
+    // The ferry's carrier stays visible even when a different active friend
+    // would normally hide Bubbo in a hostile area.
+    const ferry = id === "bubbo" && rt.groveStreamFerry.start !== null;
+    g.visible = ferry || companionVisible(id);
     if (!g.visible) return;
     const t = rt.time;
     const solved = getGame().progress.solved;
@@ -137,15 +140,16 @@ function MonsterBody({ id }: { id: MonsterId }) {
     const moving = m.speed > 0.2;
     const step = m.step;
     // Walk: Leafy waddles with little hops; Bubbo rocks side to side.
-    const walkHop = moving ? Math.abs(Math.sin(step * Math.PI)) * (id === "leafy" ? 0.1 : 0.04) : 0;
-    const walkRock = moving && id === "bubbo" ? Math.sin(step * Math.PI) * 0.12 : 0;
+    const carrying = ferry && rt.player.riding;
+    const walkHop = moving && !carrying ? Math.abs(Math.sin(step * Math.PI)) * (id === "leafy" ? 0.1 : 0.04) : 0;
+    const walkRock = moving && id === "bubbo" && !carrying ? Math.sin(step * Math.PI) * 0.12 : 0;
     const poof = Math.min(1, (t - m.poofT0) / 0.35);
     g.position.set(m.x, baseY + m.lift, m.z);
     g.rotation.y = m.yaw + pose.spin + pose.shake;
     g.scale.setScalar(0.2 + 0.8 * sm(poof));
     // Act 2: Lumo is in the raiders' cage; a friend in its combat position sits on (or carries) the player.
-    g.visible = companionVisible(id) && !(id === "lumo" && lumoHidden());
-    const mount = mountPose(id);
+    g.visible = (ferry || companionVisible(id)) && !(id === "lumo" && lumoHidden());
+    const mount = ferry ? null : mountPose(id);
     if (mount) {
       g.position.set(mount.x, mount.y, mount.z);
       g.rotation.y = mount.yaw + pose.spin * 0.2;

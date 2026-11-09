@@ -1,14 +1,14 @@
 import type { WalkShape } from "./lowland";
 import type { SolidShape } from "./island";
 
-/** Deep channel before the Causeway door; both ends bury into hills / mesa. */
+/** Deep entrance channel; both ends bury into the west hills / solid mesa. */
 export const GROVE_STREAM: Extract<WalkShape, { kind: "trail" }> = {
   kind: "trail", w: 2.6,
-  pts: [[26, -234.6], [38, -235.4], [48, -233.4], [56, -233.4], [65, -235.2], [77, -231.5]],
+  pts: [[28, -211], [39, -210.5], [49, -211], [59, -209.4], [74, -211.5]],
 };
 export const GROVE_STREAM_FERRY = {
-  north: { x: 56, z: -230 },
-  south: { x: 56, z: -237.6 },
+  north: { x: 46, z: -207.2 },
+  south: { x: 46, z: -214.5 },
 };
 /** Signed bank relative to the new local centreline, including submerged saves.
  * Continue each end's bank line into the non-walkable hills / mesa. */
@@ -26,8 +26,8 @@ export function groveStreamSide(x: number, z: number): "north" | "south" {
 export const GROVE_STREAM_MOVED_SCENERY: readonly SolidShape[] = [
   { kind: "circle", x: 55, z: -203.5, r: 1.1 },
   { kind: "capsule", ax: 44.4, az: -204.3, bx: 49.3, bz: -202.1, r: .42 },
-  { kind: "circle", x: 43.6, z: -229.5, r: 1.15 },
-  { kind: "capsule", ax: 33, az: -209, bx: 35, bz: -211, r: .35 },
-  { kind: "capsule", ax: 50.6, az: -221.1, bx: 52.2, bz: -227.2, r: .4 },
-  { kind: "box", x: 52, z: -207, hx: 1.6, hz: 1.8, yaw: 0 },
+  { kind: "circle", x: 43.6, z: -235.5, r: 1.15 },
+  { kind: "capsule", ax: 39, az: -235, bx: 41, bz: -237, r: .35 },
+  { kind: "capsule", ax: 50.6, az: -229.1, bx: 52.2, bz: -235.2, r: .4 },
+  { kind: "box", x: 42, z: -234, hx: 1.6, hz: 1.8, yaw: 0 },
 ];

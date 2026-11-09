@@ -1,8 +1,9 @@
 import { BEACON_ARENA } from "../game/logic/beacon";
 import { TUNNEL } from "../game/world/island";
-import { CANOPY_ROPES, CLIFF_ROPE, STAGE_PASSAGES, inLowland, zoneAt } from "../game/world/lowland";
+import { CANOPY_ROPES, CLIFF_ROPE, STAGE_PASSAGES, inLowland, streamY, zoneAt } from "../game/world/lowland";
 import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
 import type { Layer } from "../game/world/region";
+import { GROVE_STREAM_FERRY } from "../game/world/groveStream";
 
 /** `layer` is the player's traversal layer; omitted means ground. */
 export interface CameraPoint { x: number; y: number; z: number; climbing: boolean; cloud: boolean; layer?: Layer }
@@ -28,6 +29,18 @@ export const DEFAULT_CAMERA: Framing = { yaw: 0, pitch: .55, dist: 10, ahead: 3 
 const BEACH_SIDE: Framing & { lead: number } = { yaw: 0, pitch: .42, dist: 11, ahead: 1.5, lead: 2 };
 export const CAMERA_BLEND_SECONDS = 1;
 export const CAMERA_HYSTERESIS = .65;
+/** A single west-bank lens holds both landings and the seated rider in either
+ * direction. It is scripted, so crossing the stage border cannot change it. */
+const ferryCentre = {
+  x: (GROVE_STREAM_FERRY.north.x + GROVE_STREAM_FERRY.south.x) / 2,
+  z: (GROVE_STREAM_FERRY.north.z + GROVE_STREAM_FERRY.south.z) / 2,
+};
+const ferryWaterY = streamY(ferryCentre.x, ferryCentre.z);
+export const GROVE_FERRY_SHOT = {
+  pos: { x: ferryCentre.x - 12.5, y: ferryWaterY + 8, z: ferryCentre.z + 1.8 },
+  target: { ...ferryCentre, y: ferryWaterY + 1 },
+  fov: 55,
+} as const;
 const rect = (p: CameraPoint, m: number, x0: number, x1: number, z0: number, z1: number) =>
   p.x >= x0 - m && p.x <= x1 + m && p.z >= z0 - m && p.z <= z1 + m;
 const home = (contains: CameraProfile["contains"]): CameraProfile["contains"] => (p, m) => !p.cloud && !inLowland(p.x, p.z + m) && contains(p, m);
@@ -69,7 +82,10 @@ const GROUND_PROFILES: readonly CameraProfile[] = [
   // Fixed views angled toward the mesa, low enough for its strata to be in frame:
   // the default pitch cuts the frame off below the horizon. The arms are mirrored.
   { ...DEFAULT_CAMERA, id: "forest-left-arm", kind: "lowland", yaw: -.5, pitch: .36, dist: 11, ahead: 2,
-    contains: (p, m) => !p.cloud && p.x < 58 + m && p.z > -207 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
+    // The entrance's entire north bank is now Forest, including its eastern
+    // shoulder beside the mesa; keep that shoulder's lens to the west too.
+    contains: (p, m) => !p.cloud && (p.x < 58 + m || p.z < -185 + m && p.x < 72 + m)
+      && p.z > -212 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
   { ...DEFAULT_CAMERA, id: "forest-right-arm", kind: "lowland", yaw: .5, pitch: .36, dist: 11, ahead: 2,
     contains: (p, m) => !p.cloud && p.x > 94 - m && p.z > -207 - m && p.z < -158 + m && zoneAt(p.x, p.z) === "forest1" },
   { ...DEFAULT_CAMERA, id: "forest-base", kind: "lowland", pitch: .36, dist: 11.5, ahead: 2,
@@ -86,9 +102,9 @@ const GROUND_PROFILES: readonly CameraProfile[] = [
   // A little more height exposes the bark faces beneath the authored platform lips.
   { ...DEFAULT_CAMERA, id: "ancient-canopy", kind: "lowland", yaw: .5, pitch: .66, dist: 12.5, ahead: 2.3,
     contains: p => !p.cloud && zoneAt(p.x, p.z) === "canopy" },
-  // Keep the lens west of the mesa and both door-stream banks in view even
-  // from the south landing, with the Causeway door visible beyond the ferry.
-  { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55, pitch: .8, dist: 17, ahead: 0,
+  // The expanded east bank needs its lens west of the mesa's broad head.
+  // The entrance ferry has its own stable shot rather than widening this view.
+  { ...DEFAULT_CAMERA, id: "flooded-grove", kind: "lowland", yaw: -.55,
     contains: (p, m) => !p.cloud && (grovePassage(p) ? p.z >= GROVE_DOOR_Z - doorMargin(m) : zoneAt(p.x, p.z) === "grove") },
   { ...DEFAULT_CAMERA, id: "lowland", kind: "lowland", contains: (p, m) => !p.cloud && inLowland(p.x, p.z - m) },
   { ...DEFAULT_CAMERA, id: "volcano-tunnel", kind: "tunnel", pitch: .24, dist: 3.4, ahead: 0,

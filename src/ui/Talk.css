@@ -1,0 +1,126 @@
+.prompt .prompt-mic {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+}
+
+.prompt .prompt-mic .mic-label {
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.prompt .prompt-mic .ja {
+  font-size: 12px;
+  line-height: 1.1;
+  color: inherit;
+}
+
+.prompt .prompt-mic.on {
+  background: #14816e;
+  box-shadow: 0 4px 0 #0a5b4e;
+  animation: none;
+}
+
+.prompt .prompt-mic.on::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 3px solid #14816e;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: prompt-mic-ring 1.4s ease-out infinite;
+}
+
+@keyframes prompt-mic-ring {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(1.18); opacity: 0; }
+}
+
+.prompt .prompt-status {
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.prompt .prompt-status > .ja {
+  font-size: 17px;
+}
+
+.prompt .mic-auto-hint {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 14px;
+  line-height: 1.3;
+  margin-top: 5px;
+}
+
+.prompt .mic-auto-hint .ja {
+  font-size: 14px;
+}
+
+.prompt .mic-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 25px;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.prompt .mic-level i {
+  display: block;
+  width: 6px;
+  background: #c0ceca;
+  border-radius: 3px;
+  transition: background-color 0.1s;
+}
+
+.prompt .mic-level i.lit {
+  background: #08735e;
+}
+
+.prompt .mic-unavailable {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  color: #6b6b65;
+  opacity: 0.8;
+}
+
+.prompt .mic-slash {
+  position: absolute;
+  width: 45px;
+  height: 4px;
+  background: #a33333;
+  border: 1px solid #fff;
+  transform: rotate(-45deg);
+}
+
+.prompt .enable-mic {
+  min-height: 56px;
+  padding: 7px 13px;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.prompt .enable-mic .ja { font-size: 14px; }
+.prompt .prompt-mic:disabled { opacity: 0.65; cursor: wait; }
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt .prompt-mic.on::after { animation: none; opacity: 0.65; }
+}
+
+@media (max-width: 600px) {
+  .prompt .prompt-controls { flex-wrap: wrap; }
+  .prompt .prompt-status { min-width: 180px; font-size: 18px; }
+  .prompt .prompt-mic { width: 76px; height: 76px; }
+}

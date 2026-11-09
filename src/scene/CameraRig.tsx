@@ -8,7 +8,7 @@ import { BOULDERS, MONSTER_STONE, TUNNEL, groundY, inTunnel, tunnelCoverY } from
 
 import { CLIFF_ROPE, MOSSY_BOULDERS } from "../game/world/lowland";
 import { mesaCameraLift, mesaFloorY } from "../game/world/mesa";
-import { CAMERA_BLEND_SECONDS, DEFAULT_CAMERA, cameraProfileAt, type CameraProfile, type Framing } from "./cameraProfiles";
+import { CAMERA_BLEND_SECONDS, DEFAULT_CAMERA, GROVE_FERRY_SHOT, cameraProfileAt, type CameraProfile, type Framing } from "./cameraProfiles";
 
 const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
@@ -44,6 +44,10 @@ export function CameraRig() {
   const ropeOffset = useMemo(() => new THREE.Vector3(), []);
   const ropeLook = useMemo(() => new THREE.Vector3(), []);
   const ropeShot = useRef(rt.camera.shot);
+  const ferryWasActive = useRef(false);
+  const ferryAge = useRef(0);
+  const ferryFrom = useMemo(() => new THREE.Vector3(), []);
+  const ferryLookFrom = useMemo(() => new THREE.Vector3(), []);
 
   /** Raise the endpoint until the whole target-to-camera line clears the ground and the big rocks. */
   const lift = (target: THREE.Vector3, candidate: THREE.Vector3): number => {
@@ -74,16 +78,24 @@ export function CameraRig() {
     const c = rt.camera;
     const g = getGame();
     const p = rt.player;
+    const ferryBank = g.screen === "game" ? rt.groveStreamFerry.start : null;
+    if (ferryBank && !ferryWasActive.current) {
+      ferryAge.current = 0;
+      ferryFrom.copy(pos.current);
+      ferryLookFrom.copy(look.current);
+    }
+    ferryWasActive.current = ferryBank !== null;
     const cloud = g.screen === "game" && g.progress.act3.world === "cloud";
     const rope = g.screen === "game" && p.climbY !== null && p.z < -140;
     const wasRope = c.framing === "rope";
     const leavingRope = !rope && (wasRope || c.shot !== null && c.shot === ropeShot.current);
-    const point = { x: p.x, y: p.y, z: p.z, climbing: p.climbY !== null, cloud, layer: p.layer };
+    // Keep the departure area's profile until the rider actually steps ashore.
+    const point = { x: ferryBank?.x ?? p.x, y: p.y, z: ferryBank?.z ?? p.z, climbing: p.climbY !== null, cloud, layer: p.layer };
     const selected = cameraProfileAt(point, c.snap ? undefined : profile.current);
-    const lowland = selected.kind === "lowland" && !rope && (c.mode === "follow" || leavingRope);
+    const lowland = selected.kind === "lowland" && !rope && (ferryBank !== null || c.mode === "follow" || leavingRope);
     const fixedCauseway = lowland && selected.id === "ruined-causeway";
     // Fixed lenses (Causeway, cave) never pull in, lift or clamp to terrain.
-    const fixedLens = lowland && (fixedCauseway || selected.fixed === true);
+    const fixedLens = ferryBank !== null || lowland && (fixedCauseway || selected.fixed === true);
     const tunnel = selected.kind === "tunnel";
     if (selected !== profile.current || c.snap) {
       blendFrom.current = { ...framing.current };
@@ -104,7 +116,7 @@ export function CameraRig() {
       const d = Math.atan2(Math.sin(target.yaw - c.yaw), Math.cos(target.yaw - c.yaw));
       framing.current.yaw = c.snap ? target.yaw : c.yaw + d * (1 - Math.exp(-dt * 3));
     }
-    c.profile = selected.id;
+    c.profile = ferryBank ? "grove-stream-ferry" : selected.id;
     if (rope && !wasRope) {
       ropeAge.current = 0;
       ropeOffset.set(pos.current.x - p.x, pos.current.y - p.y, pos.current.z - p.z);
@@ -124,6 +136,12 @@ export function CameraRig() {
       const gy = groundY(s.x, s.z);
       want.current.set(s.x + Math.sin(t) * 9, gy + 4, s.z + 3 + Math.cos(t) * 9);
       wantLook.current.set(s.x, gy + 1.6, s.z);
+    } else if (ferryBank) {
+      // Fixed world coordinates, independent of the swimming bob and direction.
+      // Existing position/look smoothing blends into boarding and out at landing.
+      c.framing = "shot";
+      want.current.set(GROVE_FERRY_SHOT.pos.x, GROVE_FERRY_SHOT.pos.y, GROVE_FERRY_SHOT.pos.z);
+      wantLook.current.set(GROVE_FERRY_SHOT.target.x, GROVE_FERRY_SHOT.target.y, GROVE_FERRY_SHOT.target.z);
     } else if (rope) {
       c.framing = "rope";
       ropeShot.current = c.shot;
@@ -210,14 +228,20 @@ export function CameraRig() {
       const floor = Math.max(standY(want.current.x, want.current.z, g.progress.solved), -0.4) + 0.7;
       if (want.current.y < floor) want.current.y = floor;
     }
-    if (!ready.current || rt.voyage.active || c.snap && !rope && !leavingRope) {
+    if (!ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank) {
       pos.current.copy(want.current);
       look.current.copy(wantLook.current);
       ready.current = true;
     }
     c.snap = false;
     const k = 1 - Math.exp(-dt * ((c.mode === "follow" || leavingRope) && g.screen === "game" ? 6 : 2.4));
-    if (rope) {
+    if (ferryBank) {
+      ferryAge.current = Math.min(.95, ferryAge.current + dt);
+      const t = ferryAge.current / .95, e = t * t * (3 - 2 * t);
+      pos.current.lerpVectors(ferryFrom, want.current, e);
+      look.current.lerpVectors(ferryLookFrom, wantLook.current, e);
+      c.settled = t === 1;
+    } else if (rope) {
       ropeAge.current = Math.min(0.75, ropeAge.current + dt);
       const t = ropeAge.current / 0.75;
       const e = t * t * (3 - 2 * t);
@@ -250,10 +274,10 @@ export function CameraRig() {
     const cam = camera as THREE.PerspectiveCamera;
     // The mountain's real beacon and the nearby player need a taller sky view
     // than the lowland. Physical follow offsets remain exactly the same.
-    const fov = cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
+    const fov = ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const h = window.innerHeight;
-    const wantShift = (c.framing === "cloud" || c.framing === "fixed" || lowland ? h * (selected.viewShift ?? 0) : 0) + (g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0);
+    const wantShift = ferryBank ? 0 : (c.framing === "cloud" || c.framing === "fixed" || lowland ? h * (selected.viewShift ?? 0) : 0) + (g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0);
     shift.current += (wantShift - shift.current) * Math.min(1, dt * 5);
     if (Math.abs(shift.current) > 0.5) {
       cam.setViewOffset(window.innerWidth, h, 0, shift.current, window.innerWidth, h);

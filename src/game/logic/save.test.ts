@@ -387,8 +387,8 @@ describe("forest layout save migration", () => {
   });
 
   it.each([
-    { zone: "grove", x: 66, z: -202, streamSolved: false },
-    { zone: "grove", x: 59, z: -232, streamSolved: false },
+    { zone: "forest1", x: 66, z: -202, streamSolved: false },
+    { zone: "grove", x: 59, z: -210.5, streamSolved: true },
     { zone: "canopy", x: 114, z: -233.25, streamSolved: false },
   ] as const)("projects removed $zone floor onto nearby ground in that same zone", ({ zone, x, z, streamSolved }) => {
     const p = chapter();

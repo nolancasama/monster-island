@@ -35,3 +35,27 @@ it("still splashes enemies knocked into deep pond water after all pads settle", 
   expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
   expect(getGame().progress.solved).toContain("groveLilies");
 });
+
+it("splashes an enemy knocked from the Grove entrance bank into the relocated stream", () => {
+  resetRuntime();
+  const progress = newProgress();
+  progress.act2.started = progress.act2.descended = true;
+  progress.act2.cleared = [...STAGES];
+  progress.active = "puff";
+  progress.solved = ["groveStream"];
+  setGame({ screen: "game", mode: "explore", journalOpen: false, settingsOpen: false, progress });
+  region.world = "home"; resetCombat(); cb.onScreen = () => true;
+  rt.time = rt.playTime = 10;
+  expect(hazardAt(46, -210.85, "home", progress.solved)?.id).toBe("groveStream");
+  expect(hazardAt(56, -233.4, "home", progress.solved)).toBeNull();
+  for (const enemy of cb.enemies) enemy.state = "gone";
+  const enemy = cb.enemies.find(e => e.zone === "grove")!;
+  Object.assign(enemy, { kind: "snapjaw", x: 46, z: -213.65, hp: 100, state: "recover", timer: 99 });
+  Object.assign(rt.player, { x: 46, z: -215.65, yaw: 0, climbY: null });
+  cb.zones.current = "grove";
+  cb.stance.friend = "puff"; cb.stance.k = 1; cb.ready.basic = 0;
+  expect(basicAttack()).toBe(true);
+  for (let i = 0; i < 9; i++) { rt.time += 1 / 60; rt.playTime += 1 / 60; combatTick(1 / 60); }
+  expect(enemy.state).toBe("ko");
+  expect(cb.fx.some(f => f.kind === "splashKo")).toBe(true);
+});

@@ -59,7 +59,7 @@ export function tick(dt: number) {
     const m = rt.monsters[id];
     // Act 2: friends who are not the active one travel with the party.
     if (act2 && id !== "lumo" && g.progress.monsters[id].friend && id !== g.progress.active && ["wander", "idle", "eat", "sleep", "play", "follow"].includes(m.mode)) m.mode = "party";
-    if (!companionVisible(id) || mounted(id)) continue;
+    if ((!companionVisible(id) && !(id === "bubbo" && rt.groveStreamFerry.start)) || mounted(id)) continue;
     if (m.mode === "follow") follow(m, dt);
     else if (m.mode === "party") partyFollow(m, dt);
     else if (m.mode === "talk" || m.mode === "script") faceLook(m, dt);
@@ -76,7 +76,8 @@ export function tick(dt: number) {
   // Act 2's fights (held J repeats the basic attack).
   cb.hold = isAttackHeld("basic");
   cb.holdK = isAttackHeld("special");
-  combatTick(dt);
+  // Defer zone changes, enemy activation and zone toasts until dismount.
+  if (!rt.groveStreamFerry.start) combatTick(dt);
 
   // Food grows back. It is collectible from the moment it reappears; the
   // pop-in animation plays after that, never before.

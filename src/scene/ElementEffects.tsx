@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { cb, currentCombatZone } from "../game/combat";
+import { cb, currentCombatZone, type Fx } from "../game/combat";
 import { COMBAT, ENEMIES } from "../game/data/combat";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
@@ -14,11 +14,12 @@ import { whipPoints } from "../game/logic/whip";
 import { createWindFrame, stepWindFrame } from "../game/logic/wind";
 import { inCone } from "../game/logic/elements";
 
-// Existing seven batches plus panic limbs and speech; empty batches submit none.
+// Shared batches, including a separate translucent steam batch; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
 const CAP = 768;
 const TAU = Math.PI * 2;
 const WHIP_POINTS = 19;
+const STEAM_CAP = 6;
 // Model body heights, before enemyBodyPose's squash, scale and lift.
 const BODY_HEIGHT = { gloomlet: .82, snapjaw: 1.06, shellback: 1.07, forestSpitter: .92,
   stormCrab: 1.01, thunderBeetle: .93, windSprite: 1.37, raiderDrone: 1.24, raiderShooter: 1.35 };
@@ -172,6 +173,30 @@ function bubbleMaterial() {
   });
 }
 
+function steamMaterial() {
+  return new THREE.ShaderMaterial({
+    vertexShader: `
+      attribute float fade;
+      varying vec2 vUv;
+      varying float vFade;
+      void main() {
+        vUv = uv; vFade = fade;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.);
+      }`,
+    fragmentShader: `
+      varying vec2 vUv;
+      varying float vFade;
+      void main() {
+        vec2 p = vUv * 2. - 1.;
+        // A soft, full cloud silhouette instead of an additive glow or spawn smoke mesh.
+        float a = 1. - smoothstep(.38, 1., length(p));
+        gl_FragColor = vec4(.96, .975, .98, a * vFade);
+        if (gl_FragColor.a < .01) discard;
+      }`,
+    transparent: true, depthWrite: false
+  });
+}
+
 function panicSpeechMaterial() {
   const canvas = document.createElement("canvas");
   canvas.width = 512; canvas.height = 192;
@@ -200,6 +225,7 @@ function makePool() {
   ring.rotateX(-Math.PI / 2);
   return {
     sprites: new Batch(new THREE.PlaneGeometry(1, 1), spriteMaterial()),
+    steam: new Batch(new THREE.PlaneGeometry(1, 1), steamMaterial()),
     bubbles: new Batch(new THREE.SphereGeometry(1, 20, 12), bubbleMaterial()),
     vines: new Batch(tube, new THREE.MeshLambertMaterial({ color: "#ffffff", flatShading: true })),
     roots: new Batch(tube.clone(), new THREE.MeshLambertMaterial({ color: "#ffffff", flatShading: true })),
@@ -230,6 +256,8 @@ export function ElementEffects() {
   const stream = useMemo(() => ({ active: false, age: 0, stoppedAt: -Infinity, inferno: false }), []);
   // At most 24 Fx can be alive; slots are selected by id and reused at mount time.
   const winds = useMemo(() => Array.from({ length: 24 }, createWindFrame), []);
+  // Reuse six event slots; a newer quench replaces the oldest visible event.
+  const steams = useMemo<(Fx | null)[]>(() => Array(STEAM_CAP).fill(null), []);
   const roots = useMemo(() => Array.from({ length: CAP }, () => ({ x: 0, z: 0, y: 0, t: -1, end: -1, zone: "", height: 1, radius: .5 })), []);
   const curve = useMemo(() => new Float32Array(WHIP_POINTS * 3), []);
   const rootCurve = useMemo(() => new Float32Array(8 * 3), []);
@@ -371,15 +399,17 @@ export function ElementEffects() {
         }
         if (e.burn && e.burn.until > t) {
           const blue = e.infernoBlueUntil > t;
+          const burnFade = Math.min(1, (e.burn.until - t) / .25);
           // Cloaks the body: sized from its radius, and nudged toward the camera so
           // the mesh does not swallow them.
-          const flames = fullPanic ? 6 : 3, big = fullPanic ? 1 : .75;
+          // Panic can recover before the burn expires; only burn.until fades its flames.
+          const flames = 6;
           for (let i = 0; i < flames; i++) {
             const a = t * 2 + i * TAU / flames;
             point.set(Math.cos(a) * radius * 1.15, .25 + (i % 3) * .3, Math.sin(a) * radius * 1.15).applyMatrix4(bodyFrame.matrixWorld);
             direction.subVectors(camera.position, point).normalize().multiplyScalar(radius * .35);
             draw.sprite(point.x + direction.x, point.y + direction.y, point.z + direction.z,
-              (.42 + radius * .6) * big, (.85 + radius * .9 + Math.sin(t * 22 + i) * .18) * big, blue ? "#1687ff" : i % 2 ? "#f2611a" : "#ffb22e", .62, blue ? 2 : true);
+              .42 + radius * .6, .85 + radius * .9 + Math.sin(t * 22 + i) * .18, blue ? "#1687ff" : i % 2 ? "#f2611a" : "#ffb22e", .62 * burnFade, blue ? 2 : true);
           }
         }
         if (panicking) {
@@ -572,6 +602,7 @@ export function ElementEffects() {
           draw.sprite(x + Math.cos(a) * 1.15 * growth, y - .25, z + Math.sin(a) * 1.15 * growth, .45 * growth, .22 * growth, "#d6c9a2", fade * .4 * growth);
         }
       }
+      steams.fill(null);
       for (const f of cb.fx) {
         const age = t - f.t0, k = age / f.life;
         if (k < 0 || k >= 1 || Math.hypot(f.x - rt.player.x, f.z - rt.player.z) > 48) continue;
@@ -609,13 +640,13 @@ export function ElementEffects() {
           if (f.kind === "bomb") draw.ring(f.x, f.y, f.z, .3 + f.size * k, "#9eeaff", 1 - k);
           draw.splash(f.x, f.y, f.z, f.id, age, fade, f.kind === "splashKo");
         } else if (f.kind === "steam") {
-          for (let i = 0; i < 5; i++) {
-            const angle = i * TAU / 5 + f.id;
-            const spread = .08 + k * .22;
-            const size = (.25 + k * .36) * f.size;
-            draw.sprite(f.x + Math.cos(angle) * spread, f.y + age * .9 + (i % 2) * .12,
-              f.z + Math.sin(angle) * spread, size, size * 1.2, "#ffffff", (1 - k) * .65);
+          let oldest = 0;
+          for (let i = 0; i < STEAM_CAP; i++) {
+            if (!steams[i]) { oldest = i; break; }
+            if (steams[i]!.t0 < steams[oldest]!.t0 || (steams[i]!.t0 === steams[oldest]!.t0 && steams[i]!.id < steams[oldest]!.id)) oldest = i;
           }
+          const previous = steams[oldest];
+          if (!previous || f.t0 > previous.t0 || (f.t0 === previous.t0 && f.id > previous.id)) steams[oldest] = f;
         } else if (f.kind === "snare") {
           draw.ring(f.x, standY(f.x, f.z, game.progress.solved) + .04, f.z, f.size * Math.min(1, k * 4), "#8ec15a", (1 - k) * .65);
         } else if (f.kind === "shrug") {
@@ -623,6 +654,22 @@ export function ElementEffects() {
         } else if (f.kind === "hit" || f.kind === "ko" || f.kind === "eat") {
           draw.sprite(f.x, f.y + k * .3, f.z, 1.2 * (1 - k * .5), 1.2 * (1 - k * .5), "#fff6c0", 1 - k);
         }
+      }
+      for (const f of steams) {
+        if (!f) continue;
+        const age = t - f.t0, k = age / f.life;
+        const alpha = Math.min(1, age / .045) * Math.pow(1 - k, .8) * .72;
+        for (let i = 0; i < 5; i++) {
+          const angle = i * TAU / 5 + f.id;
+          const spread = (.12 + k * .38) * f.size;
+          const size = (.55 + k * .5) * f.size;
+          o.position.set(f.x + Math.cos(angle) * spread, f.y + .08 + age * (1.1 + (i % 3) * .18) + (i % 2) * .18,
+            f.z + Math.sin(angle) * spread);
+          o.quaternion.copy(camera.quaternion); o.scale.set(size, size * .9, 1);
+          pool.steam.put(o, color.set("#ffffff"), alpha);
+        }
+        if (age < .3) draw.ring(f.x, standY(f.x, f.z, game.progress.solved) + .045, f.z,
+          (.3 + age * 2.6) * f.size, "#f4fafb", (1 - age / .3) * .7);
       }
     }
     for (const b of batches) b.flush();

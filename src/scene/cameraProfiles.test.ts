@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BEACON } from "../game/world/cloudisle";
-import { CAMERA_PROFILES, DEFAULT_CAMERA, cameraProfileAt, type CameraPoint } from "./cameraProfiles";
-import { CANOPY_ROPES, CLIFF_ROPE, GROVE_DOOR, zoneAt } from "../game/world/lowland";
+import { CAMERA_PROFILES, DEFAULT_CAMERA, GROVE_FERRY_SHOT, cameraProfileAt, type CameraPoint } from "./cameraProfiles";
+import { CANOPY_ROPES, CLIFF_ROPE, streamY, zoneAt } from "../game/world/lowland";
 import { GROVE_STREAM_FERRY } from "../game/world/groveStream";
 import { GATE_PILLARS, groundY } from "../game/world/island";
 import * as THREE from "three";
@@ -9,33 +9,29 @@ import * as THREE from "three";
 const point = (x: number, z: number, cloud = false, y = 0): CameraPoint => ({ x, z, y, cloud, climbing: false });
 
 describe("authored camera profiles", () => {
-  it("frames both ferry banks, Bubbo's route and the stone door throughout the Grove crossing", () => {
+  it("frames both entrance ferry banks and Bubbo's whole body and rider from one fixed side-on lens", () => {
     const north = GROVE_STREAM_FERRY.north, south = GROVE_STREAM_FERRY.south;
     const middle = { x: (north.x + south.x) / 2, z: (north.z + south.z) / 2 };
-    const expected = cameraProfileAt(point(north.x, north.z));
-    expect(expected.id).toBe("flooded-grove");
-    expect(expected.resolve).toBeUndefined();
-    expect(expected.trackYaw).toBeUndefined();
-    for (const aspect of [1366 / 768, 1280 / 800]) for (const stand of [north, middle, south]) {
-      const p = point(stand.x, stand.z, false, groundY(stand.x, stand.z));
-      const profile = cameraProfileAt(p, expected);
-      expect(profile).toBe(expected);
-      const frame = profile.resolve?.(p, DEFAULT_CAMERA) ?? profile;
-      const focus = typeof profile.anchor === "function" ? profile.anchor(p, frame) : profile.anchor ?? p;
-      const y = groundY(focus.x, focus.z) + 1.1, horizontal = frame.dist * Math.cos(frame.pitch);
-      const camera = new THREE.PerspectiveCamera(profile.fov ?? 55, aspect, .1, 900);
-      camera.position.set(focus.x + Math.sin(frame.yaw) * (horizontal - frame.ahead), y + Math.sin(frame.pitch) * frame.dist, focus.z + Math.cos(frame.yaw) * (horizontal - frame.ahead));
-      camera.lookAt(focus.x - Math.sin(frame.yaw) * frame.ahead, y, focus.z - Math.cos(frame.yaw) * frame.ahead);
+    expect(cameraProfileAt(point(north.x, north.z)).id).toBe("forest-left-arm");
+    expect(cameraProfileAt(point(south.x, south.z)).id).toBe("flooded-grove");
+    expect(cameraProfileAt(point(65.2, -206.8)).id).toBe("forest-left-arm");
+    expect(GROVE_FERRY_SHOT.pos.x).toBeLessThan(north.x - 10);
+    expect(Math.abs(GROVE_FERRY_SHOT.pos.z - middle.z)).toBeLessThan(2);
+    for (const aspect of [1366 / 768, 1280 / 800]) {
+      const camera = new THREE.PerspectiveCamera(GROVE_FERRY_SHOT.fov, aspect, .1, 900);
+      const { pos, target } = GROVE_FERRY_SHOT;
+      camera.position.set(pos.x, pos.y, pos.z);
+      camera.lookAt(target.x, target.y, target.z);
       camera.updateMatrixWorld();
-      for (const sample of [
-        { ...north, height: .1 }, { ...south, height: .1 }, { ...middle, height: 1.2 },
-        { x: GROVE_DOOR.x - GROVE_DOOR.half, z: GROVE_DOOR.z, height: 0 },
-        { x: GROVE_DOOR.x + GROVE_DOOR.half, z: GROVE_DOOR.z, height: 3 },
-      ]) {
-        const projected = new THREE.Vector3(sample.x, groundY(sample.x, sample.z) + sample.height, sample.z).project(camera);
-        const context = `stand=${JSON.stringify(stand)}, aspect=${aspect}, sample=${JSON.stringify(sample)}`;
-        expect(Math.abs(projected.x), context).toBeLessThan(.98);
-        expect(Math.abs(projected.y), context).toBeLessThan(.98);
+      // Bank margins, Bubbo's feet/body, and the mounted player's head. Both
+      // directions traverse precisely this envelope with no camera reversal.
+      const samples = [north, middle, south, { ...north, x: north.x + 1.05 }, { ...south, x: south.x + 1.05 }].flatMap(stand => [-1, 0, 1].flatMap(dx => [-.8, .8].flatMap(dz =>
+        [-.05, 1.2, 2.8].map(height => ({ x: stand.x + dx, z: stand.z + dz, y: Math.max(groundY(stand.x, stand.z), streamY(stand.x, stand.z)) + height })))));
+      for (const sample of samples) {
+        const projected = new THREE.Vector3(sample.x, sample.y, sample.z).project(camera);
+        const context = `aspect=${aspect}, sample=${JSON.stringify(sample)}`;
+        expect(Math.abs(projected.x), context).toBeLessThan(.9);
+        expect(Math.abs(projected.y), context).toBeLessThan(.9);
         expect(projected.z, context).toBeGreaterThan(-1);
         expect(projected.z, context).toBeLessThan(1);
       }

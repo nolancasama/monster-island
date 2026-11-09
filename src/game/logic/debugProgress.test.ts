@@ -47,9 +47,9 @@ describe("debug destination progress", () => {
     const ferry = DEBUG_DESTINATIONS.find(d => d.id === "groveStream")!;
     expect(ferry.target).toBe("groveStream");
     expect(ACT2_OBSTACLE_PLACE.groveStream).toEqual({ ...GROVE_STREAM_FERRY.north, face: GROVE_STREAM_FERRY.south });
-    expect(ACT2_OBSTACLE_PLACE.groveStream).toMatchObject({ x: 56, z: -230 });
+    expect(ACT2_OBSTACLE_PLACE.groveStream).toMatchObject({ x: 46, z: -207.2 });
     const p = progressForDestination(ferry.id);
-    expect(p.act2.zone).toBe("grove");
+    expect(p.act2.zone).toBe("forest1");
     expect(p.act2.cleared).toEqual(["forest1"]);
     expect(p.solved).not.toContain("groveStream");
     for (const zone of ["causeway", "coast", "port"])
