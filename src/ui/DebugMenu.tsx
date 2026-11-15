@@ -152,6 +152,7 @@ function DebugDialog() {
           {cloudIsleShipDebugEnabled() && <button data-testid="debug-cloud-ship" aria-pressed={debug.cloudIsleShipOpen} onClick={() => setCloudIsleShipOpen(!debug.cloudIsleShipOpen)}>Cloud Isle ship: {debug.cloudIsleShipOpen ? "open" : "locked"}</button>}
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, coins: p.act2.coins + 100 } } }); }, "Added 100 coins")}>+100 coins</button>
+          <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, items: { ...p.act2.items, amber: (p.act2.items.amber ?? 0) + 5 } } } }); }, "Added 5 amber")}>+5 amber</button>
           <button onClick={() => run(() => { const p = getGame().progress, bag = { ...p.bag }; for (const food of Object.keys(FOODS) as FoodId[]) bag[food] = Math.min(BAG_MAX, (bag[food] ?? 0) + 10); setGame({ progress: { ...p, bag } }); }, "Added 10 of every food (max 99)")}>+10 of every food</button>
           <button onClick={() => run(debugUnlockFriends, "All friends unlocked")}>Unlock all friends</button>
           <button onClick={() => run(debugKillZone, "Active zone enemies defeated")}>Kill active zone enemies</button>
