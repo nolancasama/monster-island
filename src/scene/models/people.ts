@@ -13,8 +13,8 @@ export interface Outfit {
   shirtTrim: string;
   shorts: string;
   shoes: string;
-  /** Kai's headband, the player's cap. */
-  hat: "cap" | "band";
+  /** Kai's headband, the player's cap; none while the player wears a hat from the clothes shop. */
+  hat: "cap" | "band" | "none";
   hatColor: string;
   height: number;
   backpack?: string;
@@ -65,7 +65,7 @@ export function bodyGeometry(o: Outfit): THREE.BufferGeometry {
   if (o.hat === "cap") {
     b.add(new THREE.SphereGeometry(0.225, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.42), o.hatColor, [0, 1.36, 0], [-0.12, 0, 0]);
     b.add(new THREE.CylinderGeometry(0.17, 0.17, 0.03, 12, 1, false, -Math.PI / 2, Math.PI), o.hatColor, [0, 1.42, 0.12], [-0.12, 0, 0], [1, 1, 1.3]);
-  } else {
+  } else if (o.hat === "band") {
     b.add(new THREE.TorusGeometry(0.205, 0.035, 5, 16), o.hatColor, [0, 1.4, 0], [Math.PI / 2 - 0.1, 0, 0]);
     b.add(new THREE.BoxGeometry(0.05, 0.16, 0.04), o.hatColor, [0.06, 1.33, -0.22], [0.3, 0, 0.4]);
     b.add(new THREE.BoxGeometry(0.05, 0.14, 0.04), o.hatColor, [-0.02, 1.32, -0.22], [0.3, 0, -0.3]);

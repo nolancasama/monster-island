@@ -12,10 +12,11 @@ import {
   cliffFaceGeometry, cliffRopeGeometry, giantFernGeometry, lilyPadGeometry,
   canopyDeckGeometry, canopyRopeGeometry, canopyRopeAnchorsGeometry, updateCanopyPayingRope, lowlandPropsGeometry, lowlandSceneryY, lowlandSpots, lowlandTerrainTiles, lowlandWaterGeometry,
   mesaGeometry, npcGeometry, primevalTreeGeometry, reedGeometry, ropeBridgeGeometry,
-  spatialGeometry, stageBarrierGeometry, townGeometry, treeFernGeometry, vineBridgeGeometry,
+  spatialGeometry, stageBarrierGeometry, treeFernGeometry, vineBridgeGeometry,
   type Spot,
 } from "./models/lowland";
 import { ropeCoilGeometry } from "./models/forest";
+import { TOWN_DETAIL_FAR, townDetailGeometry, townGeometry } from "./models/town";
 import { GROVE_SHALLOWS_FAR, groveShallowsGeometry } from "./models/groveShallows";
 import { groveDoorFrameGeometry, groveDoorGeometry } from "./models/groveDoor";
 import { GROVE_DOOR } from "../game/world/lowland";
@@ -81,6 +82,7 @@ beforeAll(() => {
   add("rope", cliffRopeGeometry(), 0, 0, 0, 0, Infinity);
   add("mesa", mesaGeometry());
   add("town", townGeometry());
+  add("town detail", townDetailGeometry(), 0, 0, 0, 0, TOWN_DETAIL_FAR);
   const spots = lowlandSpots();
   instances("trees", primevalTreeGeometry(), spots.trees);
   instances("tree ferns", treeFernGeometry(), spots.fernTrees);

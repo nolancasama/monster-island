@@ -242,7 +242,7 @@ export function installE2eHook(seed: number) {
         if (e.retired) continue;
         const f = fixture.enemies.find(f => f.i === e.i);
         e.state = f?.state ?? (f ? "chase" : "gone");
-        e.air = e.resistUntil = e.slowUntil = 0; e.burn = e.control = e.flight = e.fall = null;
+        e.air = e.resistUntil = e.slowUntil = 0; e.burn = e.control = e.flight = e.fall = e.push = null;
         e.panic = null; e.panicResistUntil = e.fireTicks = e.infernoBlueUntil = 0; e.lastFireT = -10;
         if (!f) continue;
         wakeEnemy(e);
@@ -258,6 +258,12 @@ export function installE2eHook(seed: number) {
       cb.breath = null;
       cb.whip = null;
       cb.fx.length = 0;
+      cb.combos.length = 0;
+    },
+    /** Stand a friend somewhere and keep it there (screenshots of what it wears). */
+    placeMonster(id: keyof typeof rt.monsters, x: number, z: number, yaw = 0) {
+      const m = rt.monsters[id];
+      Object.assign(m, { x, z, yaw, mode: "script", look: null });
     },
     /** Act 2: set the live HP (tests of damage, eating and knock-outs). */
     setHp(hp: number) {

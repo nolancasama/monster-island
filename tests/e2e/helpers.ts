@@ -20,6 +20,7 @@ export interface MiState {
       items: { amber?: number }; upgrades: string[]; chests: string[]; tutorial: string[]; checkpoint: string;
       portFound: boolean; bought: boolean; harbor: boolean; trained: string[]; zone: string | null;
       secrets: string[]; relics: string[];
+      wardrobe: { owned: string[]; worn: Record<string, { head?: string; face?: string } | undefined>; visited: boolean };
     };
   };
   objective: { id: string; [k: string]: unknown };

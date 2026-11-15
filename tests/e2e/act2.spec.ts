@@ -268,7 +268,7 @@ test("enemies return only after a real absence; both routes' puzzles; the town i
   expect(errors).toEqual([]);
 });
 
-test("the town in English: buying (then quick buying), the first treat upgrade, the trainer, the inn and the harbour's lead", async ({ page }) => {
+test("the town in English: buying (then quick buying), a combo lesson, the clothes shop, the inn and the harbour's lead", async ({ page }) => {
   test.setTimeout(240_000);
   await seed(page, townSave());
   const errors = await boot(page);
@@ -285,7 +285,7 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.bought, 15_000, "bought");
   expect(s.progress.bag.berries).toBe(2);
   expect(s.progress.act2.coins).toBe(100 - 12);
-  expect(s.objective).toEqual({ id: "kitchen" });
+  expect(s.objective).toEqual({ id: "trainer" });
   // Afterwards: the quick shop, its button still says the sentence.
   await use(page, "market");
   await waitFor(page, (x) => x.act2.panel === "shop", 15_000, "quick shop");
@@ -296,30 +296,35 @@ test("the town in English: buying (then quick buying), the first treat upgrade, 
   expect(s.progress.act2.coins).toBe(88 - 24);
   await page.getByTestId("shop-close").click();
 
-  // The kitchen: "Mix the apples and berries." makes Leafy's treat and teaches Super Whip.
-  await use(page, "kitchen");
-  await answer(page, "mixLeafy");
+  // Coach Rex: the combo list; "Learn" explains it, "Yes, please." spends the amber. Food is untouched.
+  await use(page, "trainer");
+  await waitFor(page, (x) => x.act2.panel === "combos", 15_000, "combo list");
+  await expect(page.getByTestId("combo-leafy")).toContainText("Bonk Combo");
+  await page.getByTestId("learn-leafy").click();
+  await answer(page, "yesPlease");
   await answer(page, "thankYou");
-  s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.upgrades.includes("leafy"), 30_000, "treat made");
+  s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.upgrades.includes("leafy"), 30_000, "combo learned");
   expect(s.progress.act2.items.amber ?? 0).toBe(0);
-  expect(s.progress.bag).toMatchObject({ apples: 1, berries: 1 });
+  expect(s.progress.bag).toMatchObject({ apples: 2, berries: 2 });
   expect(s.objective).toEqual({ id: "harbor" });
 
-  // The trainer lists the moves; practising "Stop!" earns coins once.
-  await use(page, "trainer");
-  await waitFor(page, (x) => x.act2.panel === "trainer", 15_000, "trainer's list");
-  await expect(page.getByTestId("trainer-leafy")).toContainText("Double Grab");
-  await page.getByTestId("practise-leafy").click();
-  await answer(page, "cmdStop");
-  s = await waitFor(page, (x) => x.mode === "explore" && x.progress.act2.trained.includes("leafy"), 15_000, "practised");
-  expect(s.progress.act2.coins).toBe(64 + 10);
+  // Ms. Button: the first visit asks "Do you want a hat?"; buying asks who will wear it.
+  await use(page, "clothes");
+  await answer(page, "yesPlease");
+  await waitFor(page, (x) => x.act2.panel === "clothes", 15_000, "clothes panel");
+  await page.getByTestId("wear-buy-partyHat").click();
+  await page.getByTestId("wear-who-player").click();
+  s = await waitFor(page, (x) => x.progress.act2.wardrobe.worn.player?.head === "partyHat", 5_000, "hat worn");
+  expect(s.progress.act2.coins).toBe(64 - 10);
+  expect(s.progress.act2.wardrobe.visited).toBe(true);
+  await page.getByTestId("clothes-close").click();
 
   // The inn: accepting a room buys a full rest once.
   await hook(page, "setHp", 30);
   await use(page, "inn");
   await answer(page, "yesPlease");
   s = await waitFor(page, (x) => x.mode === "explore" && x.act2.hp === 100, 30_000, "rested at the inn");
-  expect(s.progress.act2.coins).toBe(64);
+  expect(s.progress.act2.coins).toBe(44);
   expect(s.progress.act2.checkpoint).toBe("port");
 
   // The harbour: "Where is the ship?" — the lead about Lumo.

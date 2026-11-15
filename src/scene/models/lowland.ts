@@ -26,30 +26,24 @@ import {
   CHESTS,
   CLIFF_ROPE,
   COAST_TRAIL,
-  CRATES,
   FOREST1_TRAIL,
   FOREST_ARMS,
   FORK_SIGN,
-  FOUNTAIN,
   GIANT_TREES,
   GROVE_TRAIL,
-  HOUSES,
   ISLET,
-  LAMPS,
   LILY_PAD_R,
   LILY_PADS,
   lilyPadRise,
   LOGS,
   LOWLAND_RIDGES,
   MOSSY_BOULDERS,
-  PIER2,
   POND,
   POND_Y,
   PORT,
   RUIN_PILLARS,
   RIGHT_ARM_ROOTS,
   RIGHT_ARM_TREES,
-  SERVICES,
   SHRINE,
   SHRINE_STATUES,
   STREAMS,
@@ -1013,145 +1007,6 @@ export function ropeBridgeGeometry(len: number): THREE.BufferGeometry {
 }
 
 // ------------------------------------------------------------------ the town
-
-/** Every building, the plaza, the quay and the pier in one merged mesh. */
-export function townGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0.4);
-  const gy = (x: number, z: number) => groundY(x, z);
-  const house = (x: number, z: number, w: number, d: number, yaw: number, wall: string, roof: string, h = 3.2) => {
-    const y = gy(x, z) - 0.2;
-    b.boxAt(w, h, d, [x, y + h / 2, z], [0, yaw, 0], wall);
-    const r = new THREE.ConeGeometry(Math.hypot(w, d) / 2 + 0.25, 1.8, 4, 1);
-    r.rotateY(Math.PI / 4);
-    r.scale((w / Math.hypot(w, d)) * 1.414, 1, (d / Math.hypot(w, d)) * 1.414);
-    b.add(r, roof, [x, y + h + 0.9, z], [0, yaw, 0]);
-    // Door and windows on the front (local +z).
-    const fx = Math.sin(yaw),
-      fz = Math.cos(yaw),
-      rx = Math.cos(yaw),
-      rz = -Math.sin(yaw);
-    const front = d / 2 + 0.02;
-    b.boxAt(0.9, 1.7, 0.08, [x + fx * front, y + 0.85, z + fz * front], [0, yaw, 0], "#6e4a2c");
-    for (const side of [-1, 1])
-      b.boxAt(0.7, 0.7, 0.08, [x + fx * front + rx * side * w * 0.3, y + 2, z + fz * front + rz * side * w * 0.3], [0, yaw, 0], "#7fc6e8");
-  };
-  for (const s of Object.values(SERVICES)) {
-    const colors: Record<string, [string, string]> = {
-      market: ["#fbe3b5", "#e8553f"],
-      clothes: ["#fff1f4", "#ff8fb0"],
-      trainer: ["#dfe9f7", "#3f7fd0"],
-      inn: ["#f2e6ff", "#8f6ad0"],
-      harbor: ["#e6eef2", "#26467a"],
-    };
-    const [wall, roof] = colors[s.id];
-    house(s.house.x, s.house.z, s.house.w, s.house.d, s.house.yaw, wall, roof, s.id === "inn" ? 4.4 : 3.2);
-    const k = s.keeper;
-    // A counter in front of each keeper.
-    const fx = Math.sin(s.house.yaw),
-      fz = Math.cos(s.house.yaw);
-    b.boxAt(Math.min(3, s.house.w * 0.5), 1, 0.7, [k.x - fx * 0.95, gy(k.x, k.z) + 0.5, k.z - fz * 0.95], [0, s.house.yaw, 0], "#b0763e");
-  }
-  for (const h of HOUSES) house(h.x, h.z, h.w, h.d, h.yaw, h.color, h.roof);
-  // Market stall: a striped awning and crates of food.
-  const m = SERVICES.market.house;
-  for (let i = 0; i < 6; i++)
-    b.boxAt(0.62, 0.08, 2, [m.x + 2.6, gy(m.x, m.z) + 2.7 - 0.1 * i, m.z - 1.6 + i * 0.64], [0.2, 0, 0], i % 2 ? "#ffffff" : "#e8553f");
-  for (const [dz, c] of [
-    [-1.1, "#e83a35"],
-    [0, "#ffd23f"],
-    [1.1, "#a070e0"],
-  ] as const) {
-    b.box(0.7, 0.4, 0.7, m.x + 3.4, gy(m.x, m.z) + 0.6, m.z + dz, "#b0763e");
-    b.sphere(0.25, m.x + 3.4, gy(m.x, m.z) + 1.1, m.z + dz, c, [1.2, 0.6, 1.2], 7);
-  }
-  // Kitchen chimney; trainer's practice dummy; inn sign post; harbour flag pole.
-  const kh = SERVICES.clothes.house;
-  b.box(0.7, 2, 0.7, kh.x + 1.5, gy(kh.x, kh.z) + 3.4, kh.z - 1, "#c9a08a");
-  const tr = SERVICES.trainer.house;
-  b.cyl(0.08, 0.08, 1.6, tr.x + 5.2, gy(tr.x, tr.z) - 0.1, tr.z + 2.6, "#6e4a2c", 6);
-  b.sphere(0.4, tr.x + 5.2, gy(tr.x, tr.z) + 1.3, tr.z + 2.6, "#d8b77a", [1, 1.3, 1], 8);
-  const hb = SERVICES.harbor.house;
-  b.cyl(0.07, 0.09, 6, hb.x + 4.6, gy(hb.x, hb.z) - 0.1, hb.z + 0.5, "#e6e6e6", 6);
-  b.boxAt(1.4, 0.9, 0.04, [hb.x + 5.35, gy(hb.x, hb.z) + 5.3, hb.z + 0.5], [0, 0, 0], "#3f9fe0");
-  // The plaza fountain.
-  const f = FOUNTAIN;
-  const fy = gy(f.x, f.z);
-  b.cyl(f.r, f.r + 0.1, 0.5, f.x, fy - 0.05, f.z, "#bdb3a2", 14);
-  b.cyl(f.r - 0.25, f.r - 0.25, 0.05, f.x, fy + 0.4, f.z, "#6fd0e0", 14);
-  b.cyl(0.25, 0.3, 1.2, f.x, fy + 0.4, f.z, "#bdb3a2", 8);
-  b.sphere(0.35, f.x, fy + 1.7, f.z, "#bdb3a2", [1, 0.5, 1], 8);
-  for (const l of LAMPS) {
-    b.cyl(0.06, 0.08, 2.6, l.x, gy(l.x, l.z) - 0.1, l.z, "#4a4a52", 6);
-    b.sphere(0.2, l.x, gy(l.x, l.z) + 2.6, l.z, "#fff3b0", [1, 1.2, 1], 8);
-  }
-  for (const c of CRATES) b.boxAt(0.8 * c.s, 0.8 * c.s, 0.8 * c.s, [c.x, gy(c.x, c.z) + 0.4 * c.s, c.z], [0, c.yaw, 0], "#b0763e");
-  // The quay wall along the harbour, the pier and its posts, a moored boat, the lighthouse.
-  const qz = PORT.z0 - 0.2;
-  const qy = gy(76, PORT.z0 + 1);
-  b.box(PORT.x1 - PORT.x0 + 6, qy + 4.4, 1, (PORT.x0 + PORT.x1) / 2, -4.4, qz, "#a59a88");
-  const deck = qy + PIER2.deckY;
-  b.box(PIER2.half * 2, 0.16, PIER2.z1 - PIER2.z0, PIER2.x, deck - 0.16, (PIER2.z0 + PIER2.z1) / 2, "#b88a52");
-  for (let z = PIER2.z0 + 0.6; z < PIER2.z1; z += 2.4)
-    for (const side of [-1, 1]) b.cyl(0.12, 0.12, deck + 3.6, PIER2.x + side * (PIER2.half - 0.05), -3.6, z, "#7a5532", 6);
-  // The boat (a sailing boat at the pier's end).
-  const bx = PIER2.x + 3.6,
-    bz = PIER2.z0 + 4;
-  const hull = new THREE.CylinderGeometry(1.4, 0.9, 6.5, 8, 1, false, Math.PI, Math.PI);
-  hull.rotateX(Math.PI / 2);
-  b.add(hull, "#c0503a", [bx, SEA_Y + 0.6, bz], [0, 0, Math.PI]);
-  b.box(2.4, 0.15, 5.6, bx, SEA_Y + 0.55, bz, "#d8b77a");
-  b.cyl(0.09, 0.11, 6, bx, SEA_Y + 0.6, bz, "#7a5532", 6);
-  b.boxAt(0.05, 3.6, 2.6, [bx, SEA_Y + 3.6, bz + 1.4], [0, 0, 0], "#fbf6ea");
-  const lx = 99,
-    lz = -327;
-  b.add(rockGeometry(3, 2.5, 1800, 1), "#7a6c61", [lx, SEA_Y - 1, lz]);
-  b.cyl(0.9, 1.3, 8, lx, SEA_Y + 1.2, lz, "#ffffff", 10);
-  for (const y of [3, 6]) b.cyl(1.0 - y * 0.03, 1.2 - y * 0.03, 0.9, lx, SEA_Y + 1.2 + y, lz, "#e8553f", 10);
-  b.cyl(1.0, 1.0, 1.2, lx, SEA_Y + 9.2, lz, "#fff3b0", 10);
-  b.cone(1.2, 1.2, lx, SEA_Y + 10.4, lz, "#e8553f", 10);
-  return b.build();
-}
-
-/** Signboards over the services (English words to read): one atlas, one draw. */
-export function townSigns(): { geo: THREE.BufferGeometry; tex: THREE.CanvasTexture } {
-  const labels: Array<[keyof typeof SERVICES, string, string]> = [
-    ["market", "FOOD MARKET", "#e8553f"],
-    ["clothes", "CLOTHES SHOP", "#ff6f9e"],
-    ["trainer", "MONSTER TRAINER", "#3f7fd0"],
-    ["inn", "SEASIDE INN", "#8f6ad0"],
-    ["harbor", "HARBOR OFFICE", "#26467a"],
-  ];
-  const c = document.createElement("canvas");
-  c.width = 512;
-  c.height = 64 * labels.length;
-  const g = c.getContext("2d")!;
-  labels.forEach(([, text, color], i) => {
-    g.fillStyle = "#fff8ea";
-    g.fillRect(0, i * 64, 512, 64);
-    g.fillStyle = color;
-    g.fillRect(6, i * 64 + 6, 500, 52);
-    g.fillStyle = "#ffffff";
-    g.font = "bold 36px sans-serif";
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(text, 256, i * 64 + 33);
-  });
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const parts: THREE.BufferGeometry[] = [];
-  labels.forEach(([id], i) => {
-    const s = SERVICES[id].house;
-    const plane = new THREE.PlaneGeometry(3.4, 0.45);
-    const uv = plane.attributes.uv as THREE.BufferAttribute;
-    for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - (i + 1 - uv.getY(k)) / labels.length);
-    const fx = Math.sin(s.yaw),
-      fz = Math.cos(s.yaw);
-    plane.rotateY(s.yaw);
-    plane.translate(s.x + fx * (s.d / 2 + 0.06), groundY(s.x, s.z) + (id === "inn" ? 3.7 : 2.75), s.z + fz * (s.d / 2 + 0.06));
-    parts.push(plane);
-  });
-  return { geo: mergeGeometries(parts, false), tex };
-}
 
 /** A keeper: one merged mesh (limbs posed), with hats and aprons from their look. */
 export function npcGeometry(n: NpcDef): THREE.BufferGeometry {

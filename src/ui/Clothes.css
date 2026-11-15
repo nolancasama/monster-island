@@ -18,6 +18,7 @@
 
 .clothes-head h2 {
   margin: 0;
+  margin-right: auto;
 }
 
 .clothes-head .shop-coins {
@@ -29,16 +30,17 @@
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
   gap: 8px;
   overflow: auto;
-  max-height: calc(100vh - 170px);
+  max-height: calc(100vh - 110px);
   padding: 2px;
 }
 
 .wear-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 8px 10px;
+  gap: 1px;
+  padding: 6px 6px 8px;
   border-radius: 14px;
   background: var(--paper-2);
   border: 3px solid transparent;
@@ -54,8 +56,9 @@
 }
 
 .wear-look {
-  width: 72px;
-  height: 64px;
+  position: relative;
+  width: 64px;
+  height: 54px;
   display: grid;
   place-items: center;
   border-radius: 12px;
@@ -81,10 +84,17 @@
   color: #c2337a;
 }
 
+/* "Only for you" / "Only for friends": a corner badge, so every card keeps one height. */
 .wear-only {
-  font-size: 0.74rem;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #ece6ff;
+  font-size: 0.68rem;
   font-weight: 800;
-  color: #6b5aa8;
+  color: #5b4a9a;
 }
 
 .wear-buy {
@@ -101,17 +111,21 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
   justify-content: center;
 }
 
 .wear-actions button {
   min-height: 44px;
-  padding: 6px 10px;
-  font-size: 0.92rem;
+  padding: 6px 9px;
+  font-size: 0.88rem;
+  white-space: nowrap;
 }
 
+/* Who wears it: a little face on the item's picture. */
 .wear-by {
+  position: absolute;
+  right: -10px;
+  bottom: -8px;
   display: inline-flex;
   border-radius: 50%;
   background: #fff;
@@ -119,7 +133,8 @@
 }
 
 .clothes-close {
-  align-self: center;
+  padding: 6px 14px;
+  min-height: 44px;
 }
 
 .wear-picker {

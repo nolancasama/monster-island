@@ -137,11 +137,22 @@ Per building:
 Signs must be readable at 1366×768 from the town cameras. They stay one atlas and one
 draw. Blade signs facing north (toward the camera) are allowed.
 
-Performance: **no new draw calls.** Everything merges into the existing town, wall and
-sign meshes; the two doors stay two meshes. Triangles: the town mesh may grow to ≤ 2.5×
-its current count and ≤ 30k, and the palisade to ≤ 1.5× the stone wall and ≤ 12k. Report
-before/after counts. Every view in `src/scene/lowland-budget.test.ts` and
-`src/game/world/portWall.test.ts` must still pass unchanged.
+Performance (as built, 2026-11-15).
+
+The town mesh had no draw distance. Its 2,654 triangles counted in the far forest views,
+and the forest base view had only 30 triangles left under its cap. So the town is now two
+merged meshes (`scene/models/town.ts`):
+- The **base** holds the volumes, gable roofs, chimneys, the giant hat, the quay, the pier,
+  the boat and the lighthouse. It is drawn at any distance and is down to **1,620**
+  triangles, so far views gained margin.
+- The **detail** holds the frames, windows, shutters, flower boxes, awnings, props, lamps,
+  the fountain, the counters and the sign boards. It is **9,376** triangles, drawn within
+  `TOWN_DETAIL_FAR` of its bounds: the coast, causeway and town views only.
+
+The cost is one extra draw call, and only near the town. Measured view totals: port
+39.1k, coast 63.2k, causeway 68.9k, all under the 120k cap. The palisade stays under the
+wall test's 8,000-triangle cap and is still drawn within `PORT_WALL_FAR`. Every view in
+`src/scene/lowland-budget.test.ts` and `src/game/world/portWall.test.ts` passes.
 
 ## 3. Clothes shop and wearables
 

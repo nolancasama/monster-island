@@ -2,7 +2,8 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { PICK_TIME, rt } from "../game/runtime";
-import { getGame } from "../game/store";
+import { getGame, useGame } from "../game/store";
+import { WornItems } from "./Wearables";
 import { MONSTERS } from "../game/data/monsters";
 import { groundY } from "../game/world/island";
 import { smoothMat, shadowMaterial } from "./materials";
@@ -25,7 +26,9 @@ function Shadow({ size = 1.1 }: { size?: number }) {
 
 /** The player: a kid explorer with a cap and backpack. */
 export function Player() {
-  const body = useMemo(() => bodyGeometry(PLAYER_OUTFIT), []);
+  // A hat from the clothes shop replaces the cap.
+  const capless = useGame((s) => !!s.progress.act2.wardrobe.worn.player?.head);
+  const body = useMemo(() => bodyGeometry(capless ? { ...PLAYER_OUTFIT, hat: "none" } : PLAYER_OUTFIT), [capless]);
   const thigh = useMemo(() => thighGeometry(PLAYER_OUTFIT), []);
   const shin = useMemo(() => shinGeometry(PLAYER_OUTFIT), []);
   const arm = useMemo(() => armGeometry(PLAYER_OUTFIT), []);
@@ -189,6 +192,7 @@ export function Player() {
     <group ref={root}>
       <group ref={pose}>
         <mesh geometry={body} material={smoothMat} />
+        <WornItems who="player" />
         <group ref={legL} position={[-0.09, 0.5, 0]}>
           <mesh geometry={thigh} material={smoothMat} />
           <group ref={shinL} position={[0, KNEE_Y, 0]}>

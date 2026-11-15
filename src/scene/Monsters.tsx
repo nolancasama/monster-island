@@ -13,6 +13,7 @@ import { cb, companionVisible, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
 import { anchors, EMBER_MOUTH, LEAFY_HAND, PUFF_BEAK } from "./anchors";
+import { WornItems } from "./Wearables";
 
 const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
@@ -296,6 +297,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
         <group ref={eyes} position={[0, parts.eyeY, 0]}>
           <mesh geometry={parts.eyes} material={smoothMat} />
         </group>
+        {id !== "lumo" && <WornItems who={id} />}
         {parts.parts.map((p) => (
           <group
             key={p.name}

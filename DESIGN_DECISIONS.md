@@ -2708,3 +2708,26 @@ Claude directly at the user's request (no router).
   Tiny Cape (needs a back anchor through ride stances; deferred), duplicates.
 - Town: wooden palisade on the unchanged wall footprint, collision and fade; buildings restyled on the
   unchanged footprints; no new draw calls.
+
+## 2026-11-15: Port Town revamp (as built)
+
+- The town is two meshes. The **base** holds the volumes, gable roofs, chimneys, the quay, the boat and the
+  lighthouse. It is drawn at any distance and is down from 2,654 to 1,620 triangles: the old mesh counted in
+  far forest views, and the forest base view had only 30 triangles of margin. The **detail** holds the frames,
+  windows, props, lamps, the fountain, counters and sign boards (9,376 triangles) and is drawn only near the
+  town (coast, causeway, port). One extra draw call, near the town only.
+  Rejected: everything in one mesh (it breaks the far views).
+- Every sign faces north, because the fixed camera looks south: blade signs at the north ends of the
+  plaza-facing fronts, the harbour sign on its north wall, and the PORT TOWN board under the gate lintel.
+  Rejected: signs on the fronts (seen edge-on).
+- Awnings are 1 m deep. Deeper ones hid everything under them from the high camera, and the market's produce
+  display moved to its camera-facing north end.
+- The clothes shop's giant roof hat (168 triangles) is rarely in frame: gameplay cameras sit about 8 m north
+  of the player, looking south. It is kept as a cheap extra; the shop's identity comes from its blade sign,
+  awning, bunting, hat stand and Ms. Button.
+- Wearables have three anchors per wearer: head, eyes and mouth. The mustache needs its own anchor because
+  Ember's snout is far below and in front of its eyes. The Knight Helmet became a raised-visor cap, because the
+  full dome hid Ember's eyes. Heart Glasses lenses are two lobes and a point; flat boxes read as diamonds.
+- The clothes panel fits all 13 items without scrolling at 1366×768 and 1280×800. "Only for you/friends" is a
+  corner badge and the close button sits in the header.
+- Ms. Button's hat costs about as many triangles as the old chef hat, because keepers are drawn in far views.

@@ -1,5 +1,33 @@
 # Current State
 
+## Development work (not merged, not deployed): `feature/port-town-revamp` (from `main` `a0dca15`)
+The user's plan "Port Town area and its town systems" (2026-11-15) was implemented by Claude directly, without
+the router, at the user's request. The frozen spec `docs/PORT_TOWN_REVAMP.md` (§0 lists every change from the
+brief) is in place, and the decisions are in `DESIGN_DECISIONS.md` (two 2026-11-15 entries).
+- **Town art:** a wooden palisade with two watchtowers, a log lintel and the PORT TOWN board
+  (`scene/models/portWall.ts`), on the same collision and fade. Gable-roofed timber buildings with shop props
+  and north-facing blade signs (`scene/models/town.ts`). The town is now a far base mesh plus a near detail
+  mesh (`TOWN_DETAIL_FAR`).
+- **Clothes shop:** the Treat Kitchen is gone; Ms. Button (`tailor`, service `clothes`) sells 13 wearables
+  (`data/wearables.ts`, rules in `logic/wardrobe.ts`, shop flow in `flow/clothes.ts`, panel in
+  `ui/ClothesPanel.tsx`). The items are drawn on the player and the friends (`scene/models/wearables.ts`,
+  `scene/Wearables.tsx`). Bonuses help the whole team; each stat is on one item.
+- **Coach Rex:** teaches one combo per friend for 1 amber (`data/combos.ts`, `flow/trainer.ts`,
+  `ui/ComboPanel.tsx`). A lesson also gives the old treat upgrade, and lessons are stored in `act2.upgrades`.
+  The combos (Bonk, Splash, Slam, Blaze) live in `game/combat.ts`, with a callout (`ui/ComboCallout.tsx`), a
+  `combo` burst and sounds. Push ownership is recorded, so a bomb's knock is never Puff's Slam.
+- **Save:** v4, plus `act2.wardrobe` (additive and re-validated). `act2.trained` is retired but still read
+  and written.
+- **Verified:** tsc and build pass, and all 1030 unit tests pass (new: wardrobe rules and save validation,
+  combo lessons, every combo with its negative cases, every gear stat, the budgets of the wearable models).
+  The lowland budget views all pass: port 39.1k, coast 63.2k, causeway 68.9k; forest base margin up from 30 to
+  about 1,060 triangles. Renders were judged by Claude at 1366×768 (and panels at 1280×800) from
+  `tests/e2e/zz-town-shots.spec.ts` (`SHOT_TAG=t2|t4`, `SHOT_ONLY=town|stances|combos|panels`;
+  `.tmp/shots/town/`).
+- **e2e:** `act2.spec.ts` "town in English" was rewritten (market → combo lesson → clothes → inn → harbour). It
+  passes every new step and then hits its **known pre-existing** coast "hit" timeout (see below). The full
+  e2e suite has not been run on this branch.
+
 ## Live
 `main` deployed 2026-11-07 at `6b76b84` (Pages run 42373513414, success): the **Act 2 vertical expansion**
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
@@ -64,6 +92,9 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
+-1. The user reviews `feature/port-town-revamp`; merge and deploy only on approval. Then the user's
+   "Pirate Voyage Adventure" plan (received 2026-11-15) gets its own frozen spec and branch. It replaces
+   `sailWithGull()`'s short crossing and stays behind the Cloud Isle release lock.
 0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway
    canopy; diagnose the coast "hit" timeout in `act2.spec.ts:341`). Real-Chromebook
    check of the mic level meter and ankle-water frame rate.

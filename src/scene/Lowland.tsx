@@ -34,6 +34,7 @@ import { layerView } from "./layerView";
 import { flatMat, occluderMat, smoothMat, canopySolidMat, canopyOccluderMat, causewayOccluderMat } from "./materials";
 import { conformBridge } from "./models/bridge";
 import { portDoorGeometry, portWallGeometry } from "./models/portWall";
+import { TOWN_DETAIL_FAR, townDetailGeometry, townGeometry, townSigns } from "./models/town";
 import { groveDoorGeometry, groveDoorFrameGeometry } from "./models/groveDoor";
 import { audio } from "../audio/audio";
 import { Chest } from "./Chest";
@@ -60,8 +61,6 @@ import {
   primevalTreeGeometry,
   reedGeometry,
   ropeBridgeGeometry,
-  townGeometry,
-  townSigns,
   treeFernGeometry,
   vineBridgeGeometry,
   type Spot,
@@ -384,6 +383,7 @@ export function Lowland() {
     return material;
   }, [waterTime]);
   const town = useMemo(townGeometry, []);
+  const townDetail = useMemo(townDetailGeometry, []);
   const portWall = useMemo(portWallGeometry, []);
   const signs = useMemo(townSigns, []);
   const signMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signs.tex, side: THREE.DoubleSide }), [signs]);
@@ -413,6 +413,7 @@ export function Lowland() {
       ))}
       <DistanceMesh geometry={shallows} material={waterMat} far={GROVE_SHALLOWS_FAR} />
       <DistanceMesh geometry={town} material={flatMat} />
+      <DistanceMesh geometry={townDetail} material={flatMat} far={TOWN_DETAIL_FAR} />
       <DistanceMesh geometry={portWall} material={occluderMat} far={PORT_WALL_FAR} />
       <PortGate />
       <GroveDoor />

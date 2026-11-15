@@ -39,6 +39,9 @@ export function ClothesPanel() {
           <span className="shop-coins">
             <Icon id="coin" size={24} /> {progress.act2.coins}
           </span>
+          <button className="secondary clothes-close" onClick={() => setGame({ panel: null })} data-testid="clothes-close">
+            Thank you! Bye! <Ja>おわる</Ja>
+          </button>
         </header>
         <div className="wear-grid">
           {WEARABLE_IDS.map((id) => {
@@ -49,7 +52,12 @@ export function ClothesPanel() {
             return (
               <div key={id} className={`wear-card${has ? " owned" : ""}${who ? " worn" : ""}`} data-testid={`wear-${id}`}>
                 <button className="wear-look" onClick={() => sayItem(id)} aria-label={`${d.name.en}. ${d.line}`} data-testid={`wear-look-${id}`}>
-                  <WearIcon id={id} size={54} />
+                  <WearIcon id={id} size={46} />
+                  {who && (
+                    <span className="wear-by" title={who === "player" ? "You" : MONSTERS[who].name} data-testid={`wear-by-${id}`}>
+                      <Face who={who} size={28} />
+                    </span>
+                  )}
                 </button>
                 <b className="wear-name">{d.name.en}</b>
                 <Ja>{d.name.ja}</Ja>
@@ -57,8 +65,8 @@ export function ClothesPanel() {
                   {blurb.en} <Ja>{blurb.ja}</Ja>
                 </span>
                 {d.who !== "everyone" && (
-                  <span className="wear-only">
-                    {ONLY[d.who].en} <Ja>{ONLY[d.who].ja}</Ja>
+                  <span className="wear-only" title={ONLY[d.who].ja}>
+                    {ONLY[d.who].en}
                   </span>
                 )}
                 {!has ? (
@@ -67,11 +75,6 @@ export function ClothesPanel() {
                   </button>
                 ) : (
                   <div className="wear-actions">
-                    {who && (
-                      <span className="wear-by" title={who === "player" ? "You" : MONSTERS[who].name} data-testid={`wear-by-${id}`}>
-                        <Face who={who} size={30} />
-                      </span>
-                    )}
                     <button className="primary" onClick={() => { askWhoWears(); setPicking(id); }} data-testid={`wear-put-${id}`}>
                       Wear
                     </button>
@@ -86,9 +89,6 @@ export function ClothesPanel() {
             );
           })}
         </div>
-        <button className="secondary clothes-close" onClick={() => setGame({ panel: null })} data-testid="clothes-close">
-          Thank you! Bye! <Ja>おわる</Ja>
-        </button>
         {picking && (
           <div className="wear-picker" data-testid="wear-picker">
             <div className="wear-picker-card panel">
