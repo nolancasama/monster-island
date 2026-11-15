@@ -89,5 +89,10 @@ test("normal built game ignores backquote; Ctrl+Shift+D reloads into debug", asy
   await page.keyboard.press("Control+Shift+KeyD");
   await page.waitForURL(/[?&]debug=1/);
   await expect(page.getByTestId("debug-badge")).toBeVisible();
+  // One press: the reloaded page opens the menu, with the pirate voyage preview in view.
+  await expect(page.getByTestId("debug-menu")).toBeVisible();
+  await expect(page.getByTestId("debug-pirate-voyage")).toBeInViewport();
+  await expect(page.getByTestId("debug-voyage-gull")).toBeVisible();
+  await page.screenshot({ path: ".tmp/shots/debug-voyage-panel.png" });
   expect(await page.evaluate(() => localStorage.getItem("mi.save.v4"))).toBe("real-save-sentinel");
 });

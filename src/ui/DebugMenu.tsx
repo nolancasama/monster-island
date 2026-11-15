@@ -135,6 +135,10 @@ function DebugDialog() {
       <output className="debug-position" data-testid="debug-position">{position.world} · {position.zone} · x {position.x.toFixed(2)} / y {position.y.toFixed(2)} / z {position.z.toFixed(2)}</output>
       <div className="debug-columns">
         <section className="debug-destinations" aria-label="Jump to"><h2>Jump to</h2><p>Sets story progress and friends for this point.</p>
+          {cloudIsleShipDebugEnabled() && <fieldset className="debug-voyage" data-testid="debug-pirate-voyage"><legend>Pirate voyage (preview)</legend>
+            <label><input type="checkbox" data-testid="debug-pirate-voyage-on" checked={debug.pirateVoyage} onChange={e => run(() => setDebugPirateVoyage(e.target.checked), e.target.checked ? "Gull's first trip is the pirate voyage (ship opened)" : "Gull's first trip is the original crossing")} /> Use pirate voyage for Gull's first trip</label>
+            <div className="debug-destination-grid">{DEBUG_VOYAGE_STARTS.map(s => <button key={s.id} data-testid={`debug-voyage-${s.id}`} onClick={() => run(() => startDebugVoyage(s.id), `Pirate voyage: ${s.label}`)}>{s.label}</button>)}</div>
+          </fieldset>}
           {(["Prologue", "Act 2", "Act 3"] as const).map(act => <fieldset key={act}><legend>{act}</legend><div className="debug-destination-grid">{DEBUG_DESTINATIONS.filter(d => d.act === act).map(d => <button key={d.id} data-testid={`debug-jump-${d.id}`} onClick={() => run(() => jumpDebug(d.id), `Jumped to ${d.label}`)}>{d.label}</button>)}</div></fieldset>)}
         </section>
         <section aria-label="Travel anywhere"><h2>Travel anywhere</h2>
@@ -151,10 +155,6 @@ function DebugDialog() {
           }} /> Grove stream ferry solved</label>
           <ProgressToggles />
           {cloudIsleShipDebugEnabled() && <button data-testid="debug-cloud-ship" aria-pressed={debug.cloudIsleShipOpen} onClick={() => setCloudIsleShipOpen(!debug.cloudIsleShipOpen)}>Cloud Isle ship: {debug.cloudIsleShipOpen ? "open" : "locked"}</button>}
-          {cloudIsleShipDebugEnabled() && <fieldset data-testid="debug-pirate-voyage"><legend>Pirate voyage (preview)</legend>
-            <label><input type="checkbox" data-testid="debug-pirate-voyage-on" checked={debug.pirateVoyage} onChange={e => run(() => setDebugPirateVoyage(e.target.checked), e.target.checked ? "Gull's first trip is the pirate voyage (ship opened)" : "Gull's first trip is the original crossing")} /> Use pirate voyage for Gull's first trip</label>
-            <div className="debug-destination-grid">{DEBUG_VOYAGE_STARTS.map(s => <button key={s.id} data-testid={`debug-voyage-${s.id}`} onClick={() => run(() => startDebugVoyage(s.id), `Pirate voyage: ${s.label}`)}>{s.label}</button>)}</div>
-          </fieldset>}
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, coins: p.act2.coins + 100 } } }); }, "Added 100 coins")}>+100 coins</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, items: { ...p.act2.items, amber: (p.act2.items.amber ?? 0) + 5 } } } }); }, "Added 5 amber")}>+5 amber</button>

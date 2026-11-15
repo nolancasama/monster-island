@@ -5,6 +5,8 @@ import { rt } from "./runtime";
 import { releaseAllAttacks } from "../input/attackInput";
 import { suspendDebugSpeech } from "./flow/ask";
 
+const OPEN_AFTER_RELOAD = "mi.debug.openAfterReload";
+
 export function installDebugControls() {
   if (!debugEnabled) {
     // Live builds: Ctrl+Shift+D reloads into ?debug=1 (separate debug save). The
@@ -15,11 +17,20 @@ export function installDebugControls() {
       e.stopImmediatePropagation();
       const url = new URL(location.href);
       url.searchParams.set("debug", "1");
+      // One press is enough: the reloaded debug page opens the menu.
+      try { sessionStorage.setItem(OPEN_AFTER_RELOAD, "1"); } catch { /* storage blocked: press again */ }
       location.assign(url.toString());
     };
     window.addEventListener("keydown", enter, true);
     return () => window.removeEventListener("keydown", enter, true);
   }
+  try {
+    if (sessionStorage.getItem(OPEN_AFTER_RELOAD)) {
+      sessionStorage.removeItem(OPEN_AFTER_RELOAD);
+      useDebug.setState({ open: true });
+      suspendDebugSpeech();
+    }
+  } catch { /* storage blocked */ }
   const down = (e: KeyboardEvent) => {
     const toggle = e.code === "Backquote" || (e.code === "KeyD" && e.ctrlKey && e.shiftKey);
     const open = useDebug.getState().open;
