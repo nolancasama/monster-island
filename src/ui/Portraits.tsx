@@ -1,5 +1,5 @@
 import type { MonsterId } from "../game/types";
-import { NPCS, type NpcId } from "../game/data/town";
+import { NPCS, type KeeperLook, type NpcId } from "../game/data/town";
 
 /**
  * Journal portraits, drawn to match the 3D models. `silhouette` draws the
@@ -193,7 +193,11 @@ export function Portrait({ id, size = 64, silhouette = false }: { id: MonsterId;
 
 /** A Port Town keeper's face, drawn from the keeper's look (data/town.ts). */
 export function NpcPortrait({ id, size = 64 }: { id: NpcId; size?: number }) {
-  const n = NPCS[id];
+  return <LookPortrait look={NPCS[id]} size={size} />;
+}
+
+/** Any keeper-style person (town keepers, pirates) from their look. */
+export function LookPortrait({ look: n, size = 64 }: { look: KeeperLook; size?: number }) {
   return (
     <svg className="portrait" width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
       <ellipse cx="50" cy="98" rx="34" ry="21" fill={n.shirt} />
@@ -209,7 +213,16 @@ export function NpcPortrait({ id, size = 64 }: { id: NpcId; size?: number }) {
           <circle cx="60" cy="27" r="2.6" fill="#d93a72" />
         </>
       )}
-      {id === "tailor" && <path d="M33 74 Q50 86 67 74 l-2 4 Q50 90 35 78z" fill="#ffd23f" />}
+      {n.name === "Ms. Button" && <path d="M33 74 Q50 86 67 74 l-2 4 Q50 90 35 78z" fill="#ffd23f" />}
+      {n.hat === "tricorn" && (
+        <>
+          <path d="M18 38 Q50 6 82 38 Q66 30 50 40 Q34 30 18 38z" fill={n.hatColor} />
+          <circle cx="50" cy="26" r="5" fill="#ffffff" />
+        </>
+      )}
+      {n.hat === "bandana" && <path d="M25 42 Q50 20 75 42 Q50 34 25 42z M73 40 l10 6 -8 3z" fill={n.hatColor} />}
+      {n.hat === "chef" && <path d="M30 34 Q24 12 40 14 Q50 2 60 14 Q76 12 70 34z" fill={n.hatColor} stroke="#e6e0d8" strokeWidth="1.5" />}
+      {n.beard && <path d="M30 60 Q32 84 50 86 Q68 84 70 60 Q60 70 50 70 Q40 70 30 60z" fill={n.beard} />}
       {n.hat === "captain" && (
         <>
           <path d="M26 34 Q50 16 74 34z" fill={n.hatColor} />
@@ -219,7 +232,7 @@ export function NpcPortrait({ id, size = 64 }: { id: NpcId; size?: number }) {
       )}
       {n.hat === "band" && <rect x="25" y="36" width="50" height="6" rx="3" fill={n.hatColor} />}
       {n.hat === "scarf" && <path d="M26 40 Q50 22 74 40 Q50 32 26 40z" fill={n.hatColor} />}
-      {id === "harbor" && <path d="M34 70 Q50 84 66 70 Q60 78 50 79 Q40 78 34 70z" fill={n.hair} />}
+      {n.name === "Captain Gull" && <path d="M34 70 Q50 84 66 70 Q60 78 50 79 Q40 78 34 70z" fill={n.hair} />}
       <circle cx="41" cy="55" r="3.3" fill="#1d1712" />
       <circle cx="59" cy="55" r="3.3" fill="#1d1712" />
       <path d="M43 65 Q50 70 57 65" stroke="#8a3a2a" strokeWidth="2.5" fill="none" strokeLinecap="round" />

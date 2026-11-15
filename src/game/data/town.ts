@@ -3,17 +3,25 @@ import type { ServiceId } from "../world/lowland";
 /** Port Town's keepers: one per service, each with a look (3D model and portrait) and a voice. */
 export type NpcId = "shopkeeper" | "tailor" | "trainer" | "innkeeper" | "harbor";
 
-export interface NpcDef {
-  id: NpcId;
+/** How a person looks and sounds: shared by the town's keepers and the pirates. */
+export interface KeeperLook {
   name: string;
-  service: ServiceId;
   skin: string;
   hair: string;
   shirt: string;
   apron?: string;
-  hat: "none" | "tophat" | "band" | "captain" | "scarf";
+  hat: "none" | "tophat" | "band" | "captain" | "scarf" | "tricorn" | "bandana" | "chef";
   hatColor: string;
+  /** A big beard (pirates). */
+  beard?: string;
+  /** An eye patch (pirates). */
+  patch?: boolean;
   voice: { pitch: number; rate: number };
+}
+
+export interface NpcDef extends KeeperLook {
+  id: NpcId;
+  service: ServiceId;
 }
 
 export const NPCS: Record<NpcId, NpcDef> = {

@@ -1,4 +1,5 @@
 import { PHRASES, type PhraseId } from "../logic/english";
+import { PIRATES, type PirateId } from "../data/pirates";
 import { judgeSpeech, type Judgement } from "../logic/speechMatch";
 import { makeRng, shuffle } from "../logic/rng";
 import { noteSaid } from "../logic/progress";
@@ -90,6 +91,7 @@ function voiceOf(by: Speaker): { pitch: number; rate: number } {
   if (by === "self") return { pitch: 1.3, rate: 0.95 };
   if (by === "game") return { pitch: 1.1, rate: 0.9 };
   if (by in NPCS) return NPCS[by as NpcId].voice;
+  if (by in PIRATES) return PIRATES[by as PirateId].voice;
   if (by in FAMILY) return FAMILY[by as FamilyId].voice;
   return MONSTERS[by as MonsterId].voice;
 }
