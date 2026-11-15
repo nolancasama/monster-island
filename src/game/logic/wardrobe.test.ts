@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newProgress, type Progress } from "./progress";
 import { addCoins, findPort, markDescended, startAct2 } from "./act2";
 import { decodeSave, encodeSave } from "./save";
-import { buyWearable, canWear, outfitOf, readWardrobe, takeOff, teamBonus, wardrobeBonus, wear, wornBy, markClothesVisited } from "./wardrobe";
+import { buyWearable, canWear, giveWearable, outfitOf, readWardrobe, takeOff, teamBonus, wardrobeBonus, wear, wornBy, markClothesVisited } from "./wardrobe";
 import { STAT_BONUS, WEARABLES, WEARABLE_IDS, WEAR_STATS, type WearableId } from "../data/wearables";
 import type { MonsterId } from "../types";
 
@@ -29,14 +29,15 @@ function own(p: Progress, ...items: WearableId[]): Progress {
 const roundTrip = (p: Progress) => decodeSave(encodeSave(p, { x: 77, z: -303, yaw: 0 }, 30))!.progress;
 
 describe("the catalog", () => {
-  it("has 13 items, each stat on exactly one item, and a line and colours for each", () => {
-    expect(WEARABLE_IDS).toHaveLength(13);
+  it("has 13 items for sale plus the Captain Hat gift, each stat on exactly one item, and a line and colours for each", () => {
+    expect(WEARABLE_IDS.filter((id) => !WEARABLES[id].gift)).toHaveLength(13);
+    expect(WEARABLE_IDS.filter((id) => WEARABLES[id].gift)).toEqual(["captainHat"]);
     for (const stat of WEAR_STATS) expect(WEARABLE_IDS.filter((id) => WEARABLES[id].stat === stat), stat).toHaveLength(1);
     for (const id of WEARABLE_IDS) {
       const d = WEARABLES[id];
       expect(d.line, id).toMatch(/^(This is an? |These are )[a-z ]+\.$/);
       expect(d.colors.length, id).toBeGreaterThan(0);
-      expect(d.price, id).toBeGreaterThan(0);
+      expect(d.price > 0, id).toBe(!d.gift);
     }
   });
 });
@@ -87,6 +88,15 @@ describe("buying and wearing", () => {
     expect(wardrobeBonus(p)).toMatchObject({ power: STAT_BONUS.power, push: STAT_BONUS.push, coins: 0 });
     expect(teamBonus(p)).toBe(teamBonus(p));
     expect(wardrobeBonus(takeOff(p, "bandana")).power).toBe(0);
+  });
+
+  it("a gift is never sold, and is given once", () => {
+    expect(buyWearable(town(), "captainHat")).toEqual({ ok: false, reason: "gift" });
+    const p = giveWearable(town(), "captainHat");
+    expect(p.act2.wardrobe.owned).toEqual(["captainHat"]);
+    expect(p.act2.coins).toBe(town().act2.coins);
+    expect(giveWearable(p, "captainHat")).toBe(p);
+    expect(canWear(p, "captainHat", "ember")).toBe(true);
   });
 
   it("the first visit is remembered", () => {

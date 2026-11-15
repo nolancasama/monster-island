@@ -44,7 +44,7 @@ export function ClothesPanel() {
           </button>
         </header>
         <div className="wear-grid">
-          {WEARABLE_IDS.map((id) => {
+          {WEARABLE_IDS.filter((id) => !WEARABLES[id].gift || owned.includes(id)).map((id) => {
             const d = WEARABLES[id];
             const has = owned.includes(id);
             const who = has ? wornBy(progress, id) : null;

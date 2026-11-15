@@ -40,11 +40,12 @@ export function outfitOf(p: Progress, who: Wearer): Partial<Record<WearSlot, Wea
   return p.act2.wardrobe.worn[who] ?? {};
 }
 
-export type BuyWearResult = { ok: true; progress: Progress } | { ok: false; reason: "owned" | "coins" };
+export type BuyWearResult = { ok: true; progress: Progress } | { ok: false; reason: "owned" | "coins" | "gift" };
 
 export function buyWearable(p: Progress, item: WearableId): BuyWearResult {
   const w = p.act2.wardrobe;
   if (w.owned.includes(item)) return { ok: false, reason: "owned" };
+  if (WEARABLES[item].gift) return { ok: false, reason: "gift" };
   const price = WEARABLES[item].price;
   if (p.act2.coins < price) return { ok: false, reason: "coins" };
   return { ok: true, progress: { ...p, act2: { ...p.act2, coins: p.act2.coins - price, wardrobe: { ...w, owned: [...w.owned, item] } } } };
@@ -76,6 +77,12 @@ export function takeOff(p: Progress, item: WearableId): Progress {
   if (Object.keys(outfit).length) worn[who] = outfit;
   else delete worn[who];
   return withWardrobe(p, { ...w, worn });
+}
+
+/** A keepsake joins the wardrobe (once); nothing is paid. */
+export function giveWearable(p: Progress, item: WearableId): Progress {
+  const w = p.act2.wardrobe;
+  return w.owned.includes(item) ? p : withWardrobe(p, { ...w, owned: [...w.owned, item] });
 }
 
 export function markClothesVisited(p: Progress): Progress {

@@ -18,7 +18,7 @@ export const WEAR_STATS: WearStat[] = ["power", "push", "speed", "defense", "coi
 
 export const WEARABLE_IDS = [
   "partyHat", "bigBow", "flowerCrown", "babyBonnet", "bandana", "explorerHat", "pirateHat", "knightHelmet", "crown",
-  "mustache", "sunglasses", "heartGlasses", "goggles",
+  "mustache", "sunglasses", "heartGlasses", "goggles", "captainHat",
 ] as const;
 export type WearableId = (typeof WEARABLE_IDS)[number];
 
@@ -35,6 +35,8 @@ export interface WearableDef {
   stat: WearStat | null;
   /** Main colours, shared by the 3D model and the shop icon. */
   colors: string[];
+  /** A keepsake that is given, never sold (the pirates' Captain Hat). */
+  gift?: true;
 }
 
 const def = (id: WearableId, en: string, ja: string, line: string, slot: WearSlot, who: WearableDef["who"], price: number, stat: WearStat | null, colors: string[]): WearableDef =>
@@ -54,6 +56,7 @@ export const WEARABLES: Record<WearableId, WearableDef> = {
   sunglasses: def("sunglasses", "Sunglasses", "サングラス", "These are sunglasses.", "face", "everyone", 20, null, ["#2a2a33", "#3a4660"]),
   heartGlasses: def("heartGlasses", "Heart Glasses", "ハートの めがね", "These are heart glasses.", "face", "everyone", 20, null, ["#ff4f8b", "#ff9dc4"]),
   goggles: def("goggles", "Goggles", "ゴーグル", "These are goggles.", "face", "everyone", 30, "push", ["#8a5a2b", "#bfe6ff", "#c9a44a"]),
+  captainHat: { ...def("captainHat", "Captain Hat", "せんちょうの ぼうし", "This is a captain hat.", "head", "everyone", 0, null, ["#c0392b", "#ffd23f", "#ffffff"]), gift: true },
 };
 
 /** The team-wide bonus of each stat while its item is worn (fractions, except coins per pickup). */

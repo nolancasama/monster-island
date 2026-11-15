@@ -65,7 +65,13 @@ export type PhraseId =
   | "cmdSpin"
   | "cmdFly" | "cmdSplash"
   | "yesLetsGo" | "raiseSail" | "turnLeft" | "itsWindy" | "itsSunny" | "itsRainy" | "look"
-  | "imAFriend" | "yesItIs" | "whereLumo" | "yesIWill";
+  | "imAFriend" | "yesItIs" | "whereLumo" | "yesIWill"
+  // The pirate voyage (docs/PIRATE_VOYAGE.md §7).
+  | "yesIAm" | "iHaveApples" | "iHaveBananas" | "iHaveFish" | "iHaveBerries" | "iHaveMeat" | "noFood"
+  | "theyreMyFriends" | "yesTheyCan" | "noTheyCant" | "howManyFish" | "whatDoYouWant" | "hereYouAre"
+  | "onTheTable" | "underTheTable" | "onTheShelf" | "underTheShelf" | "inTheBox" | "byTheDoor"
+  | "turnRight" | "goStraight" | "leafyHelp" | "bubboHelp" | "puffHelp" | "whereIsHe" | "weNeedWood"
+  | "three" | "putItHere" | "where";
 
 const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
 const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
@@ -123,6 +129,32 @@ export const NUMBER_WORDS: Record<1 | 2 | 3, string[]> = {
 };
 const WHERE = ["where", "where's", "wheres", "wear", "ware", "were", "wair", "whea", "howea", "hair", "air"];
 const SHIP = ["ship", "ships", "sheep", "chip", "shipp", "shippu", "sip", "shape", "chips"];
+// The pirate voyage: content words, with common recogniser and katakana-English variants.
+const FOOD = ["food", "foods", "fudo", "foot", "fool", "mood"];
+const FRIENDS = ["friend", "friends", "furendo", "furendozu", "frend", "frends", "fred", "fronds"];
+const HOW = ["how", "hau", "hou", "who", "how's"];
+const MANY = ["many", "meni", "money", "manny", "menny", "mini", "mane", "mani"];
+const WHAT = ["what", "wat", "whot", "watto", "hot", "what's", "watch"];
+const WANT = ["want", "wants", "wanna", "wanto", "won't", "wont", "went", "one"];
+const HERE_WORDS = ["here", "hear", "hia", "hiya", "hir", "heer", "hiaa"];
+const PREP = {
+  on: ["on", "own", "onn", "aun", "awn"],
+  under: ["under", "anda", "andaa", "undo", "thunder", "wonder", "ander", "honda"],
+  in: ["in", "inn", "een", "inside"],
+  by: ["by", "bye", "buy", "bai", "beside", "next"]
+};
+const THING = {
+  table: ["table", "tables", "teburu", "tabel", "taber", "cable", "label"],
+  shelf: ["shelf", "shelves", "sherufu", "self", "shell", "shelfs"],
+  box: ["box", "boxes", "bokkusu", "books", "fox", "bocks", "pox"],
+  door: ["door", "doors", "doa", "dore", "dor", "dough"]
+};
+const TURN = ["turn", "tern", "tan", "turns", "taan", "ton"];
+const RIGHT = ["right", "rite", "write", "light", "raito", "rights", "bright", "wright"];
+const STRAIGHT = ["straight", "strait", "sutoreeto", "street", "straightu", "straight's", "streat"];
+const HELP = ["help", "helps", "herupu", "health", "held", "yelp", "hell"];
+const WOOD = ["wood", "woods", "would", "wooden", "uddo", "hood", "good", "wuud"];
+const PUT = ["put", "putto", "pot", "but", "pat", "puts", "putt"];
 const COMMAND_WORDS: Record<"pull" | "push" | "blow" | "burn", string[]> = {
   pull: ["pull", "pulls", "pool", "pul", "puru", "full", "bull", "paul", "poll", "pulled"],
   push: ["push", "pushes", "pusch", "puss", "pash", "posh", "bush", "pusshu", "pushed", "puch"],
@@ -236,7 +268,37 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   cmdStop: { id: "cmdStop", en: "Stop!", keys: [["stop", "stops", "sutoppu"]], distractors: ["cmdPop", "cmdBurn"] },
   cmdSpin: { id: "cmdSpin", en: "Spin!", keys: [["spin", "spins", "supin"]], distractors: ["cmdBurn", "cmdStop"] },
   cmdFly: { id: "cmdFly", en: "Fly!", keys: [ABILITY_WORDS.fly], distractors: ["cmdPull", "cmdBurn"] },
-  cmdSplash: { id: "cmdSplash", en: "Splash!", keys: [["splash", "splashes", "splashu", "supurasshu", "splish", "sprash"]], distractors: ["cmdPull", "cmdFly"] }
+  cmdSplash: { id: "cmdSplash", en: "Splash!", keys: [["splash", "splashes", "splashu", "supurasshu", "splish", "sprash"]], distractors: ["cmdPull", "cmdFly"] },
+  // The pirate voyage. Answers about the bag are judged against the real bag by the flow.
+  yesIAm: { id: "yesIAm", en: "Yes, I am!", keys: [YES], forbid: NO },
+  iHaveApples: { id: "iHaveApples", en: "I have apples.", keys: [FOOD_WORDS.apples], forbid: NO },
+  iHaveBananas: { id: "iHaveBananas", en: "I have bananas.", keys: [FOOD_WORDS.bananas], forbid: NO },
+  iHaveFish: { id: "iHaveFish", en: "I have fish!", keys: [FOOD_WORDS.fish], forbid: NO },
+  iHaveBerries: { id: "iHaveBerries", en: "I have berries.", keys: [FOOD_WORDS.berries], forbid: NO },
+  iHaveMeat: { id: "iHaveMeat", en: "I have meat.", keys: [FOOD_WORDS.meat], forbid: NO },
+  noFood: { id: "noFood", en: "I don't have any food.", keys: [NO, FOOD] },
+  theyreMyFriends: { id: "theyreMyFriends", en: "No! They're my friends!", keys: [FRIENDS] },
+  yesTheyCan: { id: "yesTheyCan", en: "Yes, they can!", keys: [YES], forbid: NO },
+  noTheyCant: { id: "noTheyCant", en: "No, they can't.", keys: [NO] },
+  howManyFish: { id: "howManyFish", en: "How many fish?", keys: [HOW, MANY] },
+  whatDoYouWant: { id: "whatDoYouWant", en: "What do you want?", keys: [WHAT, WANT] },
+  hereYouAre: { id: "hereYouAre", en: "Here you are!", keys: [HERE_WORDS] },
+  onTheTable: { id: "onTheTable", en: "It's on the table.", keys: [PREP.on, THING.table], forbid: PREP.under },
+  underTheTable: { id: "underTheTable", en: "It's under the table.", keys: [PREP.under, THING.table] },
+  onTheShelf: { id: "onTheShelf", en: "It's on the shelf.", keys: [PREP.on, THING.shelf], forbid: PREP.under },
+  underTheShelf: { id: "underTheShelf", en: "It's under the shelf.", keys: [PREP.under, THING.shelf] },
+  inTheBox: { id: "inTheBox", en: "It's in the box.", keys: [PREP.in, THING.box] },
+  byTheDoor: { id: "byTheDoor", en: "It's by the door.", keys: [PREP.by, THING.door] },
+  turnRight: { id: "turnRight", en: "Turn right!", keys: [TURN, RIGHT] },
+  goStraight: { id: "goStraight", en: "Go straight!", keys: [STRAIGHT] },
+  leafyHelp: { id: "leafyHelp", en: "Leafy! Can you help me?", keys: [HELP] },
+  bubboHelp: { id: "bubboHelp", en: "Bubbo! Can you help me?", keys: [HELP] },
+  puffHelp: { id: "puffHelp", en: "Puff! Can you help me?", keys: [HELP] },
+  whereIsHe: { id: "whereIsHe", en: "Where is he?", keys: [WHERE] },
+  weNeedWood: { id: "weNeedWood", en: "We need wood!", keys: [WOOD] },
+  three: { id: "three", en: "Three!", keys: [NUMBER_WORDS[3]] },
+  putItHere: { id: "putItHere", en: "Put it here!", keys: [PUT, HERE_WORDS] },
+  where: { id: "where", en: "Where?", keys: [WHERE] }
 };
 
 /** The quantity in a heard shopping sentence ("I want three apples"), if any. */

@@ -83,6 +83,15 @@ function build(id: WearableId): THREE.BufferGeometry {
       b.sphere(0.05, 0, 0.1, 0.18, c2, [1, 1, 0.55], 6);
       break;
     }
+    case "captainHat": {
+      // The pirates' gift: a big red tricorn with gold trim, a gold badge and a white feather.
+      b.add(new THREE.CylinderGeometry(0.37, 0.37, 0.07, 3), c0, [0, -0.02, 0], [0, Math.PI, 0]);
+      b.add(new THREE.CylinderGeometry(0.385, 0.385, 0.022, 3), c1, [0, 0.022, 0], [0, Math.PI, 0]);
+      b.add(new THREE.SphereGeometry(0.21, 8, 5, 0, TAU, 0, Math.PI / 2), c0, [0, 0, 0], [0, 0, 0], [1, 1.05, 1]);
+      b.boxAt(0.07, 0.07, 0.02, [0, 0.1, 0.2], [0, 0, 0.78], c1);
+      b.add(new THREE.SphereGeometry(0.08, 6, 4), c2, [0.15, 0.2, -0.05], [0.3, 0, -0.7], [0.45, 2.1, 0.45]);
+      break;
+    }
     case "knightHelmet":
       // A cute cap-helmet with its visor raised: the eyes always show.
       b.add(new THREE.SphereGeometry(0.245, 10, 5, 0, TAU, 0, Math.PI / 2), c0, [0, -0.07, 0], [-0.05, 0, 0]);

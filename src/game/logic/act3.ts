@@ -1,4 +1,5 @@
 import type { Progress } from "./progress";
+import { newVoyage, type Voyage } from "./voyage";
 import { addCoins, addFood, addItem, rested, type Vitals } from "./act2";
 import { COMPANION_IDS, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CLOUD_AREAS, CLOUD_STAGES, CLOUD_PUZZLES, CLOUD_PUZZLE_RULES, CLOUD_PICKUPS, CLOUD_CHESTS, CLOUD_ENEMY_SPAWNS, CLOUD_ROUTE_REQUIRED, OBSERVATORY_PUZZLES, type CloudAreaId, type CloudStageId, type CloudPuzzleId } from "../world/cloudisle";
@@ -15,6 +16,8 @@ export type ErrandId = "bag" | "firewood" | "moss";
 export interface Act3 {
   cloudLayout: 2;
   voyageDone: boolean;
+  /** The pirate voyage to Cloud Isle (docs/PIRATE_VOYAGE.md §6). */
+  voyage: Voyage;
   world: "home" | "cloud";
   area: CloudAreaId;
   hollowFound: boolean;
@@ -37,7 +40,7 @@ export interface Act3 {
 
 export function newAct3(): Act3 {
   return {
-    cloudLayout: 2, voyageDone: false, world: "home", area: "cloudDock", hollowFound: false,
+    cloudLayout: 2, voyageDone: false, voyage: newVoyage(), world: "home", area: "cloudDock", hollowFound: false,
     family: { met: false, trusted: false, drawingSeen: false, tunnelOpen: false, aftermathSeen: false },
     errands: { bag: false, firewood: 0, moss: false, bagRewarded: false, firewoodRewarded: false, mossRewarded: false, pickups: [] },
     stew: 0, cleared: [], chests: [], puzzles: [], observatoryLamps: [], beaconDefeated: false, skyFortressClue: false, checkpoint: "dock"

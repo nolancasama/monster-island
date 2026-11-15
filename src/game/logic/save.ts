@@ -7,6 +7,7 @@ import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, RELIC_IDS, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { readWardrobe } from "./wardrobe";
+import { readVoyage } from "./voyage";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CLIFF_FOOT_Z, CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, CHESTS, ZONES, STAGES, STAGE_EXITS, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
 import { ALL_SECRET_IDS } from "../world/elementObjects";
@@ -138,6 +139,7 @@ function readAct3(raw: unknown, p: Progress): Act3 {
   // reload during arrival. Do not replay the voyage on Continue.
   if (raw.world === "cloud") a.voyageDone = true;
   a.world = raw.world === "cloud" ? "cloud" : "home";
+  a.voyage = readVoyage(raw.voyage, a.voyageDone);
   if (!a.voyageDone) return a;
   a.cleared = list(raw.cleared, CLOUD_STAGES);
   a.hollowFound = a.cleared.includes("stormbreakCoast") && raw.hollowFound === true;

@@ -105,6 +105,14 @@ const DRAW: Record<WearableId, (c: string[]) => ReactElement> = {
       ))}
     </>
   ),
+  captainHat: (c) => (
+    <>
+      <path d="M44 22 Q58 4 62 10 Q54 14 48 26 Z" fill={c[2]} />
+      <path d="M2 42 Q32 2 62 42 Q46 32 32 48 Q18 32 2 42 Z" fill={c[0]} />
+      <path d="M2 42 Q18 32 32 48 Q46 32 62 42" stroke={c[1]} strokeWidth="3.5" fill="none" />
+      <rect x="27" y="24" width="10" height="10" rx="2" fill={c[1]} transform="rotate(45 32 29)" />
+    </>
+  ),
   goggles: (c) => (
     <>
       <rect x="2" y="27" width="60" height="8" rx="4" fill={c[0]} />
