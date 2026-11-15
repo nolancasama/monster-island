@@ -60,7 +60,7 @@ import {
   type EnemyKind,
   type ClimbRope,
 } from "../../game/world/lowland";
-import type { NpcDef } from "../../game/data/town";
+import type { KeeperLook } from "../../game/data/town";
 
 /**
  * Act 2's pieces, built like the rest of the island: merged vertex-coloured
@@ -1008,8 +1008,8 @@ export function ropeBridgeGeometry(len: number): THREE.BufferGeometry {
 
 // ------------------------------------------------------------------ the town
 
-/** A keeper: one merged mesh (limbs posed), with hats and aprons from their look. */
-export function npcGeometry(n: NpcDef): THREE.BufferGeometry {
+/** A keeper or a pirate: one merged mesh (limbs posed), with hats, aprons, beards and patches from their look. */
+export function npcGeometry(n: KeeperLook): THREE.BufferGeometry {
   const o: Outfit = {
     skin: n.skin,
     hair: n.hair,
@@ -1050,6 +1050,29 @@ export function npcGeometry(n: NpcDef): THREE.BufferGeometry {
     extra.sphere(0.12, 0, 1.18, 0.16, n.hair, [1.4, 0.6, 0.6], 8);
   } else if (n.hat === "scarf")
     extra.add(new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), n.hatColor, [0, 1.35, -0.01], [-0.2, 0, 0]);
+  else if (n.hat === "tricorn") {
+    // A pirate captain's tricorn: three corners (one to the front), gold trim, a friendly skull.
+    extra.add(new THREE.CylinderGeometry(0.36, 0.36, 0.06, 3), n.hatColor, [0, 1.44, 0], [0, Math.PI, 0]);
+    extra.add(new THREE.CylinderGeometry(0.375, 0.375, 0.02, 3), "#ffd23f", [0, 1.48, 0], [0, Math.PI, 0]);
+    extra.add(new THREE.SphereGeometry(0.21, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), n.hatColor, [0, 1.44, 0]);
+    extra.sphere(0.05, 0, 1.56, 0.18, "#ffffff", [1, 1, 0.5], 6);
+  } else if (n.hat === "bandana") {
+    extra.add(new THREE.CylinderGeometry(0.228, 0.232, 0.1, 10, 1, true), n.hatColor, [0, 1.4, 0], [-0.1, 0, 0]);
+    extra.add(new THREE.SphereGeometry(0.225, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.4), n.hatColor, [0, 1.36, -0.01], [-0.2, 0, 0]);
+    extra.boxAt(0.08, 0.08, 0.06, [0, 1.38, -0.23], [0, 0, 0.78], n.hatColor);
+    for (const s of [-1, 1]) extra.boxAt(0.05, 0.16, 0.02, [s * 0.04, 1.27, -0.24], [0.2, 0, s * 0.35], n.hatColor);
+  } else if (n.hat === "chef") {
+    extra.cyl(0.19, 0.2, 0.22, 0, 1.44, 0, n.hatColor, 10);
+    extra.sphere(0.24, 0, 1.72, 0, n.hatColor, [1, 0.7, 1], 10);
+  }
+  if (n.beard) {
+    extra.sphere(0.17, 0, 1.16, 0.12, n.beard, [1.2, 0.95, 0.75], 8);
+    extra.boxAt(0.2, 0.05, 0.05, [0, 1.25, 0.2], [0, 0, 0], n.beard);
+  }
+  if (n.patch) {
+    extra.boxAt(0.075, 0.07, 0.02, [-0.075, 1.315, 0.205], [0, 0, 0], "#1d1712");
+    extra.boxAt(0.4, 0.02, 0.02, [0.0, 1.36, 0.1], [0.6, 0, -0.35], "#1d1712");
+  }
   if (!extra.empty) parts.push(extra.build());
   const merged = mergeGeometries(
     parts.map((p) => (p.index ? p.toNonIndexed() : p)),

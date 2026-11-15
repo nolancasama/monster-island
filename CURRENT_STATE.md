@@ -90,7 +90,14 @@ brief) is in place, and the decisions are in `DESIGN_DECISIONS.md` (two 2026-11-
   e2e suite has not been run on this branch.
 
 ## Live
-`main` deployed 2026-11-07 at `6b76b84` (Pages run 42373513414, success): the **Act 2 vertical expansion**
+**2026-11-15:** `main` was fast-forwarded to `ca32455` and deployed at the user's request (Pages run
+43669888674, success; live bundle `index-B-6O9Hk7.js`). This deploy carries the **Port Town revamp**
+(palisade, town art, clothes shop, combo trainer, combos, wearables). It also carries the dormant voyage
+groundwork (logic, phrases, pirate data, the Captain Hat gift hidden from the shop), which nothing reaches
+yet: Cloud Isle is still locked. The full e2e suite was not run before this deploy; Pages runs unit tests
+and the build only.
+
+Earlier: `main` deployed 2026-11-07 at `6b76b84` (Pages run 42373513414, success): the **Act 2 vertical expansion**
 (frozen spec `docs/ACT2_VERTICAL_EXPANSION.md`) on top of everything below. Save v4 (`mi.save.v4`, additive
 fields only). Cloud Isle still locked as Coming Soon. https://nolancasama.github.io/monster-island/
 

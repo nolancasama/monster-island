@@ -1,4 +1,5 @@
 import type { ObstacleId } from "../types";
+import { inShipArea, shipSolidAt, shipStandY, shipWalkable } from "./pirateShip";
 import { region, type Layer } from "./region";
 import { LAYER_WORLDS } from "./layers";
 // Layer content registers itself with the layer registry on import.
@@ -192,6 +193,8 @@ export function inSanctuary(_x: number, z: number): boolean {
 export function isWalkable(x: number, z: number, gates: Gates = CLOSED, m = 0, swimmer = false, layer: Layer = region.layer): boolean {
   if (gates.cloud) return cloudWalkable(x, z, gates.cloud, m);
   if (layer !== "ground") return layerWalkable(x, z, gates, m, layer);
+  // The pirate ship decides alone inside its area (docs/PIRATE_VOYAGE.md §2).
+  if (inShipArea(x, z)) return shipWalkable(x, z, m);
   return onLand(x, z, gates, m, swimmer) && !blocked(x, z, m, gates, "ground");
 }
 
@@ -392,6 +395,7 @@ export function nearestWalkable(x: number, z: number, r: number, gates: Gates = 
 
 /** True if a circle overlaps solid scenery. */
 export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED, layer: Layer = region.layer): boolean {
+  if (!gates.cloud && layer === "ground" && inShipArea(x, z)) return shipSolidAt(x, z, r);
   return overlaps(x, z, r, obstaclesFor(gates, z, layer));
 }
 
@@ -399,6 +403,7 @@ export function blocked(x: number, z: number, r: number, gates: Gates = CLOSED, 
  * On another layer: that layer's surface, falling back to the ground below it. */
 export function standY(x: number, z: number, solved: readonly ObstacleId[], layer: Layer = region.layer): number {
   if (region.world === "cloud") return cloudY(x, z);
+  if (layer === "ground" && inShipArea(x, z)) return shipStandY(x, z);
   if (layer !== "ground") {
     const surface = LAYER_WORLDS[layer]?.surfaceY(x, z, solved) ?? -Infinity;
     if (surface > -Infinity) return surface;
