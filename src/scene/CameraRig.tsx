@@ -13,6 +13,7 @@ import { CAMERA_BLEND_SECONDS, DEFAULT_CAMERA, GROVE_FERRY_SHOT, cameraProfileAt
 const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
+import { voyageRoll } from "./voyageWeather";
 
 /** The live camera, for projecting world labels to the screen. */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -268,6 +269,9 @@ export function CameraRig() {
       pos.current.y += mesaCameraLift(look.current, pos.current);
     camera.position.copy(pos.current);
     camera.lookAt(look.current);
+    // At sea on the pirate voyage: a gentle sway, and the storm's slow roll.
+    const roll = voyageRoll(rt.time);
+    if (roll) camera.rotateZ(roll);
     // Lens shift: while a prompt or line covers the bottom of the screen, the
     // view slides up by half its height (at most 30% of the screen), so the
     // monster being talked to stays above the panel. No perspective change.

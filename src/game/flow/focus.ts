@@ -1,4 +1,5 @@
 import { MONSTERS, LIVE_MONSTERS } from "../data/monsters";
+import { voyageCandidates, voyaging } from "./voyage";
 import { FOODS } from "../data/foods";
 import { gateOpen, isSolved, objective } from "../logic/progress";
 import { getGame, type Focus } from "../store";
@@ -54,6 +55,7 @@ function candidates(): Candidate[] {
   const g = getGame();
   const p = g.progress;
   if (p.act3.world === "cloud") return cloudCandidates();
+  if (voyaging()) return voyageCandidates();
   // Ground interactions never reach through rock or from a leaf to the deck below.
   if (rt.player.layer !== "ground") return layerCandidates();
   const out: Candidate[] = [];

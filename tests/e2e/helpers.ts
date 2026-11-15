@@ -22,6 +22,11 @@ export interface MiState {
       secrets: string[]; relics: string[];
       wardrobe: { owned: string[]; worn: Record<string, { head?: string; face?: string } | undefined>; visited: boolean };
     };
+    act3: {
+      world: "home" | "cloud"; voyageDone: boolean;
+      voyage: { stage: string; jobs: string[]; interrogated: boolean; hat: boolean };
+      [k: string]: unknown;
+    };
   };
   objective: { id: string; [k: string]: unknown };
   focus: { id: string; kind: string } | null;

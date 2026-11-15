@@ -5,6 +5,7 @@ import { rt, type MonsterRt } from "./runtime";
 import type { ObstacleId } from "./types";
 import { getGame } from "./store";
 import { hopPosition } from "./logic/lilyHop";
+import { vy } from "./voyageRt";
 
 /**
  * Where a monster's body stands, and where a rider sits on Bubbo. The scene
@@ -20,6 +21,9 @@ export function breathe(m: MonsterRt, t: number): number {
 
 /** Height of a monster's root: the ground, the water it swims in, or its hover. */
 export function monsterRootY(m: MonsterRt, solved: readonly ObstacleId[], t: number): number {
+  // The pirate voyage holds friends at authored heights (boarding arcs, the raft, the tow).
+  const voyageY = vy.monY[m.id];
+  if (voyageY !== undefined) return voyageY + (m.air > 0.05 ? m.air + Math.sin(t * 2.6 + m.x) * 0.06 : 0);
   if (rt.voyage.active) return rt.voyage.y + .75;
   const hop = rt.player.hop;
   if (hop && getGame().progress.active === m.id)

@@ -41,11 +41,11 @@ export const SPOT = {
   boardDeck: { x: 0, z: 5 },
   helm: { x: 0, z: 11.5 },
   captain: { x: -1.6, z: 11.6 },
-  gull: { x: 1.7, z: 11.9 },
+  gull: { x: 1.3, z: 10.8 },
   cook: { x: 0.9, z: -15.4 },
   bill: { x: -0.6, z: -3.6 },
-  finn: { x: -1.6, z: 16.9 },
-  crew: [{ x: 1.0, z: -10.1 }, { x: 1.0, z: -11.3 }, { x: 4.0, z: -10.5 }],
+  finn: { x: -1.4, z: 16.2 },
+  crew: [{ x: 1.0, z: -10.1 }, { x: 1.0, z: -11.3 }, { x: 2.5, z: -12.35 }],
   stove: { x: 0, z: -16.5 },
   pot: { x: 0, z: -16.5 },
   supplies: { x: -2.1, z: -15 },
@@ -57,8 +57,18 @@ export const SPOT = {
   shelf: { x: -2.5, z: -5.7 },
   box: { x: 1.4, z: -2.6 },
   door: { x: -1.2, z: -7.55 },
-  fishing: { x: 0, z: 17.2 },
+  fishing: { x: 0.3, z: 17.3 },
 } as const;
+
+/** The supply crates in the galley, each with its food (the cook's job). */
+export const SUPPLY_CRATES = [
+  { food: "fish" as const, x: -2.1, z: -15.9, color: "#5a7ea0" },
+  { food: "meat" as const, x: -2.1, z: -15.1, color: "#a8433a" },
+  { food: "apples" as const, x: -2.1, z: -14.3, color: "#e83a35" },
+  { food: "bananas" as const, x: -2.1, z: -13.6, color: "#ffd23f" },
+];
+/** The fish bucket on the fishing deck (clear of the stairs' landing). */
+export const BUCKET = { x: -2.4, z: 15.9 };
 
 /** Solid bands and furniture (local boxes). */
 export const SHIP_SOLIDS: Box[] = [
@@ -83,9 +93,9 @@ export const SHIP_SOLIDS: Box[] = [
   { x0: 0.6, x1: 2.2, z0: -6.5, z1: -4.9 },
   { x0: -2.8, x1: -2.15, z0: -6.8, z1: -4.6 },
   { x0: 0.8, x1: 2, z0: -3.2, z1: -2 },
-  // The mess table on the main deck, and the fishing deck's bucket.
+  // The mess table on the main deck, and the fishing deck's bucket (clear of the stairs' landing).
   { x0: 1.6, x1: 3.4, z0: -11.8, z1: -9.2 },
-  { x0: 1.9, x1: 2.6, z0: 16.6, z1: 17.3 },
+  { x0: -2.7, x1: -2.1, z0: 15.6, z1: 16.2 },
 ];
 
 /** Round solids: masts and the helm. */

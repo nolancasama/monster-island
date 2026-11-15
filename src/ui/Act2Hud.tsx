@@ -15,6 +15,7 @@ import type { FoodId } from "../game/types";
 import { Icon } from "./icons";
 import { Portrait } from "./Portraits";
 import { Ja } from "./Talk";
+import { VoyageHud } from "./VoyageHud";
 
 /**
  * Act 2's HUD. HP and MP change every frame in a fight, so the bars are
@@ -217,10 +218,13 @@ export function Act2Hud() {
   const started = useGame((s) => s.progress.act2.started);
   const mode = useGame((s) => s.mode);
   const screen = useGame((s) => s.screen);
+  // No fights on the pirate voyage: its own job HUD replaces HP and MP.
+  const voyage = useGame((s) => s.progress.act3.world === "home" && ["captured", "jobs", "storm", "raft"].includes(s.progress.act3.voyage.stage));
   if (!started || screen !== "game") return null;
   return (
     <>
-      {mode === "explore" && !cloudSafe && <Vitals />}
+      {mode === "explore" && !cloudSafe && !voyage && <Vitals />}
+      <VoyageHud />
       {mode === "explore" && <Coins />}
       {mode === "explore" && <StageCounter />}
       {mode === "explore" && <BeaconBar />}

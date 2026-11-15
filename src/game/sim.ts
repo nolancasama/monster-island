@@ -26,6 +26,7 @@ import { darkCaveEntryBlocked } from "./world/cave";
 import { LEAF_STATE, UPPER_CHECKPOINTS, UPPER_LEAVES, refreshUpperHazards, stepLeaf } from "./world/upperCanopy";
 import { cloudTriggers } from "./flow/act3";
 import { CLIFF_FOOT_Z } from "./world/lowland";
+import { voyageTick } from "./voyageSim";
 import { audio } from "../audio/audio";
 import type { MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
@@ -79,6 +80,8 @@ export function tick(dt: number) {
   cb.holdK = isAttackHeld("special");
   // Defer zone changes, enemy activation and zone toasts until dismount.
   if (!rt.groveStreamFerry.start) combatTick(dt);
+  // The pirate voyage's jobs, storm and raft (held J keeps Ember's heat and Puff's wind).
+  voyageTick(dt, isAttackHeld("basic"));
 
   // Food grows back. It is collectible from the moment it reappears; the
   // pop-in animation plays after that, never before.

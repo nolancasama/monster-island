@@ -1,4 +1,5 @@
 import { MONSTERS, LIVE_MONSTERS } from "../data/monsters";
+import { resumeVoyage, voyageResumable, voyageSavePoint } from "./voyage";
 import { cloudIsleOpen, CLOUD_ISLE_SOON } from "../release";
 import { FOODS } from "../data/foods";
 import { companions, friends, gateOpen, GATES, newProgress, objective, type Progress } from "../logic/progress";
@@ -37,10 +38,13 @@ export function saveNow() {
   // Never persist an unfinished voyage's offshore home-world coordinates.
   if (rt.voyage.active && rt.world === "home") return;
   const p = rt.player;
+  // On the pirate voyage a save always holds a deck spot; loading resumes at the stage's own spawn.
+  const voyageAt = voyageSavePoint();
+  if (voyageAt === false) return;
   // Never save mid-ride or mid-climb: resume at the bank or the foot of the rope instead.
   // Canopy climbs retain their starting stand. The sanctuary keeps its ledge.
   const climbAt = p.z < -180 && p.safeGround ? p.safeGround : p.z < -140 ? CLIFF_ROPE.top : { x: ROPE.x, z: ROPE.z + 1.4 };
-  const at = p.fall ? p.fall.land : p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
+  const at = voyageAt ? voyageAt : p.fall ? p.fall.land : p.riding ? { x: CROSSING.west.x, z: CROSSING.west.z } : p.climbY !== null ? climbAt : { x: p.x, z: p.z };
   // Act 2's live HP and MP are written in with the rest of the progress.
   const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: g.progress.act3.world === "cloud" ? g.progress.act2.zone : zoneAt(at.x, at.z) },
     act3: { ...g.progress.act3, area: g.progress.act3.world === "cloud" ? cloudZoneAt(p.x,p.z) ?? "cloudDock" : g.progress.act3.area } } : g.progress;
@@ -172,6 +176,8 @@ export async function continueGame() {
   applyWorld(p);
   await beginAudio();
   if (!p.metMaple) void intro();
+  // A save made during the pirate voyage puts the ship back around the player.
+  if (voyageResumable(p)) void resumeVoyage();
 }
 
 /** Title screen, a finished prologue: straight to the sanctuary, where the new chapter begins. */

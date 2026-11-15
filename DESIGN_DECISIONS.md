@@ -2749,3 +2749,54 @@ Claude directly on `feature/pirate-voyage`, cut from `feature/port-town-revamp` 
 - Gull is captured too, leaves in a lifeboat, and arrives at Cloud Isle's dock afterwards, so Cloud Isle's
   gameplay is unchanged. The keepsake is a new, never-sold Captain Hat in the existing wardrobe.
 - The release lock stays: the voyage is reachable only when `cloudIsleOpen()`.
+
+## 2026-11-15: Pirate Voyage (as built, milestones 2c–6)
+
+Built by Claude directly, without the router, at the user's request.
+- **Rigging cut-away.** Masts, sails, rigging, the galley bulkhead and the stern lanterns use
+  `shipCutMaterial` (`scene/materials.ts`). Anything more than about 1 m nearer the camera than the player,
+  measured along the camera's horizontal forward in world space, dissolves through a screen door. Because
+  the rule uses the real camera, it also works for the broadside and frameTwo shots. Wide cutscene shots
+  turn it off (`vy.cut`). Rejected: the existing `occluderMat` cone. A fore-and-aft sail lies almost on the
+  stern camera's sight line, so the cone left most of the sail across the screen; renders showed the
+  mizzen and fore sails covering half the view.
+- **The voyage's own sea.** A 720 m subdivided plane snapped to a 10 m grid around the camera's target
+  replaces the home sea and the old crossing's sea while `vy.sea`. The home far plane ends at z −450,
+  so the ship (z −470) had floated over sky. Waves scroll with the ship's speed (`vy.flow`), and the
+  storm darkens the sea and raises the waves. The wake is thin foam streaks: round patches read as ice
+  floes.
+- **Gull's boat.** `rt.voyage.active` still means "the player rides Gull's boat" (the sim pins the player,
+  the camera and saving rely on it). Boarding clears it, and `vy.boatMoored` keeps the boat drawn alongside,
+  held by the capture's three ropes, which stay as mooring lines until the break-up.
+  The arcs use `player.floatY` and a per-friend `vy.monY` height (`ride.ts monsterRootY`), so they are real
+  arcs. Before, every friend was pinned to the boat's height.
+- **Saves at sea.** Nothing is saved before the `captured` checkpoint. After it, a save always holds a
+  walkable deck spot (`voyageSavePoint`), and loading restarts the stage at its own spawn. A save on the
+  raft would otherwise fail validation and fall back to the cliff rope foot.
+- **Free play.** One running phase (`vy.phase`) owns E, J and a tick for each job step, storm emergency
+  or raft step. J aims generously: a wide cone ahead, then anything within about 3 m. A rough facing
+  succeeds, and the e2e can drive it.
+- **Fishing.** Fish swim beside the fishing deck and in a strip behind it. Water directly behind the
+  stern lies under the fixed camera and is off screen.
+- **Cooking.** The pot takes any food; the cook's "Do you have …?" asks about the food in the player's
+  hands. A wrong dish gets "That's not fish! I want fish!" and the cook eats it, so it can never be lost.
+  The heat bar's green band is 0.5–0.9. It rises 0.36/s while J is held near the stove and cools 0.26/s
+  when J is released; 2.5 s in the band cooks the dish. One hold-and-release usually does it.
+  Rejected: 0.55–0.85 rising at 0.42/s, where a child holding J stays green for only about 0.7 s.
+- **Sailing.** A broadside camera follows the player while the sails fill, because they are edge-on to the
+  stern camera. The cut-away is off there, and also for the storm's torn sail, which uses the same camera.
+  A slack sail hangs at 60% height and rises to full height as it fills: seen from the side, billow
+  alone barely changes. Steering uses a high stern shot, with obstacles drifting toward the bow in 9 m
+  lanes.
+- **The Captain Hat** is offered with "Do you want to wear it?" → "Yes, please." / "No, thank you.".
+- **The raft.** The player stays on the hatch. J pulls the nearest plank, so no aiming is needed. The
+  arrow keys answer the tow's steering prompts (the tap buttons are the touch arrows).
+- **Cloud Isle.** The raft lands by the dock. Gull's boat sails in (`vy.boatIn`), and the dock's standing
+  Gull appears only once it has arrived.
+- **HUD.** The voyage HUD (`ui/VoyageHud.tsx`) replaces HP and MP on the ship. It shows a counter or a
+  meter with a bilingual hint and the lightning flash, and on touch screens a J button named after the
+  tool. The panel sits top-left under the objective card, because the friend-switch toasts use the top
+  centre and covered its counter there.
+- **Import cycle.** `input/attackInput` no longer imports the voyage. The voyage registers its J tool with
+  `setVoyageTool`, because the import closed a cycle through `combat` and `act3` that broke 16 unit-test
+  files.

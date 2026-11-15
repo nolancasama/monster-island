@@ -1,4 +1,5 @@
 import { BEACON_ARENA } from "../game/logic/beacon";
+import { inShipArea } from "../game/world/pirateShip";
 import { TUNNEL } from "../game/world/island";
 import { CANOPY_ROPES, CLIFF_ROPE, STAGE_PASSAGES, inLowland, streamY, zoneAt } from "../game/world/lowland";
 import { CLOUD_ZONES, CLOUD_CHESTS, cloudZoneAt } from "../game/world/cloudisle";
@@ -96,6 +97,9 @@ const GROUND_PROFILES: readonly CameraProfile[] = [
     contains: (p, m) => !p.cloud && (grovePassage(p)
       ? p.z <= GROVE_DOOR_Z + doorMargin(m)
       : zoneAt(p.x, p.z) === "causeway" || rect(p, 0, 92, 100, -244, -241)) },
+  // The pirate ship: steeper, so the decks, the sunken hold and the open galley read from above.
+  { ...DEFAULT_CAMERA, id: "pirate-ship", kind: "lowland", pitch: .78, dist: 11, ahead: 1.2,
+    contains: p => !p.cloud && inShipArea(p.x, p.z) },
   // Sees over the town wall from both sides; the wall also fades on the sight line.
   { ...DEFAULT_CAMERA, id: "port-gate", kind: "lowland", pitch: .85, dist: 11, ahead: 1,
     contains: (p, m) => !p.cloud && p.z < -282 + m && p.z > -298 - m },

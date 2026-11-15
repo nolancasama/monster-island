@@ -1996,3 +1996,51 @@ kbd {
 .lumo-drawing svg { display: block; width: 100%; }
 .lumo-drawing b { display: block; text-align: center; }
 @media (max-width: 700px) { .lumo-drawing { width: min(245px, 43vw); top: 10%; right: 2%; padding: 6px; } }
+
+/* Pirate voyage (docs/PIRATE_VOYAGE.md): the job panel, its meter and the storm's flash. */
+.voyage-hud {
+  /* Under the objective card: friend-switch toasts use the top centre. */
+  position: absolute;
+  top: 96px;
+  left: 12px;
+  width: min(380px, 40vw);
+  padding: 8px 14px 9px;
+  text-align: center;
+  z-index: 8;
+}
+.voyage-title {
+  font-weight: 900;
+  font-size: 0.98rem;
+}
+.voyage-count {
+  margin-top: 3px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #2f7a3a;
+}
+.voyage-meter {
+  position: relative;
+  margin-top: 6px;
+}
+.voyage-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 2px solid #2f7a3a;
+  border-right: 2px solid #2f7a3a;
+  background: rgba(63, 174, 74, 0.18);
+  z-index: 1;
+  pointer-events: none;
+}
+.voyage-hint {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.voyage-flash {
+  position: fixed;
+  inset: 0;
+  background: #f4f8ff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 7;
+}

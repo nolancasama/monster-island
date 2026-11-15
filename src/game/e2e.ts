@@ -1,4 +1,8 @@
 import { placePlayer, goToTarget } from "./travel";
+import { resetVoyageRt, vy } from "./voyageRt";
+import { resumeVoyage, setScene } from "./flow/voyage";
+import { itemWorld } from "./flow/voyageJobs";
+import { SHIP } from "./world/pirateShip";
 import type { Layer } from "./world/region";
 import { cloudIsleOpen, setE2eCloudIsleShipOpen } from "./release";
 import { getGame, setGame } from "./store";
@@ -259,6 +263,33 @@ export function installE2eHook(seed: number) {
       cb.whip = null;
       cb.fx.length = 0;
       cb.combos.length = 0;
+    },
+    /** Show the pirate ship, its sea and crew (voyage evidence). */
+    voyageShow(active = true) {
+      if (active) setScene(); else resetVoyageRt();
+    },
+    /** The voyage's live state, in world coordinates where it matters (pirate-voyage.spec). */
+    voyage() {
+      const w = (p: { x: number; z: number }) => ({ x: SHIP.x + p.x, z: SHIP.z + p.z });
+      return {
+        phase: vy.phase?.name ?? null, hud: vy.hud, active: vy.active, sea: vy.sea, storm: vy.storm, flow: vy.flow,
+        fish: vy.fish.map((f) => ({ ...w(f), boot: f.boot, state: f.state })), bucket: vy.bucket,
+        cargo: vy.cargo, carry: vy.carry, cook: { ...vy.cook }, sails: [...vy.sails], sewn: vy.sewn, lane: vy.lane,
+        obstacles: vy.obstacles.map((o) => ({ lane: o.lane, z: o.z })),
+        barrels: vy.barrels.map((b) => ({ ...w(b), tied: b.tied })), fires: vy.fires.map((f) => ({ ...w(f), out: f.out })),
+        spar: vy.spar ? { ...w(vy.spar), lift: vy.spar.lift } : null,
+        raft: { on: vy.raft.on, x: vy.raft.x, z: vy.raft.z, built: vy.raft.built, planks: vy.raft.planks.map((p) => ({ x: p.x, z: p.z, state: p.state })) },
+        crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, { ...w(c), visible: c.visible }])),
+        items: { barrel: itemWorld("barrel"), bag: itemWorld("bag"), bottle: itemWorld("bottle") },
+      };
+    },
+    /** Start the voyage at a checkpoint, as a reload would (evidence and the e2e reload checks). */
+    voyageJump(stage: "captured" | "jobs" | "storm" | "raft", jobs: string[] = []) {
+      const g = getGame();
+      const voyage = { ...g.progress.act3.voyage, stage, interrogated: true, jobs: stage === "storm" || stage === "raft" ? ["fishing", "cooking", "cargo", "sailing"] : jobs, hat: stage === "storm" || stage === "raft" };
+      setGame({ progress: { ...g.progress, act3: { ...g.progress.act3, voyage: voyage as typeof g.progress.act3.voyage } } });
+      resetVoyageRt();
+      void resumeVoyage();
     },
     /** Stand a friend somewhere and keep it there (screenshots of what it wears). */
     placeMonster(id: keyof typeof rt.monsters, x: number, z: number, yaw = 0) {

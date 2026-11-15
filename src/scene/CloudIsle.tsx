@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { vy } from "../game/voyageRt";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -487,7 +488,7 @@ function CloudSea({ crossing = false }: { crossing?: boolean }) {
   const fair = useMemo(() => new THREE.Color("#1e74b4"), []), stormy = useMemo(() => new THREE.Color("#344e5c"), []);
   useFrame(() => {
     if (!ref.current) return;
-    ref.current.visible = !crossing || rt.voyage.active && rt.world === "home";
+    ref.current.visible = !crossing || rt.voyage.active && rt.world === "home" && !vy.sea;
     if (!ref.current.visible) return;
     const v = rt.voyage, storm = crossing ? voyageStorm() : getGame().progress.act3.beaconDefeated ? .05 : 1;
     const cx = crossing ? v.x : 0, cz = crossing ? v.z : 60;
@@ -516,8 +517,15 @@ function VoyageRocks() {
     }
     return b.build();
   }, []);
-  useFrame(() => { if (ref.current) ref.current.visible = rt.voyage.active && rt.world === "home"; });
+  useFrame(() => { if (ref.current) ref.current.visible = rt.voyage.active && rt.world === "home" && !vy.sea; });
   return <mesh ref={ref} geometry={geometry} material={flatMat} />;
+}
+
+/** Gull on Cloud Isle's dock (absent while his boat is still sailing in after the raft). */
+function DockGull({ geometry }: { geometry: THREE.BufferGeometry }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(() => { if (ref.current) ref.current.visible = vy.boatIn >= 1; });
+  return <mesh ref={ref} geometry={geometry} material={flatMat} position={ground(CLOUD_DOCK.gull.x, CLOUD_DOCK.gull.z)} rotation={[0, Math.PI, 0]} />;
 }
 
 export function CloudBoat() {
@@ -535,16 +543,23 @@ export function CloudBoat() {
   useFrame(() => {
     if (!root.current) return;
     const v = rt.voyage;
-    if (keeper.current) keeper.current.visible = v.active;
-    root.current.visible = getGame().progress.act2.harbor;
-    if (v.active) {
+    if (keeper.current) keeper.current.visible = v.active && !vy.gullAboard || rt.world === "cloud" && vy.boatIn < 1;
+    // On the pirate voyage the boat is ridden, tied alongside the ship, or lost in the storm.
+    const voyaging = vy.sea && rt.world === "home";
+    root.current.visible = getGame().progress.act2.harbor && (!voyaging || v.active || vy.boatMoored);
+    if (v.active || voyaging) {
       root.current.position.set(v.x, v.y, v.z); root.current.rotation.set(0, v.yaw, 0);
+    } else if (rt.world === "cloud" && vy.boatIn < 1) {
+      // After the pirate voyage's raft lands, Gull sails in from the open sea.
+      const k = vy.boatIn, d = CLOUD_DOCK.boat;
+      root.current.position.set(d.x + (1 - k) * 34, -.1 + Math.sin(rt.time * 1.5) * .05, d.z - (1 - k) * 40);
+      root.current.rotation.set(0, Math.atan2(-34, 40), Math.sin(rt.time) * .01);
     } else {
       const p = rt.world === "cloud" ? CLOUD_DOCK.boat : { x: PIER2.x, z: PIER2.z0 - 3 };
       root.current.position.set(p.x, -.1 + Math.sin(rt.time * 1.5) * .035, p.z);
       root.current.rotation.set(0, rt.world === "cloud" ? 0 : Math.PI, Math.sin(rt.time) * .008);
     }
-    if (sail.current) sail.current.scale.y = v.active ? Math.max(.03, v.sail) : 1;
+    if (sail.current) sail.current.scale.y = v.active || voyaging ? Math.max(.03, v.sail) : 1;
   });
   return <><CloudSea crossing /><VoyageRocks /><group ref={root}><mesh geometry={hull} material={flatMat} /><mesh ref={sail} geometry={cloth} material={clothMat} position={[0, 6.4, -.1]} /><mesh ref={keeper} geometry={gull} material={flatMat} position={[.65, .75, 1.9]} rotation={[0, Math.PI, 0]} /></group></>;
 }
@@ -569,7 +584,7 @@ export function CloudIsle() {
     {a.errands.mossRewarded && <mesh geometry={bedding} material={flatMat} />}
     <Vegetation /><Barriers /><WindAndWater /><CoastProps />
     <FamilyMember who="tala" /><FamilyMember who="bo" /><FamilyMember who="kiko" /><DiscoveryTrail />
-    <mesh geometry={gull} material={flatMat} position={ground(CLOUD_DOCK.gull.x, CLOUD_DOCK.gull.z)} rotation={[0, Math.PI, 0]} />
+    <DockGull geometry={gull} />
     <Observatory /><StormBeacon /><SummitWeather /><SkyFortress /><CagedLumo /><HollowAftermath />
     </group>
     <PickupsAndChests inside={inside} /><CloudRoutes inside={inside} />

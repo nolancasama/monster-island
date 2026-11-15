@@ -3,6 +3,7 @@ import { MONSTERS, MONSTER_ORDER } from "./data/monsters";
 import { MAPLE, SPAWN } from "./world/island";
 import { region, type Layer } from "./world/region";
 import { resetUpperLeaves } from "./world/upperCanopy";
+import { resetVoyageRt } from "./voyageRt";
 
 /**
  * Mutable per-frame state shared by the scene, input and game flow. Kept out
@@ -256,6 +257,7 @@ export function resetRuntime() {
   rt.voyage.active = false;
   rt.voyage.sail = 0;
   rt.voyage.stage = "idle";
+  resetVoyageRt();
   rt.act3Scene = "idle";
   rt.squallLift = 0;
   rt.kikoTrail = 0;

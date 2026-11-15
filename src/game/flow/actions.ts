@@ -1,4 +1,5 @@
 import { FOOD_SOURCES } from "../world/island";
+import { voyageInteract, voyaging } from "./voyage";
 import { FOODS } from "../data/foods";
 import { bagMax } from "../logic/act2";
 import { companions, pickUp } from "../logic/progress";
@@ -21,6 +22,7 @@ export function interact(f: Focus | null = getGame().focus) {
   const g = getGame();
   if (!f || g.mode !== "explore" || isRunning()) return;
   if (g.progress.act3.world === "cloud") { void cloudInteract(f); return; }
+  if (voyaging()) { voyageInteract(f); return; }
   if (g.hint === "talk" || g.hint === "move") setGame({ hint: null });
   switch (f.kind) {
     case "monster":

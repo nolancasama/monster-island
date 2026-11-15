@@ -1,14 +1,44 @@
 # Current State
 
-## In progress (checked out): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
-The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) is being implemented by Claude
-directly, without the router. The frozen spec is `docs/PIRATE_VOYAGE.md` (§0 verdict, §1 stages and
-English, §2 ship layout, §3 jobs, §4 storm, §5 raft, §6 save, §7 phrases, §10 order). The decision is in
-`DESIGN_DECISIONS.md` (2026-11-15 "Pirate Voyage Adventure"). The branch sits on the unmerged town branch,
-because the Captain Hat keepsake uses its wardrobe.
+## Development work (checked out, not merged, not deployed): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
+The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) was implemented by Claude
+directly, without the router, at the user's request. The frozen spec is `docs/PIRATE_VOYAGE.md`. The
+decisions are in `DESIGN_DECISIONS.md`: "Pirate Voyage Adventure" and "Pirate Voyage (as built,
+milestones 2c–6)". The branch sits on the unmerged town branch, because the Captain Hat keepsake uses its
+wardrobe. Merging and deploying need the user's approval. Cloud Isle stays locked in public builds, so the
+voyage is reachable only with the ship opened (debug `?debug=1` or the e2e hook).
 
-**Done and committed** (`b805dfa` spec, `dcd1fcd` milestone 1, `434774b` milestone 2a; tsc passes, all
-1045 unit tests pass):
+**The whole voyage is built** (milestones 1–6):
+- **Departure and capture:** `flow/voyage.ts`. Real boarding arcs (`player.floatY`, `vy.monY`), Gull's boat
+  moored alongside (`vy.boatMoored`), the truthful interrogation, the monsters scene, checkpoint `captured`,
+  free roam.
+- **The four jobs, in any order:** `flow/voyageJobs.ts`. Fishing (Bubbo), cooking (Ember, with a heat
+  band), cargo (Leafy, on/under/in/by) and sailing (Puff, a broadside camera, then three-lane steering).
+  Then the crew's thanks, the Captain Hat with "Do you want to wear it?", and thunder.
+- **The storm:** `flow/voyageStorm.ts`. Barrels, fires, the torn sail and the spar, then the break-up and
+  the lifeboats.
+- **The raft and the landing:** `flow/voyageRaft.ts`. Three planks, Bubbo's tow, Puff's sail, the island,
+  Cloud Isle, Gull's boat sailing in, and `voyageDone`.
+- **Free-play engine:** `game/voyageSim.ts` (phase, J tools with aim assist, tick) and `game/voyageRt.ts`
+  (live state).
+- **Scene:** `scene/PirateShip.tsx` (ship, crew, voyage sea, wake) and `scene/VoyageProps.tsx` (fish,
+  cargo, galley, obstacles, storm props, lifeboats, raft, rain, effects). The rigging cut-away is
+  `shipCutMaterial`. The HUD is `ui/VoyageHud.tsx`.
+- **Verified 2026-11-15:**
+  - tsc passes, and all 1055 unit tests pass (new: ship collision and the ship budget).
+  - `tests/e2e/pirate-voyage.spec.ts` passes end to end in about 3 min (5 runs, the last on the final
+    flow code): the jobs in the order cargo, sailing, fishing, cooking; reloads at `jobs` and `raft`;
+    exactly one food taken; the hat owned and worn; no page errors.
+  - Ship views: 50–64 draws, 47–56k triangles.
+  - Renders judged by Claude at 1366×768:
+    - jobs, storm, raft and landing: `SHOT_TAG=e5`, `.tmp/shots/voyage/e5/`;
+    - the capture's story beats at normal speed: `zz-voyage-shots.spec.ts` with `SHOT_ONLY=capture`,
+      `.tmp/shots/voyage/c4/`;
+    - deck views: `SHOT_ONLY=ship`.
+- **Tooling:** run vitest from PowerShell. In Git Bash every file fails with "reading 'config'"
+  (environmental).
+
+**Earlier milestones, committed** (`b805dfa` spec, `dcd1fcd` milestone 1, `434774b` 2a, `c17d932` 2b):
 - `game/logic/voyage.ts` and `voyage.test.ts`:
   - stage, jobs, the interrogated and hat flags;
   - `voyageStage()` (`act3.voyageDone` is the authority);
@@ -28,38 +58,14 @@ because the Captain Hat keepsake uses its wardrobe.
   `KeeperLook` (data/town.ts) is shared by keepers and pirates, and pirates have voices, names and
   portraits (`LookPortrait`).
 
-**Next** (spec §10, in order; commit after each):
-1. `npcGeometry` in `scene/models/lowland.ts` is still typed `NpcDef`. Change it to `KeeperLook` and draw
-   tricorn, bandana, chef hat, beard and patch.
-2. `game/world/pirateShip.ts`, in local coordinates from `SHIP = (76, -470)` with the bow toward −z:
-   - **Hull:** half-width 4.5 for lz ≥ −13, tapering to 1.5 at the bow tip lz −21; the stern transom is at
-     lz 15.
-   - **Main deck:** y = SEA_Y + 2.4.
-   - **Hold:** lx ±2.8, lz −7.8…−1.2, at SEA_Y + 0.6. Its ramp is lx −2.75…−1.75, lz −1.2…2.0.
-   - **Fishing deck and its ramp:** the stern ramp is lx 1.9…3.1, lz 12…15.4; the fishing deck is lx ±3,
-     lz 15.4…18, at SEA_Y + 0.7. Fish water is lx ±5, lz 19…27.
-   - **Galley:** the bow compartment, lz −18…−13, behind a bulkhead with a door gap at lx ±1.
-   - **Fixtures:** helm (0, 11.5); masts main (0.8, 3.2), fore (−0.5, −10.6), mizzen (0, 8.5); mess table
-     lx 1.4…3.6, lz −12…−9.
-   - **Rails and hold edges:** solid bands. Ramps interpolate the height.
-   - **Hooks:** an `inShipArea` branch in `world/collision.ts` `isWalkable` and `standY`, before the
-     lowland branch (moveCircle and nearestWalkable go through `isWalkable`).
-   - **Camera:** a `pirate-ship` camera profile (pitch .75, dist 11).
-3. `scene/models/pirateShip.ts` (≤ 9k triangles: an extruded hull outline, deck, hold, galley, masts,
-   cannons, flag). Sails are fore-and-aft: edge-on to the stern camera, with a side shot for the sailing job.
-   The billow is the `scale.x` of a pre-bent sail. Add `scene/PirateShip.tsx`, drawn near the ship only, and
-   a `game/voyageRt.ts` runtime (npc spots, sails, storm, carried item, fish, fires, raft).
-4. `flow/voyage.ts`:
-   - Replace the first-trip branch of `sailWithGull()` (`flow/act3.ts`, lines 54–105), keeping the
-     `cloudIsleOpen()` lock.
-   - Add departure (Gull, "Yes, I am!", "Let's go!"), the capture (the ship approaches; ropes; the boarding
-     arcs), the interrogation, the monsters scene, then checkpoint `captured`.
-   - Ship focus candidates and interactions like `cloudCandidates`/`cloudInteract`. J routes to the friend's
-     job tool in `input/attackInput.ts` `pressAttack` while on the ship.
-   - Resume at the stage's spawn on load.
-5. The jobs (§3), the storm (§4), the raft and landing (§5): Gull's boat arrives at `CLOUD_DOCK`, then the
-   existing `arrive("cloud")`, with `completeVoyage` and the stage set to done.
-6. e2e `pirate-voyage.spec.ts` (Tap mode, the cloud ship opened by the e2e hook), an evidence spec, docs.
+**Next for the voyage:**
+1. The user reviews and plays it. Open the ship in a debug build (`?debug=1`, the ship toggle), then talk
+   to Gull at the harbour. Judge the feel on a real Chromebook: the frame rate at sea, the rain, and the
+   heat band's difficulty.
+2. Not built: debug travel targets for each voyage checkpoint (spec §0.9). The e2e hook
+   `voyageJump(stage)` does the same for tests.
+3. Not run: the full e2e suite on this branch (about 1.5 h).
+4. Merge order on approval: `feature/port-town-revamp` first, then this branch.
 
 ## Development work (not merged, not deployed): `feature/port-town-revamp` (from `main` `a0dca15`)
 The user's plan "Port Town area and its town systems" (2026-11-15) was implemented by Claude directly, without
@@ -160,8 +166,9 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
--1. Continue `feature/pirate-voyage` from its **Next** list at the top. The user reviews
-   `feature/port-town-revamp` (merge and deploy only on approval; the voyage branch depends on it).
+-1. The pirate voyage is built and its e2e passes: the user reviews `feature/pirate-voyage` (its **Next**
+   list at the top) and `feature/port-town-revamp`, which the voyage branch depends on. Merge and deploy
+   only on approval.
 0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway
    canopy; diagnose the coast "hit" timeout in `act2.spec.ts:341`). Real-Chromebook
    check of the mic level meter and ankle-water frame rate.

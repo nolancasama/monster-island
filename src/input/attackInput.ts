@@ -4,6 +4,10 @@ import { getGame, useGame } from "../game/store";
 export type AttackSlot = "basic" | "special";
 export type AttackSource = "key" | "mouse" | "touch";
 
+/** The pirate voyage registers its J tool here (flow/voyage); importing it would close an import cycle through combat. */
+let voyageTool: ((slot: AttackSlot) => boolean) | null = null;
+export function setVoyageTool(fn: (slot: AttackSlot) => boolean) { voyageTool = fn; }
+
 const down = { basic: new Set<AttackSource>(), special: new Set<AttackSource>() };
 const held = { basic: new Set<AttackSource>(), special: new Set<AttackSource>() };
 
@@ -12,6 +16,8 @@ export function pressAttack(slot: AttackSlot, source: AttackSource): void {
   down[slot].add(source);
   if (!canFight()) return;
   held[slot].add(source);
+  // On the pirate ship, J and K are the active friend's job tool.
+  if (voyageTool?.(slot)) return;
   if (slot === "basic") basicAttack();
   else specialAttack();
 }

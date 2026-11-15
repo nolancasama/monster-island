@@ -108,6 +108,46 @@ export function updateOccluderFade(camera: THREE.Camera, target: THREE.Vector3, 
   losUniforms.targetView.value.copy(target).applyMatrix4(camera.matrixWorldInverse);
 }
 
+/**
+ * Ship rigging (pirate voyage): tall parts standing between the camera and the
+ * player dissolve, measured along the camera's horizontal forward in world space.
+ * The sails lie almost along the stern camera's sight line, so the cone of
+ * `occluderMat` would leave most of a sail across the screen.
+ */
+const shipCut = { plane: { value: new THREE.Vector4(0, 0, 0, -1) }, on: { value: 0 } };
+export function shipCutMaterial(base: THREE.MeshLambertMaterial, key: string): THREE.MeshLambertMaterial {
+  const material = base.clone();
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uShipCut = shipCut.plane;
+    shader.uniforms.uShipCutOn = shipCut.on;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vShipWorld;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvShipWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vShipWorld;\nuniform vec4 uShipCut;\nuniform float uShipCutOn;")
+      .replace(
+        "#include <clipping_planes_fragment>",
+        `#include <clipping_planes_fragment>
+if (uShipCutOn > 0.5) {
+  float along = dot(vShipWorld.xz - uShipCut.xy, uShipCut.zw);
+  float keep = smoothstep(-1.15, -0.6, along);
+  if (keep <= 0.0) discard;
+  if (keep < 1.0) {
+    float screenDoor = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
+    if (screenDoor > keep) discard;
+  }
+}`
+      );
+  };
+  material.customProgramCacheKey = () => `ship-cut-${key}-v1`;
+  return material;
+}
+/** Where the player stands and which way the camera looks (horizontal, normalised). */
+export function updateShipCut(px: number, pz: number, fx: number, fz: number, on: boolean) {
+  shipCut.plane.value.set(px, pz, fx, fz);
+  shipCut.on.value = on ? 1 : 0;
+}
+
 let glow: THREE.CanvasTexture | null = null;
 /** Soft radial dot (beacons, embers, blob shadows, sparkles). */
 export function glowTexture(): THREE.CanvasTexture {

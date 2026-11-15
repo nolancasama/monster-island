@@ -31,6 +31,7 @@ import { bouldersGeometry, bushGeometry, jungleTreeGeometry, palmsGeometry, rock
 import { massifTiles, seaStacksGeometry } from "./models/highlands";
 import { PartBuilder } from "./partBuilder";
 import { voyageStorm } from "./voyageWeather";
+import { vy } from "../game/voyageRt";
 
 const sstep = (a: number, b: number, v: number) => {
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
@@ -263,7 +264,8 @@ export function Sea() {
   useFrame(() => {
     // The crossing owns a subdivided sea around the moving boat. Normal
     // home-island water resumes unchanged as soon as the voyage is over.
-    mat.visible = !rt.voyage.active;
+    // The pirate voyage's own sea (scene/PirateShip) replaces it while it runs.
+    mat.visible = !rt.voyage.active && !vy.sea;
     const t = rt.time;
     const p = near.attributes.position as THREE.BufferAttribute;
     const arr = p.array as Float32Array;

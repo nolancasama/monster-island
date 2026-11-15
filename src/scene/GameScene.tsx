@@ -23,6 +23,7 @@ import { Cave } from "./Cave";
 import { BubbleRide, UpperCanopy } from "./UpperCanopy";
 import { layerView } from "./layerView";
 import { VoyageBoat } from "./VoyageBoat";
+import { PirateShip } from "./PirateShip";
 import { installMouseAttacks } from "../input/attackInput";
 
 const collisionDebugAllowed = debugEnabled || new URLSearchParams(window.location.search).get("e2e") === "1";
@@ -138,6 +139,7 @@ export function GameScene() {
       <BubbleRide />
       </>}
       <VoyageBoat />
+      <PirateShip />
       <CombatScene />
       <Player />
       <Monsters />
