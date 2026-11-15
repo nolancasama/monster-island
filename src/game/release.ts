@@ -17,6 +17,19 @@ export function cloudIsleOpen(): boolean {
   return CLOUD_ISLE_RELEASED || e2eShipOpen || (cloudIsleShipDebugEnabled() && useDebug.getState().cloudIsleShipOpen);
 }
 
+let e2ePirateVoyage = false;
+/** Browser tests (?e2e=1 hook only) choose the pirate voyage for Gull's first trip. */
+export function setE2ePirateVoyage(on: boolean): void { e2ePirateVoyage = on; }
+
+/**
+ * The pirate voyage (docs/PIRATE_VOYAGE.md) is a debug-menu preview: only the
+ * debug menu's switch (session memory, `?debug=1`) or the e2e hook replaces
+ * Gull's original crossing with it. Students never reach it.
+ */
+export function pirateVoyageOpen(): boolean {
+  return e2ePirateVoyage || (cloudIsleShipDebugEnabled() && useDebug.getState().pirateVoyage);
+}
+
 export function setCloudIsleShipOpen(open: boolean): void {
   if (cloudIsleShipDebugEnabled()) useDebug.setState({ cloudIsleShipOpen: open });
 }

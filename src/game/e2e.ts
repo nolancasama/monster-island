@@ -4,7 +4,7 @@ import { resumeVoyage, setScene } from "./flow/voyage";
 import { itemWorld } from "./flow/voyageJobs";
 import { SHIP } from "./world/pirateShip";
 import type { Layer } from "./world/region";
-import { cloudIsleOpen, setE2eCloudIsleShipOpen } from "./release";
+import { cloudIsleOpen, setE2eCloudIsleShipOpen, setE2ePirateVoyage } from "./release";
 import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
@@ -188,6 +188,10 @@ export function installE2eHook(seed: number) {
     },
     openCloudShip(open = true) {
       setE2eCloudIsleShipOpen(open);
+    },
+    /** Gull's first trip becomes the pirate voyage (the debug menu's preview switch). */
+    openPirateVoyage(on = true) {
+      setE2ePirateVoyage(on);
     },
     /** Additive fixture; use the real save validator and matching physical world. */
     setAct3(patch: Partial<Act3>) {

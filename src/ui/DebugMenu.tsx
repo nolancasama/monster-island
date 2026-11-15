@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { debugEnabled } from "../game/debugAccess";
 import { cloudIsleShipDebugEnabled, setCloudIsleShipOpen } from "../game/release";
 import { useDebug } from "../game/debugState";
+import { DEBUG_VOYAGE_STARTS, setDebugPirateVoyage, startDebugVoyage } from "../game/debugVoyage";
 import { debugHeal, debugKillZone, debugUnlockFriends, resetDebugSave, setDebugNoclip } from "../game/debugActions";
 import { DEBUG_DESTINATIONS, jumpDebug, switchDebugWorld, teleportDebug } from "../game/debugTravel";
 import { rt } from "../game/runtime";
@@ -150,6 +151,10 @@ function DebugDialog() {
           }} /> Grove stream ferry solved</label>
           <ProgressToggles />
           {cloudIsleShipDebugEnabled() && <button data-testid="debug-cloud-ship" aria-pressed={debug.cloudIsleShipOpen} onClick={() => setCloudIsleShipOpen(!debug.cloudIsleShipOpen)}>Cloud Isle ship: {debug.cloudIsleShipOpen ? "open" : "locked"}</button>}
+          {cloudIsleShipDebugEnabled() && <fieldset data-testid="debug-pirate-voyage"><legend>Pirate voyage (preview)</legend>
+            <label><input type="checkbox" data-testid="debug-pirate-voyage-on" checked={debug.pirateVoyage} onChange={e => run(() => setDebugPirateVoyage(e.target.checked), e.target.checked ? "Gull's first trip is the pirate voyage (ship opened)" : "Gull's first trip is the original crossing")} /> Use pirate voyage for Gull's first trip</label>
+            <div className="debug-destination-grid">{DEBUG_VOYAGE_STARTS.map(s => <button key={s.id} data-testid={`debug-voyage-${s.id}`} onClick={() => run(() => startDebugVoyage(s.id), `Pirate voyage: ${s.label}`)}>{s.label}</button>)}</div>
+          </fieldset>}
           <button onClick={() => run(debugHeal, "HP and all MP restored")}>Full heal: HP + all MP</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, coins: p.act2.coins + 100 } } }); }, "Added 100 coins")}>+100 coins</button>
           <button onClick={() => run(() => { const p = getGame().progress; setGame({ progress: { ...p, act2: { ...p.act2, items: { ...p.act2.items, amber: (p.act2.items.amber ?? 0) + 5 } } } }); }, "Added 5 amber")}>+5 amber</button>

@@ -5,8 +5,10 @@ The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) was im
 directly, without the router, at the user's request. The frozen spec is `docs/PIRATE_VOYAGE.md`. The
 decisions are in `DESIGN_DECISIONS.md`: "Pirate Voyage Adventure" and "Pirate Voyage (as built,
 milestones 2c–6)". The branch sits on the unmerged town branch, because the Captain Hat keepsake uses its
-wardrobe. Merging and deploying need the user's approval. Cloud Isle stays locked in public builds, so the
-voyage is reachable only with the ship opened (debug `?debug=1` or the e2e hook).
+wardrobe. Merging and deploying need the user's approval. **2026-11-16: the voyage is a debug-menu
+preview.** Gull's first trip is the original crossing unless the debug menu's "Pirate voyage (preview)"
+switch is on (`?debug=1`; `pirateVoyageOpen()` in `game/release.ts`, `game/debugVoyage.ts`). That panel
+also jumps to the departure or any checkpoint. E2e uses the `openPirateVoyage` hook. Students never reach it.
 
 **The whole voyage is built** (milestones 1–6):
 - **Departure and capture:** `flow/voyage.ts`. Real boarding arcs (`player.floatY`, `vy.monY`), Gull's boat
@@ -59,11 +61,9 @@ voyage is reachable only with the ship opened (debug `?debug=1` or the e2e hook)
   portraits (`LookPortrait`).
 
 **Next for the voyage:**
-1. The user reviews and plays it. Open the ship in a debug build (`?debug=1`, the ship toggle), then talk
-   to Gull at the harbour. Judge the feel on a real Chromebook: the frame rate at sea, the rain, and the
-   heat band's difficulty.
-2. Not built: debug travel targets for each voyage checkpoint (spec §0.9). The e2e hook
-   `voyageJump(stage)` does the same for tests.
+1. The user reviews and plays it: `?debug=1`, debug menu → "Pirate voyage (preview)", then a start button.
+   Judge the feel on a real Chromebook: the frame rate at sea, the rain, and the heat band's difficulty.
+2. Built 2026-11-16: debug jumps to each voyage checkpoint (spec §0.9), in the same debug panel.
 3. Not run: the full e2e suite on this branch (about 1.5 h).
 4. Merge order on approval: `feature/port-town-revamp` first, then this branch.
 

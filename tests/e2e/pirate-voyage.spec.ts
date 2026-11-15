@@ -223,6 +223,7 @@ async function continueSaved(page: Page) {
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.mode === "explore" || Boolean(s.prompt) || Boolean(s.line), 90_000, "continued");
   await hook(page, "openCloudShip", true);
+  await hook(page, "openPirateVoyage", true);
 }
 
 test.use({ actionTimeout: 15_000 });
@@ -236,6 +237,7 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.mode === "explore", 90_000, "loaded");
   await hook(page, "openCloudShip", true);
+  await hook(page, "openPirateVoyage", true);
 
   // Departure, capture, interrogation, the monsters.
   await hook(page, "goTo", "harbor", 1.4);

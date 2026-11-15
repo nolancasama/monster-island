@@ -2800,3 +2800,15 @@ Built by Claude directly, without the router, at the user's request.
 - **Import cycle.** `input/attackInput` no longer imports the voyage. The voyage registers its J tool with
   `setVoyageTool`, because the import closed a cycle through `combat` and `act3` that broke 16 unit-test
   files.
+
+## 2026-11-16 — Pirate voyage is a debug-menu preview
+- **What:** Gull's first trip is the original crossing again, even with the debug Cloud Isle ship open.
+  The pirate voyage runs only when the debug menu's "Pirate voyage (preview)" switch is on
+  (`useDebug.pirateVoyage`, session memory, `?debug=1` only; `pirateVoyageOpen()` in `game/release.ts`).
+  The same panel jumps to Port dock at the departure or at any checkpoint (captured, jobs, storm, raft;
+  `game/debugVoyage.ts`), which also covers the spec's §0.9 debug travel targets. E2e uses the
+  `openPirateVoyage` hook.
+- **Why:** the user asked for the branch's changes to live in a debug version reachable only from the debug
+  menu, so the voyage can ship to `main` without replacing the existing crossing.
+- **Rejected:** keeping the voyage behind the Cloud Isle ship toggle alone (that silently replaced the
+  original crossing for every debug playtest and broke `act3.spec.ts`).

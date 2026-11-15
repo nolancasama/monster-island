@@ -1,15 +1,15 @@
 import type { FamilyId } from "../data/family";
 import { startPirateVoyage } from "./voyage";
-import { cloudIsleOpen, CLOUD_ISLE_SHIP_SOON, CLOUD_ISLE_SOON } from "../release";
+import { cloudIsleOpen, pirateVoyageOpen, CLOUD_ISLE_SHIP_SOON, CLOUD_ISLE_SOON } from "../release";
 import { MONSTERS } from "../data/monsters";
 import { COMPANION_IDS } from "../data/combat";
 import { cb, hooks, resetBeaconFight, travelCombat, wakeUp } from "../combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { BEACON, CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, OBSERVATORY, RAIDER_BARRICADE, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
-import { SERVICES } from "../world/lowland";
+import { PIER2, SERVICES } from "../world/lowland";
 import { gatesOf, nearestWalkable, PLAYER_R } from "../world/collision";
-import { claimErrand, cloudWakeArea, collectErrandPickup, cookStew, defeatBeacon, discoverSkyFortress, discoverHollow, eatStew, markFamily, observatoryLiftReady, openCloudChest, reachObservatory, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
+import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, defeatBeacon, discoverSkyFortress, discoverHollow, eatStew, markFamily, observatoryLiftReady, openCloudChest, reachObservatory, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
 import { rested } from "../logic/act2";
 import { canDo, recordCan } from "../logic/progress";
 import { CAN_QUESTION, type PhraseId } from "../logic/english";
@@ -52,8 +52,60 @@ export async function sailWithGull() {
     await fadeThrough(() => arrive(home ? "cloud" : "home"), 900);
     return;
   }
-  // The first trip is the pirate voyage (docs/PIRATE_VOYAGE.md); it ends on Cloud Isle.
-  await startPirateVoyage();
+  // The pirate voyage (docs/PIRATE_VOYAGE.md) is a debug-menu preview for now; it ends on Cloud Isle.
+  if (pirateVoyageOpen()) { await startPirateVoyage(); return; }
+  const answer = await ask({ kind: "command", options: ["yesLetsGo"], tapAlways: true, readQuestion: true, cancellable: true,
+    question: { by: "harbor", en: "Are you ready? Let's go to Cloud Isle!", ja: "じゅんびは いいかい? クラウドじまへ いこう!" }, help: "ガルせんちょうと ふねに のろう" });
+  if (!answer) return;
+  const v = rt.voyage;
+  v.active = true; v.sail = 0; v.stage = "depart";
+  v.x = PIER2.x; v.z = PIER2.z0 - 3; v.y = -.1; v.yaw = Math.PI;
+  rt.player.frozen = true;
+  audio.startMusic("island");
+  boatPose();
+  await say("harbor", "Hold on, friends!", "ともだちも いっしょに しゅっぱつだ!");
+  await boatLeg(6, v.x, v.z - 7);
+  v.stage = "sail";
+  await command("raiseSail", "ほを あげよう!「Raise the sail!」");
+  await over(2, k => { v.sail = k; boatPose(); });
+  await boatLeg(10, v.x, v.z - 20);
+  v.stage = "rocks";
+  await say("harbor", "Rocks ahead! Turn left!", "まえに いわだ! ひだりへ まがろう!");
+  // No fail state: Gull always completes the safe turn after the answer.
+  await command("turnLeft", "ひだりへ まがろう!「Turn left!」");
+  await boatLeg(10, v.x + 13, v.z - 10);
+  v.stage = "weather";
+  for (;;) {
+    const weather = await ask({ kind: "choice", options: ["itsWindy", "itsSunny", "itsRainy"], tapAlways: true, readQuestion: true,
+      question: { by: "harbor", en: "How's the weather?", ja: "どんな てんきかな?" }, picture: "cloudWind", icons: { itsWindy: "cloudWind", itsSunny: "cloudSun", itsRainy: "cloudRain" }, help: "ふくらんだ ほを みて こたえよう" });
+    if (weather === "itsWindy") break;
+    await say("harbor", "Look at the sail. The wind is strong! Try again.", "ほを みてごらん。かぜが つよいね! もういちど。");
+  }
+  await boatLeg(8, v.x, v.z - 20);
+  v.stage = "look";
+  await command("look", "しまが みえてきた!「Look!」");
+  // The voyage's only cut: swap the physical worlds while out at sea.
+  await fadeThrough(() => {
+    rt.world = "cloud";
+    v.x = 0; v.z = -29; v.yaw = 0; v.stage = "reveal";
+    rt.player.x = v.x; rt.player.z = v.z;
+    updateProgress(pr => travelCloud(completeVoyage(pr), "cloud"));
+    travelCombat();
+    boatPose();
+  }, 450);
+  rt.ship.visible = true; rt.ship.scale = 1; rt.ship.cage.visible = false;
+  await over(13, k => {
+    rt.ship.x = lerp(-34, 34, k); rt.ship.z = 28 + k * 5; rt.ship.y = 20; rt.ship.yaw = Math.PI / 2;
+    shot({ x: v.x + 6, y: 5.8, z: v.z - 10 }, { x: 0, y: 16, z: 285 });
+  });
+  rt.ship.visible = false;
+  await say("harbor", "Cloud Isle! The beacon is above the storm. Stay close!", "クラウドじまだ! あらしの うえに とうが ある。はなれないで!");
+  await boatLeg(9, CLOUD_DOCK.boat.x, CLOUD_DOCK.boat.z);
+  v.active = false; v.stage = "done";
+  arrive("cloud");
+  await say("harbor", "I'll wait here. You can always sail home.", "ここで まっているよ。いつでも みなとまちへ かえれるよ。");
+  banner({ title: "Cloud Isle", sub: "Find a way through Stormbreak Coast.", ja: "クラウドじま — あらしの かいがんを すすもう", tone: "place" });
+  saveNow();
 }
 
 export function boatPose() {

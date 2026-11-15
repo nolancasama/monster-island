@@ -72,6 +72,7 @@ test("departure, capture, interrogation and the monsters (normal speed)", async 
   await page.getByTestId("btn-continue").click();
   await waitFor(page, st => st.mode === "explore", 90_000, "loaded");
   await hook(page, "openCloudShip", true);
+  await hook(page, "openPirateVoyage", true);
   await hook(page, "goTo", "harbor", 1.4);
   await waitFor(page, st => st.focus?.id === "harbor" && st.mode === "explore", 15_000, "at Gull");
   await page.keyboard.press("KeyE");
