@@ -82,8 +82,8 @@ export function objectiveText(o: Objective): Text {
       return { en: "Rescue Lumo! Reach the port.", ja: "ルモを たすけよう! みなとへ いこう" };
     case "market":
       return { en: "Buy food at the market!", ja: "おみせで たべものを かおう!" };
-    case "kitchen":
-      return { en: "Make a monster treat!", ja: "キッチンで おやつを つくろう!" };
+    case "trainer":
+      return { en: "Learn a combo from Coach Rex", ja: "コーチ・レックスに コンボを ならおう" };
     case "harbor":
       return { en: "Ask at the harbor: Where is the ship?", ja: "みなとの じむしょで ふねの ことを きこう" };
     case "act2Done":

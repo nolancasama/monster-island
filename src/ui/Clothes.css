@@ -1,0 +1,228 @@
+/* Ms. Button's clothes shop and Coach Rex's combo panel (docs/PORT_TOWN_REVAMP.md §3.4, §4.3). */
+
+.clothes-panel {
+  position: relative;
+  width: min(920px, 96vw);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clothes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clothes-head h2 {
+  margin: 0;
+}
+
+.clothes-head .shop-coins {
+  margin: 0;
+}
+
+.wear-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 8px;
+  overflow: auto;
+  max-height: calc(100vh - 170px);
+  padding: 2px;
+}
+
+.wear-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 8px 10px;
+  border-radius: 14px;
+  background: var(--paper-2);
+  border: 3px solid transparent;
+  text-align: center;
+}
+
+.wear-card.owned {
+  background: #fff7fb;
+}
+
+.wear-card.worn {
+  border-color: #ff7eb6;
+}
+
+.wear-look {
+  width: 72px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff;
+  border: 2px solid var(--line);
+  box-shadow: none;
+  padding: 0;
+}
+
+.wear-name {
+  margin-top: 2px;
+  font-size: 0.98rem;
+  line-height: 1.1;
+}
+
+.wear-blurb {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.wear-blurb.stat {
+  color: #c2337a;
+}
+
+.wear-only {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #6b5aa8;
+}
+
+.wear-buy {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 6px 14px;
+}
+
+.wear-actions {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.wear-actions button {
+  min-height: 44px;
+  padding: 6px 10px;
+  font-size: 0.92rem;
+}
+
+.wear-by {
+  display: inline-flex;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #ff7eb6;
+}
+
+.clothes-close {
+  align-self: center;
+}
+
+.wear-picker {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 247, 251, 0.82);
+  border-radius: inherit;
+}
+
+.wear-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  max-width: 94%;
+}
+
+.wear-picker-q {
+  font-size: 1.3rem;
+}
+
+.wear-who {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.wear-who button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 84px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  background: #fff;
+  border: 3px solid var(--line);
+  font-weight: 900;
+}
+
+.wear-who button.on {
+  border-color: #ff7eb6;
+}
+
+/* Coach Rex's combos */
+
+.combo-row {
+  border: 3px solid transparent;
+}
+
+.combo-row.known {
+  background: #f1fbef;
+}
+
+.combo-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.combo-extra {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.combo-learn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.combo-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.combo-learned {
+  font-weight: 900;
+  color: #3f9a52;
+  text-align: center;
+}
+
+/* Combo popups: big English sound words that rise and fade. */
+.combo-callout {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 40;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  -webkit-text-stroke: 2px #1d2a33;
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 #1d2a33, 0 0 12px rgba(0, 0, 0, 0.35);
+  will-change: transform, opacity;
+}

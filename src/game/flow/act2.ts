@@ -1,9 +1,11 @@
 import { MONSTERS } from "../data/monsters";
 import { FOODS } from "../data/foods";
-import { COMBAT, PRICES, RECIPES, COMPANION_IDS, type CompanionId } from "../data/combat";
-import { NPCS, type NpcId } from "../data/town";
-import { NUMBER_PHRASE, WANT_PHRASE, heardQuantity, type PhraseId } from "../logic/english";
-import { RELIC_NAMES, buy, chestFoodOverflow, craft, craftMissing, findPort, hearLead, markDescended, openChest, practise, rested, stayAtInn, startAct2, addCoins, type Checkpoint } from "../logic/act2";
+import { PRICES } from "../data/combat";
+import { NUMBER_PHRASE, WANT_PHRASE, heardQuantity } from "../logic/english";
+import { RELIC_NAMES, buy, chestFoodOverflow, findPort, hearLead, markDescended, openChest, rested, stayAtInn, startAct2, type Checkpoint } from "../logic/act2";
+import { clothesShop } from "./clothes";
+import { trainer } from "./trainer";
+import { faceKeeper } from "./town";
 import { companions } from "../logic/progress";
 import { banner, getGame, setGame, toast, updateProgress } from "../store";
 import { animate, effect, rt } from "../runtime";
@@ -502,7 +504,8 @@ function arriveAtPort(): Promise<void> {
     rt.maple.wave = rt.time;
     await say("maple", "You made it! I came by boat.", "ついたね! わたしは ふねで きたよ。");
     await say("maple", "Let's get ready. Buy food at the market.", "じゅんびを しよう。おみせで たべものを かおう。");
-    await say("maple", "Then make a monster treat in the kitchen.", "それから キッチンで モンスターの おやつを つくろう。");
+    await say("maple", "Then learn a combo from Coach Rex.", "それから コーチ・レックスに コンボを ならおう。");
+    await say("maple", "Look! You can buy fun hats, too!", "みて! たのしい ぼうしも かえるよ!");
     await say("maple", "Then ask at the harbor office: Where is the ship?", "そして みなとの じむしょで「Where is the ship?」と きこう。");
     rt.maple.talking = false;
     saveNow();
@@ -513,16 +516,10 @@ function arriveAtPort(): Promise<void> {
 
 export function talkToKeeper(service: ServiceId): Promise<void> {
   if (service === "market") return market();
-  if (service === "kitchen") return kitchen();
+  if (service === "clothes") return clothesShop();
   if (service === "trainer") return trainer();
   if (service === "inn") return inn();
   return harborOffice();
-}
-
-function faceKeeper(id: NpcId) {
-  const k = SERVICES[NPCS[id].service].keeper;
-  rt.player.yaw = Math.atan2(k.x - rt.player.x, k.z - rt.player.z);
-  frameTwo(rt.player, k, 0.85);
 }
 
 /** The food market: the full English exchange the first time, the quick-buy panel after that. */
@@ -598,107 +595,6 @@ export function quickBuy(food: FoodId, n: number): boolean {
   audio.play("buy");
   toast({ en: `+${n} ${FOODS[food].word}`, ja: `${FOODS[food].ja} ${n}こ`, icon: food, tone: "good" }, 1400);
   return true;
-}
-
-const MIX_PHRASE: Record<CompanionId, PhraseId> = { leafy: "mixLeafy", bubbo: "mixBubbo", puff: "mixPuff", ember: "mixEmber" };
-
-/** The kitchen: name the two foods to mix; the treat teaches its friend an upgrade. */
-function kitchen(): Promise<void> {
-  return run(async () => {
-    faceKeeper("cook");
-    const p = getGame().progress;
-    const left = COMPANION_IDS.filter((f) => p.monsters[f].friend && !p.act2.upgrades.includes(f));
-    if (!left.length) {
-      await say("cook", "Your friends ate all my treats! They are super strong now!", "ともだちは みんな おやつを たべたよ! とても つよく なった!");
-      return;
-    }
-    await say("cook", "Hi! I make monster treats. Two foods and one amber!", "やあ! モンスターの おやつを つくるよ。たべもの 2つと こはく 1つ!");
-    const said = await ask({
-      kind: "choice",
-      options: left.map((f) => MIX_PHRASE[f]),
-      question: { en: "What do you want to make?", ja: "なにを つくる?", by: "cook" },
-      readQuestion: true,
-      help: left.map((f) => `${RECIPES[f].treat.ja}(${MONSTERS[f].name})`).join("・"),
-      cancellable: true
-    });
-    if (!said) return;
-    const friend = left.find((f) => MIX_PHRASE[f] === said)!;
-    const r = RECIPES[friend];
-    const missing = craftMissing(getGame().progress, friend);
-    if (missing.length) {
-      const names = missing.map((m) => (m === "amber" ? "amber" : FOODS[m as FoodId].word));
-      const ja = missing.map((m) => (m === "amber" ? "こはく" : FOODS[m as FoodId].ja)).join("と ");
-      await say("cook", `You need ${names.join(" and ")}.`, `${ja}が ひつようだよ。${missing.includes("amber") ? "こはくは たからばこや てきから みつかるよ" : "おみせで かえるよ"}`);
-      return;
-    }
-    updateProgress((pr) => craft(pr, friend));
-    audio.play("craft");
-    const s = SERVICES.kitchen.house;
-    effect("sparkle", s.x - 2, walkY(s) + 1.2, s.z);
-    await wait(600);
-    await say("cook", `Here you are! ${r.treat.en}!`, `はい、どうぞ! ${r.treat.ja}!`);
-    // The friend eats it and learns its upgrade, there and then.
-    const m = rt.monsters[friend];
-    if (Math.hypot(m.x - rt.player.x, m.z - rt.player.z) > 4) poofTo(friend, rt.player.x + 1.2, rt.player.z + 0.8);
-    m.mode = "script";
-    m.look = { x: rt.player.x, z: rt.player.z };
-    animate(friend, "eat");
-    audio.play("munch");
-    await wait(1300);
-    animate(friend, "friend");
-    audio.voice(friend, "excited");
-    effect("sparkle", m.x, walkY(m) + 1.2, m.z);
-    const up = COMBAT[friend].upgrade.name;
-    const upgradeHint = { leafy: "Grab two enemies and bash them together!", bubbo: "Trap bigger enemies in bubbles!", puff: "Blow enemies away with wider wind!", ember: "Breathe farther and burn longer!" };
-    banner({ title: `${MONSTERS[friend].name} learned ${up.en}!`, sub: upgradeHint[friend], ja: `${MONSTERS[friend].name}は ${up.ja}を おぼえた!`, tone: "clear" }, 3600);
-    await say(friend, "Yummy! I feel strong!", "おいしい! ちからが わいてきた!");
-    await ask({ kind: "command", options: ["thankYou"], readSentence: true, help: "コックさんに おれいを いおう" });
-    m.mode = friend === getGame().progress.active ? "follow" : "party";
-    m.look = null;
-  });
-}
-
-/** The trainer: explains the moves (panel) and lets each special's command be practised aloud. */
-function trainer(): Promise<void> {
-  return run(async () => {
-    faceKeeper("trainer");
-    await say("trainer", "Hi! I'm Coach Rex. I know every monster move!", "やあ! コーチの レックスだ。モンスターの わざは なんでも しってるぞ!");
-    await say("trainer", "Face an enemy! J is free. K uses MP.", "てきの ほうを むこう! J は MPなし。K は MPを つかうよ。");
-    await say("trainer", "Hold J or left click: Ember keeps breathing fire! Bubbo traps an enemy in a bubble!", "J か ひだりクリックを おしつづけて エンバーの ほのお! バボは あわで てきを うかせるよ!");
-    await say("trainer", "Leafy grabs and throws. Puff blows enemies away!", "リーフィは つかんで なげる。パフは かぜで てきを とばすよ!");
-    await say("trainer", "Press K: Burn! makes wide fire. Pop! bursts a big bubble.", "K: Burn! は ひろい ほのお。Pop! は おおきな あわの ばくだん。");
-    await say("trainer", "Stop! roots enemies. Spin! makes a cyclone that carries them!", "Stop! は ねっこで とめる。Spin! は たつまきで はこぶよ!");
-    await say("trainer", "Tap K for a fire burst. Hold K on a keyboard for longer fire!", "K を いちど おすと ほのおが でるよ。キーボードで おしつづけると ながく でるよ!");
-    setGame({ panel: "trainer" });
-  });
-}
-
-const COMMAND_PHRASE: Record<CompanionId, PhraseId> = { leafy: "cmdStop", bubbo: "cmdPop", puff: "cmdSpin", ember: "cmdBurn" };
-
-/** Practise one friend's special command with the trainer (the first time gives coins). */
-export function practiseCommand(friend: CompanionId): Promise<void> {
-  setGame({ panel: null });
-  return run(async () => {
-    faceKeeper("trainer");
-    const said = await ask({
-      kind: "command",
-      options: [COMMAND_PHRASE[friend]],
-      question: { en: `Tell ${MONSTERS[friend].name} the special move!`, ja: `${MONSTERS[friend].name}に とくべつな わざの ことばを いおう`, by: "trainer" },
-      readSentence: true,
-      help: `${COMBAT[friend].special.name.ja}: 「${COMBAT[friend].special.word}」`,
-      cancellable: true
-    });
-    if (!said) return;
-    const first = !getGame().progress.act2.trained.includes(friend);
-    animate(friend, "power");
-    audio.voice(friend, "excited");
-    await say("trainer", `Great! ${COMBAT[friend].special.word} That's ${COMBAT[friend].special.name.en}!`, `いいね! それが ${COMBAT[friend].special.name.ja}だ!`);
-    if (first) {
-      updateProgress((p) => addCoins(practise(p, friend), 10));
-      audio.play("coin");
-      toast({ en: "+10 coins!", ja: "コイン 10まい!", icon: "coin", tone: "good" }, 1800);
-    }
-  });
 }
 
 function inn(): Promise<void> {

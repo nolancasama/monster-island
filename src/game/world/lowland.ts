@@ -683,7 +683,7 @@ export const ACT2_OBSTACLE_PLACE: Record<"groveStream" | "groveLilies" | "canopy
 };
 
 /** The town: each service has a building, a keeper and the spot E works from. */
-export type ServiceId = "market" | "kitchen" | "trainer" | "inn" | "harbor";
+export type ServiceId = "market" | "clothes" | "trainer" | "inn" | "harbor";
 export interface ServiceDef {
   id: ServiceId;
   name: Text;
@@ -698,9 +698,9 @@ export const SERVICES: Record<ServiceId, ServiceDef> = {
     house: { x: 61, z: -299, w: 6, d: 4, yaw: Math.PI / 2 },
     keeper: { x: 64.6, z: -299, yaw: Math.PI / 2 },
   },
-  kitchen: {
-    id: "kitchen",
-    name: { en: "Treat Kitchen", ja: "おやつの キッチン" },
+  clothes: {
+    id: "clothes",
+    name: { en: "Clothes Shop", ja: "ふくの おみせ" },
     house: { x: 93, z: -299, w: 6, d: 4.5, yaw: -Math.PI / 2 },
     keeper: { x: 89.2, z: -299, yaw: -Math.PI / 2 },
   },

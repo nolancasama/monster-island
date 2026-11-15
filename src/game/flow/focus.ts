@@ -18,7 +18,7 @@ import { GROVE_STREAM_FERRY } from "../world/groveStream";
 /** What E does at each of the town's services. */
 const SERVICE_FOCUS: Record<ServiceId, { verb: string; noun: string }> = {
   market: { verb: "Buy", noun: "food" },
-  kitchen: { verb: "Make", noun: "a treat" },
+  clothes: { verb: "Buy", noun: "clothes" },
   trainer: { verb: "Talk to", noun: "the trainer" },
   inn: { verb: "Rest at", noun: "the inn" },
   harbor: { verb: "Ask about", noun: "the ship" }
@@ -218,7 +218,7 @@ export function objectiveTarget(): (Vec2 & { y: number }) | null {
       return t ? { x: t.x, z: t.z, y: 2.2 } : null;
     }
     case "market":
-    case "kitchen":
+    case "trainer":
     case "harbor": {
       const k = SERVICES[o.id].keeper;
       return { x: k.x, z: k.z, y: 2.4 };

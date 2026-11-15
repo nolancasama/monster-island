@@ -13,7 +13,9 @@ import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "./world/
 import { run } from "./flow/script";
 import { audio } from "../audio/audio";
 import { pressAttack, releaseAttack } from "../input/attackInput";
-import { hazardAt, ignite } from "./logic/elements";
+import { blastKnock, hazardAt, ignite } from "./logic/elements";
+import { COMBO_TUNING } from "./data/combos";
+import { STAT_BONUS, WEARABLES, type WearableId } from "./data/wearables";
 import { ELEMENT_OBJECTS } from "./world/elementObjects";
 import { waterAt } from "./logic/water";
 import { startPanic } from "./logic/panic";
@@ -1244,7 +1246,7 @@ describe("elemental J simulation", () => {
     expect(basicAttack({ repeat: true })).toBe(false);
   });
 
-  it("Double Grab bashes the nearest two for fourteen and a second of stun", () => {
+  it("Double Grab (the Bonk lesson) bashes the nearest two for fourteen plus the Bonk and a second of stun", () => {
     const a = loneEnemy("snapjaw", -.5, 23), b = extra(1, "snapjaw", .5, 23);
     friend("leafy");
     setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: ["leafy"] } } }));
@@ -1256,9 +1258,11 @@ describe("elemental J simulation", () => {
       { hand: "L", enemy: a.i, object: null }
     ]);
     advanceCombat(.36);
-    expect([a.hp, b.hp]).toEqual([86, 86]);
+    expect([a.hp, b.hp]).toEqual([86 - COMBO_TUNING.bonk.struck, 86 - COMBO_TUNING.bonk.struck]);
     expect([a.state, b.state]).toEqual(["stun", "stun"]);
+    // The combo's shorter stun never cuts the bash's second short.
     expect(a.timer).toBeGreaterThan(.95);
+    expect(cb.combos.map(c => [c.kind, c.n])).toEqual([["bonk", 2]]);
     expect(cb.fx.some(f => f.kind === "hit" && Math.abs(f.x) < 1e-9 && Math.abs(f.z - 23) < 1e-9)).toBe(true);
   });
 
@@ -2264,5 +2268,186 @@ describe("Storm Beacon world combat integration", () => {
     expect(cb.knockedOut).toBe(false);
     resetBeaconFight();
     expect(cb.beacon.power).toBe(3);
+  });
+});
+
+describe("Coach Rex's combos and the wardrobe's bonuses (docs/PORT_TOWN_REVAMP.md §4.4, §4.6)", () => {
+  beforeEach(() => vi.stubGlobal("window", { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  function friend(id: CompanionId) {
+    setGame(g => ({ progress: { ...g.progress, active: id } }));
+    cb.stance.friend = id; cb.stance.k = 1; cb.ready.basic = cb.ready.special = 0;
+  }
+  function extra(i: number, kind: EnemyKind, x: number, z: number) {
+    const e = cb.enemies[i];
+    Object.assign(e, { kind, x, z, homeX: x, homeZ: z, zone: "stormbreakCoast", hp: 100, state: "recover", timer: 99, kx: 0, kz: 0 });
+    return e;
+  }
+  function learn(...friends: CompanionId[]) {
+    setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, upgrades: friends } } }));
+  }
+  /** The player wears these (the player is always a valid wearer). */
+  function wearing(...items: WearableId[]) {
+    const head = items.find(i => WEARABLES[i].slot === "head"), face = items.find(i => WEARABLES[i].slot === "face");
+    setGame(g => ({ progress: { ...g.progress, act2: { ...g.progress.act2, wardrobe: { owned: items, worn: { player: { ...(head ? { head } : {}), ...(face ? { face } : {}) } }, visited: true } } } }));
+  }
+  function bombAt(x: number, z: number) {
+    friend("bubbo");
+    expect(specialAttack()).toBe(true);
+    const s = cb.shots.find(s => s.shape === "bomb")!;
+    Object.assign(s, { x, z, vx: 0, vz: 0, age: s.life - .001 });
+    combatTick(.001);
+  }
+  function leafyFling(weapon: ReturnType<typeof loneEnemy>) {
+    weapon.control = { kind: "flung", t0: rt.time, until: rt.time + .6, source: 4242 } as NonNullable<typeof weapon.control>;
+    weapon.flight = { owner: "leafy", victims: [], x: weapon.x, z: weapon.z - 1.5, yaw: 0, startX: weapon.x, startZ: weapon.z };
+    weapon.kz = 9;
+  }
+  const kinds = () => cb.combos.map(c => [c.kind, c.n]);
+
+  it("Bonk: a Leafy-thrown enemy hitting another adds the combo to both; unlearned it is the plain hit", () => {
+    for (const known of [false, true]) {
+      cb.combos = [];
+      const weapon = loneEnemy("snapjaw", 0, 22.5), victim = extra(1, "snapjaw", 0, 24.2);
+      learn(...(known ? ["leafy" as const] : []));
+      friend("leafy");
+      leafyFling(weapon);
+      advanceCombat(.4);
+      const t = COMBO_TUNING.bonk;
+      expect(victim.hp, `known ${known}`).toBe(known ? 90 - t.struck : 90);
+      expect(weapon.hp, `known ${known}`).toBe(known ? 94 - t.thrown : 94);
+      expect(kinds()).toEqual(known ? [["bonk", 1]] : []);
+    }
+  });
+
+  it("Bonk is Leafy's only: a Puff-blown weapon is the plain hit even when Leafy knows it", () => {
+    const weapon = loneEnemy("snapjaw", 0, 22.5), victim = extra(1, "snapjaw", 0, 25.6);
+    learn("leafy");
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.6);
+    expect(weapon.hp).toBe(86);
+    expect(victim.hp).toBe(90);
+    expect(kinds()).toEqual([]);
+  });
+
+  it("Splash: one bomb hitting two enemies adds the bonus and a stagger to both", () => {
+    const a = loneEnemy("snapjaw", -.6, 24), b = extra(1, "snapjaw", .6, 24);
+    learn("bubbo");
+    bombAt(0, 24);
+    expect([a.hp, b.hp]).toEqual([78 - COMBO_TUNING.splash.each, 78 - COMBO_TUNING.splash.each]);
+    expect([a.state, b.state]).toEqual(["stun", "stun"]);
+    expect(kinds()).toEqual([["splash", 2]]);
+    expect(cb.fx.filter(f => f.kind === "combo").length).toBe(2);
+  });
+
+  it("Splash needs two enemies and the lesson", () => {
+    const a = loneEnemy("snapjaw", 0, 24);
+    learn("bubbo");
+    bombAt(0, 24);
+    expect(a.hp).toBe(78);
+    const b = extra(1, "snapjaw", .6, 24), c = extra(2, "snapjaw", -.6, 24);
+    learn();
+    cb.ready.special = 0;
+    bombAt(0, 24);
+    expect([b.hp, c.hp]).toEqual([78, 78]);
+    expect(kinds()).toEqual([]);
+  });
+
+  it("Slam: Puff's push into a wall adds the combo and bounces back; unlearned it is the plain wall hit", () => {
+    for (const known of [false, true]) {
+      cb.combos = [];
+      const e = loneEnemy("snapjaw", -6, 28.5);
+      // The first pass leaves the control-resistance window; each pass starts fresh.
+      Object.assign(e, { resistUntil: 0, control: null, flight: null, push: null });
+      Object.assign(rt.player, { x: -6, z: 25.5, yaw: 0 });
+      learn(...(known ? ["puff" as const] : []));
+      friend("puff");
+      expect(basicAttack()).toBe(true);
+      advanceCombat(.4);
+      expect(e.hp, `known ${known}`).toBe(known ? 84 - COMBO_TUNING.slam.damage : 84);
+      expect(e.state).toBe("stun");
+      expect(kinds()).toEqual(known ? [["slam", 1]] : []);
+      if (known) expect(e.kz).toBeLessThan(0);
+      expect(e.push).toBeNull();
+    }
+  });
+
+  it("Slam is Puff's only: a bomb's knock into the same wall never slams", () => {
+    const e = loneEnemy("snapjaw", -6, 28.5);
+    Object.assign(rt.player, { x: -6, z: 25.5, yaw: 0 });
+    friend("puff");
+    expect(basicAttack()).toBe(true);
+    advanceCombat(.8);
+    // Now resting against the wall: knock it back in with a bomb, Puff knowing Slam.
+    Object.assign(e, { hp: 100, state: "recover", timer: 99, control: null, flight: null, kx: 0, kz: 0 });
+    learn("puff");
+    cb.combos = [];
+    bombAt(e.x, e.z - 1.2);
+    advanceCombat(.3);
+    expect(kinds()).toEqual([]);
+    expect(e.hp).toBeGreaterThanOrEqual(100 - 22 - 8);
+  });
+
+  it("Blaze: one Inferno setting two enemies alight flares both and lengthens their burn", () => {
+    const a = loneEnemy("snapjaw", -.6, 26.2), b = extra(1, "snapjaw", .6, 26.2);
+    Object.assign(rt.player, { x: 0, z: 24, yaw: 0 });
+    learn("ember");
+    friend("ember");
+    expect(specialAttack()).toBe(true);
+    expect(kinds()).toEqual([["blaze", 2]]);
+    for (const e of [a, b]) expect(e.burn!.until).toBeCloseTo(rt.time + 2.5 + COMBO_TUNING.blaze.extend, 5);
+  });
+
+  it("Blaze needs two enemies in one fire action, and the lesson", () => {
+    const a = loneEnemy("snapjaw", 0, 26.2);
+    Object.assign(rt.player, { x: 0, z: 24, yaw: 0 });
+    learn("ember");
+    friend("ember");
+    expect(specialAttack()).toBe(true);
+    expect(kinds()).toEqual([]);
+    expect(a.burn!.until).toBeCloseTo(rt.time + 2.5, 5);
+  });
+
+  it("the Crown raises combo damage and the Bandana all damage", () => {
+    const a = loneEnemy("snapjaw", -.6, 24), b = extra(1, "snapjaw", .6, 24);
+    learn("bubbo");
+    wearing("crown");
+    bombAt(0, 24);
+    expect(a.hp).toBeCloseTo(78 - COMBO_TUNING.splash.each * (1 + STAT_BONUS.combo), 5);
+    const c = extra(2, "snapjaw", 0, 30);
+    for (const e of [a, b]) e.state = "gone";
+    learn();
+    wearing("bandana");
+    cb.ready.special = 0;
+    bombAt(0, 30);
+    expect(c.hp).toBeCloseTo(100 - 22 * (1 + STAT_BONUS.power), 5);
+  });
+
+  it("the Goggles push farther, the Explorer Hat walks faster", () => {
+    const e = loneEnemy("snapjaw", 0, 26);
+    Object.assign(rt.player, { x: 0, z: 24, yaw: 0 });
+    friend("puff");
+    const speed = speedScale();
+    wearing("goggles", "explorerHat");
+    expect(speedScale()).toBeCloseTo(speed * (1 + STAT_BONUS.speed), 9);
+    expect(basicAttack()).toBe(true);
+    expect(e.kz).toBeCloseTo(blastKnock("medium") * (1 + STAT_BONUS.push), 9);
+  });
+
+  it("the Knight Helmet takes the edge off a hit, and the Pirate Hat adds a coin per pickup", () => {
+    for (const e of cb.enemies) e.state = "gone";
+    wearing("knightHelmet", "mustache");
+    Object.assign(rt.player, { x: 32.5, z: 370 }); // the first electric panel
+    cb.safeUntil = 0;
+    rt.time = 6.41;
+    combatTick(.016);
+    expect(cb.vitals.hp).toBe(96);
+    wearing("pirateHat");
+    const before = getGame().progress.act2.coins + cb.pendingCoins;
+    cb.drops.push({ id: 9e6, kind: "coin", value: 3, x: rt.player.x, y: rt.player.y + .8, z: rt.player.z, vx: 0, vy: 0, vz: 0, t0: rt.time - 1, magnet: true });
+    advanceCombat(.1);
+    expect(getGame().progress.act2.coins + cb.pendingCoins).toBe(before + 3 + STAT_BONUS.coins);
   });
 });

@@ -17,6 +17,8 @@ import type { FoodId, MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
 import { debugPaused, useDebug } from "./debugState";
 import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, weaponVictims, type Burn, type Control } from "./logic/elements";
+import { COMBOS, COMBO_TUNING, type ComboKind } from "./data/combos";
+import { teamBonus } from "./logic/wardrobe";
 import { objectState, secretEvent, tickSecrets, type ElementState, type SecretProgress } from "./logic/secrets";
 import { ELEMENT_OBJECTS, EVENT_TAG, secretOf, type ElementEvent, type ElementObject } from "./world/elementObjects";
 import { isCaveFlame } from "./world/cave";
@@ -121,6 +123,8 @@ export interface EnemyRt {
   plunge: { t0: number; y0: number; vx: number; vz: number } | null;
   /** One victim ledger survives the swing-to-fling transition. */
   flight: { owner: CompanionId; victims: number[]; x: number; z: number; yaw: number; startX: number; startZ: number; bash?: { x: number; z: number }; swing?: Swing } | null;
+  /** Who started a control-free knock (bomb, weapon hit) and until when; flights carry their own owner. */
+  push: { owner: CompanionId; until: number } | null;
   step: number;
 }
 
@@ -207,7 +211,7 @@ const whipCloudGates: NonNullable<Gates["cloud"]> = { cleared: [], solved: [], t
 /** Short-lived attack shapes for the scene (vines, jets, gusts, bursts, hits). */
 export interface Fx {
   id: number;
-  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo" | "steam";
+  kind: "whip" | "pull" | "jet" | "gust" | "burst" | "hit" | "ko" | "eat" | "breath" | "trap" | "blast" | "snare" | "cyclone" | "bomb" | "shrug" | "splashKo" | "steam" | "combo";
   x: number;
   y: number;
   z: number;
@@ -218,7 +222,21 @@ export interface Fx {
   size: number;
   t0: number;
   life: number;
+  /** A combo burst's friend colour. */
+  color?: string;
 }
+
+/** One held Fire Breath stream or one Inferno: the enemies it set on fire count toward Blaze. */
+export interface FireAction {
+  age: number;
+  tick: number;
+  id: number;
+  lit: number[];
+  blazed: boolean;
+}
+
+/** A combo the callout shows; the same key within a second counts up instead. */
+export interface ComboEvent { id: number; kind: ComboKind; key: string; t: number; n: number; x: number; y: number; z: number }
 
 export interface Stance {
   /** The friend in its combat position (null: everyone follows). */
@@ -244,7 +262,7 @@ function spawnEnemy(i: number, cloud = false): EnemyRt {
     ...(retired ? { retired } : {}),
     i, kind: s.kind, zone: s.zone, homeX: s.x, homeZ: s.z, x: s.x, z: s.z, lastGround: { x: s.x, z: s.z }, yaw: (i * 2.39) % (Math.PI * 2), kx: 0, kz: 0,
     hp: ENEMIES[s.replaces ?? s.kind].hp, state: retired ? "gone" : "dormant", spawnT: null, waiting: false, timer: 1 + (i % 5) * 0.4, wander: null, dx: 0, dz: 1, struck: false,
-    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, wade: null, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, step: 0
+    hitT: -10, alertT: -10, air: 0, burn: null, infernoBlueUntil: 0, panic: null, panicResistUntil: 0, wade: null, fireTicks: 0, lastFireT: -10, control: null, resistUntil: 0, slowUntil: 0, fall: null, plunge: null, flight: null, push: null, step: 0
   };
 }
 
@@ -261,14 +279,16 @@ export const cb = {
   nextActivation: {} as Partial<Record<CombatZone, number>>,
   shots: [] as Shot[],
   cyclone: null as Cyclone | null,
-  inferno: null as null | { age: number; tick: number },
-  breath: null as null | { age: number; tick: number },
+  inferno: null as null | FireAction,
+  breath: null as null | FireAction,
   whip: null as Whip | null,
   bombChain: null as BombChain | null,
   /** Partial environmental steps never enter the save. */
   elementObjects: {} as Record<string, ElementState>,
   drops: [] as Drop[],
   fx: [] as Fx[],
+  /** The last combos (newest last), for the callout and the test harness. */
+  combos: [] as ComboEvent[],
   stance: { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 } as Stance,
   /** rt.time when each move is ready again. */
   ready: { basic: 0, special: 0 },
@@ -319,6 +339,7 @@ export function resetCombat() {
   cb.shots = [];
   cb.drops = [];
   cb.fx = [];
+  cb.combos = [];
   cb.stance = { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 };
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
@@ -357,6 +378,7 @@ export function travelCombat() {
   cb.shots = [];
   cb.drops = [];
   cb.fx = [];
+  cb.combos = [];
   cb.stance = { friend: null, k: 0, fromX: 0, fromZ: 0, leaving: null, leaveK: 0 };
   cb.ready = { basic: 0, special: 0 };
   cb.move = null;
@@ -409,7 +431,7 @@ export function playerRadius(): number {
 
 /** Riding is a little quicker than walking. */
 export function speedScale(): number {
-  return (steed() ? 1.18 : 1) * (cb.inferno ? 0.5 : 1);
+  return (steed() ? 1.18 : 1) * (cb.inferno ? 0.5 : 1) * (1 + teamBonus(getGame().progress).speed);
 }
 
 /** Seats on each rider (in the friend's frame): back = behind its centre, up = above its root. */
@@ -788,7 +810,7 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
     pushFx("trap", o.x, o.y, o.z, ux, uz, yaw, 0.8);
     audio.play("bubble");
   } else if (move.shape === "breath") {
-    cb.breath = { age: 0, tick: move.cooldown };
+    cb.breath = { age: 0, tick: move.cooldown, id: nextId++, lit: [], blazed: false };
     fireTick(false, rt.time);
     audio.startFlame?.();
     learn("attack");
@@ -809,7 +831,7 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
       if (!alive(e)) continue;
       if (e.control?.kind === "trapped") pushBubble(e, ux, uz);
       else {
-        const knock = blastKnock(ENEMIES[e.kind].weightClass);
+        const knock = blastKnock(ENEMIES[e.kind].weightClass) * pushK();
         startControl(e, "flung", 0.6, f);
         if (e.control?.kind !== "snared") { e.kx = ux * knock; e.kz = uz * knock; }
       }
@@ -855,7 +877,7 @@ export function specialAttack(): boolean {
     }
     case "inferno":
       stopBreath();
-      cb.inferno = { age: 0, tick: 0.25 };
+      cb.inferno = { age: 0, tick: 0.25, id: nextId++, lit: [], blazed: false };
       infernoTick();
       audio.startFlame?.();
       audio.play("burst");
@@ -1112,14 +1134,15 @@ function extinguishInWater(e: EnemyRt) {
   if (alive(e) && (e.burn || e.panic)) extinguish(e);
 }
 
-function igniteEnemy(e: EnemyRt, now: number) {
-  if (enemyWater(e) !== "none") return;
+/** Sets (or refreshes) a burn; false when water prevents it. */
+function igniteEnemy(e: EnemyRt, now: number): boolean {
+  if (enemyWater(e) !== "none") return false;
   if (e.burn) {
     if (e.burn.until < now) e.burn.tick = now + 1 / 3;
     e.burn.until = now + 2.5;
   }
   else e.burn = ignite(null, now);
-  if (!canStartPanic(now, e.panicResistUntil, e.panic, alive(e), !!e.control)) return;
+  if (!canStartPanic(now, e.panicResistUntil, e.panic, alive(e), !!e.control)) return true;
   e.panic = startPanic(ENEMIES[e.kind].weightClass, now);
   e.state = "chase";
   e.timer = 0;
@@ -1127,10 +1150,12 @@ function igniteEnemy(e: EnemyRt, now: number) {
   e.kx = e.kz = 0;
   if (isRanged(e.kind)) for (const s of cb.shots) if (s.source === e.i && s.hostile) s.life = 0;
   audio.panic?.(rt.time);
+  return true;
 }
 
 function fireTick(inferno: boolean, now: number) {
   const move = inferno ? COMBAT.ember.special : COMBAT.ember.basic, p = rt.player;
+  const fire = inferno ? cb.inferno : cb.breath;
   if (!inferno) cb.ready.basic = now + move.cooldown;
   const range = move.range * (upgraded("ember") ? COMBAT.ember.upgrade.size : 1);
   const ux = Math.sin(p.yaw), uz = Math.cos(p.yaw);
@@ -1144,7 +1169,7 @@ function fireTick(inferno: boolean, now: number) {
     e.lastFireT = now;
     // Start panic before this tick's damage so ignition itself respects the floor.
     if (inferno && enemyWater(e) === "none" && (!e.burn || e.burn.until < now)) e.infernoBlueUntil = now + .6;
-    if (inferno || e.fireTicks >= 3) igniteEnemy(e, now);
+    if ((inferno || e.fireTicks >= 3) && igniteEnemy(e, now) && fire && upgraded("ember")) blazeNote(fire, e);
     fireHit(e, move.damage, ux, uz, !inferno, now);
   }
 }
@@ -1202,16 +1227,25 @@ function detonateBomb(s: Shot) {
     pushFx("bomb", e.x, standY(e.x, e.z, getGame().progress.solved) + e.air, e.z, 0, 0, 0, 2);
     popBubble(e);
   }
+  const struck: EnemyRt[] = [];
   for (const e of enemies) {
     if (Math.hypot(e.x - s.x, e.z - s.z) <= move.radius) {
       const dx = e.x - s.x, dz = e.z - s.z, d = Math.hypot(dx, dz);
       const ux = d > 1e-6 ? dx / d : s.vx / (Math.hypot(s.vx, s.vz) || 1);
       const uz = d > 1e-6 ? dz / d : s.vz / (Math.hypot(s.vx, s.vz) || 1);
       hit(e, move.damage, 0, 0, ux, uz, "bubbo");
-      if (alive(e) && e.control?.kind !== "snared") { e.kx += ux * move.knock; e.kz += uz * move.knock; }
+      struck.push(e);
+      if (alive(e) && e.control?.kind !== "snared") {
+        e.kx += ux * move.knock * pushK(); e.kz += uz * move.knock * pushK();
+        e.push = { owner: "bubbo", until: rt.time + 1 };
+      }
     }
-    if (chain.victims.includes(e.i)) hit(e, 8, 0, 0, 0, 0, "bubbo");
+    if (chain.victims.includes(e.i)) {
+      hit(e, 8, 0, 0, 0, 0, "bubbo");
+      if (!struck.includes(e)) struck.push(e);
+    }
   }
+  if (upgraded("bubbo") && struck.length >= COMBO_TUNING.splash.min) splashCombo(struck, s);
   audio.play("splash");
 }
 
@@ -1226,7 +1260,7 @@ function endCyclone() {
     const dx = e.x - c.x, dz = e.z - c.z, d = Math.hypot(dx, dz) || 1;
     // Continue the carry into a fling; resistance starts when that fling ends.
     e.control = { ...e.control, kind: "flung", t0: rt.time, until: rt.time + 0.6 };
-    const speed = 4 * 1.5 / (1 - Math.exp(-1.5 * 0.6));
+    const speed = 4 * 1.5 / (1 - Math.exp(-1.5 * 0.6)) * pushK();
     e.kx = dx / d * speed; e.kz = dz / d * speed;
   }
 }
@@ -1413,18 +1447,26 @@ function weaponCollisions(e: EnemyRt) {
     flight.victims = victims;
     const dx = o.x - e.x, dz = o.z - e.z, d = Math.hypot(dx, dz) || 1;
     hit(o, 10, 0, 0, dx / d, dz / d, flight.owner);
-    if (alive(o) && o.control?.kind !== "snared") { o.kx += dx / d * 5; o.kz += dz / d * 5; }
+    if (alive(o) && o.control?.kind !== "snared") {
+      o.kx += dx / d * 5 * pushK(); o.kz += dz / d * 5 * pushK();
+      o.push = { owner: flight.owner, until: rt.time + 1 };
+    }
     hit(e, 6, 0, 0, 0, 0, flight.owner);
+    if (flight.owner === "leafy" && upgraded("leafy")) bonk(o, e, `bonk:${e.control?.source ?? e.i}`);
     if (!alive(e)) break;
   }
 }
 
 function wallImpact(e: EnemyRt, speed: number) {
-  const owner = e.flight?.owner ?? "puff";
+  const pusher = e.flight?.owner ?? (e.push && e.push.until >= rt.time ? e.push.owner : null);
   const swinging = e.control?.kind === "grabbed";
+  const kx = e.kx, kz = e.kz;
   endControl(e);
   e.kx = e.kz = 0;
-  if (swinging || speed > 3) hit(e, 8, 0, swinging ? 0 : 0.6, 0, 0, owner);
+  e.push = null;
+  // Puff's Slam Combo: one per push, never Leafy's swing scraping a wall.
+  if (!swinging && pusher === "puff" && speed > COMBO_TUNING.slam.minSpeed && upgraded("puff")) slamCombo(e, kx, kz);
+  else if (swinging || speed > 3) hit(e, 8, 0, swinging ? 0 : 0.6, 0, 0, pusher ?? "puff");
 }
 
 /** The tether carries an enemy over banks and voids. Wherever a swing ends short of a
@@ -1516,7 +1558,7 @@ function updateSwing(e: EnemyRt, c: Control, flight: NonNullable<EnemyRt["flight
     }
     c.kind = "flung"; c.t0 += SWING_DURATION; c.until = c.t0 + .55;
     flight.yaw = p.yaw;
-    e.kx = Math.sin(p.yaw) * 11; e.kz = Math.cos(p.yaw) * 11;
+    e.kx = Math.sin(p.yaw) * 11 * pushK(); e.kz = Math.cos(p.yaw) * 11 * pushK();
     // Test the release point itself for hazards; water waits for the throw to land.
     displaceEnemy(e, e.x, e.z);
     if (alive(e) && e.control === c) updateSwingFling(e, c, Math.max(0, rt.time - c.t0));
@@ -1568,6 +1610,8 @@ function updateElements(e: EnemyRt, dt: number): boolean {
         endControl(e);
         hit(e, 14, 0, 1, Math.sin(flight.yaw), Math.cos(flight.yaw), flight.owner, true);
         pushFx("hit", bx, standY(bx, bz, getGame().progress.solved) + .6, bz, 0, 0, 0, 1.1);
+        // Double Grab is the Bonk Combo's lesson: the two bashed enemies are each struck.
+        if (upgraded("leafy")) bonk(e, null, `bash:${c.t0}`);
       }
     } else if (flight.swing) updateSwing(e, c, flight);
     return true;
@@ -1596,8 +1640,8 @@ function updateElements(e: EnemyRt, dt: number): boolean {
 
 const HEAVY_TUG_DAMAGE = 14;
 
-function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number) {
-  const life = kind === "steam" ? .85 : kind === "blast" ? .14 + size / 12 : kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : 0.6;
+function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, az: number, yaw: number, size: number): Fx {
+  const life = kind === "steam" ? .85 : kind === "blast" ? .14 + size / 12 : kind === "breath" || kind === "hit" ? 0.35 : kind === "ko" ? 0.9 : kind === "eat" ? 1 : kind === "combo" ? .55 : 0.6;
   if (kind === "steam") {
     let count = 0, oldest = -1;
     for (let i = 0; i < cb.fx.length; i++) if (cb.fx[i].kind === "steam") {
@@ -1606,13 +1650,95 @@ function pushFx(kind: Fx["kind"], x: number, y: number, z: number, ax: number, a
     }
     if (count >= 6) {
       const reused = cb.fx.splice(oldest, 1)[0];
-      Object.assign(reused, { id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
+      Object.assign(reused, { id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life, color: undefined });
       cb.fx.push(reused);
-      return;
+      return reused;
     }
   }
-  cb.fx.push({ id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life });
+  const fx: Fx = { id: nextId++, kind, x, y, z, ax, az, yaw, size, t0: rt.time, life };
+  cb.fx.push(fx);
   if (cb.fx.length > 24) cb.fx.shift();
+  return fx;
+}
+
+// ------------------------------------------------------------ combos (docs/PORT_TOWN_REVAMP.md §4.4)
+
+/** Knock-back speed after the Goggles' push bonus. */
+const pushK = () => 1 + teamBonus(getGame().progress).push;
+/** Combo bonus damage after the Crown's combo bonus (hit() then adds power). */
+const comboDamage = (n: number) => n * (1 + teamBonus(getGame().progress).combo);
+const groundAt = (x: number, z: number) => standY(x, z, getGame().progress.solved);
+
+function comboBurst(x: number, y: number, z: number, friend: CompanionId, size: number) {
+  pushFx("combo", x, y, z, 0, 0, 0, size).color = COMBOS[friend].color;
+}
+
+/** Log a combo for the callout (the same key within a second counts up) and play its sting. */
+function noteCombo(kind: ComboKind, key: string, x: number, y: number, z: number, n?: number) {
+  const last = cb.combos.find(c => c.key === key && rt.time - c.t < 1.2);
+  if (last) Object.assign(last, { n: n ?? last.n + 1, t: rt.time, x, y, z });
+  else {
+    cb.combos.push({ id: nextId++, kind, key, t: rt.time, n: n ?? 1, x, y, z });
+    if (cb.combos.length > 8) cb.combos.shift();
+  }
+  audio.play("combo");
+  if (kind !== "splash") audio.play(kind);
+}
+
+/** A combo's stun only ever lengthens the current one (hit() would overwrite it). */
+function comboStun(e: EnemyRt, seconds: number) {
+  if (!alive(e) || e.control) return;
+  if (e.state === "stun" || e.waiting) e.timer = Math.max(e.timer, seconds);
+  else { e.state = "stun"; e.timer = seconds; }
+}
+
+/** Leafy's Bonk: the struck enemy reels; the thrown one (if any) takes a little more. */
+function bonk(struck: EnemyRt, thrown: EnemyRt | null, key: string) {
+  const t = COMBO_TUNING.bonk, y = groundAt(struck.x, struck.z) + .8;
+  hit(struck, comboDamage(t.struck), 0, 0, 0, 0, "leafy", false, true);
+  comboStun(struck, t.stun);
+  if (thrown) hit(thrown, comboDamage(t.thrown), 0, 0, 0, 0, "leafy", false, true);
+  comboBurst(struck.x, y, struck.z, "leafy", 1.1);
+  noteCombo("bonk", key, struck.x, y + .5, struck.z);
+}
+
+/** Bubbo's Splash: every enemy one bomb hit takes a bonus and staggers. */
+function splashCombo(struck: EnemyRt[], s: Shot) {
+  const t = COMBO_TUNING.splash;
+  for (const e of struck) {
+    hit(e, comboDamage(t.each), 0, 0, 0, 0, "bubbo", false, true);
+    comboStun(e, t.stun);
+    comboBurst(e.x, groundAt(e.x, e.z) + .7, e.z, "bubbo", .8);
+  }
+  pushFx("bomb", s.x, s.y, s.z, 0, 0, 0, COMBAT.bubbo.special.radius * 1.4);
+  noteCombo("splash", `splash:${s.id}`, s.x, groundAt(s.x, s.z) + 1.6, s.z, struck.length);
+}
+
+/** Puff's Slam: a harder wall hit, a longer stun and a small bounce back off the wall. */
+function slamCombo(e: EnemyRt, kx: number, kz: number) {
+  const t = COMBO_TUNING.slam, y = groundAt(e.x, e.z) + .7;
+  hit(e, 8 + comboDamage(t.damage), 0, t.stun, 0, 0, "puff");
+  comboBurst(e.x, y, e.z, "puff", 1.25);
+  noteCombo("slam", `slam:${e.i}:${nextId}`, e.x, y + .6, e.z);
+  const d = Math.hypot(kx, kz);
+  if (alive(e) && d > 1e-6) { e.kx = -kx / d * t.bounce; e.kz = -kz / d * t.bounce; }
+}
+
+/** Ember's Blaze: from the second enemy one fire action sets alight, each one flares. */
+function blazeNote(fire: FireAction, e: EnemyRt) {
+  if (fire.lit.includes(e.i)) return;
+  fire.lit.push(e.i);
+  const t = COMBO_TUNING.blaze;
+  if (fire.lit.length < t.min) return;
+  const flaring = fire.blazed ? [e] : cb.enemies.filter(o => fire.lit.includes(o.i));
+  fire.blazed = true;
+  for (const o of flaring) {
+    if (!alive(o)) continue;
+    hit(o, comboDamage(t.flare), 0, 0, 0, 0, "ember", false, true);
+    if (o.burn) o.burn.until += t.extend;
+    comboBurst(o.x, groundAt(o.x, o.z) + .9, o.z, "ember", .9);
+  }
+  noteCombo("blaze", `blaze:${fire.id}`, e.x, groundAt(e.x, e.z) + 1.5, e.z, fire.lit.length);
 }
 
 function strikePylon(index: number, friend: CompanionId) {
@@ -1699,6 +1825,8 @@ function fireHit(e: EnemyRt, damage: number, ux: number, uz: number, basic: bool
 function hit(e: EnemyRt, damage: number, knock: number, stun: number, ux: number, uz: number, _by: CompanionId, basic = false, quiet = false) {
   if (!alive(e)) return;
   const def = ENEMIES[e.kind];
+  const power = teamBonus(getGame().progress).power;
+  if (power && damage > 0) damage *= 1 + power;
   e.hp -= crabDamage(e.kind, damage, basic, e.yaw, ux, uz);
   // Interrupting a ranged enemy also disperses its in-flight shot.
   if (!quiet && isRanged(e.kind)) {
@@ -2331,6 +2459,8 @@ function separate() {
 function hurtPlayer(n: number, ux: number, uz: number, knock = 5) {
   if (debugEnabled && useDebug.getState().invincible) return;
   if (rt.player.hop || rt.time < cb.safeUntil || cb.knockedOut) return;
+  const defense = teamBonus(getGame().progress).defense;
+  if (defense) n = Math.max(1, Math.round(n * (1 - defense)));
   cb.vitals = hurt(cb.vitals, n);
   cb.safeUntil = rt.time + 1.1;
   cb.hurtT = rt.time;
@@ -2454,7 +2584,7 @@ function updateDrops(dt: number) {
       d.y += (p.y + 0.8 - d.y) * Math.min(1, dt * 8);
       if (dist < 0.6) {
         if (collect(d)) {
-          if (d.kind === "coin") coins += d.value;
+          if (d.kind === "coin") coins += d.value + teamBonus(getGame().progress).coins;
           continue;
         }
         d.magnet = false;
@@ -2491,7 +2621,7 @@ function collect(d: Drop): boolean {
   if (d.kind === "amber") {
     updateProgress((p) => addItem(p, "amber", 1));
     audio.play("sparkle");
-    toast({ en: "+1 amber!", ja: "こはくを みつけた! おやつの ざいりょうだよ", icon: "amber", tone: "good" }, 2200);
+    toast({ en: "+1 amber!", ja: "こはくを みつけた! コンボを ならうのに つかうよ", icon: "amber", tone: "good" }, 2200);
     return true;
   }
   const food = d.food!;

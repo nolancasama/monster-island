@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { setGame, useGame } from "../game/store";
 import { stageStatus, cloudStageStatus, cb, eat, inHostileZone } from "../game/combat";
 import { pressAttack, releaseAttack, type AttackSlot } from "../input/attackInput";
-import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, RECIPES, type CompanionId } from "../game/data/combat";
+import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, type CompanionId } from "../game/data/combat";
 import { FOODS } from "../game/data/foods";
 import { RELIC_NAMES, favouriteFood } from "../game/logic/act2";
 import { MONSTERS } from "../game/data/monsters";
-import { practiseCommand, quickBuy } from "../game/flow/act2";
+import { quickBuy } from "../game/flow/act2";
+import { ClothesPanel } from "./ClothesPanel";
+import { ComboPanel } from "./ComboPanel";
+import { ComboCallouts } from "./ComboCallout";
 import { rt } from "../game/runtime";
 import type { FoodId } from "../game/types";
 import { Icon } from "./icons";
@@ -223,7 +226,9 @@ export function Act2Hud() {
       {mode === "explore" && <BeaconBar />}
       <Moves />
       <ShopPanel />
-      <TrainerPanel />
+      <ClothesPanel />
+      <ComboPanel />
+      <ComboCallouts />
     </>
   );
 }
@@ -317,55 +322,6 @@ function ShopPanel() {
         </div>
         <button className="secondary" onClick={() => setGame({ panel: null })} data-testid="shop-close">
           Thank you! Bye! <Ja>おわる</Ja>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Coach Rex's list: every friend's moves, the English words, MP costs and upgrades; practise a command aloud. */
-function TrainerPanel() {
-  const panel = useGame((s) => s.panel);
-  const progress = useGame((s) => s.progress);
-  if (panel !== "trainer") return null;
-  const friends = (["leafy", "bubbo", "puff", "ember"] as CompanionId[]).filter((id) => progress.monsters[id].friend);
-  return (
-    <div className="modal-back ui" data-testid="trainer">
-      <div className="modal panel trainer-panel">
-        <h2>
-          Monster Moves <Ja>モンスターの わざ</Ja>
-        </h2>
-        <div className="trainer-rows">
-          {friends.map((id) => {
-            const c = COMBAT[id];
-            const up = progress.act2.upgrades.includes(id);
-            return (
-              <div key={id} className="trainer-row" data-testid={`trainer-${id}`}>
-                <Portrait id={id} size={54} />
-                <div className="trainer-moves">
-                  <b>{MONSTERS[id].name}</b>
-                  <span>
-                    <kbd>J</kbd> {c.basic.word} — {c.basic.name.en} <Ja>{c.basic.name.ja}</Ja>
-                  </span>
-                  <Ja>{c.basic.hint.ja}</Ja>
-                  <span>
-                    <kbd>K</kbd> {c.special.word} — {c.special.name.en} ({c.special.cost} MP) <Ja>{c.special.name.ja}</Ja>
-                  </span>
-                  <Ja>{c.special.hint.ja}</Ja>
-                  <span className={up ? "learned" : "locked"}>
-                    {up ? "★ " : "☆ "}
-                    {c.upgrade.name.en} {up ? "(learned!)" : `— ${RECIPES[id].treat.en}`} <Ja>{up ? "おぼえた!" : `${RECIPES[id].treat.ja}で おぼえる`}</Ja>
-                  </span>
-                </div>
-                <button className="primary" onClick={() => void practiseCommand(id)} data-testid={`practise-${id}`}>
-                  Say "{c.special.word}" {progress.act2.trained.includes(id) ? "✓" : "+10"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <button className="secondary" onClick={() => setGame({ panel: null })} data-testid="trainer-close">
-          Thank you! <Ja>おわる</Ja>
         </button>
       </div>
     </div>

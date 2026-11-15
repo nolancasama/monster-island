@@ -122,7 +122,8 @@ export function installE2eHook(seed: number) {
           bubble: rt.bubbleRide.phase,
           panel: g.panel,
           banner: g.banner?.title ?? null,
-          hint: g.hint
+          hint: g.hint,
+          combos: cb.combos.map((c) => ({ kind: c.kind, n: c.n, t: c.t }))
         },
         act3: { scene: rt.act3Scene, world: rt.world, voyage: {...rt.voyage}, area: g.progress.act3.area, zone: cb.cloudZones.current, drawing: g.drawing, view: { ...cloudView }, mountedWorlds: cloudView.visible ? ["cloud"] : ["home"], squallLift: rt.squallLift, beacon: { ...cb.beacon, pylons: cb.beacon.pylons.map(p => ({...p})), gust: {...cb.beacon.gust}, rings: cb.beacon.rings.map(p => ({...p})) }, electricPanels: CLOUD_ELECTRIC_PANELS.map(p => ({...p, phase: electricPanelPhase(rt.time, p.phase), active: electricPanelActive(rt.time, p.phase)})) }
       };

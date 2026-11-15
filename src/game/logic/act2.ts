@@ -1,8 +1,10 @@
 import type { FoodId, ItemId, ObstacleId } from "../types";
 import type { Progress } from "./progress";
 import { BAG_MAX } from "../data/foods";
-import { COMPANION_IDS, FOOD_RESTORE, INN_PRICE, KO_HP, MAX_HP, MAX_MP, MP_REGEN, PRICES, RECIPES, type CompanionId } from "../data/combat";
+import { COMPANION_IDS, FOOD_RESTORE, INN_PRICE, KO_HP, MAX_HP, MAX_MP, MP_REGEN, PRICES, type CompanionId } from "../data/combat";
+import { COMBOS } from "../data/combos";
 import { CHESTS, ENEMY_SPAWNS, STAGES, type StageId, type ZoneId } from "../world/lowland";
+import { newWardrobe, type Wardrobe } from "./wardrobe";
 
 /**
  * Act 2, "The Hunt for Lumo": what is saved and the pure rules on it.
@@ -32,7 +34,11 @@ export interface Act2 {
   mp: Record<CompanionId, number>;
   coins: number;
   items: Partial<Record<ItemId, number>>;
-  /** Friends who have eaten their treat (and learned its upgrade). */
+  /**
+   * Friends who have learned their lesson from Coach Rex: the combo and the bigger
+   * move (COMBAT[f].upgrade). Before 2026-11-15 a treat taught the bigger move, so a
+   * friend who ate one already knows its combo.
+   */
   upgrades: CompanionId[];
   /** One-time treasure chests opened. */
   chests: string[];
@@ -46,8 +52,10 @@ export interface Act2 {
   bought: boolean;
   /** Heard where the raiders' ship went. */
   harbor: boolean;
-  /** Special commands practised with the trainer. */
+  /** Retired 2026-11-15 (the trainer no longer practises commands); kept so saves round-trip. */
   trained: CompanionId[];
+  /** Ms. Button's clothes: owned, worn, and whether she has been met. */
+  wardrobe: Wardrobe;
   /** The area the player was in when last saved. */
   zone: ZoneId | null;
   /** Unique treasures from the optional cave and summit chests (once each). */
@@ -66,7 +74,8 @@ export const fullMp = (): Record<CompanionId, number> => ({ leafy: MAX_MP, bubbo
 export function newAct2(): Act2 {
   return {
     forestLayout: 2, canopyLayout: 1, started: false, cleared: [], lumoTaken: false, descended: false, hp: MAX_HP, mp: fullMp(), coins: 0, items: {}, upgrades: [],
-    chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null, relics: []
+    chests: [], secrets: [], tutorial: [], checkpoint: "cliff", portFound: false, bought: false, harbor: false, trained: [], zone: null, relics: [],
+    wardrobe: newWardrobe()
   };
 }
 
@@ -194,7 +203,7 @@ export function afterKnockout(v: Vitals): Vitals {
   return { ...v, hp: Math.max(v.hp, KO_HP) };
 }
 
-// ------------------------------------------------------------ shop, kitchen, chests
+// ------------------------------------------------------------ shop, lessons, chests
 
 export type BuyResult = { ok: true; progress: Progress } | { ok: false; reason: "coins" | "bag" };
 
@@ -206,26 +215,21 @@ export function buy(p: Progress, food: FoodId, n: number): BuyResult {
   return { ok: true, progress: withAct2(next, { bought: true }) };
 }
 
-/** What is still missing for a friend's treat (empty = it can be made). */
-export function craftMissing(p: Progress, friend: CompanionId): Array<FoodId | ItemId> {
-  const r = RECIPES[friend];
-  const missing: Array<FoodId | ItemId> = r.foods.filter((f) => (p.bag[f] ?? 0) < 1);
-  if ((p.act2.items.amber ?? 0) < r.amber) missing.push("amber");
-  return missing;
+/** Has this friend learned its lesson (its combo and its bigger move)? */
+export function knowsCombo(p: Progress, friend: CompanionId): boolean {
+  return p.act2.upgrades.includes(friend);
 }
 
-/** Make and feed the treat: uses the foods and amber, teaches the upgrade (once per friend). */
-export function craft(p: Progress, friend: CompanionId): Progress {
-  if (p.act2.upgrades.includes(friend) || craftMissing(p, friend).length || !p.monsters[friend].friend) return p;
-  const r = RECIPES[friend];
-  const bag = { ...p.bag };
-  for (const f of r.foods) bag[f] = (bag[f] ?? 0) - 1;
-  const next = addItem({ ...p, bag }, "amber", -r.amber);
-  return withAct2(next, { upgrades: [...next.act2.upgrades, friend] });
-}
+export type LearnResult = { ok: true; progress: Progress } | { ok: false; reason: "known" | "friend" | "amber" };
 
-export function practise(p: Progress, friend: CompanionId): Progress {
-  return p.act2.trained.includes(friend) ? p : withAct2(p, { trained: [...p.act2.trained, friend] });
+/** Coach Rex's lesson: spends the combo's amber and teaches the combo (once per friend). */
+export function learnCombo(p: Progress, friend: CompanionId): LearnResult {
+  if (knowsCombo(p, friend)) return { ok: false, reason: "known" };
+  if (!p.monsters[friend].friend) return { ok: false, reason: "friend" };
+  const cost = COMBOS[friend].amber;
+  if ((p.act2.items.amber ?? 0) < cost) return { ok: false, reason: "amber" };
+  const next = addItem(p, "amber", -cost);
+  return { ok: true, progress: withAct2(next, { upgrades: [...next.act2.upgrades, friend] }) };
 }
 
 /** Food that will become coins when this unopened chest is collected. */
@@ -300,7 +304,8 @@ export type Act2Objective =
   | { id: "openChest" }
   | { id: "reachPort" }
   | { id: "market" }
-  | { id: "kitchen" }
+  /** Learn a first combo from Coach Rex (before 2026-11-15: make a treat in the kitchen). */
+  | { id: "trainer" }
   | { id: "harbor" }
   | { id: "act2Done" };
 
@@ -316,7 +321,7 @@ export function act2Objective(p: Progress): Act2Objective {
   }
   if (a.harbor) return { id: "act2Done" };
   if (!a.bought) return { id: "market" };
-  if (!a.upgrades.length) return { id: "kitchen" };
+  if (!a.upgrades.length) return { id: "trainer" };
   return { id: "harbor" };
 }
 

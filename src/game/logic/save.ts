@@ -6,6 +6,7 @@ import { PHRASES, type PhraseId } from "./english";
 import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
 import { ACT2_OBSTACLES, RELIC_IDS, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
+import { readWardrobe } from "./wardrobe";
 import { COMPANION_IDS, KO_HP, MAX_HP, MAX_MP, type CompanionId } from "../data/combat";
 import { CLIFF_FOOT_Z, CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, CHESTS, ZONES, STAGES, STAGE_EXITS, POND, GROVE_CROSSING, lowlandWalkable, zoneAt, type ZoneId } from "../world/lowland";
 import { ALL_SECRET_IDS } from "../world/elementObjects";
@@ -107,6 +108,8 @@ function readAct2(raw: unknown, p: Progress): Act2 {
   a.portFound = a.descended && raw.portFound === true;
   a.bought = a.portFound && raw.bought === true;
   a.harbor = a.portFound && raw.harbor === true;
+  // Clothes can only come from the town's shop.
+  if (a.portFound) a.wardrobe = readWardrobe(raw.wardrobe, p);
   const checkpoints: Checkpoint[] = ["cliff", "port"];
   const cp = raw.checkpoint as Checkpoint;
   a.checkpoint = checkpoints.includes(cp) && (cp !== "port" || a.portFound) ? cp : "cliff";

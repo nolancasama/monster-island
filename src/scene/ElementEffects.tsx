@@ -659,6 +659,15 @@ export function ElementEffects() {
           if (age < .22) draw.ring(f.x, f.y, f.z, .4 + age * 3, "#ffffff", 1 - age / .22, true);
         } else if (f.kind === "hit" || f.kind === "ko" || f.kind === "eat") {
           draw.sprite(f.x, f.y + k * .3, f.z, 1.2 * (1 - k * .5), 1.2 * (1 - k * .5), "#fff6c0", 1 - k);
+        } else if (f.kind === "combo") {
+          // A combo burst: a ring snapping open, a white flash and six stars in the friend's colour.
+          const tint = f.color ?? "#ffffff";
+          draw.ring(f.x, f.y, f.z, (.3 + 1.1 * Math.min(1, k * 2.4)) * f.size, tint, (1 - k) * .9, true);
+          if (k < .4) draw.sprite(f.x, f.y, f.z, 1.5 * f.size * (1 - k), 1.5 * f.size * (1 - k), "#ffffff", (1 - k / .4) * .85);
+          for (let i = 0; i < 6; i++) {
+            const a = i * TAU / 6 + f.id * .7, r = (.35 + k * 1.25) * f.size, w = .32 * f.size * (1 - k * .5);
+            draw.sprite(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r * .75 + k * .25, f.z, w, w, tint, 1 - k);
+          }
         }
       }
       for (const f of steams) {

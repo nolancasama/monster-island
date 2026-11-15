@@ -1038,7 +1038,7 @@ export function townGeometry(): THREE.BufferGeometry {
   for (const s of Object.values(SERVICES)) {
     const colors: Record<string, [string, string]> = {
       market: ["#fbe3b5", "#e8553f"],
-      kitchen: ["#fff1f4", "#ff8fb0"],
+      clothes: ["#fff1f4", "#ff8fb0"],
       trainer: ["#dfe9f7", "#3f7fd0"],
       inn: ["#f2e6ff", "#8f6ad0"],
       harbor: ["#e6eef2", "#26467a"],
@@ -1065,7 +1065,7 @@ export function townGeometry(): THREE.BufferGeometry {
     b.sphere(0.25, m.x + 3.4, gy(m.x, m.z) + 1.1, m.z + dz, c, [1.2, 0.6, 1.2], 7);
   }
   // Kitchen chimney; trainer's practice dummy; inn sign post; harbour flag pole.
-  const kh = SERVICES.kitchen.house;
+  const kh = SERVICES.clothes.house;
   b.box(0.7, 2, 0.7, kh.x + 1.5, gy(kh.x, kh.z) + 3.4, kh.z - 1, "#c9a08a");
   const tr = SERVICES.trainer.house;
   b.cyl(0.08, 0.08, 1.6, tr.x + 5.2, gy(tr.x, tr.z) - 0.1, tr.z + 2.6, "#6e4a2c", 6);
@@ -1116,7 +1116,7 @@ export function townGeometry(): THREE.BufferGeometry {
 export function townSigns(): { geo: THREE.BufferGeometry; tex: THREE.CanvasTexture } {
   const labels: Array<[keyof typeof SERVICES, string, string]> = [
     ["market", "FOOD MARKET", "#e8553f"],
-    ["kitchen", "TREAT KITCHEN", "#ff6f9e"],
+    ["clothes", "CLOTHES SHOP", "#ff6f9e"],
     ["trainer", "MONSTER TRAINER", "#3f7fd0"],
     ["inn", "SEASIDE INN", "#8f6ad0"],
     ["harbor", "HARBOR OFFICE", "#26467a"],
@@ -1180,9 +1180,15 @@ export function npcGeometry(n: NpcDef): THREE.BufferGeometry {
   }
   const extra = new PartBuilder(0);
   if (n.apron) extra.boxAt(0.36, 0.42, 0.04, [0, 0.7, 0.17], [0.05, 0, 0], n.apron);
-  if (n.hat === "chef") {
-    extra.cyl(0.19, 0.2, 0.22, 0, 1.44, 0, "#ffffff", 10);
-    extra.sphere(0.24, 0, 1.72, 0, "#ffffff", [1, 0.7, 1], 10);
+  if (n.hat === "tophat") {
+    // Ms. Button: a tall top hat with a big bow, and a measuring tape round her neck.
+    // About the old chef hat's triangles: keepers are drawn in the far forest views too.
+    extra.cyl(0.3, 0.3, 0.035, 0, 1.41, 0, n.hatColor, 10);
+    extra.cyl(0.2, 0.185, 0.46, 0, 1.43, 0, n.hatColor, 8);
+    extra.cyl(0.193, 0.19, 0.08, 0, 1.47, 0, "#ff7eb6", 8);
+    for (const s of [-1, 1]) extra.boxAt(0.13, 0.11, 0.05, [0.1 + s * 0.08, 1.51, 0.17], [0, 0, s * 0.35], "#ff4f8b");
+    extra.boxAt(0.06, 0.06, 0.06, [0.1, 1.51, 0.19], [0, 0, 0.78], "#d93a72");
+    for (const s of [-1, 1]) extra.boxAt(0.04, 0.34, 0.014, [s * 0.09, 1.02, 0.15], [0.12, 0, s * 0.1], "#ffd23f");
   } else if (n.hat === "captain") {
     extra.cyl(0.25, 0.23, 0.12, 0, 1.45, 0, "#ffffff", 12);
     extra.cyl(0.25, 0.25, 0.04, 0, 1.44, 0.02, "#26467a", 12);

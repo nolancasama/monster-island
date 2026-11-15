@@ -64,7 +64,13 @@ export type SfxName =
   | "rumble"
   | "cage"
   | "crackle"
-  | "sizzle";
+  | "sizzle"
+  // Port Town revamp: a combo lesson, and each combo's hit.
+  | "comboLearn"
+  | "combo"
+  | "bonk"
+  | "slam"
+  | "blaze";
 
 /** Monster moods for vocalisations (the English itself is TTS). */
 export type Mood = "hello" | "happy" | "sad" | "excited" | "sleepy" | "surprised";
@@ -472,6 +478,27 @@ class AudioEngine {
       case "cage":
         [96, 91, 98, 93].forEach((m, i) => this.tone(midi(m), t + i * 0.06, { peak: 0.04, attack: 0.01, decay: 0.5 }));
         this.noiseBurst(t, { filter: "highpass", freq: 4000, peak: 0.05, decay: 0.6 });
+        break;
+      case "comboLearn":
+        // A short fanfare: a rising arpeggio landing on a held chord.
+        [60, 64, 67, 72, 76].forEach((m, i) => this.tone(midi(m), t + i * 0.07, { peak: 0.06, attack: 0.01, decay: 0.25, type: "triangle" }));
+        [72, 76, 79, 84].forEach((m) => this.tone(midi(m), t + 0.38, { peak: 0.045, attack: 0.02, decay: 0.9, type: "triangle" }));
+        break;
+      case "combo":
+        // The shared combo sting: three bright quick notes.
+        [79, 84, 91].forEach((m, i) => this.tone(midi(m), t + i * 0.055, { peak: 0.05, attack: 0.005, decay: i === 2 ? 0.28 : 0.09, type: "square" }));
+        break;
+      case "bonk":
+        this.tone(560, t, { to: 170, peak: 0.12, attack: 0.003, decay: 0.16, type: "sine" });
+        this.noiseBurst(t, { filter: "lowpass", freq: 900, to: 300, q: 1, peak: 0.12, decay: 0.08 });
+        break;
+      case "slam":
+        this.noiseBurst(t, { filter: "lowpass", freq: 420, to: 90, q: 1.4, peak: 0.32, attack: 0.003, decay: 0.3 });
+        this.tone(110, t, { to: 46, peak: 0.16, attack: 0.003, decay: 0.28, type: "sawtooth" });
+        break;
+      case "blaze":
+        this.noiseBurst(t, { filter: "bandpass", freq: 700, to: 2600, q: 0.8, peak: 0.16, attack: 0.02, decay: 0.42 });
+        this.tone(220, t, { to: 520, peak: 0.05, attack: 0.02, decay: 0.3, type: "sawtooth" });
         break;
     }
   }

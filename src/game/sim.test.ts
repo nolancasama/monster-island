@@ -161,7 +161,7 @@ for (const interruption of ["journal", "settings", "panel", "line", "mode", "scr
     pressAttack("basic", "key");
     if (interruption === "journal") setGame({ journalOpen: true });
     if (interruption === "settings") setGame({ settingsOpen: true });
-    if (interruption === "panel") setGame({ panel: "trainer" });
+    if (interruption === "panel") setGame({ panel: "combos" });
     if (interruption === "line") setGame({ line: { id: 1, by: "maple", en: "Hello" } });
     if (interruption === "mode") setGame({ mode: "busy" });
     if (interruption === "screen") setGame({ screen: "title" });

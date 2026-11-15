@@ -6,7 +6,7 @@ export type EnemyKind = LowlandEnemyKind | CloudEnemyKind;
 
 /**
  * Act 2 combat as data: each companion's two moves, the enemies, food
- * recovery, shop prices and the treat recipes. Rules that use these live in
+ * recovery and shop prices. Rules that use these live in
  * logic/act2.ts (pure) and combat.ts (the per-frame simulation).
  */
 
@@ -46,7 +46,7 @@ export interface CompanionCombat {
   stance: Stance;
   basic: MoveDef;
   special: MoveDef;
-  /** The upgrade a treat teaches, and what it changes. */
+  /** The bigger move Coach Rex's lesson teaches with the combo (once a treat's upgrade). */
   upgrade: { name: Text; damage: number; size: number; twin?: boolean };
 }
 
@@ -139,17 +139,3 @@ export const FOOD_RESTORE: Record<FoodId, { hp: number; mp: number; friend: Comp
 export const PRICES: Record<FoodId, number> = { apples: 5, bananas: 4, fish: 8, berries: 6, meat: 10 };
 /** The Seaside Inn's price, paid only after accepting a room. */
 export const INN_PRICE = 10;
-
-export interface Recipe {
-  friend: CompanionId;
-  treat: Text;
-  foods: [FoodId, FoodId];
-  amber: number;
-}
-/** One treat per friend: two foods and one amber. Eating it teaches the friend's upgrade. */
-export const RECIPES: Record<CompanionId, Recipe> = {
-  leafy: { friend: "leafy", treat: { en: "Leaf Cake", ja: "はっぱケーキ" }, foods: ["apples", "berries"], amber: 1 },
-  bubbo: { friend: "bubbo", treat: { en: "Bubble Pie", ja: "あわパイ" }, foods: ["fish", "bananas"], amber: 1 },
-  puff: { friend: "puff", treat: { en: "Cloud Candy", ja: "くもキャンディ" }, foods: ["berries", "bananas"], amber: 1 },
-  ember: { friend: "ember", treat: { en: "Fire Stew", ja: "ほのおシチュー" }, foods: ["meat", "apples"], amber: 1 }
-};

@@ -138,8 +138,8 @@ export interface GameState {
   seconds: number;
   /** A big centred story banner ("NEW QUEST: Rescue Lumo!"); play goes on underneath. */
   banner: { title: string; sub?: string; ja?: string; tone: "quest" | "clear" | "place" } | null;
-  /** An open town panel (quick shop, the trainer's list). */
-  panel: "shop" | "trainer" | null;
+  /** An open town panel (quick food shop, Ms. Button's clothes, Coach Rex's combos). */
+  panel: "shop" | "clothes" | "combos" | null;
   drawing: boolean;
 }
 

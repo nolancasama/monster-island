@@ -2688,3 +2688,23 @@ Causeway door, Causeway 14 → 8 enemies, enemies vanish only past the door. Acc
   (thrown/bubbled enemies trigger on landing). Five white puffs from the top of the body plus a surface ring,
   ~0.85 s, max 6 at once (oldest reused). "TSSSS" is a synthesized two-layer high-band noise burst (~0.7 s).
   No burn can start while an enemy stands in water; direct fire damage still applies.
+
+## 2026-11-15: Port Town revamp (user plan "Port Town area and its town systems")
+
+Frozen spec `docs/PORT_TOWN_REVAMP.md`; §0 lists every change from the brief and why. Implemented by
+Claude directly at the user's request (no router).
+- The Treat Kitchen becomes Ms. Button's Clothes Shop. Its treat upgrades move to Coach Rex: each friend's
+  lesson teaches a combo **and** the old bigger move, stored in the existing `act2.upgrades` (a friend who
+  ate a treat already knows its combo; no migration). Rejected: keeping upgrades only for old saves
+  (unobtainable hidden powers) and dropping them (a silent nerf).
+- A lesson costs 1 amber (amber's only use was the kitchen; the forest chest's amber is guaranteed before
+  the town). Clothes cost coins only. Rejected: amber-priced clothes (could strand the required first lesson).
+- Combos are bonuses on existing events (enemy-as-weapon hits, Double Grab bash, wall impacts, bomb
+  detonation, ignition), so base combat is unchanged until learned. Push ownership is now recorded, because
+  bomb knock into a wall was credited to Puff. Ember: 2+ enemies set on fire by one fire action (the plan's
+  suggested version). Rejected: spread-on-contact (less controllable, hidden cause).
+- Wearables: head and face slots chosen by the item; each item owned once, one wearer at a time; bonuses
+  team-wide while worn, each stat on exactly one item. Rejected: +max HP (MAX_HP is a shared constant),
+  Tiny Cape (needs a back anchor through ride stances; deferred), duplicates.
+- Town: wooden palisade on the unchanged wall footprint, collision and fade; buildings restyled on the
+  unchanged footprints; no new draw calls.

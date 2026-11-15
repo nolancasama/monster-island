@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { askAtObstacle, newProgress, objective, OBSTACLES, solve, type Progress } from "./progress";
 import {
-  clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, craft, craftMissing, eatEffect, eatHelps, findPort, hearLead,
-  hurt, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, practise, prologueComplete, regenMp, rested, spendMp, stayAtInn, startAct2, addFood, chestFoodOverflow, afterKnockout
+  clearStage, remainingEnemies, RESPAWN_AWAY, act2Objective, addCoins, addItem, bagMax, bestFood, buy, changeZone, eatEffect, eatHelps, findPort, hearLead,
+  hurt, knowsCombo, learnCombo, markDescended, markTutorial, newZoneMemory, noteDefeat, openChest, prologueComplete, regenMp, rested, spendMp, stayAtInn, startAct2, addFood, chestFoodOverflow, afterKnockout
 } from "./act2";
 import { decodeSave, encodeSave } from "./save";
 import { PHRASES, heardQuantity } from "./english";
@@ -49,8 +49,11 @@ describe("Act 2 story", () => {
     const bought = buy(addCoins(p, 50), "apples", 1);
     expect(bought.ok).toBe(true);
     if (bought.ok) p = bought.progress;
-    expect(objective(p)).toEqual({ id: "kitchen" });
-    p = craft(addFood2(p, "berries"), "leafy");
+    expect(objective(p)).toEqual({ id: "trainer" });
+    // The forest chest's amber always pays for the first lesson.
+    const lesson = learnCombo(p, "leafy");
+    expect(lesson.ok).toBe(true);
+    if (lesson.ok) p = lesson.progress;
     expect(objective(p)).toEqual({ id: "harbor" });
     p = hearLead(p);
     expect(objective(p)).toEqual({ id: "act2Done" });
@@ -66,10 +69,6 @@ describe("Act 2 story", () => {
     expect(act2Objective(p)).toEqual({ id: "act2Done" });
   });
 });
-
-function addFood2(p: Progress, f: FoodId): Progress {
-  return { ...p, bag: { ...p.bag, [f]: (p.bag[f] ?? 0) + 1 } };
-}
 
 describe("HP and MP", () => {
   it("quick-eat chooses only the active friend's favourite when HP or that friend's MP needs it", () => {
@@ -139,7 +138,7 @@ describe("HP and MP", () => {
   });
 });
 
-describe("coins, the market, the kitchen, chests and the trainer", () => {
+describe("coins, the market, combo lessons, chests and the trainer", () => {
   const p0 = markDescended(startAct2(done()));
 
   it("preserves all chest coins and overflow across saves at the old currency ceiling", () => {
@@ -178,16 +177,28 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
     expect(buy({ ...p0, bag: { fish: 99 } }, "fish", 1)).toEqual({ ok: false, reason: "bag" });
   });
 
-  it("a treat needs its two foods and one amber; eating it teaches the upgrade once", () => {
-    const p = addFood2(addFood2(p0, "apples"), "berries");
-    expect(craftMissing(p, "leafy")).toEqual(["amber"]);
-    expect(craft(p, "leafy")).toBe(p);
-    const ready = addItem(p, "amber");
-    const made = craft(ready, "leafy");
-    expect(made.act2.upgrades).toEqual(["leafy"]);
-    expect(made.bag).toMatchObject({ apples: 0, berries: 0 });
-    expect(made.act2.items.amber).toBe(0);
-    expect(craft(addItem(addFood2(addFood2(made, "apples"), "berries"), "amber"), "leafy")).toEqual(addItem(addFood2(addFood2(made, "apples"), "berries"), "amber"));
+  it("a combo lesson costs one amber, is learned once, and only by a friend", () => {
+    expect(learnCombo(p0, "leafy")).toEqual({ ok: false, reason: "amber" });
+    const p = addItem(p0, "amber", 2);
+    const res = learnCombo(p, "leafy");
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.progress.act2.upgrades).toEqual(["leafy"]);
+    expect(res.progress.act2.items.amber).toBe(1);
+    expect(res.progress.bag).toEqual(p.bag);
+    expect(knowsCombo(res.progress, "leafy")).toBe(true);
+    expect(knowsCombo(res.progress, "puff")).toBe(false);
+    expect(learnCombo(res.progress, "leafy")).toEqual({ ok: false, reason: "known" });
+    const stranger = { ...p, monsters: { ...p.monsters, ember: { ...p.monsters.ember, friend: false } } };
+    expect(learnCombo(stranger, "ember")).toEqual({ ok: false, reason: "friend" });
+  });
+
+  it("a friend who ate a treat in an old save already knows its combo", () => {
+    const old = findPort({ ...p0, act2: { ...p0.act2, upgrades: ["bubbo" as const] } });
+    const loaded = decodeSave(encodeSave(old, { x: 77, z: -303, yaw: 0 }, 20))!;
+    expect(knowsCombo(loaded.progress, "bubbo")).toBe(true);
+    expect(learnCombo(addItem(loaded.progress, "amber"), "bubbo")).toEqual({ ok: false, reason: "known" });
+    expect(objective(loaded.progress)).not.toEqual({ id: "trainer" });
   });
 
   it("a chest opens once and gives its first amber; nothing opens before Act 2", () => {
@@ -196,7 +207,6 @@ describe("coins, the market, the kitchen, chests and the trainer", () => {
     expect(p.act2).toMatchObject({ coins: 15, items: { amber: 1 }, chests: ["forestChest"] });
     expect(p.bag.apples).toBe(2);
     expect(openChest(p, "forestChest")).toBe(p);
-    expect(practise(practise(p, "puff"), "puff").act2.trained).toEqual(["puff"]);
   });
 
   it("every food uses the same cap for additions and purchases in both chapters", () => {
@@ -373,10 +383,8 @@ describe("Act 2 English", () => {
     expect(judge("tree", ["oneP", "twoP", "threeP"])).toMatchObject({ kind: "match", id: "threeP" });
   });
 
-  it("the harbour question, the kitchen's mixes and the trainer's commands", () => {
+  it("the harbour question and the friends' commands", () => {
     expect(judge("where is the ship", ["whereShip"])).toMatchObject({ kind: "match", id: "whereShip" });
-    expect(judge("mix the apples and berries", ["mixLeafy", "mixBubbo", "mixPuff", "mixEmber"])).toMatchObject({ kind: "match", id: "mixLeafy" });
-    expect(judge("berries and bananas", ["mixLeafy", "mixBubbo", "mixPuff", "mixEmber"])).toMatchObject({ kind: "match", id: "mixPuff" });
     for (const [said, id] of [["pull", "cmdPull"], ["push", "cmdPush"], ["blow", "cmdBlow"], ["burn", "cmdBurn"]] as const) {
       expect(judge(said, [id])).toMatchObject({ kind: "match", id });
     }

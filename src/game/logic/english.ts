@@ -46,7 +46,7 @@ export type PhraseId =
   | "itsBig"
   | "hasWings"
   | "hasTail"
-  // Act 2: shopping, the harbour, the kitchen and the trainer's commands.
+  // Act 2: shopping, the harbour and the friends' commands.
   | "wantApples"
   | "wantBananas"
   | "wantFish"
@@ -56,10 +56,6 @@ export type PhraseId =
   | "twoP"
   | "threeP"
   | "whereShip"
-  | "mixLeafy"
-  | "mixBubbo"
-  | "mixPuff"
-  | "mixEmber"
   | "cmdPull"
   | "cmdPush"
   | "cmdBlow"
@@ -232,10 +228,6 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   threeP: { id: "threeP", en: "Three, please.", keys: [NUMBER_WORDS[3]], forbid: [...NUMBER_WORDS[2]] },
   whereShip: { id: "whereShip", en: "Where is the ship?", keys: [WHERE, SHIP], distractors: ["thankYou", "letsGo"] },
   // Two foods name the recipe; "Mix the" is not judged.
-  mixLeafy: { id: "mixLeafy", en: "Mix the apples and berries.", keys: [FOOD_WORDS.apples, FOOD_WORDS.berries] },
-  mixBubbo: { id: "mixBubbo", en: "Mix the fish and bananas.", keys: [FOOD_WORDS.fish, FOOD_WORDS.bananas] },
-  mixPuff: { id: "mixPuff", en: "Mix the berries and bananas.", keys: [FOOD_WORDS.berries, FOOD_WORDS.bananas] },
-  mixEmber: { id: "mixEmber", en: "Mix the meat and apples.", keys: [FOOD_WORDS.meat, FOOD_WORDS.apples] },
   cmdPull: { id: "cmdPull", en: "Pull!", keys: [COMMAND_WORDS.pull], distractors: ["cmdPush", "cmdBlow"] },
   cmdPush: { id: "cmdPush", en: "Push!", keys: [COMMAND_WORDS.push], distractors: ["cmdPull", "cmdBurn"] },
   cmdBlow: { id: "cmdBlow", en: "Blow!", keys: [COMMAND_WORDS.blow], distractors: ["cmdBurn", "cmdPull"] },

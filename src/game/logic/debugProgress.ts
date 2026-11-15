@@ -39,7 +39,7 @@ export const DEBUG_DESTINATIONS: DebugDestination[] = [
   { id: "upperRopeTop", label: "Upper Canopy (treetops)", target: "upperRopeTop", step: 9, zone: "upperCanopy", layer: "high", act: "Act 2", world: "home" },
   { id: "summit", label: "Mountain summit", target: "summit", step: 9, zone: "summit", layer: "high", act: "Act 2", world: "home" },
   ...ZONE_ORDER.map(zone => ({ id: `zone:${zone}`, label: ZONES[zone].name.en, target: `zone:${zone}`, step: 9, zone, act: "Act 2" as const, world: "home" as const })),
-  ...["market", "kitchen", "trainer", "inn", "harbor"].map(target => ({ id: target, label: `Port Town ${target === "harbor" ? "harbour" : target}`, target, step: 9, zone: "port" as const, act: "Act 2" as const, world: "home" as const })),
+  ...["market", "clothes", "trainer", "inn", "harbor"].map(target => ({ id: target, label: `Port Town ${target === "harbor" ? "harbour" : target === "clothes" ? "clothes shop" : target}`, target, step: 9, zone: "port" as const, act: "Act 2" as const, world: "home" as const })),
   { id: "voyage", label: "Voyage / Port dock", target: "harbor", step: 10, zone: "port", act: "Act 3", world: "home" },
   ...CLOUD_AREAS.map(area => ({ id: `cloud:${area}`, label: CLOUD_ZONES[area].name.en, target: `cloud:${area}`, step: 10, area, act: "Act 3" as const, world: "cloud" as const })),
 ];

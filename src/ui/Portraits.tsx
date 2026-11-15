@@ -200,7 +200,16 @@ export function NpcPortrait({ id, size = 64 }: { id: NpcId; size?: number }) {
       {n.apron && <path d="M36 82 h28 v18 h-28z" fill={n.apron} />}
       <circle cx="50" cy="55" r="25" fill={n.skin} />
       <path d="M25 52 Q27 28 50 28 Q73 28 75 52 Q68 40 50 40 Q32 40 25 52z" fill={n.hair} />
-      {n.hat === "chef" && <path d="M30 34 Q24 12 40 14 Q50 2 60 14 Q76 12 70 34z" fill={n.hatColor} stroke="#e6e0d8" strokeWidth="1.5" />}
+      {n.hat === "tophat" && (
+        <>
+          <rect x="35" y="4" width="30" height="30" rx="3" fill={n.hatColor} />
+          <rect x="35" y="24" width="30" height="6" fill="#ff7eb6" />
+          <rect x="23" y="31" width="54" height="6" rx="3" fill={n.hatColor} />
+          <path d="M60 27 l11 -6 v12z M60 27 l-9 -5 v10z" fill="#ff4f8b" />
+          <circle cx="60" cy="27" r="2.6" fill="#d93a72" />
+        </>
+      )}
+      {id === "tailor" && <path d="M33 74 Q50 86 67 74 l-2 4 Q50 90 35 78z" fill="#ffd23f" />}
       {n.hat === "captain" && (
         <>
           <path d="M26 34 Q50 16 74 34z" fill={n.hatColor} />
