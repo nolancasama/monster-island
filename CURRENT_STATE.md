@@ -1,6 +1,6 @@
 # Current State
 
-## Development work (checked out, not merged, not deployed): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
+## Pirate voyage (merged and deployed 2026-11-16 as a debug-menu preview): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
 The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) was implemented by Claude
 directly, without the router, at the user's request. The frozen spec is `docs/PIRATE_VOYAGE.md`. The
 decisions are in `DESIGN_DECISIONS.md`: "Pirate Voyage Adventure" and "Pirate Voyage (as built,
@@ -96,6 +96,12 @@ brief) is in place, and the decisions are in `DESIGN_DECISIONS.md` (two 2026-11-
   e2e suite has not been run on this branch.
 
 ## Live
+**2026-11-16:** `main` was fast-forwarded to `401ee51` (`feature/pirate-voyage`) and deployed at the user's
+request (Pages run 43769527914, success; live bundle `index-DcXhxUWP.js`). The pirate voyage is live only as
+the debug-menu preview (`?debug=1` → "Pirate voyage (preview)"); students still get the original crossing
+and a locked Cloud Isle. Before deploy: tsc, 1055 unit tests, `act3.spec.ts` and `pirate-voyage.spec.ts`
+(7/7). The full e2e suite was not run.
+
 **2026-11-15:** `main` was fast-forwarded to `ca32455` and deployed at the user's request (Pages run
 43669888674, success; live bundle `index-B-6O9Hk7.js`). This deploy carries the **Port Town revamp**
 (palisade, town art, clothes shop, combo trainer, combos, wearables). It also carries the dormant voyage
