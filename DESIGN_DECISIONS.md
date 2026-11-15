@@ -2731,3 +2731,21 @@ Claude directly at the user's request (no router).
 - The clothes panel fits all 13 items without scrolling at 1366×768 and 1280×800. "Only for you/friends" is a
   corner badge and the close button sits in the header.
 - Ms. Button's hat costs about as many triangles as the old chef hat, because keepers are drawn in far views.
+
+## 2026-11-15: Pirate Voyage Adventure (user plan of the same name)
+
+Frozen spec `docs/PIRATE_VOYAGE.md`; §0 lists every change from the brief and why. It is implemented by
+Claude directly on `feature/pirate-voyage`, cut from `feature/port-town-revamp` for the wardrobe.
+- The pirate ship is a static, walkable, cutaway deck region in the home world's open sea, about 150 m south
+  of Port Town. Motion comes from the water, the wake, the clouds and camera sway or roll.
+  Rejected: a new world type, a rocking collision deck, enclosed interiors.
+- On the ship, J is the active friend's job tool, through voyage-only effects; combat never runs there.
+- Prepositions are carry and choose: the table and the shelf ask ON or UNDER, the box takes IN and the door
+  takes BY. The game checks the real state. Rejected: free physics drops (ON and UNDER are ambiguous from
+  above).
+- Steering uses spoken or tapped commands over three lanes; a wrong command is a gentle bump, never a
+  failure.
+- The interrogation is built from the real bag, offers both answers, corrects gently, and takes one food.
+- Gull is captured too, leaves in a lifeboat, and arrives at Cloud Isle's dock afterwards, so Cloud Isle's
+  gameplay is unchanged. The keepsake is a new, never-sold Captain Hat in the existing wardrobe.
+- The release lock stays: the voyage is reachable only when `cloudIsleOpen()`.
