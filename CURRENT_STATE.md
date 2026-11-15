@@ -1,5 +1,66 @@
 # Current State
 
+## In progress (checked out): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
+The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) is being implemented by Claude
+directly, without the router. The frozen spec is `docs/PIRATE_VOYAGE.md` (§0 verdict, §1 stages and
+English, §2 ship layout, §3 jobs, §4 storm, §5 raft, §6 save, §7 phrases, §10 order). The decision is in
+`DESIGN_DECISIONS.md` (2026-11-15 "Pirate Voyage Adventure"). The branch sits on the unmerged town branch,
+because the Captain Hat keepsake uses its wardrobe.
+
+**Done and committed** (`b805dfa` spec, `dcd1fcd` milestone 1, `434774b` milestone 2a; tsc passes, all
+1045 unit tests pass):
+- `game/logic/voyage.ts` and `voyage.test.ts`:
+  - stage, jobs, the interrogated and hat flags;
+  - `voyageStage()` (`act3.voyageDone` is the authority);
+  - the fair interrogation (`interrogationFoods`, `truthfulAnswer`, `foodChoices`, `handOverFood` takes one
+    food once);
+  - cargo (`cargoTasks`, `taskDone`, `slotFree`, `whereChoices`, `putLine`; items barrel, bag, bottle;
+    furniture table and shelf on/under, box in, door by);
+  - steering lanes (`steer`, `obstacleSide`, `safeCommand`).
+- `act3.voyage` is in `logic/act3.ts`, and `logic/save.ts` reads it before readAct3's `voyageDone` early
+  return.
+- 29 new phrases in `logic/english.ts` (the spec §7 names are updated as built: Stop reuses `cmdStop`, "Can
+  you make a fire?" reuses `canFire`, "Can you swim?" reuses `canSwim`, "Can you help me?" reuses `canHelp`,
+  the shelf and table use the full "It's on/under the …" sentences, and "How many? Three!" uses `three`).
+- The Captain Hat (`gift: true` in `data/wearables.ts`): never sold (`buyWearable` returns "gift"), given by
+  `giveWearable`, shown in the shop only once owned; it has an icon and a 3D model.
+- `data/pirates.ts`: Captain Redbeard, Cook Pepper, Bosun Bill, Fisher Finn, Tom, Sam, Max.
+  `KeeperLook` (data/town.ts) is shared by keepers and pirates, and pirates have voices, names and
+  portraits (`LookPortrait`).
+
+**Next** (spec §10, in order; commit after each):
+1. `npcGeometry` in `scene/models/lowland.ts` is still typed `NpcDef`. Change it to `KeeperLook` and draw
+   tricorn, bandana, chef hat, beard and patch.
+2. `game/world/pirateShip.ts`, in local coordinates from `SHIP = (76, -470)` with the bow toward −z:
+   - **Hull:** half-width 4.5 for lz ≥ −13, tapering to 1.5 at the bow tip lz −21; the stern transom is at
+     lz 15.
+   - **Main deck:** y = SEA_Y + 2.4.
+   - **Hold:** lx ±2.8, lz −7.8…−1.2, at SEA_Y + 0.6. Its ramp is lx −2.75…−1.75, lz −1.2…2.0.
+   - **Fishing deck and its ramp:** the stern ramp is lx 1.9…3.1, lz 12…15.4; the fishing deck is lx ±3,
+     lz 15.4…18, at SEA_Y + 0.7. Fish water is lx ±5, lz 19…27.
+   - **Galley:** the bow compartment, lz −18…−13, behind a bulkhead with a door gap at lx ±1.
+   - **Fixtures:** helm (0, 11.5); masts main (0.8, 3.2), fore (−0.5, −10.6), mizzen (0, 8.5); mess table
+     lx 1.4…3.6, lz −12…−9.
+   - **Rails and hold edges:** solid bands. Ramps interpolate the height.
+   - **Hooks:** an `inShipArea` branch in `world/collision.ts` `isWalkable` and `standY`, before the
+     lowland branch (moveCircle and nearestWalkable go through `isWalkable`).
+   - **Camera:** a `pirate-ship` camera profile (pitch .75, dist 11).
+3. `scene/models/pirateShip.ts` (≤ 9k triangles: an extruded hull outline, deck, hold, galley, masts,
+   cannons, flag). Sails are fore-and-aft: edge-on to the stern camera, with a side shot for the sailing job.
+   The billow is the `scale.x` of a pre-bent sail. Add `scene/PirateShip.tsx`, drawn near the ship only, and
+   a `game/voyageRt.ts` runtime (npc spots, sails, storm, carried item, fish, fires, raft).
+4. `flow/voyage.ts`:
+   - Replace the first-trip branch of `sailWithGull()` (`flow/act3.ts`, lines 54–105), keeping the
+     `cloudIsleOpen()` lock.
+   - Add departure (Gull, "Yes, I am!", "Let's go!"), the capture (the ship approaches; ropes; the boarding
+     arcs), the interrogation, the monsters scene, then checkpoint `captured`.
+   - Ship focus candidates and interactions like `cloudCandidates`/`cloudInteract`. J routes to the friend's
+     job tool in `input/attackInput.ts` `pressAttack` while on the ship.
+   - Resume at the stage's spawn on load.
+5. The jobs (§3), the storm (§4), the raft and landing (§5): Gull's boat arrives at `CLOUD_DOCK`, then the
+   existing `arrive("cloud")`, with `completeVoyage` and the stage set to done.
+6. e2e `pirate-voyage.spec.ts` (Tap mode, the cloud ship opened by the e2e hook), an evidence spec, docs.
+
 ## Development work (not merged, not deployed): `feature/port-town-revamp` (from `main` `a0dca15`)
 The user's plan "Port Town area and its town systems" (2026-11-15) was implemented by Claude directly, without
 the router, at the user's request. The frozen spec `docs/PORT_TOWN_REVAMP.md` (§0 lists every change from the
@@ -92,9 +153,8 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
--1. The user reviews `feature/port-town-revamp`; merge and deploy only on approval. Then the user's
-   "Pirate Voyage Adventure" plan (received 2026-11-15) gets its own frozen spec and branch. It replaces
-   `sailWithGull()`'s short crossing and stays behind the Cloud Isle release lock.
+-1. Continue `feature/pirate-voyage` from its **Next** list at the top. The user reviews
+   `feature/port-town-revamp` (merge and deploy only on approval; the voyage branch depends on it).
 0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway
    canopy; diagnose the coast "hit" timeout in `act2.spec.ts:341`). Real-Chromebook
    check of the mic level meter and ankle-water frame rate.
