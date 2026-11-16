@@ -4,7 +4,7 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS, type CompanionId } from "../data/combat";
 import { getGame, toast, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
-import { BUCKET, DECK_Y, FISH_Y, SPOT, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
+import { BUCKET, DECK_Y, FISH_DECK, FISH_Y, SPOT, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
 import { SEA_Y } from "../world/island";
 import { ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, safeCommand, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
 import { giveWearable, wear } from "../logic/wardrobe";
@@ -97,7 +97,8 @@ const JOBS: Record<VoyageJob, () => Promise<void>> = { fishing, cooking, cargo, 
 // ------------------------------------------------------------ A. fishing (Bubbo)
 
 /** Where the fish swim (local): beside the fishing deck and behind it. */
-const POOLS = [{ cx: -6.6, cz: 17.2, rx: 2.0, rz: 2.3 }, { cx: 6.6, cz: 17.2, rx: 2.0, rz: 2.3 }, { cx: 0, cz: 21.3, rx: 3.0, rz: 1.0 }];
+const POOL_X = FISH_DECK.x1 + 3.6;
+const POOLS = [{ cx: -POOL_X, cz: 17.2, rx: 2.0, rz: 2.3 }, { cx: POOL_X, cz: 17.2, rx: 2.0, rz: 2.3 }, { cx: 0, cz: 21.3, rx: 4.5, rz: 1.0 }];
 const BUCKET_TOP = { y: FISH_Y + 0.75 };
 
 export function spawnFish() {
@@ -518,7 +519,7 @@ const OBSTACLE_JA = { rock: "いわ", barrel: "たる" };
 async function steering() {
   await scene(async () => {
     await fadeThrough(() => {
-      placeOnDeck(shipWorld({ x: 0.9, z: 12.4 }));
+      placeOnDeck(shipWorld({ x: 1.35, z: 12.4 }));
       rt.player.yaw = Math.PI;
     }, 400);
     rt.player.frozen = true;
@@ -582,7 +583,7 @@ async function crewFinale() {
     await fadeThrough(() => {
       placeOnDeck(shipWorld({ x: 0, z: 5.6 }));
       rt.player.yaw = 0;
-      const spots: Array<[CrewId, number, number]> = [["redbeard", 0, 9.2], ["pepper", 1.6, 8.4], ["bill", -1.6, 8.4], ["finn", -2.6, 9.6], ["gull", 2.6, 9.6], ["tom", 3.0, 6.4], ["sam", -3.0, 6.6], ["max", 3.2, 4.4]];
+      const spots: Array<[CrewId, number, number]> = [["redbeard", 0, 9.2], ["pepper", 2.4, 8.4], ["bill", -2.4, 8.4], ["finn", -3.9, 9.6], ["gull", 3.9, 9.6], ["tom", 4.5, 6.4], ["sam", -4.5, 6.6], ["max", 4.8, 4.4]];
       for (const [id, x, z] of spots) { vy.crew[id].x = x; vy.crew[id].z = z; vy.crew[id].yaw = Math.PI; vy.crew[id].hold = null; }
     }, 400);
     shot({ x: L(4.5, 0).x, y: DECK_Y + 4.2, z: L(0, 1.8).z }, { x: L(0, 0).x, y: DECK_Y + 1.2, z: L(0, 8).z });

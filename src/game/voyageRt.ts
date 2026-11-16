@@ -23,7 +23,7 @@ export interface Phase {
  * while it approaches); effects are in world coordinates.
  */
 export type CrewId = PirateId | "gull";
-export interface CrewSpot { x: number; z: number; yaw: number; visible: boolean; cheer: number; air: number; hold: FoodId | "fish3" | null }
+export interface CrewSpot { x: number; z: number; yaw: number; visible: boolean; cheer: number; air: number; hold: FoodId | "fish3" | null; menace: boolean }
 
 export type FxKind = "bubble" | "flame" | "vine" | "gust" | "steam" | "splash" | "sparkle" | "rope";
 export interface VoyageFx { id: number; kind: FxKind; x: number; y: number; z: number; tx: number; ty: number; tz: number; t0: number; life: number }
@@ -39,7 +39,7 @@ export interface Plank { x: number; z: number; yaw: number; state: "float" | "pu
 export interface VoyageHudState { title: string; ja: string; value?: number; band?: [number, number]; count?: [number, number]; hint?: string }
 
 const home = (): Record<CrewId, CrewSpot> => {
-  const s = (p: { x: number; z: number }, yaw: number): CrewSpot => ({ x: p.x, z: p.z, yaw, visible: true, cheer: -10, air: 0, hold: null });
+  const s = (p: { x: number; z: number }, yaw: number): CrewSpot => ({ x: p.x, z: p.z, yaw, visible: true, cheer: -10, air: 0, hold: null, menace: false });
   return {
     redbeard: s(SPOT.captain, 0), gull: s(SPOT.gull, 0.3), pepper: s(SPOT.cook, Math.PI), bill: s(SPOT.bill, 0), finn: s(SPOT.finn, 0.4),
     tom: s(SPOT.crew[0], -Math.PI / 2), sam: s(SPOT.crew[1], -Math.PI / 2), max: s(SPOT.crew[2], Math.PI),

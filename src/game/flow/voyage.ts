@@ -1,18 +1,18 @@
 import { FOODS } from "../data/foods";
 import { PIRATES } from "../data/pirates";
-import { COMPANION_IDS, type CompanionId } from "../data/combat";
-import { banner, getGame, toast, updateProgress, type Focus } from "../store";
+import { COMPANION_IDS } from "../data/combat";
+import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, rt } from "../runtime";
 import { PIER2 } from "../world/lowland";
-import { DECK_Y, SHIP, SPOT, inShipArea, shipWalkable, shipWorld } from "../world/pirateShip";
+import { DECK_Y, HALF_BEAM, SHIP, SPOT, hullHalf, inShipArea, shipWalkable, shipWorld } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { foodChoices, foodOfHave, handOverFood, interrogationFoods, setVoyageStage, truthfulAnswer, voyageStage, VOYAGE_JOBS, type VoyageJob, type VoyageStage } from "../logic/voyage";
 import type { Progress } from "../logic/progress";
 import { voyageEpoch, vy, type CrewId } from "../voyageRt";
 import { DebugScriptCancelled } from "../debugLifecycle";
-import { activeFriend, currentPhase, freeTool } from "../voyageSim";
+import { activeFriend, currentPhase } from "../voyageSim";
 import { ask, fastMode, say, wait } from "./ask";
-import { follow, frameTwo, isRunning, run, shot } from "./script";
+import { fadeThrough, follow, frameTwo, isRunning, run, shot } from "./script";
 import { boatLeg, boatPose } from "./act3";
 import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
@@ -43,9 +43,26 @@ export const ease = (t: number) => t * t * (3 - 2 * t);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Where Gull's boat is tied, alongside the pirate ship's starboard side. */
-export const MOORED = { x: SHIP.x + 7.4, z: SHIP.z + 5.5 };
+export const MOORED = { x: SHIP.x + hullHalf(5.5) + 3.15, z: SHIP.z + 5.5 };
 /** Where the player stands after boarding (and resumes a saved voyage). */
-export const BOARDED = shipWorld({ x: -1.4, z: 7.4 });
+export const BOARDED = shipWorld({ x: -2.1, z: 7.4 });
+
+/**
+ * The capture's huddle on the main deck (local): the player, Gull and the four
+ * friends close together in a ring, the seven pirates in a wider ring round
+ * them, facing in. The stern-starboard side (toward the camera) stays open.
+ */
+export const HUDDLE = { x: -1.2, z: 6.2 };
+const ringAt = (r: number, deg: number) => ({ x: HUDDLE.x + Math.cos((deg * Math.PI) / 180) * r, z: HUDDLE.z + Math.sin((deg * Math.PI) / 180) * r });
+/** The party's places in the huddle (angle 90° faces the stern, the camera's side). */
+export const HUDDLE_PARTY = {
+  player: ringAt(1.15, 90), gull: ringAt(1.15, 150), leafy: ringAt(1.15, 210), puff: ringAt(1.15, 270), bubbo: ringAt(1.15, 330), ember: ringAt(1.15, 30),
+} as const;
+/** The pirates' ring: Redbeard straight ahead of the player (bow side), the crew round the far side. */
+export const HUDDLE_PIRATES: Record<Exclude<CrewId, "gull">, { x: number; z: number }> = {
+  redbeard: ringAt(2.75, -90), pepper: ringAt(2.75, -55), bill: ringAt(2.75, -125), finn: ringAt(2.75, -160),
+  tom: ringAt(2.75, -20), sam: ringAt(2.75, 165), max: ringAt(2.75, 15),
+};
 
 /** Aboard the pirate ship while it is in the world. */
 export const onShip = () => vy.active && rt.world === "home" && inShipArea(rt.player.x, rt.player.z);
@@ -131,25 +148,57 @@ async function depart() {
   await boatLeg(8, MOORED.x + 3, SHIP.z + 46);
 }
 
+type Shot = { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
+const lerp3 = (a: Shot["pos"], b: Shot["pos"], t: number) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) });
+/** The shot the camera is in now (scripts own it while Gull's boat is ridden: the rig follows each shot exactly). */
+const currentShot = (): Shot | null => (rt.camera.shot ? { pos: { ...rt.camera.shot.pos }, target: { ...rt.camera.shot.target } } : null);
+/**
+ * Ease from wherever the camera is to a shot that may itself move (`to(k)`), so a
+ * framing change is a smooth cinematic move instead of a cut. Position and
+ * look-at blend together, keeping orientation and distance continuous.
+ */
+async function glide(seconds: number, to: (k: number) => Shot, each?: (k: number) => void) {
+  const from = currentShot() ?? to(0);
+  await over(seconds, (k) => {
+    each?.(k);
+    const e = ease(k), end = to(k);
+    shot(lerp3(from.pos, end.pos, e), lerp3(from.target, end.target, e));
+  });
+}
+
+/** The ship far off on the horizon (its offset from the mooring as it sails in). */
+const SIGHTED = { x: 46, z: -60 };
+
 async function capture() {
   const v = rt.voyage;
-  // A big ship comes in fast from the south-east.
-  vy.active = true; vy.shipOffset = { x: 46, z: -60 }; vy.flow = 0;
-  shot({ x: v.x + 14, y: 7, z: v.z + 10 }, { x: SHIP.x + 30, y: 4, z: SHIP.z - 20 });
+  // A big ship rises over the horizon to the north-east. The camera turns from the
+  // boat's broadside view to look out at it, then follows its approach.
+  vy.active = true; vy.shipOffset = { ...SIGHTED }; vy.flow = 0;
+  const horizon = (): Shot => ({
+    pos: { x: v.x - 9, y: 6.2, z: v.z + 12 },
+    target: { x: SHIP.x + vy.shipOffset.x * 0.85, y: 3.2, z: SHIP.z + vy.shipOffset.z * 0.85 },
+  });
+  await glide(1.8, horizon, (k) => { vy.shipOffset.x = SIGHTED.x - 4 * ease(k); vy.shipOffset.z = SIGHTED.z + 5 * ease(k); });
+  const held = { ...vy.shipOffset };
   await say("harbor", "Look! A big ship!", "みて! おおきな ふねだ!");
   const bx = v.x, bz = v.z;
   audio.play("whoosh");
-  await over(6, (k) => {
+  // The approach: the ship sails in alongside while the camera moves to the wide alongside view.
+  const alongside = (): Shot => ({
+    pos: { x: MOORED.x + 17, y: 9.5, z: MOORED.z + 19 },
+    target: { x: SHIP.x + vy.shipOffset.x * 0.6, y: 4, z: SHIP.z + vy.shipOffset.z * 0.6 },
+  });
+  await glide(6, alongside, (k) => {
     const e = ease(k);
-    vy.shipOffset.x = lerp(46, 0, e); vy.shipOffset.z = lerp(-60, 0, e);
+    vy.shipOffset.x = lerp(held.x, 0, e); vy.shipOffset.z = lerp(held.z, 0, e);
     v.x = lerp(bx, MOORED.x, e); v.z = lerp(bz, MOORED.z, e); v.yaw = Math.PI;
     boatPose();
-    shot({ x: MOORED.x + 16, y: 9, z: MOORED.z + 18 }, { x: SHIP.x + vy.shipOffset.x * 0.6, y: 4, z: SHIP.z + vy.shipOffset.z * 0.6 });
   });
   vy.shipOffset = { x: 0, z: 0 };
   v.sail = 0.08;
-  shot({ x: MOORED.x + 9, y: 6.5, z: MOORED.z + 9 }, { x: SHIP.x + 1, y: DECK_Y + 1.5, z: SHIP.z + 9 });
-  vy.crew.redbeard.x = 2.6; vy.crew.redbeard.z = 9.4;
+  vy.crew.redbeard.x = HALF_BEAM - 1.6; vy.crew.redbeard.z = 9.4;
+  // Settle on the captain at the rail above the boat.
+  await glide(1.4, () => ({ pos: { x: MOORED.x + 9.5, y: 6.8, z: MOORED.z + 9.5 }, target: { x: SHIP.x + HALF_BEAM - 2, y: DECK_Y + 1.5, z: SHIP.z + 9 } }));
   await say("redbeard", "Stop! Stop that boat!", "とまれ! その ふねを とめろ!");
   await say("harbor", "Oh no! Pirates!", "たいへん! かいぞくだ!");
   // Three ropes fly across as the captain shouts, and stay as the boat's mooring lines (scene/VoyageProps).
@@ -157,51 +206,60 @@ async function capture() {
   void over(1.2, (k) => { vy.ropes = Math.max(vy.ropes, k); });
   await say("redbeard", "Ropes, crew! Bring them here!", "ロープだ! つれてこい!");
   vy.ropes = 1;
-  await boardArcs();
+  await surrounded();
 }
 
-/** Everyone swings across on the ropes: arcs, never a teleport. */
-async function boardArcs() {
-  const v = rt.voyage, boatY = v.y + 0.75;
+/** Place the party in the huddle and the pirates round it (the capture's reveal, also used by tests). */
+export function huddleUp() {
+  const v = rt.voyage, p = rt.player;
   // The boat stays tied alongside; from here the ship's deck carries everyone.
-  v.active = false; vy.boatMoored = true; vy.cut = true;
-  const p = rt.player;
-  p.floatY = boatY;
-  for (const id of COMPANION_IDS) vy.monY[id] = boatY;
-  const deckOf: Record<CompanionId, { x: number; z: number }> = {
-    leafy: shipWorld({ x: -2.7, z: 6.6 }), bubbo: shipWorld({ x: 0.9, z: 7.2 }), puff: shipWorld({ x: -0.4, z: 6.2 }), ember: shipWorld({ x: 1.9, z: 8.2 }),
-  };
-  shot({ x: MOORED.x + 5, y: 9, z: MOORED.z + 12 }, { x: SHIP.x + 2, y: DECK_Y + 1, z: SHIP.z + 7 });
-  // The player first.
-  const from = { x: p.x, z: p.z };
-  audio.play("whoosh");
-  await over(1.1, (k) => {
-    const e = ease(k);
-    p.x = lerp(from.x, BOARDED.x, e); p.z = lerp(from.z, BOARDED.z, e);
-    p.floatY = lerp(boatY, DECK_Y, e) + Math.sin(k * Math.PI) * 2.6;
-    p.yaw = Math.atan2(BOARDED.x - from.x, BOARDED.z - from.z);
-  });
-  p.floatY = null;
-  // The friends, one after another.
+  v.active = false; vy.boatMoored = true; vy.cut = true; vy.gullAboard = true;
+  const at = shipWorld(HUDDLE_PARTY.player), centre = shipWorld(HUDDLE);
+  p.x = at.x; p.z = at.z; p.vx = p.vz = 0; p.floatY = null; p.riding = false; p.climbY = null;
+  p.yaw = Math.atan2(centre.x - at.x, centre.z - at.z);
   for (const id of COMPANION_IDS) {
-    const m = rt.monsters[id], to = deckOf[id], sx = m.x, sz = m.z;
-    m.mode = "script";
-    audio.voice(id, "surprised");
-    await over(0.8, (k) => {
-      const e = ease(k);
-      m.x = lerp(sx, to.x, e); m.z = lerp(sz, to.z, e);
-      vy.monY[id] = lerp(boatY, DECK_Y, e) + Math.sin(k * Math.PI) * 2.2;
-    });
+    const m = rt.monsters[id], w = shipWorld(HUDDLE_PARTY[id]);
+    m.mode = "script"; m.x = w.x; m.z = w.z; m.air = m.airTarget = 0; m.look = null;
+    m.yaw = Math.atan2(centre.x - w.x, centre.z - w.z) + Math.PI;
     delete vy.monY[id];
   }
-  // Gull too (his height is relative to the deck).
-  vy.gullAboard = true;
-  const g = vy.crew.gull, gl = { x: MOORED.x - SHIP.x, z: MOORED.z - SHIP.z };
-  await over(0.9, (k) => {
-    const e = ease(k);
-    g.x = lerp(gl.x, SPOT.gull.x, e); g.z = lerp(gl.z, SPOT.gull.z, e); g.air = lerp(boatY - DECK_Y, 0, e) + Math.sin(k * Math.PI) * 2.2;
-  });
-  g.air = 0;
+  const g = vy.crew.gull;
+  g.x = HUDDLE_PARTY.gull.x; g.z = HUDDLE_PARTY.gull.z; g.air = 0; g.yaw = Math.atan2(HUDDLE.x - g.x, HUDDLE.z - g.z) + Math.PI;
+  for (const id of Object.keys(HUDDLE_PIRATES) as Array<keyof typeof HUDDLE_PIRATES>) {
+    const c = vy.crew[id], s = HUDDLE_PIRATES[id];
+    c.x = s.x; c.z = s.z; c.air = 0; c.visible = true; c.menace = true;
+    c.yaw = Math.atan2(HUDDLE.x - s.x, HUDDLE.z - s.z);
+  }
+  rt.camera.snap = true;
+}
+
+/** The pirates are back at their own places (after the monsters scene, or on load). */
+export function crewHome() {
+  for (const id of Object.keys(vy.crew) as CrewId[]) {
+    const home = id === "gull" ? SPOT.gull : id === "redbeard" ? SPOT.captain : id === "pepper" ? SPOT.cook : id === "bill" ? SPOT.bill
+      : id === "finn" ? SPOT.finn : SPOT.crew[id === "tom" ? 0 : id === "sam" ? 1 : 2];
+    Object.assign(vy.crew[id], { x: home.x, z: home.z, menace: false, air: 0 });
+  }
+}
+
+/**
+ * The capture: a fade to black while the pirates pull everyone aboard, then the
+ * reveal of the party huddled together, the crew all round them. No one jumps
+ * or swings across.
+ */
+async function surrounded() {
+  const centre = shipWorld(HUDDLE);
+  const reveal: Shot = { pos: { x: centre.x + 7.2, y: DECK_Y + 6.6, z: centre.z + 5.4 }, target: { x: centre.x - 0.2, y: DECK_Y + 0.9, z: centre.z - 0.7 } };
+  setGame({ fade: 1 });
+  await wait(fastMode() ? 20 : 650);
+  huddleUp();
+  for (const id of COMPANION_IDS) audio.voice(id, "surprised");
+  shot(reveal.pos, reveal.target);
+  await wait(fastMode() ? 20 : 350);
+  setGame({ fade: 0 });
+  await wait(fastMode() ? 20 : 700);
+  // A slow push in on the huddle while the crew close round.
+  await glide(1.6, () => ({ pos: lerp3(reveal.pos, { x: centre.x + 5.6, y: DECK_Y + 5.2, z: centre.z + 4.4 }, 1), target: reveal.target }));
 }
 
 // ------------------------------------------------------------ the food interrogation
@@ -210,8 +268,19 @@ async function interrogation() {
   frameTwo(rt.player, crewWorld("redbeard"), 0.9);
   rt.player.yaw = Math.atan2(crewWorld("redbeard").x - rt.player.x, crewWorld("redbeard").z - rt.player.z);
   await say("redbeard", "Ahoy! I'm Captain Redbeard!", "やあ! わしは キャプテン・レッドビアードだ!");
-  await say("redbeard", "We are hungry. Let's see your bag!", "はらぺこだ。バッグを みせろ!");
+  // The bag stays open on screen through every question (ui/VoyageBag).
+  setGame({ voyageBag: { target: null } });
+  try {
+    await say("redbeard", "We are hungry. Let's see your bag!", "はらぺこだ。バッグを みせろ!");
+    await questions();
+  } finally {
+    setGame({ voyageBag: null });
+  }
+}
+
+async function questions() {
   for (const food of interrogationFoods(getGame().progress.bag)) {
+    setGame({ voyageBag: { target: food } });
     for (;;) {
       const said = await ask({ kind: "choice", options: ["yesIDo", "noIDont"], tapAlways: true, readQuestion: true, picture: food,
         question: { by: "redbeard", en: `Do you have ${FOODS[food].word}?`, ja: `${FOODS[food].ja}を もってる?` }, help: "バッグの なかみを みて、ほんとうの ことを こたえよう" });
@@ -225,12 +294,14 @@ async function interrogation() {
       await say("redbeard", "Hmm? Look in your bag!", "あれ? バッグを よく みてごらん!");
     }
   }
+  setGame({ voyageBag: { target: null } });
   const choices = foodChoices(getGame().progress.bag);
   const said = await ask({ kind: "choice", options: choices, tapAlways: true, readQuestion: true,
     icons: Object.fromEntries(choices.map((c) => [c, foodOfHave(c) ?? "bag"])),
     question: { by: "redbeard", en: "What food do you have?", ja: "どんな たべものを もってる?" }, help: "もっている たべものを いおう" });
   const food = said ? foodOfHave(said) : null;
   const already = getGame().progress.act3.voyage.interrogated;
+  setGame({ voyageBag: { target: food } });
   updateProgress((p) => handOverFood(p, food));
   if (food) {
     if (!already) toast({ en: `-1 ${FOODS[food].word}`, ja: `${FOODS[food].ja} 1こ わたした`, icon: food, tone: "info" }, 2200);
@@ -243,11 +314,13 @@ async function interrogation() {
 // ------------------------------------------------------------ the monsters
 
 async function monstersScene() {
-  const mid = shipWorld({ x: 0, z: 7.5 });
-  shot({ x: mid.x + 4, y: DECK_Y + 5, z: mid.z + 8 }, { x: mid.x, y: DECK_Y + 0.8, z: mid.z - 1 });
+  const mid = shipWorld(HUDDLE);
+  shot({ x: mid.x + 5.2, y: DECK_Y + 5.4, z: mid.z + 6.2 }, { x: mid.x, y: DECK_Y + 0.8, z: mid.z - 0.6 });
   await say("redbeard", "What's that? Monsters!", "なんだ それは? モンスター!");
   await say("redbeard", "Monsters! Delicious!", "モンスター! おいしそう!");
-  vy.crew.pepper.x = 1.4; vy.crew.pepper.z = 6.2;
+  // The cook leans in on the huddle.
+  const pep = vy.crew.pepper, from = { ...HUDDLE_PIRATES.pepper };
+  void over(0.6, (k) => { pep.x = lerp(from.x, lerp(from.x, HUDDLE.x, 0.3), ease(k)); pep.z = lerp(from.z, lerp(from.z, HUDDLE.z, 0.3), ease(k)); });
   await say("pepper", "Monster soup!", "モンスタースープだ!");
   for (const id of COMPANION_IDS) { animate(id, "hide"); audio.voice(id, "surprised"); }
   await ask({ kind: "command", options: ["theyreMyFriends"], tapAlways: true, readSentence: true, help: "ともだちを まもろう!" });
@@ -260,9 +333,10 @@ async function monstersScene() {
     await say("redbeard", "Hmm... are you sure?", "ほんとうに?");
   }
   for (const id of COMPANION_IDS) { animate(id, "yes"); audio.voice(id, "excited"); }
+  for (const c of Object.values(vy.crew)) c.menace = false;
   await say("redbeard", "Okay! Show me!", "よし! みせてみろ!");
-  vy.crew.pepper.x = SPOT.cook.x; vy.crew.pepper.z = SPOT.cook.z;
-  vy.crew.redbeard.x = SPOT.captain.x; vy.crew.redbeard.z = SPOT.captain.z;
+  // The crew go back to work (behind a short fade, so nobody slides across the deck).
+  await fadeThrough(() => { crewHome(); frameTwo(rt.player, crewWorld("redbeard"), 0.9); }, 350);
   await say("redbeard", "My crew needs help. Talk to them!", "クルーが こまっている。はなしかけて みろ!");
   banner({ title: "The Pirate Ship", sub: "Help the crew: fish, cook, cargo and sails!", ja: "かいぞくせん — クルーを てつだおう!", tone: "place" }, 4200);
 }
@@ -334,13 +408,15 @@ export function voyageInteract(f: Focus) {
   });
 }
 
-/** J on the ship or the raft: the active friend's tool (K does nothing there). */
+/**
+ * J and K while the voyage owns the sea (Gull's boat, the ship, the raft): consumed,
+ * never ordinary combat. J is the running job's tool for the active friend; with
+ * nothing to do (or K) it does nothing.
+ */
 export function voyageAttack(slot: "basic" | "special"): boolean {
-  if (!voyaging()) return false;
-  if (slot !== "basic") return true;
+  if (!vy.sea || rt.world !== "home") return false;
   const friend = activeFriend();
-  if (!friend) return true;
-  if (!currentPhase()?.tool?.(friend)) freeTool(friend);
+  if (slot === "basic" && friend && voyaging()) currentPhase()?.tool?.(friend);
   return true;
 }
 setVoyageTool(voyageAttack);

@@ -13,7 +13,15 @@ import { HIP_Y, SEATED, SEATED_EMBER, squatAmount, squatPose } from "./poses";
 import { rideK } from "../game/combat";
 import { mapleArmGeometry, mapleBodyGeometry, mapleLegGeometry } from "./models/maple";
 import { foodGeometry } from "./models/props";
+import { vy } from "../game/voyageRt";
 import type { FoodId } from "../game/types";
+
+/**
+ * Holding a dish: both arms out and in a little, so the hands meet under it at
+ * waist height in front of the torso (shoulders at y .98, arms .45 long: the
+ * hands come to about (±.14, .82, .40)). VoyageProps' CARRY_HOLD sits on them.
+ */
+export const CARRY_ARMS = { x: -1.2, z: 0.3 };
 
 function Shadow({ size = 1.1 }: { size?: number }) {
   const mat = useMemo(() => shadowMaterial(0.34), []);
@@ -47,6 +55,7 @@ export function Player() {
   const armL = useRef<THREE.Group>(null);
   const armR = useRef<THREE.Group>(null);
   const held = useRef<THREE.Mesh>(null);
+  const carryK = useRef(0);
 
   /**
    * Hand over hand on the rope (the player faces it). The cycle is driven by
@@ -166,6 +175,16 @@ export function Player() {
       }
     }
     if (shadow.current) shadow.current.visible = p.climbY === null && k < 0.5;
+    // On the pirate ship, food or a dish is carried on both hands in front of the torso.
+    const carry = vy.active && rt.world === "home" && (vy.carry?.kind === "food" || vy.carry?.kind === "dish") && p.climbY === null;
+    carryK.current += ((carry ? 1 : 0) - carryK.current) * 0.25;
+    const ck = carryK.current;
+    if (ck > 0.01 && armL.current && armR.current) {
+      armL.current.rotation.x += (CARRY_ARMS.x - armL.current.rotation.x) * ck;
+      armR.current.rotation.x += (CARRY_ARMS.x - armR.current.rotation.x) * ck;
+      armL.current.rotation.z += (CARRY_ARMS.z - armL.current.rotation.z) * ck;
+      armR.current.rotation.z += (-CARRY_ARMS.z - armR.current.rotation.z) * ck;
+    }
     if (p.climbY !== null) climbPose(p.climbY, p.mantle);
     // Windmilling at an edge, then flailing on the way down.
     const edge = p.fall ? 1 : p.teeter > 0 ? .55 : 0;

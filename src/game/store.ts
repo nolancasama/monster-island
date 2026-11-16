@@ -142,6 +142,8 @@ export interface GameState {
   /** An open town panel (quick food shop, Ms. Button's clothes, Coach Rex's combos). */
   panel: "shop" | "clothes" | "combos" | null;
   drawing: boolean;
+  /** The bag shown during Redbeard's "Do you have …?" questions, with the food being asked about. */
+  voyageBag: { target: FoodId | null } | null;
 }
 
 const SETTINGS_KEY = "mi.settings.v1";
@@ -196,7 +198,8 @@ export const useGame = create<GameState>(() => ({
   seconds: 0,
   banner: null,
   panel: null,
-  drawing: false
+  drawing: false,
+  voyageBag: null
 }));
 
 let bannerTimer = 0;

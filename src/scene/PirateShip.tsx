@@ -6,14 +6,14 @@ import { npcGeometry } from "./models/lowland";
 import { pirateShipGeometries, sailGeometry } from "./models/pirateShip";
 import { PIRATES } from "../game/data/pirates";
 import { NPCS } from "../game/data/town";
-import { DECK_Y, SHIP, SPOT, shipFloorY } from "../game/world/pirateShip";
+import { DECK_Y, MASTS, SAIL_FOOT, SHIP, SPOT, hullHalf, sailHeight, shipFloorY } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { CREW_IDS, vy, type CrewId } from "../game/voyageRt";
 import { rt } from "../game/runtime";
 import { VoyageProps, foodGeo } from "./VoyageProps";
 
-/** The three gaff sails: mizzen, main, fore (the order of `vy.sails`). */
-const SAILS = [{ mast: SPOT.mizzenMast, h: 5.2 }, { mast: SPOT.mainMast, h: 8.6 }, { mast: SPOT.foreMast, h: 7.0 }];
+/** The three gaff sails: mizzen, main, fore (the order of `vy.sails`), each from its boom to its gaff. */
+const SAILS = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ mast: m, h: sailHeight(m) }));
 const tallMat = shipCutMaterial(flatMat, "tall");
 const sailMat = shipCutMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), "sail");
 /** The break-up tips the bow down about a pivot at the stern. */
@@ -23,17 +23,24 @@ function CrewMember({ id }: { id: CrewId }) {
   const geo = useMemo(() => npcGeometry(id === "gull" ? NPCS.harbor : PIRATES[id]), [id]);
   const ref = useRef<THREE.Group>(null);
   const held = useRef<THREE.Mesh>(null);
+  const lean = useRef(0);
   useFrame(() => {
     const g = ref.current, c = vy.crew[id];
     if (!g) return;
     g.visible = c.visible;
     if (!c.visible) return;
-    // Face the player when close (local frame), as the town's keepers do.
+    // Face the player when close (local frame), as the town's keepers do; round the captured
+    // party, face in toward the huddle.
     const px = rt.player.x - SHIP.x - vy.shipOffset.x, pz = rt.player.z - SHIP.z - vy.shipOffset.z;
-    const want = Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
+    const want = c.menace ? c.yaw : Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
     let d = want - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * 0.1;
+    // Closing in: a lean toward the party and a slow, heavy sway (posture, never weapons).
+    lean.current += ((c.menace ? 0.16 : 0) - lean.current) * 0.08;
+    g.rotation.order = "YXZ";
+    g.rotation.x = lean.current;
+    g.rotation.z = lean.current * Math.sin(rt.time * 1.6 + c.x * 3) * 0.35;
     const cheer = rt.time - c.cheer < 1.6 ? Math.abs(Math.sin((rt.time - c.cheer) * 9)) * 0.28 : 0;
     g.position.set(c.x, (shipFloorY(c.x, c.z) ?? DECK_Y) + c.air + cheer + Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02, c.z);
     const h = held.current;
@@ -102,7 +109,7 @@ function Wake() {
       const side = i % 2 ? -1 : 1;
       const k = ((vy.flowDist * 0.12 + i / COUNT) % 1 + 1) % 1;
       const z = -20 + k * 33;
-      const x = side * (4.75 + (z + 20) * 0.025 + Math.sin(i * 3.1) * 0.25);
+      const x = side * (Math.max(hullHalf(z), hullHalf(-13) * 0.4) + 0.25 + (z + 20) * 0.025 + Math.sin(i * 3.1) * 0.25);
       const s = Math.sin(k * Math.PI) * Math.min(1, vy.flow);
       dummy.position.set(SHIP.x + x, seaHeight(SHIP.x + x, SHIP.z + z, rt.time, vy.storm, vy.flowDist) + 0.05, SHIP.z + z);
       dummy.scale.set(1 + s, 1, Math.max(0.01, s) * (1.2 + Math.min(1, vy.flow) * 0.8));
@@ -139,10 +146,12 @@ export function PirateShip() {
     if (mainMast.current) mainMast.current.rotation.set(0, 0, -vy.mastFall * 1.3);
     sailRefs.current.forEach((m, i) => {
       if (!m) return;
-      const fill = vy.sails[i];
-      // Slack sails hang low and flat; filling raises them to full height and billows them out.
-      m.scale.x = 0.06 + 0.94 * fill + Math.sin(rt.time * (3 + i) + i) * 0.05 * (1 - fill);
-      m.scale.y = 0.6 + 0.4 * fill;
+      const fill = vy.sails[i], slack = 1 - fill;
+      // Filling changes the cloth's depth: a slack sail hangs flat from boom to gaff (sagging only
+      // a little) and luffs about its mast; a full one bellies out and holds still.
+      m.scale.x = 0.06 + 0.94 * fill + Math.sin(rt.time * (3 + i) + i) * 0.05 * slack;
+      m.scale.y = 0.95 + 0.05 * fill;
+      m.rotation.y = Math.sin(rt.time * 2.3 + i * 1.7) * 0.08 * slack;
       if (i === 1) m.geometry = vy.sewn < 1 ? tornSail : sails[1];
     });
   });
@@ -157,10 +166,10 @@ export function PirateShip() {
           <mesh geometry={ship.tall} material={tallMat} />
           <group ref={mainMast} position={[mm.x, DECK_Y, mm.z]}>
             <mesh geometry={ship.main} material={tallMat} />
-            <mesh ref={(el) => { sailRefs.current[1] = el; }} geometry={sails[1]} material={sailMat} position={[0.12, 2.32, 0.1]} />
+            <mesh ref={(el) => { sailRefs.current[1] = el; }} geometry={sails[1]} material={sailMat} position={[0.12, SAIL_FOOT, 0.1]} />
           </group>
           {[0, 2].map((i) => (
-            <mesh key={i} ref={(el) => { sailRefs.current[i] = el; }} geometry={sails[i]} material={sailMat} position={[SAILS[i].mast.x + 0.12, DECK_Y + 2.32, SAILS[i].mast.z + 0.1]} />
+            <mesh key={i} ref={(el) => { sailRefs.current[i] = el; }} geometry={sails[i]} material={sailMat} position={[SAILS[i].mast.x + 0.12, DECK_Y + SAIL_FOOT, SAILS[i].mast.z + 0.1]} />
           ))}
           {CREW_IDS.map((id) => <CrewMember key={id} id={id} />)}
         </group>

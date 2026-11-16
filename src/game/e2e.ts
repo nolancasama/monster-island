@@ -2,6 +2,7 @@ import { placePlayer, goToTarget } from "./travel";
 import { resetVoyageRt, vy } from "./voyageRt";
 import { resumeVoyage, setScene } from "./flow/voyage";
 import { itemWorld } from "./flow/voyageJobs";
+import { cookMarker } from "./voyageSim";
 import { SHIP } from "./world/pirateShip";
 import type { Layer } from "./world/region";
 import { cloudIsleOpen, setE2eCloudIsleShipOpen, setE2ePirateVoyage } from "./release";
@@ -285,6 +286,10 @@ export function installE2eHook(seed: number) {
         raft: { on: vy.raft.on, x: vy.raft.x, z: vy.raft.z, built: vy.raft.built, planks: vy.raft.planks.map((p) => ({ x: p.x, z: p.z, state: p.state })) },
         crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, { ...w(c), visible: c.visible }])),
         items: { barrel: itemWorld("barrel"), bag: itemWorld("bag"), bottle: itemWorld("bottle") },
+        /** The capture's reveal: the pirates stand round the huddled party. */
+        huddle: Object.values(vy.crew).some((c) => c.menace),
+        /** The cooking job's marker (world), over the dish or its pirate. */
+        marker: (() => { const m = cookMarker(); return m ? { ...w(m), y: m.y, kind: m.kind, who: m.who ?? null } : null; })(),
       };
     },
     /** Start the voyage at a checkpoint, as a reload would (evidence and the e2e reload checks). */

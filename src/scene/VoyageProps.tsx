@@ -1,16 +1,17 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { flatMat, smoothMat } from "./materials";
 import { foodGeometry } from "./models/props";
 import { npcGeometry } from "./models/lowland";
 import { bootGeometry, cargoGeometry, dishGeometry, fireGeometry, floatBarrelGeometry, islandGeometry, lifeboatGeometry, plankGeometry, raftGeometry, raftSailGeometry, rockGeometry, sparGeometry } from "./models/pirateShip";
 import { PIRATES } from "../game/data/pirates";
 import { NPCS } from "../game/data/town";
-import { BUCKET, DECK_Y, FISH_Y, SHIP, SPOT } from "../game/world/pirateShip";
+import { BUCKET, DECK_Y, FISH_Y, HALF_BEAM, SHIP, SPOT, STEER_LANE, hullHalf } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { vy, type CrewId } from "../game/voyageRt";
-import { cargoSpot } from "../game/voyageSim";
+import { cargoSpot, cookMarker } from "../game/voyageSim";
 import { rt } from "../game/runtime";
 import type { FoodId } from "../game/types";
 import type { CargoItem } from "../game/logic/voyage";
@@ -97,6 +98,13 @@ function Cargo() {
   return <>{ITEMS.map((item, i) => <mesh key={item} ref={(el) => { refs.current[i] = el; }} geometry={geos[i]} material={flatMat} visible={false} />)}</>;
 }
 
+/**
+ * Where a carried food or dish sits, in the player's frame: on both hands held out
+ * in front of the torso (scene/Characters' carry pose), below the chin and clear
+ * of the body. Shared by the render and its test.
+ */
+export const CARRY_HOLD = { forward: 0.47, up: 0.84 };
+
 /** Food or a dish in the player's hands, the stove's fire, the pot's contents. */
 function Galley() {
   const fire = useMemo(fireGeometry, []);
@@ -104,13 +112,15 @@ function Galley() {
   useFrame(() => {
     const h = held.current;
     if (h) {
-      const c = vy.carry;
+      const c = vy.carry, p = rt.player;
       h.visible = onDeck() && Boolean(c) && c!.kind !== "cargo";
       if (h.visible && c && c.kind !== "cargo") {
         const g = c.kind === "dish" ? dishGeo(c.food) : foodGeo(c.food);
         if (h.geometry !== g) h.geometry = g;
-        h.position.set(rt.player.x + Math.sin(rt.player.yaw) * 0.35, rt.player.y + 1.05, rt.player.z + Math.cos(rt.player.yaw) * 0.35);
-        h.scale.setScalar(c.kind === "dish" ? 1.2 : 1.5);
+        const bob = Math.abs(Math.sin(p.step * Math.PI)) * 0.025 * Math.min(1, p.speed / 4);
+        h.position.set(p.x + Math.sin(p.yaw) * CARRY_HOLD.forward, p.y + CARRY_HOLD.up + bob, p.z + Math.cos(p.yaw) * CARRY_HOLD.forward);
+        h.rotation.set(0, p.yaw, 0);
+        h.scale.setScalar(c.kind === "dish" ? 1.15 : 1.3);
       }
     }
     const st = SPOT.stove, cook = vy.cook;
@@ -140,7 +150,35 @@ function Galley() {
     <mesh ref={flame} geometry={fire} material={flatMat} visible={false} />
     <mesh ref={pot} geometry={foodGeo("fish")} material={flatMat} scale={1.3} visible={false} />
     <mesh ref={plate} geometry={dishGeo("fish")} material={flatMat} scale={1.3} visible={false} />
+    <CookMarkers />
   </>;
+}
+
+/** A gold arrow, bobbing and pulsing, the same for the dish and for the hungry pirate. */
+function CookMarkers() {
+  const geo = useMemo(() => {
+    const b = new THREE.ConeGeometry(0.22, 0.42, 4);
+    b.rotateX(Math.PI);
+    const ring = new THREE.TorusGeometry(0.2, 0.05, 4, 14);
+    ring.rotateX(Math.PI / 2);
+    ring.translate(0, 0.38, 0);
+    return mergeGeometries([b.toNonIndexed(), ring.toNonIndexed()], false);
+  }, []);
+  // Drawn over nearby rigging and furniture so it is never lost, but small.
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: "#ffcf33", depthTest: false, transparent: true, opacity: 0.95 }), []);
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    const m = ref.current;
+    if (!m) return;
+    const at = onDeck() ? cookMarker() : null;
+    m.visible = Boolean(at);
+    if (!at) return;
+    const pulse = 1 + Math.sin(rt.time * 5) * 0.08;
+    m.position.set(shipX(at.x), at.y + Math.sin(rt.time * 3.2) * 0.14, shipZ(at.z));
+    m.rotation.set(0, rt.time * 1.4, 0);
+    m.scale.setScalar(pulse);
+  });
+  return <mesh ref={ref} geometry={geo} material={mat} renderOrder={20} visible={false} />;
 }
 
 // ------------------------------------------------------------ obstacles (ship and raft lanes)
@@ -155,7 +193,7 @@ function Obstacles() {
     if (!o || !m.visible) return;
     const g = o.kind === "rock" ? rock : barrel;
     if (m.geometry !== g) m.geometry = g;
-    const raft = vy.raft.on, w = raft ? 4.5 : 9, s = raft ? 0.75 : 1.3;
+    const raft = vy.raft.on, w = raft ? 4.5 : STEER_LANE, s = raft ? 0.75 : 1.3;
     const cx = raft ? vy.raft.x : SHIP.x, cz = raft ? vy.raft.z : SHIP.z;
     m.position.set(cx + (o.lane - vy.laneVis) * w, SEA_Y + (o.kind === "rock" ? -0.3 : 0.1) + Math.sin(rt.time * 2 + o.id) * 0.08, cz + o.z);
     m.scale.setScalar(s);
@@ -192,7 +230,7 @@ function StormProps() {
       if (r) {
         r.visible = onDeck() && Boolean(bar?.tied);
         if (bar?.tied) {
-          const side = bar.x >= 0 ? 4.0 : -4.0;
+          const side = (bar.x >= 0 ? 1 : -1) * (HALF_BEAM - 0.5);
           a.set(shipX(bar.x), DECK_Y + 0.55, shipZ(bar.z)); b.set(shipX(side), DECK_Y + 0.8, shipZ(bar.z + 0.3));
           span(r, a, b, 0.045);
         }
@@ -235,7 +273,7 @@ function MooringRopes() {
       m.visible = show;
       if (!show) return;
       const v = rt.voyage, k = Math.min(1, vy.ropes);
-      a.set(shipX(4.25), DECK_Y + 0.95, shipZ(lz));
+      a.set(shipX(hullHalf(lz) - 0.25), DECK_Y + 0.95, shipZ(lz));
       b.set(v.x - 0.9, 0.75 + Math.sin(rt.time * 1.5) * 0.03, v.z + dz);
       b.lerpVectors(a, b, k);
       span(m, a, b, 0.045);
@@ -257,7 +295,7 @@ function Lifeboats() {
       g.visible = vy.lifeboats > 0 && vy.sea && rt.world === "home";
       if (!g.visible) return;
       const k = vy.lifeboats;
-      g.position.set(SHIP.x + b.side * (7 + k * 26), SEA_Y + 0.1 + Math.sin(rt.time * 1.8 + i) * 0.12, SHIP.z + 4 + k * (10 + i * 6));
+      g.position.set(SHIP.x + b.side * (HALF_BEAM + 2.5 + k * 26), SEA_Y + 0.1 + Math.sin(rt.time * 1.8 + i) * 0.12, SHIP.z + 4 + k * (10 + i * 6));
       g.rotation.set(Math.sin(rt.time * 1.3 + i) * 0.06, b.side * 0.9 + Math.PI * (i ? 1 : 0), Math.sin(rt.time * 1.7) * 0.05);
     });
   });

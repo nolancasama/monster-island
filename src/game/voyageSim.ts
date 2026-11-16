@@ -1,7 +1,7 @@
-import { addFx, vy, type Candidate, type FxKind, type Phase } from "./voyageRt";
+import { addFx, vy, type Candidate, type CrewId, type FxKind, type Phase } from "./voyageRt";
 import { effect, rt } from "./runtime";
 import { getGame } from "./store";
-import { DECK_Y, HOLD_Y, SHIP, SPOT } from "./world/pirateShip";
+import { DECK_Y, HOLD_Y, MASTS, SAIL_FOOT, SHIP, SPOT, sailHeight } from "./world/pirateShip";
 import { SEA_Y } from "./world/island";
 import type { CargoItem, Placement } from "./logic/voyage";
 import type { CompanionId } from "./data/combat";
@@ -36,7 +36,7 @@ export const TOOL: Record<CompanionId, { kind: FxKind; name: string; ja: string 
 export const L = (x: number, z: number) => ({ x: SHIP.x + x, z: SHIP.z + z });
 
 /** Where each cargo item rests (local, its base height): on/under/in/by, or its own spot on the floor. */
-const FLOOR: Record<CargoItem, { x: number; z: number }> = { barrel: { x: 0.2, z: -6.9 }, bag: { x: -0.9, z: -2.0 }, bottle: { x: 2.35, z: -4.2 } };
+const FLOOR: Record<CargoItem, { x: number; z: number }> = { barrel: { x: 0.3, z: -6.9 }, bag: { x: -1.35, z: -2.0 }, bottle: { x: 3.5, z: -4.2 } };
 export function cargoSpot(item: CargoItem, pl: Placement | null): { x: number; y: number; z: number } {
   if (!pl) return { ...FLOOR[item], y: HOLD_Y };
   const t = SPOT.table, s = SPOT.shelf, b = SPOT.box, d = SPOT.door;
@@ -51,11 +51,26 @@ export function cargoSpot(item: CargoItem, pl: Placement | null): { x: number; y
 }
 
 /** The centre of each sail's cloth (mizzen, main, fore), local. */
-export const SAIL_AIM = [
-  { x: 0.4, y: DECK_Y + 4.2, z: SPOT.mizzenMast.z + 2.0 },
-  { x: 1.2, y: DECK_Y + 6.0, z: SPOT.mainMast.z + 2.0 },
-  { x: -0.1, y: DECK_Y + 5.0, z: SPOT.foreMast.z + 2.0 },
-];
+export const SAIL_AIM = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ x: m.x + 0.4, y: DECK_Y + SAIL_FOOT + sailHeight(m) * 0.5 + 0.3, z: m.z + 2.0 }));
+
+/** A marker's height above the dish on the stove, and above a pirate's feet. */
+export const MARKER_LIFT = { dish: 1.0, crew: 2.55 };
+
+/**
+ * Where the cooking job's marker points (local to the ship), or null: over the
+ * finished dish until it is taken, then over the pirate who ordered it until it
+ * is handed over. Never over anyone else (scene/VoyageProps draws it).
+ */
+export function cookMarker(): { x: number; y: number; z: number; kind: "dish" | "crew"; who?: CrewId } | null {
+  if (vy.phase?.name !== "cooking") return null;
+  const cook = vy.cook, st = SPOT.stove;
+  if (cook.dish && !vy.carry) return { x: st.x, y: DECK_Y + 1.4 + MARKER_LIFT.dish, z: st.z, kind: "dish" };
+  if (vy.carry?.kind === "dish" && cook.order) {
+    const c = vy.crew[cook.order.who];
+    return { x: c.x, y: DECK_Y + MARKER_LIFT.crew, z: c.z, kind: "crew", who: cook.order.who };
+  }
+  return null;
+}
 
 // ------------------------------------------------------------ aiming
 
@@ -89,12 +104,6 @@ export function toolFx(friend: CompanionId, to: { x: number; y: number; z: numbe
   const life = kind === "vine" ? 0.55 : kind === "gust" ? 0.6 : kind === "flame" ? 0.5 : 0.45;
   addFx(kind, h, to, life, rt.time);
   audio.play(kind === "bubble" ? "bubble" : kind === "flame" ? "fireball" : kind === "vine" ? "vines" : "wind");
-}
-
-/** J with nothing to do: a harmless little burst of the friend's power ahead. */
-export function freeTool(friend: CompanionId) {
-  const p = rt.player, d = TOOL[friend].kind === "vine" ? 3 : 4.5;
-  toolFx(friend, { x: p.x + Math.sin(p.yaw) * d, y: p.y + 1.0, z: p.z + Math.cos(p.yaw) * d });
 }
 
 /** Steam and a hiss where water meets fire. */

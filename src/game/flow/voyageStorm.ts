@@ -56,7 +56,7 @@ export async function startStorm() {
   audio.startMusic("danger");
   await scene(async () => {
     rt.player.frozen = true;
-    shot({ x: L(9, 0).x, y: DECK_Y + 8, z: L(0, 16).z }, { x: L(0, 0).x, y: DECK_Y + 1.5, z: L(0, 2).z });
+    shot({ x: L(12.5, 0).x, y: DECK_Y + 9.5, z: L(0, 18.5).z }, { x: L(0, 0).x, y: DECK_Y + 1.5, z: L(0, 2).z });
     const from = vy.storm;
     await over(3, (k) => { vy.storm = lerp(from, 1, ease(k)); if (k > 0.5) weather(); });
     vy.storm = 1;
@@ -71,7 +71,7 @@ export async function startStorm() {
 
 // ------------------------------------------------------------ 1. barrels (Leafy)
 
-const BARREL_LANES = [{ z: 1.6, x0: -0.9, x1: 3.2 }, { z: 4.6, x0: -3.3, x1: 3.3 }, { z: 6.4, x0: -3.3, x1: 3.3 }];
+const BARREL_LANES = [{ z: 1.6, x0: -1.35, x1: 4.8 }, { z: 4.6, x0: -4.95, x1: 4.95 }, { z: 6.4, x0: -4.95, x1: 4.95 }];
 
 async function barrels() {
   vy.barrels = BARREL_LANES.map((l, i) => ({ x: lerp(l.x0, l.x1, 0.3 + i * 0.2), z: l.z, vx: (i % 2 ? -1 : 1) * (1.4 + i * 0.3), tied: false, t0: 0 }));
@@ -111,8 +111,8 @@ async function barrels() {
 async function fires() {
   await scene(async () => {
     rt.player.frozen = true;
-    shot({ x: L(8, 0).x, y: DECK_Y + 9, z: L(0, 14).z }, { x: L(0, 0).x, y: DECK_Y, z: L(0, 3).z });
-    for (const [x, z] of [[-2.6, 5.2], [2.5, 8.6], [1.6, 0.6]]) {
+    shot({ x: L(11.5, 0).x, y: DECK_Y + 11, z: L(0, 17).z }, { x: L(0, 0).x, y: DECK_Y, z: L(0, 3).z });
+    for (const [x, z] of [[-3.9, 5.2], [3.75, 8.6], [2.4, 0.6]]) {
       vy.flash = rt.time; audio.play("rumble");
       vy.fires.push({ x, z, out: false, t0: 0 });
       audio.play("crackle");
@@ -155,7 +155,7 @@ async function torn() {
   vy.sewn = 0; vy.sails[1] = 0.1;
   vy.flash = rt.time; audio.play("snap");
   // Two pirates come to sew.
-  vy.crew.tom.x = -0.4; vy.crew.tom.z = 4.2; vy.crew.sam.x = 2.0; vy.crew.sam.z = 4.5;
+  vy.crew.tom.x = -0.6; vy.crew.tom.z = 4.2; vy.crew.sam.x = 3.0; vy.crew.sam.z = 4.5;
   await scene(async () => {
     rt.player.frozen = true;
     const m = L(SPOT.mainMast.x, SPOT.mainMast.z);
@@ -199,7 +199,7 @@ async function torn() {
 
 // ------------------------------------------------------------ 4. the fallen spar (Leafy)
 
-const PINNED = { x: -1.8, z: -11.4 };
+const PINNED = { x: -2.7, z: -11.4 };
 
 async function spar() {
   vy.crew.max.x = PINNED.x; vy.crew.max.z = PINNED.z; vy.crew.max.yaw = 0.4;
@@ -248,7 +248,7 @@ async function spar() {
 async function breakUp() {
   await scene(async () => {
     rt.player.frozen = true;
-    placeOnDeck(shipWorld({ x: -0.6, z: 13.2 }));
+    placeOnDeck(shipWorld({ x: -0.9, z: 13.2 }));
     rt.player.yaw = Math.PI;
     for (const id of COMPANION_IDS) rt.monsters[id].mode = "script";
     vy.cut = false;

@@ -12,6 +12,7 @@ import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
 import { PLAYER_R, blocked, gatesOf, isWalkable, moveCircle, nearestWalkable, standY, type Gates } from "./world/collision";
 import { monsterRootY } from "./ride";
+import { vy } from "./voyageRt";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
 import { debugEnabled } from "./debugAccess";
@@ -778,9 +779,16 @@ function aimAt(range: number): { x: number; z: number } {
   return { x: p.x + Math.sin(p.yaw) * range, z: p.z + Math.cos(p.yaw) * range };
 }
 
+/**
+ * The pirate voyage owns the sea (the ship, Gull's boat, the raft): J is the job
+ * tool there and ordinary combat never runs, even with J held for the stove or
+ * the sails. Normal regions get combat back as soon as the voyage lets go.
+ */
+export const voyageOwnsCombat = () => vy.sea && rt.world === "home";
+
 /** J: the active friend's basic attack (free; repeats while held). */
 export function basicAttack(options: { repeat?: boolean } = {}): boolean {
-  if (swingingEnemy()) return false;
+  if (voyageOwnsCombat() || swingingEnemy()) return false;
   const f = friendNow();
   if (f === "ember" && cb.inferno) return false;
   if (f === "ember" && cb.breath && canFight()) return true;
@@ -843,7 +851,7 @@ export function basicAttack(options: { repeat?: boolean } = {}): boolean {
 
 /** K: the active friend's special (costs MP; a short cooldown). */
 export function specialAttack(): boolean {
-  if (swingingEnemy()) return false;
+  if (voyageOwnsCombat() || swingingEnemy()) return false;
   const f = friendNow();
   if (!f || !canFight() || rt.time < cb.ready.special || cb.inferno) return false;
   const move = COMBAT[f].special;
@@ -2001,6 +2009,14 @@ export function combatTick(dt: number) {
     audio.stopFlame?.();
   }
   if (cb.breath && (!cb.hold || friendNow() !== "ember")) stopBreath();
+  // At sea a held J belongs to the job (Ember's stove, Puff's sails): end any
+  // fire, cyclone or whip carried aboard and never start new ones.
+  const atSea = voyageOwnsCombat();
+  if (atSea && (cb.breath || cb.inferno || cb.cyclone || cb.whip || cb.bombChain || cb.move || cb.shots.length)) {
+    clearSpecials();
+    cb.move = null;
+    cb.shots = [];
+  }
   if (debugPaused()) return;
   const g = getGame();
   if (g.screen !== "game" || !act2Live()) return;
@@ -2058,11 +2074,11 @@ export function combatTick(dt: number) {
     if (paid && cb.inferno && cb.cyclone) cb.vitals.mp.puff = before.mp.puff;
   }
   activateEnemies(zone);
-  // Held J repeats the basic attack.
-  if (cb.hold) basicAttack({ repeat: true });
+  // Held J repeats the basic attack (never at sea: the voyage's tools own J there).
+  if (cb.hold && !atSea) basicAttack({ repeat: true });
   const live = canFight();
   updateBeaconFight(dt, live, zone);
-  if (canFight()) {
+  if (canFight() && !atSea) {
     if (world === "home") applySecretProgress(tickSecrets(secretProgress(), dt, p));
     updateInferno(dt);
     updateBreath(dt);

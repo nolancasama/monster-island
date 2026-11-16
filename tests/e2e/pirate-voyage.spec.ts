@@ -8,7 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
-import { SHIP } from "../../src/game/world/pirateShip";
+import { DECK_Y, HALF_BEAM, MASTS, SHIP, SPOT } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
 
 const TAG = process.env.SHOT_TAG;
@@ -30,6 +30,8 @@ function save(bag: Record<string, number>) {
 
 type V = any;
 const voyage = (page: Page): Promise<V> => hook(page, "voyage") as Promise<V>;
+/** Interrogation questions answered with the bag panel checked; cooking steps with the marker checked. */
+let bagChecks = 0, markerChecks = 0;
 
 /** Stand at a ship spot (local), facing a world point. */
 async function standFacing(page: Page, local: { x: number; z: number }, at: { x: number; z: number }) {
@@ -66,6 +68,15 @@ async function answer(page: Page, st: MiState) {
     const food = FOOD_WORDS.find((f) => q.includes(f));
     const held = v.carry?.kind === "food" && v.carry.food === food;
     pick = held || ((st.progress.bag as any)[food!] ?? 0) > 0 ? "yesIDo" : "noIDont";
+    if (!v.phase) {
+      // Redbeard's questions: the bag is on screen with the asked food lit up and its real count.
+      const panel = page.getByTestId("voyage-bag");
+      await expect(panel).toBeVisible();
+      const item = page.getByTestId(`voyage-bag-${food}`);
+      await expect(item).toHaveAttribute("data-target", "true");
+      await expect(item).toContainText(String((st.progress.bag as any)[food!] ?? 0));
+      bagChecks++;
+    }
   } else if (c.includes("yesTheyCan")) pick = "yesTheyCan";
   else if (c.includes("yesPlease")) pick = "yesPlease";
   else if (c.includes("turnLeft")) {
@@ -112,15 +123,21 @@ async function drive(page: Page, label: string, done: (s: MiState, v: V) => bool
 
 // ------------------------------------------------------------ free play, per phase
 
+// Stand points follow the ship's authored layout (world/pirateShip.ts; the beam widened 1.5× on 2026-11-16).
 const JOB_SPOT: Record<string, { crew: string; stand: { x: number; z: number } }> = {
-  cargo: { crew: "bill", stand: { x: 0.6, z: -3.9 } }, sailing: { crew: "redbeard", stand: { x: -1.4, z: 10.3 } },
-  fishing: { crew: "finn", stand: { x: 0.0, z: 16.7 } }, cooking: { crew: "pepper", stand: { x: 0.2, z: -14.4 } },
+  cargo: { crew: "bill", stand: { x: SPOT.bill.x + 1.5, z: -3.9 } }, sailing: { crew: "redbeard", stand: { x: SPOT.captain.x + 1, z: 10.3 } },
+  fishing: { crew: "finn", stand: { x: SPOT.finn.x + 1.3, z: 16.7 } }, cooking: { crew: "pepper", stand: { x: SPOT.cook.x - 1.1, z: -14.4 } },
 };
-const FURN_STAND: Record<string, { x: number; z: number }> = { table: { x: 0.2, z: -5.7 }, shelf: { x: -1.4, z: -5.7 }, box: { x: 2.4, z: -2.5 }, door: { x: -1.2, z: -6.6 } };
-const FURN_AT: Record<string, { x: number; z: number }> = { table: { x: 1.4, z: -5.7 }, shelf: { x: -2.5, z: -5.7 }, box: { x: 1.4, z: -2.6 }, door: { x: -1.2, z: -7.55 } };
-const SAIL_AT = [{ x: 0.4, z: 10.5 }, { x: 1.2, z: 5.2 }, { x: -0.1, z: -8.6 }];
+const FURN_STAND: Record<string, { x: number; z: number }> = {
+  table: { x: SPOT.table.x - 1.9, z: -5.7 }, shelf: { x: SPOT.shelf.x + 1.1, z: -5.7 }, box: { x: SPOT.box.x + 1.2, z: -2.6 }, door: { x: SPOT.door.x, z: -6.6 },
+};
+const FURN_AT: Record<string, { x: number; z: number }> = { table: SPOT.table, shelf: SPOT.shelf, box: SPOT.box, door: SPOT.door };
+/** The middle of each sail's cloth (voyageSim's SAIL_AIM): mizzen, main, fore. */
+const SAIL_AT = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ x: m.x + 0.4, z: m.z + 2 }));
 const SAIL_STAND = [{ x: 0, z: 6.0 }, { x: 0, z: 6.0 }, { x: 0, z: -11.6 }];
-const HUNGRY_STAND: Record<string, { x: number; z: number }> = { tom: { x: 0.0, z: -9.6 }, sam: { x: 0.0, z: -11.7 }, max: { x: 1.4, z: -12.45 } };
+const HUNGRY_STAND: Record<string, { x: number; z: number }> = {
+  tom: { x: SPOT.crew[0].x - 1.45, z: -9.8 }, sam: { x: SPOT.crew[1].x - 1.45, z: -11.7 }, max: { x: SPOT.crew[2].x - 1.15, z: -12.3 },
+};
 const CRATE_Z: Record<string, number> = { fish: -15.9, meat: -15.1, apples: -14.3, bananas: -13.6 };
 
 async function startJob(page: Page, job: string) {
@@ -156,10 +173,12 @@ async function play(page: Page, _s: MiState, v: V) {
         return;
       }
       if (heatHeld) { await page.keyboard.up("KeyJ"); heatHeld = false; }
-      if (c.dish && !v.carry) { await standFacing(page, { x: -0.5, z: -15.4 }, L(0, -16.5)); await pressE(page, "pot"); return; }
-      if (v.carry?.kind === "dish" && c.order) { await standFacing(page, HUNGRY_STAND[c.order.who], v.crew[c.order.who]); await pressE(page, `crew:${c.order.who}`); return; }
+      // The marker shows the finished dish, then only the pirate who ordered it.
+      if (c.dish && !v.carry) { expect(v.marker?.kind).toBe("dish"); markerChecks++; await standFacing(page, { x: -0.5, z: -15.4 }, L(0, -16.5)); await pressE(page, "pot"); return; }
+      if (v.carry?.kind === "dish" && c.order) { expect(v.marker?.who).toBe(c.order.who); markerChecks++; await standFacing(page, HUNGRY_STAND[c.order.who], v.crew[c.order.who]); await pressE(page, `crew:${c.order.who}`); return; }
+      if (!c.dish && v.carry?.kind !== "dish") expect(v.marker).toBeNull();
       if (v.carry?.kind === "food") { await standFacing(page, { x: -0.5, z: -15.4 }, L(0, -16.5)); await pressE(page, "pot"); return; }
-      if (c.order && !v.carry) { const z = CRATE_Z[c.order.food]; await standFacing(page, { x: -1.2, z }, L(-2.1, z)); await pressE(page, `crate:${c.order.food}`); return; }
+      if (c.order && !v.carry) { const z = CRATE_Z[c.order.food]; await standFacing(page, { x: SPOT.supplies.x + 1.15, z }, L(SPOT.supplies.x, z)); await pressE(page, `crate:${c.order.food}`); return; }
       const next = ["tom", "sam", "max"].find((id) => !c.orders.some((o: any) => o.who === id));
       if (next) { await standFacing(page, HUNGRY_STAND[next], v.crew[next]); await pressE(page, `crew:${next}`); }
       return;
@@ -200,13 +219,13 @@ async function play(page: Page, _s: MiState, v: V) {
       return;
     }
     case "storm-sail": {
-      await standFacing(page, { x: 0, z: 5.2 }, L(0.8, 3.2));
+      await standFacing(page, { x: 0, z: 5.2 }, L(SPOT.mainMast.x, SPOT.mainMast.z));
       if (!heatHeld) { await page.keyboard.down("KeyJ"); heatHeld = true; }
       return;
     }
     case "storm-spar": {
       if (heatHeld) { await page.keyboard.up("KeyJ"); heatHeld = false; }
-      await standFacing(page, { x: -1.0, z: -10.0 }, v.spar ?? L(-1.6, -11.1));
+      await standFacing(page, { x: -1.6, z: -9.6 }, v.spar ?? L(-2.5, -11.1));
       await pressJ(page);
       await page.waitForTimeout(400);
       return;
@@ -245,10 +264,19 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
   await page.keyboard.press("KeyE");
   await waitFor(page, (s) => Boolean(s.prompt?.choices.includes("yesIAm")), 30_000, "Are you ready?");
   await shot(page, "01-ready");
-  let sawFoodQuestion = false;
-  await drive(page, "capture and interrogation", (s) => s.progress.act3.voyage.stage === "captured" && s.mode === "explore", async () => {}, 240_000)
+  let sawFoodQuestion = false, huddled = false, highest = -Infinity;
+  await drive(page, "capture and interrogation", (s, v) => {
+    // Nobody jumps or swings across: the capture fades out and reveals the party in a huddle.
+    if (v.active && s.player.y > highest) highest = s.player.y;
+    if (s.line?.en === "Ahoy! I'm Captain Redbeard!") huddled ||= Boolean(v.huddle);
+    return s.progress.act3.voyage.stage === "captured" && s.mode === "explore";
+  }, async () => {}, 240_000)
     .then(({ s }) => { sawFoodQuestion = s.progress.act3.voyage.interrogated; });
   expect(sawFoodQuestion).toBe(true);
+  expect(huddled).toBe(true);
+  expect(bagChecks).toBeGreaterThan(0);
+  expect(highest).toBeLessThan(DECK_Y + 0.5);
+  await expect(page.getByTestId("voyage-bag")).toHaveCount(0);
   let st = await state(page);
   // The pirates took exactly one food that the player really had.
   const before = bag.apples + bag.fish, after = Object.values(st.progress.bag as Record<string, number>).reduce((a, b) => a + b, 0);
@@ -268,6 +296,7 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
     }, Number(process.env.VOYAGE_JOB_TIMEOUT ?? 420_000));
     st = await state(page);
     expect(st.progress.act3.voyage.jobs).toContain(job);
+    if (job === "cooking") expect(markerChecks).toBeGreaterThanOrEqual(6);
 
     if (job === "cargo") {
       // Reload at `jobs`: the ship comes back with the job kept and no food taken twice.
@@ -281,7 +310,7 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
       expect(JSON.stringify(st.progress.bag)).toBe(bagBefore);
       const v = await voyage(page);
       expect(v.active).toBe(true);
-      expect(Math.abs(st.player.x - SHIP.x)).toBeLessThan(7);
+      expect(Math.abs(st.player.x - SHIP.x)).toBeLessThan(HALF_BEAM);
       expect(Math.abs(st.player.z - SHIP.z)).toBeLessThan(21);
       expect(st.player.y).toBeGreaterThan(0);
     }
