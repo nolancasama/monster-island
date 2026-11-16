@@ -9,7 +9,7 @@ import type { Layer } from "./world/region";
 import { CLOUD_DOCK, CLOUD_SPAWNS, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_CHESTS, HOLLOW, OBSERVATORY, type CloudAreaId, CANOPY_GLIDE } from "./world/cloudisle";
 import { CAVE_CHAMBER } from "./world/cave";
 import { BUBBLE_LANDING, SUMMIT_DEPARTURE, UPPER_ROPE } from "./world/upperCanopy";
-import { ACT2_OBSTACLE_PLACE, CAVE_MOUTH, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
+import { ACT2_OBSTACLE_PLACE, CAVE_MOUTH, CHESTS, CLIFF_ROPE, FORK_SIGN, customerSpot, routeMarker, SERVICES, type ServiceId, type ZoneId } from "./world/lowland";
 
 /** Placement shared by tester navigation and the stable e2e hook. */
 export const placePlayer = (x: number, z: number, faceX: number, faceZ: number, layer: Layer = "ground") => {
@@ -87,8 +87,8 @@ export function goToTarget(name: string, dist = 1.6) {
         return placePlayer(f.x, f.z, face.x, face.z);
       }
       if (name in SERVICES) {
-        const k = SERVICES[name as ServiceId].keeper;
-        return placePlayer(k.x + Math.sin(k.yaw) * 1.7, k.z + Math.cos(k.yaw) * 1.7, k.x, k.z);
+        const k = SERVICES[name as ServiceId].keeper, at = customerSpot(name as ServiceId);
+        return placePlayer(at.x, at.z, k.x, k.z);
       }
       const near =
         name === "river"

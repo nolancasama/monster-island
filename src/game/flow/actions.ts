@@ -14,6 +14,7 @@ import { isRunning, run } from "./script";
 import { audio } from "../../audio/audio";
 import { climbCliff, climbRope as climbLowlandRope, openChestScene, readForkSign, talkToKeeper } from "./act2";
 import { UPPER_ROPE } from "../world/upperCanopy";
+import { talkToPippa } from "./town";
 import { CANOPY_ROPES, type ServiceId } from "../world/lowland";
 import type { MonsterId, ObstacleId } from "../types";
 
@@ -62,7 +63,8 @@ export function interact(f: Focus | null = getGame().focus) {
       void openChestScene(f.id);
       return;
     case "npc":
-      void talkToKeeper(f.id as ServiceId);
+      if (f.id === "pippa") void talkToPippa();
+      else void talkToKeeper(f.id as ServiceId);
   }
 }
 

@@ -14,6 +14,7 @@ import { CombatScene } from "./Combat";
 import { Maple, Player } from "./Characters";
 import { Monsters } from "./Monsters";
 import { ElementEffects } from "./ElementEffects";
+import { Scorch } from "./Scorch";
 import { Effects } from "./Effects";
 import { CameraRig } from "./CameraRig";
 import { CollisionOverlay } from "./CollisionOverlay";
@@ -144,6 +145,7 @@ export function GameScene() {
       <Player />
       <Monsters />
       <ElementEffects />
+      <Scorch />
       <Effects />
       <CameraRig />
       {collisionDebugAllowed && !cloud ? <CollisionOverlay /> : null}

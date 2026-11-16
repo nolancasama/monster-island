@@ -10,7 +10,7 @@ import {
   CLOUD_BOUNDS, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_GUSTS, CLOUD_PICKUPS,
   CLOUD_ZONES, COAST_GATE, HOLLOW_APPROACH, HOLLOW, RAIDER_BARRICADE,
   cloudY, cloudZoneAt, type CloudGates } from "../game/world/cloudisle";
-import { nearestOnTrail, PIER2, type WalkShape } from "../game/world/lowland";
+import { GULL_BERTH, nearestOnTrail, type WalkShape } from "../game/world/lowland";
 import { cloudGroundY, cloudLandMask } from "../game/world/cloudTerrain";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
@@ -512,8 +512,8 @@ function VoyageRocks() {
     // These fixed rocks are straight ahead at the Turn left prompt. The
     // following boat leg passes to their port side, leaving visible clearance.
     for (const [dx, dz, r, h] of [[0, 0, 2.6, 2.8], [-2.7, -2.5, 1.9, 2.1], [2.5, -4, 2.2, 3.4]]) {
-      b.add(new THREE.DodecahedronGeometry(r, 0), "#59616a", [PIER2.x + dx, h * .3, PIER2.z0 - 44 + dz], [.3, dx, .2], [1, h / r, 1]);
-      b.torus(r * .85, .07, [PIER2.x + dx, -.18, PIER2.z0 - 44 + dz], [Math.PI / 2, 0, 0], "#b0c9cc");
+      b.add(new THREE.DodecahedronGeometry(r, 0), "#59616a", [GULL_BERTH.x + dx, h * .3, GULL_BERTH.z - 44 + dz], [.3, dx, .2], [1, h / r, 1]);
+      b.torus(r * .85, .07, [GULL_BERTH.x + dx, -.18, GULL_BERTH.z - 44 + dz], [Math.PI / 2, 0, 0], "#b0c9cc");
     }
     return b.build();
   }, []);
@@ -545,8 +545,11 @@ export function CloudBoat() {
     const v = rt.voyage;
     if (keeper.current) keeper.current.visible = v.active && !vy.gullAboard || rt.world === "cloud" && vy.boatIn < 1;
     // On the pirate voyage the boat is ridden, tied alongside the ship, or lost in the storm.
+    // Otherwise it is always at its berth by Port Town's pier (the town has no other boat).
     const voyaging = vy.sea && rt.world === "home";
-    root.current.visible = getGame().progress.act2.harbor && (!voyaging || v.active || vy.boatMoored);
+    const berthed = rt.world === "home" && !v.active && !voyaging;
+    const nearBerth = Math.hypot(rt.camera.pos.x - GULL_BERTH.x, rt.camera.pos.z - GULL_BERTH.z) < 90;
+    root.current.visible = (rt.world === "home" || getGame().progress.act2.harbor) && (!voyaging || v.active || vy.boatMoored) && (!berthed || nearBerth);
     if (v.active || voyaging) {
       root.current.position.set(v.x, v.y, v.z); root.current.rotation.set(0, v.yaw, 0);
     } else if (rt.world === "cloud" && vy.boatIn < 1) {
@@ -555,9 +558,9 @@ export function CloudBoat() {
       root.current.position.set(d.x + (1 - k) * 34, -.1 + Math.sin(rt.time * 1.5) * .05, d.z - (1 - k) * 40);
       root.current.rotation.set(0, Math.atan2(-34, 40), Math.sin(rt.time) * .01);
     } else {
-      const p = rt.world === "cloud" ? CLOUD_DOCK.boat : { x: PIER2.x, z: PIER2.z0 - 3 };
+      const p = rt.world === "cloud" ? CLOUD_DOCK.boat : GULL_BERTH;
       root.current.position.set(p.x, -.1 + Math.sin(rt.time * 1.5) * .035, p.z);
-      root.current.rotation.set(0, rt.world === "cloud" ? 0 : Math.PI, Math.sin(rt.time) * .008);
+      root.current.rotation.set(0, rt.world === "cloud" ? 0 : GULL_BERTH.yaw, Math.sin(rt.time) * .008);
     }
     if (sail.current) sail.current.scale.y = v.active || voyaging ? Math.max(.03, v.sail) : 1;
   });

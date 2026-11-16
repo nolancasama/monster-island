@@ -10,7 +10,7 @@ import { ACT2_PLACE, PHASE3_PLACE } from "./obstacles";
 import { lumoHidden } from "./act2";
 import { cloudCandidates } from "./act3";
 import { CLOUD_SPAWNS, HOLLOW } from "../world/cloudisle";
-import { CANOPY_ROPES, CHESTS, CLIFF_ROPE, FORK_SIGN, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
+import { CANOPY_ROPES, CHESTS, CLIFF_ROPE, FORK_SIGN, PIPPA, routeMarker, SERVICES, zoneAt, type ServiceId } from "../world/lowland";
 import { UPPER_ROPE } from "../world/upperCanopy";
 import { obstacleAvailable } from "../logic/progress";
 import type { ObstacleId } from "../types";
@@ -136,6 +136,7 @@ function act2Candidates(add: (f: Focus, reach?: number) => void) {
       add({ id, kind: "obstacle", verb: "Look at", noun: ACT2_NOUN[id], ...(id === "groveStream" ? { ja: "かわを みよう" } : id === "caveTorches" ? { ja: "たいまつを みよう" } : {}), x: place.x, z: place.z }, 2.6);
   }
   for (const s of Object.values(SERVICES)) add({ id: s.id, kind: "npc", ...SERVICE_FOCUS[s.id], x: s.keeper.x, z: s.keeper.z }, 2.8);
+  add({ id: "pippa", kind: "npc", verb: "Talk to", noun: "Pippa", x: PIPPA.x, z: PIPPA.z }, 2.6);
 }
 
 export function findFocus(): Focus | null {

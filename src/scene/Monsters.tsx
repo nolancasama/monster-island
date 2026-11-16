@@ -9,7 +9,7 @@ import { standY } from "../game/world/collision";
 import { smoothMat, shadowMaterial } from "./materials";
 import { bubboParts, emberParts, leafyParts, lumoParts, puffParts, type MonsterParts } from "./models/monsters";
 import type { MonsterId } from "../game/types";
-import { cb, companionVisible, mountPose } from "../game/combat";
+import { cb, companionVisible, mountMotion, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
 import { anchors, EMBER_MOUTH, LEAFY_HAND, PUFF_BEAK } from "./anchors";
@@ -160,6 +160,14 @@ function MonsterBody({ id }: { id: MonsterId }) {
     r.scale.set(1 / Math.sqrt(pose.squash), pose.squash, 1 / Math.sqrt(pose.squash));
     r.rotation.x = pose.lean;
     r.rotation.z = walkRock + pose.tilt;
+    // Carrying the rider: the stride, lunges, jolts and leans the rider shares (scene/Characters).
+    if (mount && cb.stance.friend === id && (id === "bubbo" || id === "ember")) {
+      const mm = mountMotion();
+      r.position.y = mm.bob;
+      r.scale.set(1 / Math.sqrt(mm.squash), mm.squash, 1 / Math.sqrt(mm.squash));
+      r.rotation.x = mm.pitch;
+      r.rotation.z = mm.roll;
+    }
     if (eyes.current) eyes.current.scale.y = pose.eyes;
     if (shadowRef.current) {
       shadowRef.current.position.y = ground - baseY - m.lift + 0.03;

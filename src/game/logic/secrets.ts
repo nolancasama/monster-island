@@ -29,14 +29,15 @@ export function secretEvent(id: string, event: ElementEvent, p: SecretProgress):
   const burningBarrier = response.becomes === "burning" && event === "burn";
   const remaining = burningBarrier ? 1.5 : id === "comboFurnace" && event === "burn" ? 8 : undefined;
   let next: SecretProgress = { ...p, objects: { ...p.objects, [id]: { state: response.becomes, ...(remaining === undefined ? {} : { remaining }) } } };
-  if (!response.secret || burningBarrier || id === "puffLeaves") return next;
+  // A pile that burns is cleared when its fire has burnt out (tickSecrets); wind clears leaves at once.
+  if (!response.secret || burningBarrier) return next;
   if (response.secret === "leafyStatues" && !["leafyStatues", "leafyStatuesEast"].every(id => next.objects[id]?.state === "pulled")) return next;
   next = complete(next, response.secret);
   return next;
 }
 
-/** Advance active-play clocks, and the exposed trapdoor's walking trigger. */
-export function tickSecrets(p: SecretProgress, dt: number, player: { x: number; z: number }): SecretProgress {
+/** Advance active-play clocks (a burning pile or reed bed burns out, the furnace cools). */
+export function tickSecrets(p: SecretProgress, dt: number, _player: { x: number; z: number }): SecretProgress {
   let next = p;
   for (const o of ELEMENT_OBJECTS) {
     if (next.secrets.includes(secretOf(o))) continue;
@@ -48,7 +49,6 @@ export function tickSecrets(p: SecretProgress, dt: number, player: { x: number; 
       next = { ...next, objects: { ...next.objects, [o.id]: remaining > 1e-9 ? { ...s, remaining } : { state: burnt ? "burnt" : "intact" } } };
       if (remaining <= 1e-9 && burnt) next = complete(next, o.on!.burn!.secret!);
     }
-    if (o.id === "puffLeaves" && s.state === "cleared" && Math.hypot(player.x - o.x, player.z - o.z) <= o.r + .35) next = complete(next, o.id);
   }
   return next;
 }

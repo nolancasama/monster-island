@@ -5,7 +5,7 @@ import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collisi
 import { CAMP, CLIFF_TOP_SPOT, SPAWN } from "../world/island";
 import { CLIFF_ROPE, CANOPY_ROPES, CANOPY_DECKS, GROVE_CROSSING, POND, STAGES, STAGE_EXITS, zoneAt } from "../world/lowland";
 import { SECRET_IDS } from "../world/elementObjects";
-import { startAct2, markDescended } from "./act2";
+import { startAct2, markDescended, openChest } from "./act2";
 import type { MonsterId } from "../types";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -216,6 +216,12 @@ describe("forest layout save migration", () => {
     if (legacy) delete act2.canopyLayout;
     return { p, back: decodeSave(JSON.stringify({ v: 4, progress: { ...p, act2 }, player: { ...position, yaw: .7 }, seconds: 87 }))! };
   }
+
+  it("keeps Port Town's seaside chest opened (2026-11-16), so its reward is never collected twice", () => {
+    const back = load({ x: 98.6, z: -312.5 }, { cleared: [...STAGES], portFound: true, chests: ["forestChest", "seasideChest"], coins: 20 });
+    expect(back.progress.act2.chests).toEqual(["forestChest", "seasideChest"]);
+    expect(openChest(back.progress, "seasideChest")).toBe(back.progress);
+  });
 
   it.each(["cleared", "vines", "bridge", "zone", "deck", "port"])("grants the permanent ascent rope for prior Canopy progress: %s", reason => {
     const position = reason === "deck" ? { x: 100, z: -212 } : CLIFF_ROPE.foot;

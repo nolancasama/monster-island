@@ -5,7 +5,7 @@ import { makeRng, shuffle } from "../logic/rng";
 import { noteSaid } from "../logic/progress";
 import { getGame, setGame, updateProgress, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
 import { MONSTERS } from "../data/monsters";
-import { NPCS, type NpcId } from "../data/town";
+import { FOLK, NPCS, type FolkId, type NpcId } from "../data/town";
 import { FAMILY, type FamilyId } from "../data/family";
 import type { MonsterId } from "../types";
 import { recognition, HARD_ERRORS, type ListenHandle } from "../../audio/recognition";
@@ -92,6 +92,7 @@ function voiceOf(by: Speaker): { pitch: number; rate: number } {
   if (by === "game") return { pitch: 1.1, rate: 0.9 };
   if (by in NPCS) return NPCS[by as NpcId].voice;
   if (by in PIRATES) return PIRATES[by as PirateId].voice;
+  if (by in FOLK) return FOLK[by as FolkId].voice;
   if (by in FAMILY) return FAMILY[by as FamilyId].voice;
   return MONSTERS[by as MonsterId].voice;
 }

@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { PartBuilder } from "../partBuilder";
 import { rockGeometry } from "./nature";
 import { SEA_Y, groundY } from "../../game/world/island";
-import { CRATES, FOUNTAIN, HOUSES, LAMPS, PIER2, PORT, PORT_WALL, SERVICES, TOWN_GATE, type ServiceId } from "../../game/world/lowland";
+import { COUNTER_H, CRATES, HOUSES, LAMPS, PIER2, PLAZA_STATUE, PORT, PORT_WALL, SERVICES, TOWN_GATE, type ServiceId } from "../../game/world/lowland";
 
 /**
  * Port Town (docs/PORT_TOWN_REVAMP.md §2), as two merged meshes:
@@ -47,9 +47,12 @@ function prism(w: number, d: number, rise: number): THREE.BufferGeometry {
   return g;
 }
 
+/** Roof slab thickness. */
+const ROOF_T = .13;
+
 /** Two roof slabs with eaves and gable overhangs, plus a ridge beam, over a w × d attic. */
 function roof(b: PartBuilder, w: number, d: number, y: number, rise: number, color: string, ridge: string) {
-  const S = Math.hypot(d / 2, rise), a = Math.atan2(rise, d / 2), L = S + .42, t = .13;
+  const S = Math.hypot(d / 2, rise), a = Math.atan2(rise, d / 2), L = S + .42, t = ROOF_T;
   for (const side of [1, -1]) {
     const uy = -rise / S, uz = side * (d / 2) / S, ny = (d / 2) / S, nz = side * rise / S;
     const cy = y + rise + uy * (L / 2 - .08) + ny * t / 2, cz = uz * (L / 2 - .08) + nz * t / 2;
@@ -120,6 +123,27 @@ function barrel(b: PartBuilder, x: number, y: number, z: number, s = 1) {
   for (const hy of [.18, .62]) b.cyl(.315 * s, .315 * s, .07 * s, x, y + hy * s, z, "#4b4f55", 8);
 }
 
+/** The anchor's crown (the foot of its shank) and its arms, in the harbour wall's frame. */
+export const ANCHOR = { foot: 1.18, top: 2.22, arm: .5, angle: .6 };
+
+/**
+ * A wall anchor, one contiguous shape: ring, stock, shank, and two arms that start
+ * at the shank's foot (a crown block covers the joint) and end in flukes.
+ */
+function anchor(b: PartBuilder, ax: number, z: number) {
+  const NAVY = "#26467a", { foot, top, arm, angle } = ANCHOR;
+  b.torus(.08, .025, [ax, top + .08, z], [0, 0, 0], NAVY);
+  b.boxAt(.62, .1, .06, [ax, top - .14, z], [0, 0, 0], NAVY);
+  b.boxAt(.14, top - foot, .06, [ax, (top + foot) / 2, z], [0, 0, 0], NAVY);
+  b.boxAt(.26, .14, .06, [ax, foot + .02, z], [0, 0, 0], NAVY);
+  for (const s of [-1, 1]) {
+    const dx = Math.cos(angle) * arm, dy = Math.sin(angle) * arm;
+    b.boxAt(arm, .1, .06, [ax + s * dx / 2, foot + dy / 2, z], [0, 0, s * angle], NAVY);
+    // A flat arrowhead fluke continuing the arm.
+    b.add(new THREE.ConeGeometry(.11, .24, 3), NAVY, [ax + s * (dx + Math.cos(angle) * .08), foot + dy + Math.sin(angle) * .08, z], [0, 0, -s * (Math.PI / 2 - angle)], [1, 1, .3]);
+  }
+}
+
 /** Service props in the building's frame (front = +z); `north` is the local direction of world north. */
 function serviceProps(b: PartBuilder, id: ServiceId, l: Look, w: number, d: number, north: [number, number]) {
   const fz = d / 2;
@@ -184,10 +208,7 @@ function serviceProps(b: PartBuilder, id: ServiceId, l: Look, w: number, d: numb
     // The keeper's side is the north (back) wall: an anchor, a ship's wheel, rope and barrels.
     // (Local x runs west here: the sign hangs at world x ≈ 65, the keeper stands at 69.8.)
     const bz = -fz - .05;
-    b.boxAt(.14, 1.05, .06, [-1.6, 1.7, bz], [0, 0, 0], "#26467a");
-    b.boxAt(.62, .1, .06, [-1.6, 2.1, bz], [0, 0, 0], "#26467a");
-    for (const s of [-1, 1]) b.boxAt(.42, .1, .06, [-1.6 + s * .2, 1.27, bz], [0, 0, s * .6], "#26467a");
-    b.torus(.08, .025, [-1.6, 2.3, bz], [0, 0, 0], "#26467a");
+    anchor(b, -1.6, bz);
     b.torus(.36, .04, [2.7, 1.75, bz], [0, 0, 0], DARKWOOD);
     for (let i = 0; i < 4; i++) b.boxAt(.82, .05, .04, [2.7, 1.75, bz - .01], [0, 0, i * Math.PI / 4], DARKWOOD);
     for (const x of [1.2, 1.8]) barrel(b, x, 0, -fz - .45, .9);
@@ -215,32 +236,44 @@ const merge = (parts: THREE.BufferGeometry[]) => {
   return merged;
 };
 
+/**
+ * The clothes shop's landmark, in the shop's frame: a giant purple top hat sitting
+ * astride the ridge. The brim is two halves, each lying on its roof slope, so the
+ * roof carries it and nothing cuts through; the crown stands upright on the ridge.
+ */
+export function giantHatGeometry(): THREE.BufferGeometry {
+  const hat = new PartBuilder(0);
+  const c = SERVICES.clothes.house, l = LOOK.clothes;
+  const slope = Math.atan2(l.rise, c.d / 2), base = hatBase();
+  for (const side of [1, -1]) {
+    const half = new THREE.CylinderGeometry(1.05, 1.05, .1, 12, 1, false, side > 0 ? -Math.PI / 2 : Math.PI / 2, Math.PI);
+    hat.add(half, "#7b4fc9", [0, base + .05, 0], [side * slope, 0, 0]);
+  }
+  hat.cyl(.62, .58, 1.3, 0, base - .02, 0, "#7b4fc9", 10);
+  hat.cyl(.635, .6, .26, 0, base + .05, 0, "#ff7eb6", 10);
+  for (const s of [-1, 1]) hat.boxAt(.42, .3, .1, [s * .26, base + .18, .62], [0, 0, s * .4], "#ff4f8b");
+  return hat.build();
+}
+/** Height (shop frame) of the roof's top surface along the clothes shop's ridge: where the hat sits. */
+export function hatBase(): number {
+  const c = SERVICES.clothes.house, l = LOOK.clothes;
+  return l.h + l.rise + ROOF_T / Math.cos(Math.atan2(l.rise, c.d / 2));
+}
+
 /** Volumes, roofs, the clothes shop's giant hat, quay, pier, boat and lighthouse: drawn at any distance. */
 export function townGeometry(): THREE.BufferGeometry {
   const parts = placedBuildings().map(p => place(building(p.look, p.w, p.d, false), p));
-  // The clothes shop's landmark: a giant purple top hat with a pink band and bow on the ridge.
-  const hat = new PartBuilder(0);
-  const c = SERVICES.clothes.house, l = LOOK.clothes, top = l.h + l.rise - .12;
-  hat.cyl(1.05, 1.05, .12, 0, top, 0, "#7b4fc9", 12);
-  hat.cyl(.62, .58, 1.3, 0, top + .1, 0, "#7b4fc9", 10);
-  hat.cyl(.635, .6, .26, 0, top + .16, 0, "#ff7eb6", 10);
-  for (const s of [-1, 1]) hat.boxAt(.42, .3, .1, [s * .26, top + .29, .62], [0, 0, s * .4], "#ff4f8b");
-  parts.push(place(hat.build(), { ...c, look: l }));
+  parts.push(place(giantHatGeometry(), { ...SERVICES.clothes.house, look: LOOK.clothes }));
   // The quay wall, the pier and its posts, a moored boat, the lighthouse.
   const b = new PartBuilder(0.4);
   const qz = PORT.z0 - 0.2, qy = gy(76, PORT.z0 + 1);
   b.box(PORT.x1 - PORT.x0 + 6, qy + 4.4, 1, (PORT.x0 + PORT.x1) / 2, -4.4, qz, "#a59a88");
+  // The pier's deck is level with the quay (lowland.ts PIER2.deckY). Gull's own boat lies alongside
+  // it (scene/CloudIsle CloudBoat at GULL_BERTH), the same boat that sails out on every voyage.
   const deck = qy + PIER2.deckY;
   b.box(PIER2.half * 2, 0.16, PIER2.z1 - PIER2.z0, PIER2.x, deck - 0.16, (PIER2.z0 + PIER2.z1) / 2, "#b88a52");
   for (let z = PIER2.z0 + 0.6; z < PIER2.z1; z += 2.4)
     for (const side of [-1, 1]) b.cyl(0.12, 0.12, deck + 3.6, PIER2.x + side * (PIER2.half - 0.05), -3.6, z, "#7a5532", 6);
-  const bx = PIER2.x + 3.6, bz = PIER2.z0 + 4;
-  const hull = new THREE.CylinderGeometry(1.4, 0.9, 6.5, 8, 1, false, Math.PI, Math.PI);
-  hull.rotateX(Math.PI / 2);
-  b.add(hull, "#c0503a", [bx, SEA_Y + 0.6, bz], [0, 0, Math.PI]);
-  b.box(2.4, 0.15, 5.6, bx, SEA_Y + 0.55, bz, "#d8b77a");
-  b.cyl(0.09, 0.11, 6, bx, SEA_Y + 0.6, bz, "#7a5532", 6);
-  b.boxAt(0.05, 3.6, 2.6, [bx, SEA_Y + 3.6, bz + 1.4], [0, 0, 0], "#fbf6ea");
   const lx = 99, lz = -327;
   b.add(rockGeometry(3, 2.5, 1800, 1), "#7a6c61", [lx, SEA_Y - 1, lz]);
   b.cyl(0.9, 1.3, 8, lx, SEA_Y + 1.2, lz, "#ffffff", 10);
@@ -251,6 +284,18 @@ export function townGeometry(): THREE.BufferGeometry {
   return merge(parts);
 }
 
+/**
+ * Sign heights (centre, above the house's ground) that keep a board and its bracket
+ * under the roof's eave: the eave's overhang drops to about the wall height less
+ * .3 m within .3 m of the wall (buildings stand .15 m into the ground).
+ */
+export const SIGN_BELOW_EAVE = {
+  blade: (wallH: number) => wallH - 0.15 - 0.78,
+  plaque: (wallH: number) => wallH - 0.15 - 0.68,
+};
+/** A blade sign's bracket sits this far above its board's centre. */
+export const BRACKET_ABOVE = 0.24 + 0.2;
+
 /** Where each sign hangs (world, facing north toward the fixed camera) and its board size. */
 export function signSpots(): Array<{ text: string; color: string; x: number; y: number; z: number; w: number; h: number; blade: boolean }> {
   const label: Record<ServiceId, [string, string]> = {
@@ -259,17 +304,67 @@ export function signSpots(): Array<{ text: string; color: string; x: number; y: 
   };
   const spots = Object.values(SERVICES).map(s => {
     const h = s.house, [text, color] = label[s.id], g = gy(h.x, h.z);
-    if (s.id === "harbor") return { text, color, x: h.x - .9, y: g + 2.45, z: h.z + h.d / 2 + .1, w: 2.2, h: .5, blade: false };
-    // West and east rows: a blade sign from the north end of the plaza-facing front.
+    // The harbour's plaque on its north wall: under the eave, clear of the window, the wheel and the anchor.
+    if (s.id === "harbor") return { text, color, x: h.x, y: g + SIGN_BELOW_EAVE.plaque(LOOK.harbor.h), z: h.z + h.d / 2 + .1, w: 2, h: .48, blade: false };
+    // West and east rows: a blade sign from the north end of the plaza-facing front, hung below the
+    // eave (its bracket meets the wall under the roof's overhang). The tall inn keeps its own height.
     const fx = Math.sin(h.yaw), frontX = h.x + fx * h.d / 2;
-    return { text, color, x: frontX + fx * 1.05, y: g + (s.id === "inn" ? 3.5 : 2.85), z: h.z + h.w / 2 - .3, w: 1.95, h: .48, blade: true };
+    return { text, color, x: frontX + fx * 1.05, y: g + (s.id === "inn" ? 3.5 : SIGN_BELOW_EAVE.blade(LOOK[s.id].h)), z: h.z + h.w / 2 - .3, w: 1.95, h: .48, blade: true };
   });
   const lintel = gy(TOWN_GATE.x, PORT_WALL.z) + PORT_WALL.height + .35;
   spots.push({ text: "PORT TOWN", color: "#7a4a2a", x: TOWN_GATE.x, y: lintel - .55, z: PORT_WALL.z + .25 + .08, w: 2.5, h: .56, blade: false });
   return spots;
 }
 
-/** Trims, shop props, lamps, the fountain, counters and sign boards: near views only. */
+/**
+ * The plaza statue, standing on y = 0: a chubby, friendly monster hero on a round
+ * two-step stone pedestal, holding a gold star up high, its cape behind it. It
+ * faces north (+z), toward the town's fixed camera. Pedestal radius 1.55 (the
+ * old fountain's footprint); about 4.6 m tall so it reads from the plaza.
+ */
+export function statueGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0);
+  const LIGHT = "#cfc8b8", MID = "#b9b09e", DARK_STONE = "#9a917f", SHADE = "#6c665b", GOLD = "#e8b93a";
+  // The pedestal: a low step, the plinth, its cap, and a plaque on the front.
+  b.cyl(1.5, 1.55, .3, 0, 0, 0, DARK_STONE, 16);
+  b.cyl(1.05, 1.15, .95, 0, .3, 0, MID, 14);
+  b.cyl(1.22, 1.22, .14, 0, 1.25, 0, LIGHT, 14);
+  b.boxAt(.86, .34, .06, [0, .8, 1.1], [0, 0, 0], "#8f8674");
+  b.boxAt(.66, .06, .07, [0, .84, 1.12], [0, 0, 0], GOLD);
+  const y = 1.39;
+  // Feet and legs, a round body with a lighter belly, a cape behind.
+  for (const s of [-1, 1]) {
+    b.sphere(.22, s * .28, y + .1, .1, MID, [1, .55, 1.35], 10);
+    b.cyl(.17, .19, .4, s * .25, y + .05, 0, MID, 10);
+  }
+  b.sphere(.62, 0, y + .98, 0, LIGHT, [1, 1.12, .9], 14);
+  b.sphere(.42, 0, y + .86, .3, "#ddd7c9", [1, 1.1, .5], 12);
+  b.boxAt(1.05, 1.2, .07, [0, y + 1.0, -.52], [.18, 0, 0], DARK_STONE);
+  // The head: round, with two little horns, friendly eyes and cheeks.
+  b.sphere(.5, 0, y + 1.88, .05, LIGHT, [1.06, .95, .95], 14);
+  for (const s of [-1, 1]) {
+    b.add(new THREE.ConeGeometry(.13, .38, 7), MID, [s * .3, y + 2.3, 0], [0, 0, -s * .38]);
+    b.sphere(.075, s * .18, y + 1.95, .5, SHADE, [1, 1.2, .6], 8);
+    b.sphere(.07, s * .32, y + 1.8, .45, "#d9cdbd", [1, .7, .5], 8);
+  }
+  b.sphere(.06, 0, y + 1.74, .52, SHADE, [2.2, .5, .6], 8);
+  // The left fist on the hip; the right arm raised high, holding the star.
+  b.cylAt(.13, .58, [-.62, y + .98, .02], [0, 0, -.42], MID, 10);
+  b.sphere(.15, -.74, y + .73, .05, MID, [1, 1, 1], 10);
+  b.cylAt(.13, 1.16, [.67, y + 1.82, .03], [0, 0, -.31], MID, 10);
+  b.sphere(.16, .85, y + 2.38, .05, MID, [1, 1, 1], 10);
+  const star = { x: .92, y: y + 2.8, z: .05 };
+  b.sphere(.14, star.x, star.y, star.z, GOLD, [1, 1, .6], 10);
+  for (let k = 0; k < 5; k++) {
+    const a = k * Math.PI * 2 / 5;
+    b.add(new THREE.ConeGeometry(.1, .3, 4), GOLD, [star.x - Math.sin(a) * .2, star.y + Math.cos(a) * .2, star.z], [0, 0, a], [1, 1, .45]);
+  }
+  // A curled tail behind.
+  b.add(new THREE.ConeGeometry(.17, .7, 7), MID, [0, y + .5, -.62], [-1.0, 0, 0]);
+  return b.build();
+}
+
+/** Trims, shop props, lamps, the statue, counters and sign boards: near views only. */
 export function townDetailGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   for (const p of placedBuildings()) {
@@ -282,11 +377,11 @@ export function townDetailGeometry(): THREE.BufferGeometry {
     parts.push(place(g, p));
   }
   const b = new PartBuilder(0);
-  // A counter in front of each keeper.
+  // A counter in front of each keeper, between them and their customers (solid: world/lowland.ts).
   for (const s of Object.values(SERVICES)) {
-    const k = s.keeper, fx = Math.sin(s.house.yaw), fz = Math.cos(s.house.yaw);
-    b.boxAt(Math.min(3, s.house.w * 0.5), 1, 0.7, [k.x - fx * 0.95, gy(k.x, k.z) + 0.5, k.z - fz * 0.95], [0, s.house.yaw, 0], "#b0763e");
-    b.boxAt(Math.min(3, s.house.w * 0.5) + .12, .08, .82, [k.x - fx * 0.95, gy(k.x, k.z) + 1.02, k.z - fz * 0.95], [0, s.house.yaw, 0], DARKWOOD);
+    const c = s.counter, y = gy(c.x, c.z);
+    b.boxAt(c.w, COUNTER_H, c.d, [c.x, y + COUNTER_H / 2, c.z], [0, c.yaw, 0], "#b0763e");
+    b.boxAt(c.w + .12, .08, c.d + .12, [c.x, y + COUNTER_H + .02, c.z], [0, c.yaw, 0], DARKWOOD);
   }
   // Sign boards behind the atlas words, with their brackets.
   for (const s of signSpots()) {
@@ -294,20 +389,19 @@ export function townDetailGeometry(): THREE.BufferGeometry {
     if (s.text === "PORT TOWN") continue;
     b.boxAt(s.w + .14, s.h + .14, .07, [s.x, s.y, s.z - .045], [0, 0, 0], "#5a3c26");
     if (s.blade) {
-      const wallX = s.x - Math.sign(77 - s.x) * 1.05;
-      b.boxAt(Math.abs(s.x - wallX) + .2, .09, .09, [(s.x + wallX) / 2, s.y + s.h / 2 + .2, s.z - .045], [0, 0, 0], "#3c3c44");
+      // An iron arm out of the wall, a plate where it is fixed, and two short hangers to the board.
+      const wallX = s.x - Math.sign(77 - s.x) * 1.05, armY = s.y + BRACKET_ABOVE;
+      b.boxAt(Math.abs(s.x - wallX) + .14, .09, .09, [(s.x + wallX) / 2 + Math.sign(77 - s.x) * .04, armY, s.z - .045], [0, 0, 0], "#3c3c44");
+      b.boxAt(.05, .34, .2, [wallX + Math.sign(77 - s.x) * .03, armY - .08, s.z - .045], [0, 0, 0], "#3c3c44");
       for (const o of [-.6, .6]) b.boxAt(.03, .2, .03, [s.x + o, s.y + s.h / 2 + .12, s.z - .045], [0, 0, 0], "#3c3c44");
     }
   }
-  // The plaza fountain with a ring of flat stones.
-  const f = FOUNTAIN, fy = gy(f.x, f.z);
-  b.cyl(f.r, f.r + 0.1, 0.5, f.x, fy - 0.05, f.z, "#bdb3a2", 12);
-  b.cyl(f.r - 0.25, f.r - 0.25, 0.05, f.x, fy + 0.4, f.z, "#6fd0e0", 12);
-  b.cyl(0.25, 0.3, 1.2, f.x, fy + 0.4, f.z, "#bdb3a2", 8);
-  b.sphere(0.35, f.x, fy + 1.7, f.z, "#bdb3a2", [1, 0.5, 1], 8);
+  // The plaza statue (where the fountain stood), with the same ring of flat stones round it.
+  const f = PLAZA_STATUE, fy = gy(f.x, f.z);
+  parts.push(statueGeometry().translate(f.x, fy, f.z));
   for (let i = 0; i < 10; i++) {
     const a = i / 10 * Math.PI * 2;
-    b.boxAt(.9, .05, .55, [f.x + Math.cos(a) * (f.r + .75), fy + .01, f.z + Math.sin(a) * (f.r + .75)], [0, -a, 0], i % 2 ? "#b8ad98" : "#a89d88");
+    b.boxAt(.9, .05, .55, [f.x + Math.cos(a) * (f.r + .8), fy + .01, f.z + Math.sin(a) * (f.r + .8)], [0, -a, 0], i % 2 ? "#b8ad98" : "#a89d88");
   }
   // Lamps: a post, a little roof and a warm lantern.
   for (const l of LAMPS) {

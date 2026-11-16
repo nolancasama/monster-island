@@ -3,7 +3,7 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS } from "../data/combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, rt } from "../runtime";
-import { PIER2 } from "../world/lowland";
+import { GULL_BERTH, PIER2 } from "../world/lowland";
 import { DECK_Y, HALF_BEAM, SHIP, SPOT, hullHalf, inShipArea, shipWalkable, shipWorld } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { foodChoices, foodOfHave, handOverFood, interrogationFoods, setVoyageStage, truthfulAnswer, voyageStage, VOYAGE_JOBS, type VoyageJob, type VoyageStage } from "../logic/voyage";
@@ -139,7 +139,8 @@ export async function startPirateVoyage(): Promise<void> {
 async function depart() {
   const v = rt.voyage;
   vy.sea = true; vy.storm = 0; vy.flow = 0; vy.cut = false;
-  v.active = true; v.sail = 1; v.stage = "depart"; v.x = PIER2.x; v.z = PIER2.z0 - 3; v.y = -0.1; v.yaw = Math.PI;
+  // From the berth alongside the pier, where the boat was waiting.
+  v.active = true; v.sail = 1; v.stage = "depart"; v.x = GULL_BERTH.x; v.z = GULL_BERTH.z; v.y = -0.1; v.yaw = GULL_BERTH.yaw;
   rt.player.frozen = true;
   audio.startMusic("island");
   boatPose();

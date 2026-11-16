@@ -5,7 +5,7 @@ import { cb } from "../game/combat";
 import { getGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { standY } from "../game/world/collision";
-import { ELEMENT_OBJECTS, SECRET_IDS, SECRET_SITES } from "../game/world/elementObjects";
+import { ELEMENT_OBJECTS, PILE, PILES, SECRET_IDS, SECRET_SITES, type PileKind } from "../game/world/elementObjects";
 
 // Five draws across all sites, including instanced autumn leaf quads.
 // Flames share ElementEffects' existing sprite draw. Scratch storage is mount-only.
@@ -47,7 +47,7 @@ export function Secrets() {
     const sites = SECRET_IDS.map(id => ({
       id, site: SECRET_SITES[id], object: ELEMENT_OBJECTS.find(o => o.id === id)!,
       open: getGame().progress.act2.secrets.includes(id) ? 1 : 0,
-      first: true, a: 0, b: 0, clear: 0,
+      first: true, a: 0, b: 0, clear: 0, how: null as null | "fire" | "wind",
     }));
     function part(kind: keyof typeof batches, x: number, y: number, z: number,
       sx: number, sy: number, sz: number, tint: string, rx = 0, ry = 0, rz = 0) {
@@ -59,14 +59,6 @@ export function Secrets() {
     }
     function box(x: number, y: number, z: number, w: number, h: number, d: number, tint: string, rx = 0, ry = 0, rz = 0) {
       part("box", x, y, z, w, h, d, tint, rx, ry, rz);
-    }
-    function thorn(x: number, z: number, k: number, seed: number) {
-      const y = groundY(x, z);
-      box(x, y + .48 * k, z, .19, .96 * k, .18, k < .3 ? DARK : "#69452e", 0, seed, .32);
-      for (let j = 0; j < 3; j++) {
-        part("cone", x + Math.sin(seed + j) * .16, y + (.4 + j * .24) * k, z,
-          .18, .52 * k, .15, "#815b36", 0, seed + j, j % 2 ? 1 : -1);
-      }
     }
     function shell(x: number, y: number, z: number, upright: number, s = 1) {
       part("stone", x, y, z, .46 * s, (.13 + upright * .33) * s, (.46 - upright * .32) * s, "#f4cc9c");
@@ -93,17 +85,51 @@ export function Secrets() {
       }
       box(x, y + 1.42, z + .34, .16, .12, .12, "#80897f");
     }
-    function leaves(x: number, z: number, hx: number, hz: number, k: number, base: number) {
+    const CHAR = new THREE.Color("#2a2420"), tint = new THREE.Color();
+    /** A colour darkened toward charcoal as the pile burns. */
+    const charred = (hex: string, c: number) => `#${tint.set(hex).lerp(CHAR, c).getHexString()}`;
+    /**
+     * One compact, round pile over a hidden chest (world/elementObjects PILES):
+     * a dome of autumn leaves, or a heap of crossed sticks round a little teepee.
+     * `k` 1 → 0 as it goes; `char` 0 → 1 as fire blackens it; `blow` 0 → 1 as
+     * Puff's wind scatters the leaves outward and up.
+     */
+    function pile(kind: PileKind, x: number, z: number, y: number, k: number, char: number, blow: number) {
       if (k < .002) return;
-      for (let i = 0; i < 100; i++) {
-        const a = i * 2.39996, r = Math.sqrt((i + .5) / 100);
-        const dx = Math.cos(a) * hx * r, dz = Math.sin(a) * hz * r;
-        part("leaf", x + dx + (1 - k) * Math.sin(a) * 2, base + (.1 + (1 - r) * .65) * k,
-          z + dz, .7 * k, .95 * k, k, i % 3 === 0 ? "#d89a32" : i % 3 === 1 ? "#b75228" : "#d0b044",
-          -Math.PI / 2 + Math.sin(i) * .45, i * 1.8, i * .5);
+      const R = PILE.r, H = PILE.h * (1 - .3 * char);
+      // A mound under the cover, so no gap shows the ground (or the chest) through it.
+      part("stone", x, y + H * .28 * k, z, R * .82 * k, H * .55 * k, R * .82 * k, charred(kind === "leaves" ? "#9b5a2a" : "#6e5a43", char));
+      if (kind === "leaves") {
+        for (let i = 0; i < 110; i++) {
+          const a = i * 2.39996, r = Math.sqrt((i + .5) / 110);
+          const lift = (1 - r * r) * H * .92 + .06, out = blow * (1.6 + (i % 4) * .7);
+          part("leaf", x + Math.cos(a) * (R * r + out), y + (lift + blow * (1.4 + (i % 3) * .5) * (1 - blow * .6)) * (blow ? 1 : k),
+            z + Math.sin(a) * (R * r + out), .62 * k, .85 * k, k,
+            charred(i % 4 === 0 ? "#d89a32" : i % 4 === 1 ? "#b75228" : i % 4 === 2 ? "#d0b044" : "#9a4a22", char),
+            -Math.PI / 2 + (1 - r) * .9 * Math.sin(i * 1.3) + blow * i, a + Math.PI / 2, (1 - r) * .7 * Math.cos(i));
+        }
+        return;
+      }
+      // Sticks: a teepee of eight leaning poles, then crossed sticks heaped round it.
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + .2, len = 1.35 * H / PILE.h;
+        part("box", x + Math.cos(a) * R * .38 * k, y + len * .45 * k, z + Math.sin(a) * R * .38 * k, .08 * k, len * k, .08 * k,
+          charred(i % 2 ? "#8a5a32" : "#a0703f", char), Math.sin(a) * .5, 0, -Math.cos(a) * .5);
+      }
+      for (let i = 0; i < 18; i++) {
+        const a = i * 2.39996, r = .35 + .6 * ((i * 7) % 18) / 18, layer = i % 3;
+        part("box", x + Math.cos(a) * R * r * .8 * k, y + (.12 + layer * .16) * (1 - r * .35) * k, z + Math.sin(a) * R * r * .8 * k,
+          (1.1 + (i % 4) * .14) * k, .08 * k, .08 * k, charred(i % 3 === 0 ? "#6e4a2a" : i % 3 === 1 ? "#8a5a32" : "#b07c48", char),
+          0, a + Math.PI / 2 + (i % 2 ? .5 : -.4), (i % 2 ? .12 : -.1));
+      }
+      // A few dry leaves caught in the heap.
+      for (let i = 0; i < 10; i++) {
+        const a = i * 2.39996, r = .2 + .7 * i / 10;
+        part("leaf", x + Math.cos(a) * R * r * k, y + (.55 - r * .3) * H * k, z + Math.sin(a) * R * r * k, .45 * k, .6 * k, k,
+          charred(i % 2 ? "#c58a3a" : "#9a4a22", char), -Math.PI / 2 + Math.sin(i) * .6, a, 0);
       }
     }
-    return { all, sites, eastStatue, part, box, thorn, shell, statue, leaves, material, leafMaterial };
+    return { all, sites, eastStatue, part, box, shell, statue, pile, material, leafMaterial };
   }, []);
   useEffect(() => () => {
     for (const b of kit.all) { b.mesh.geometry.dispose(); b.mesh.dispose(); }
@@ -111,7 +137,7 @@ export function Secrets() {
   }, [kit]);
 
   useFrame((_, dt) => {
-    const { part, box, thorn, shell, statue, leaves } = kit;
+    const { part, box, shell, statue, pile } = kit;
     const secrets = getGame().progress.act2.secrets;
     for (const s of kit.sites) {
       const done = secrets.includes(s.id), state = cb.elementObjects[s.id]?.state ?? "intact";
@@ -126,6 +152,20 @@ export function Secrets() {
       s.b = s.first ? targetB : THREE.MathUtils.clamp(s.b + Math.sign(targetB - s.b) * step, 0, 1);
       s.clear = s.first ? targetClear : THREE.MathUtils.clamp(s.clear + Math.sign(targetClear - s.clear) * step, 0, 1);
       s.first = false;
+      const kind = PILES[s.id];
+      if (kind) {
+        // One pile over the chest: it chars and sinks as it burns, or (leaves) blows away.
+        if (state === "burning") s.how = "fire";
+        else if (done && !s.how) s.how = state === "cleared" ? "wind" : "fire";
+        const c = s.site.chest;
+        if (cb.world !== "home" || Math.hypot(rt.player.x - c.x, rt.player.z - c.z) > 45) continue;
+        const burnt = state === "burning" ? 1 - (cb.elementObjects[s.id]?.remaining ?? 1.5) / 1.5 : 0;
+        const fire = done && s.how === "fire", blow = done && s.how === "wind" ? s.open : 0;
+        const char = fire ? 1 : burnt;
+        const k = fire ? (1 - s.open) * .75 : done ? 1 - blow : 1 - burnt * .25;
+        pile(kind, c.x, c.z, groundY(c.x, c.z), k, char, blow);
+        continue;
+      }
       const b = s.site.blocker;
       if (b.kind !== "box") continue;
       if (cb.world !== "home" || Math.hypot(rt.player.x - b.x, rt.player.z - b.z) > 45) continue;
@@ -135,9 +175,8 @@ export function Secrets() {
 
       // Open chambers have a low structural rim; their centres remain terrain.
       // Closed pockets and the shell cage never add a floor over the ground.
-      if (k > 0 && (s.id === "leafyStatues" || s.id === "puffLeaves"
-        || s.id === "comboCrateLift" || s.id === "comboFurnace")) {
-        const tint = s.id === "puffLeaves" || s.id === "comboCrateLift" ? WOOD : STONE;
+      if (k > 0 && (s.id === "leafyStatues" || s.id === "comboCrateLift" || s.id === "comboFurnace")) {
+        const tint = s.id === "comboCrateLift" ? WOOD : STONE;
         for (const side of [-1, 1]) {
           box(x + side * (hx - .09), y + .09 * k, z, .18, .18 * k, hz * 2, tint);
           box(x, y + .09 * k, z + side * (hz - .09), hx * 2 - .36, .18 * k, .18, tint);
@@ -145,40 +184,7 @@ export function Secrets() {
         // A stream runs through this one chamber: planks keep the chest out of the water.
         if (s.id === "comboCrateLift") box(x, y + .13 * k, z, hx * 2 - .2, .1 * k, hz * 2 - .2, WOOD);
       }
-      if (s.id === "groveDryReeds" || s.id === "canopyDryReeds") {
-        // Dry reeds fill the exact blocker footprint and withdraw as the saved
-        // burn completes. They reuse the thicket's instanced wood and cones.
-        if (shut > .002) for (let ix = 0; ix <= 6; ix++) for (let iz = 0; iz <= 8; iz++) {
-          const px = x - hx + ix * hx / 3, pz = z - hz + iz * hz / 4;
-          const base = groundY(px, pz), height = (.95 + ((ix + iz * 3) % 4) * .14) * shut;
-          box(px, base + height / 2, pz, .13 * shut, height, .13 * shut, "#b89549", 0, 0, Math.sin(ix * 2 + iz) * .12);
-          part("cone", px, base + height, pz, .16 * shut, .3 * shut, .14 * shut, "#d0b06b");
-        }
-        for (let i = 0; i < 5; i++) {
-          const a = i * 2.39996, r = .45 * Math.sqrt((i + .5) / 5);
-          const height = (1 - k) * .9;
-          box(ox + Math.cos(a) * r, oy + height / 2, oz + Math.sin(a) * r, .13, height, .13, "#b89549");
-        }
-      } else if (s.id === "emberThicket") {
-        for (let i = 0; i < 12; i++) {
-          const a = i * 2.39996, r = .75 * Math.sqrt((i + .5) / 12);
-          thorn(ox + Math.cos(a) * r, oz + Math.sin(a) * r, 1 - k * .86, a);
-        }
-        // Hedge follows all four collision edges, including both rear corners.
-        for (let i = 0; i <= 8; i++) {
-          const t = i / 8;
-          if (shut > .002) {
-            thorn(x - hx + t * hx * 2, z - hz, shut, i);
-            thorn(x - hx + t * hx * 2, z + hz, shut, i + 2);
-            thorn(x - hx, z - hz + t * hz * 2, shut, i + 4);
-            thorn(x + hx, z - hz + t * hz * 2, shut, i + 6);
-          }
-        }
-        // The bush covers the whole pocket: no bare floor gives the hiding place away.
-        if (shut > .002) for (let ix = 1; ix < 4; ix++) for (let iz = 1; iz < 5; iz++)
-          thorn(x - hx + ix * hx / 2, z - hz + iz * hz * .4, shut * 1.2, ix * 3 + iz);
-        if (k > 0) part("stone", ox, oy + .035, oz, .85 * k, .055, .8 * k, "#615951");
-      } else if (s.id === "bubboLedgeKey") {
+      if (s.id === "bubboLedgeKey") {
         const postX = x - hx - .32, postZ = z + hz;
         box(postX, groundY(postX, postZ) + .8, postZ, .38, 1.6, .38, "#d5c5a3");
         part("ring", postX, groundY(postX, postZ) + 1.4, postZ + .21, .3, .3, .3, "#846953");
@@ -214,20 +220,6 @@ export function Secrets() {
           if (k > 0) box(x, y + .045 + (3 - i) * .08 * k, z + hz - .3 - i * .48,
             2.5, .09, .43, "#848b80");
         }
-      } else if (s.id === "puffLeaves") {
-        for (let i = 0; i < 6; i++) {
-          box(ox + (i % 2 - .5) * .9, oy + .025, oz + (Math.floor(i / 2) - 1) * .75, .84, .05, .69, "#898b77");
-        }
-        leaves(ox, oz, 1.2, 1, 1 - s.clear, oy + .04);
-        // Leaf-covered lid fills the otherwise solid chest pocket, then folds outward.
-        const lidX = x - k * (hx + .25), lidY = y + .65 * shut + .08;
-        box(lidX, lidY, z, hx * 2 * (1 - k * .87), 1.3 * shut + .1, hz * 2, DARK_WOOD, 0, 0, -k * .12);
-        for (let i = 0; i < 6; i++) {
-          box(lidX, lidY + .66 * shut + .07, z - hz + (i + .5) * hz / 3,
-            hx * 2 * (1 - k * .87), .07, hz / 3 - .045, WOOD);
-        }
-        part("ring", lidX + .6 * shut, lidY + .7 * shut + .13, z + .8, .18, .18, .18, "#c7ac71", Math.PI / 2);
-        leaves(x, z, hx, hz, 1 - s.clear, y + 1.4);
       } else if (s.id === "comboCrateLift") {
         // Pad and switch are visual props only; E4a owns the grab/lift targets.
         const padX = ox - 1, padZ = oz - 1.4, py = groundY(padX, padZ);

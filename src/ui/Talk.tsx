@@ -6,7 +6,7 @@ import { recognition, requestMicPermission } from "../audio/recognition";
 import { MONSTERS } from "../game/data/monsters";
 import { Icon } from "./icons";
 import { MaplePortrait, NpcPortrait, LookPortrait, Portrait, SelfPortrait } from "./Portraits";
-import { NPCS, type NpcId } from "../game/data/town";
+import { FOLK, NPCS, type FolkId, type NpcId } from "../game/data/town";
 import { UI } from "./i18n";
 import type { MonsterId } from "../game/types";
 import { FAMILY, type FamilyId } from "../game/data/family";
@@ -23,7 +23,7 @@ export function Ja({ children }: { children: React.ReactNode }) {
 }
 
 const NAME: Record<string, string> = { maple: "Professor Maple", self: "You", game: "" };
-export const speakerName = (by: Speaker) => NAME[by] ?? FAMILY[by as FamilyId]?.name ?? NPCS[by as NpcId]?.name ?? PIRATES[by as PirateId]?.name ?? MONSTERS[by as MonsterId]?.name ?? "";
+export const speakerName = (by: Speaker) => NAME[by] ?? FAMILY[by as FamilyId]?.name ?? NPCS[by as NpcId]?.name ?? PIRATES[by as PirateId]?.name ?? FOLK[by as FolkId]?.name ?? MONSTERS[by as MonsterId]?.name ?? "";
 
 export function SpeakerFace({ by, size }: { by: Speaker; size: number }) {
   if (by in FAMILY) {
@@ -33,6 +33,7 @@ export function SpeakerFace({ by, size }: { by: Speaker; size: number }) {
   if (by === "maple") return <MaplePortrait size={size} />;
   if (by in NPCS) return <NpcPortrait id={by as NpcId} size={size} />;
   if (by in PIRATES) return <LookPortrait look={PIRATES[by as PirateId]} size={size} />;
+  if (by in FOLK) return <LookPortrait look={FOLK[by as FolkId]} size={size} />;
   if (by === "self") return <SelfPortrait size={size} />;
   if (by === "game")
     return (

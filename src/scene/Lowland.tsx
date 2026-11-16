@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
-import { NPCS, NPC_OF } from "../game/data/town";
+import { FOLK, NPCS, NPC_OF, type KeeperLook } from "../game/data/town";
 import {
   lowlandRegionVisible,
   PORT_WALL,
@@ -21,6 +21,7 @@ import {
   POND,
   POND_Y,
   streamY,
+  PIPPA,
   SERVICES,
   type ServiceId,
 } from "../game/world/lowland";
@@ -167,9 +168,18 @@ const nearSideChest = (x: number, z: number) => Math.hypot(rt.player.x - x, rt.p
 
 function Keeper({ service }: { service: ServiceId }) {
   const def = NPCS[NPC_OF[service]];
-  const geo = useMemo(() => npcGeometry(def), [def]);
+  return <TownPerson look={def} at={SERVICES[service].keeper} />;
+}
+
+/** Pippa, behind the Food Market. */
+function Pippa() {
+  return <TownPerson look={FOLK.pippa} at={PIPPA} />;
+}
+
+/** A town person standing at a spot, turning to face the player when near. */
+function TownPerson({ look, at: k }: { look: KeeperLook; at: { x: number; z: number; yaw: number } }) {
+  const geo = useMemo(() => npcGeometry(look), [look]);
   const ref = useRef<THREE.Group>(null);
-  const k = SERVICES[service].keeper;
   useFrame(() => {
     const g = ref.current;
     if (!g) return;
@@ -436,6 +446,7 @@ export function Lowland() {
       {(Object.keys(SERVICES) as ServiceId[]).map((s) => (
         <Keeper key={s} service={s} />
       ))}
+      <Pippa />
     </group>
   );
 }

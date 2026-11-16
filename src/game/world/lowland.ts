@@ -198,9 +198,25 @@ export const COAST_TRAIL: Array<[number, number]> = [
   [76, -290.5],
 ];
 
+/** The grass at the foot of the Canopy's root wall, beside the entrance rope (forest floor). */
+export const ROPE_APPROACH_GRASS = [rect(90.5, 106, -200.5, -196.8), rect(109, 117.5, -200.5, -188)];
+/**
+ * Near the entrance rope the forest bank rises right at the walkable edge, so
+ * grass that looks open is open and the edge reads as a slope (elsewhere the bank
+ * keeps its wider flat margin).
+ */
+export const ROPE_BANK = { x0: 88, x1: 120, z0: -203, z1: -182, fade: 3, margin: 0.3, ramp: 3 };
+function ropeBankK(x: number, z: number): number {
+  const b = ROPE_BANK, out = Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
+  return 1 - smooth(out / b.fade);
+}
+
 export const CAUSEWAY = rect(50, 113, -264.5, -242.5);
 export const PORT = rect(54, 100, -322.5, -289.5);
-export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.55 };
+/** The town pier: its deck sits just above the quay (no step up from the plaza). */
+export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.08 };
+/** Captain Gull's boat lies alongside the pier, bow to the sea; both departures leave from here. */
+export const GULL_BERTH = { x: PIER2.x + PIER2.half + 1.75, z: PIER2.z0 + 6, yaw: Math.PI };
 export const SHRINE = disc(106.5, -251.5, 4.8);
 /** Full statue silhouettes sit at least .6m beyond the east walk boundary. */
 export const SHRINE_STATUES = [{ x: 114.2, z: -253.7 }, { x: 114.2, z: -249.3 }];
@@ -403,6 +419,10 @@ export const ZONES: Record<ZoneId, ZoneDef> = {
       // without retaining the old diagonal ascent into the Canopy.
       rect(111, 117.5, -196, -184),
       rect(104, 111, -200.5, -184.5),
+      // The open grass along the Canopy's root wall either side of the entrance rope
+      // (2026-11-16): west to the mesa's foot, east to the boulders. It looked open
+      // and was not; the rope is now approached across all of it.
+      ...ROPE_APPROACH_GRASS,
       disc(76.5, -168, 7.3),
       disc(74.5, -178.5, 6.8),
       disc(68, -166, 8.3),
@@ -651,6 +671,14 @@ export interface ChestDef {
   /** A unique treasure, granted once (act2.relics). */
   relic?: RelicId;
 }
+/**
+ * Pippa, behind the Food Market (west of it): out of sight from the plaza, found
+ * by walking round the market's south end. She faces the way in.
+ */
+export const PIPPA = { x: 56.4, z: -299.6, yaw: Math.PI * 0.85 };
+/** A chest behind the Seaside Inn, on the paved strip by its back wall: the inn hides it from the plaza. */
+export const SEASIDE_CHEST = { x: 98.6, z: -314, yaw: 0 };
+
 export const CHESTS: ChestDef[] = [
   // The tutorial chest at the end of the first forest: food to learn eating, and the first amber.
   { id: "forestChest", x: 79.3, z: -183.4, yaw: -0.5, coins: 15, amber: 1, food: { id: "apples", n: 2 } },
@@ -662,6 +690,8 @@ export const CHESTS: ChestDef[] = [
   { id: "shrineChest", x: 108.6, z: -252.6, yaw: -1.6, coins: 40, amber: 1, food: { id: "meat", n: 2 } },
   { id: "groveHiddenCache", close: true, x: 61, z: -201, yaw: .5, coins: 25, amber: 1 },
   { id: "canopyTreasureLedge", close: true, x: 85.5, z: -210, yaw: -.5, coins: 25, amber: 1 },
+  // Port Town: found by walking round behind the Seaside Inn (no puzzle).
+  { id: "seasideChest", close: true, ...SEASIDE_CHEST, coins: 20, amber: 0, food: { id: "fish", n: 1 } },
   ...SECRET_IDS.map(secret => ({ id: `${secret}Chest`, secret, ...SECRET_SITES[secret].chest, yaw: 0, coins: 20, amber: 1 })),
   // Behind Leafy's root seal at the back of the cave (cave layer; see world/cave.ts CAVE_CHEST).
   { id: "caveRootSealChest", secret: "caveRootSeal", layer: "cave", close: true, x: 66.95, z: -196.35, yaw: 1.91, coins: 45, amber: 2, relic: "caveCrystal" },
@@ -690,40 +720,62 @@ export interface ServiceDef {
   /** Building centre, size (x, z) and the direction its front faces. */
   house: { x: number; z: number; w: number; d: number; yaw: number };
   keeper: { x: number; z: number; yaw: number };
+  /**
+   * The solid counter between the keeper and customers (w along the front, d deep,
+   * turned like the house), shared by the model and collision. Customers talk
+   * across it from the plaza side; the keeper stands behind it.
+   */
+  counter: { x: number; z: number; w: number; d: number; yaw: number };
 }
+export const COUNTER_H = 1;
 export const SERVICES: Record<ServiceId, ServiceDef> = {
   market: {
     id: "market",
     name: { en: "Food Market", ja: "たべものの おみせ" },
     house: { x: 61, z: -299, w: 6, d: 4, yaw: Math.PI / 2 },
     keeper: { x: 64.6, z: -299, yaw: Math.PI / 2 },
+    counter: { x: 65.55, z: -299, w: 3, d: 0.7, yaw: Math.PI / 2 },
   },
   clothes: {
     id: "clothes",
     name: { en: "Clothes Shop", ja: "ふくの おみせ" },
     house: { x: 93, z: -299, w: 6, d: 4.5, yaw: -Math.PI / 2 },
     keeper: { x: 89.2, z: -299, yaw: -Math.PI / 2 },
+    counter: { x: 88.25, z: -299, w: 3, d: 0.7, yaw: -Math.PI / 2 },
   },
   trainer: {
     id: "trainer",
     name: { en: "Monster Trainer", ja: "モンスタートレーナー" },
     house: { x: 60.5, z: -312, w: 5.5, d: 5, yaw: Math.PI / 2 },
     keeper: { x: 64.4, z: -312, yaw: Math.PI / 2 },
+    counter: { x: 65.35, z: -312, w: 2.75, d: 0.7, yaw: Math.PI / 2 },
   },
   inn: {
     id: "inn",
     name: { en: "Seaside Inn", ja: "うみべの やど" },
     house: { x: 93.5, z: -312, w: 6, d: 6, yaw: -Math.PI / 2 },
     keeper: { x: 89.3, z: -312, yaw: -Math.PI / 2 },
+    counter: { x: 88.35, z: -312, w: 3, d: 0.7, yaw: -Math.PI / 2 },
   },
   harbor: {
     id: "harbor",
     name: { en: "Harbor Office", ja: "みなとの じむしょ" },
     house: { x: 66, z: -319.5, w: 7, d: 4, yaw: Math.PI },
     keeper: { x: 69.8, z: -316.6, yaw: Math.PI },
+    counter: { x: 69.8, z: -315.65, w: 3, d: 0.7, yaw: Math.PI },
   },
 };
-export const FOUNTAIN = { x: 77, z: -306, r: 1.6 };
+/** Where a customer stands to talk across a service's counter (plaza side). */
+export function customerSpot(id: ServiceId, gap = 0.75): { x: number; z: number } {
+  const { keeper: k, counter: c } = SERVICES[id];
+  const dx = c.x - k.x, dz = c.z - k.z, d = Math.hypot(dx, dz) || 1;
+  return { x: c.x + (dx / d) * (c.d / 2 + gap), z: c.z + (dz / d) * (c.d / 2 + gap) };
+}
+/**
+ * The plaza's statue (where the fountain stood): a friendly hero monster on a round
+ * stone pedestal, on the same spot and about the same footprint.
+ */
+export const PLAZA_STATUE = { x: 77, z: -306, r: 1.55 };
 /** Maple waits on the quay once the town is reached. */
 export const MAPLE_PORT = { x: 80.5, z: -317.5, yaw: Math.PI * 0.85 };
 export const TOWN_GATE = { x: 76, z: -289.5 };
@@ -914,11 +966,10 @@ export const CRATES: Array<Vec2 & { yaw: number; s: number }> = [
   { x: 98, z: -306, yaw: 0.7, s: 1 },
   { x: 56.4, z: -306.5, yaw: -0.4, s: 0.9 },
 ];
+/** Street lamps (the two beside the old fountain went with it). */
 export const LAMPS: Vec2[] = [
   { x: 70.5, z: -293 },
   { x: 81.5, z: -293 },
-  { x: 70.5, z: -309 },
-  { x: 83.5, z: -309 },
   { x: 74.2, z: -321.6 },
   { x: 77.8, z: -321.6 },
 ];
@@ -964,11 +1015,14 @@ export function lowlandSolids(): SolidShape[] {
   for (const s of Object.values(SERVICES)) {
     box(s.house.x, s.house.z, s.house.w / 2, s.house.d / 2, s.house.yaw);
     circle(s.keeper.x, s.keeper.z, 0.4);
+    // The counter's top overhangs its base by .06; walkers stop at the top's edge.
+    box(s.counter.x, s.counter.z, s.counter.w / 2 + 0.06, s.counter.d / 2 + 0.06, s.counter.yaw);
   }
   for (const h of HOUSES) box(h.x, h.z, h.w / 2, h.d / 2, h.yaw);
   for (const c of CRATES) box(c.x, c.z, 0.4 * c.s, 0.4 * c.s, c.yaw);
   for (const l of LAMPS) circle(l.x, l.z, 0.12);
-  circle(FOUNTAIN.x, FOUNTAIN.z, FOUNTAIN.r);
+  circle(PLAZA_STATUE.x, PLAZA_STATUE.z, PLAZA_STATUE.r);
+  circle(PIPPA.x, PIPPA.z, 0.4);
   for (const side of [-1, 1]) circle(TOWN_GATE.x + side * (PORT_WALL.gateHalf + PORT_WALL.towerR), PORT_WALL.z, PORT_WALL.towerR);
   return out;
 }
@@ -1028,7 +1082,8 @@ export function forestBankY(x: number, z: number): number {
     opening = Math.max(opening, 1 - smooth((distance - 0.6) / 0.9));
   }
   const edge = smooth((-159 - z) / 6) * smooth((z + 288) / 6) * smooth((x - 30) / 4) * smooth((123 - x) / 4);
-  return (4 - 3.6 * opening) * smooth((d - 1.2) / 4.5) * edge;
+  const rope = ropeBankK(x, z), margin = 1.2 + (ROPE_BANK.margin - 1.2) * rope, ramp = 4.5 + (ROPE_BANK.ramp - 4.5) * rope;
+  return (4 - 3.6 * opening) * smooth((d - margin) / ramp) * edge;
 }
 
 /** Curved transition crossings; collision footprints remain independent of the low shoulders. */

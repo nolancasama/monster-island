@@ -43,8 +43,8 @@ export const SHALLOW_KEEP_OUTS: readonly WalkShape[] = [
   { kind: "trail", pts: [[67.7, -216.4], [71, -216.4]], w: 2.1 },
   // Bubbo's key target, reward, and approach remain dry.
   { kind: "trail", pts: [[54.5, -218], [56.8, -218], [60, -214]], w: 2.1 },
-  // Dry reeds must remain dry, including the chest and fire approach.
-  { kind: "trail", pts: [[60, -221], [66.2, -221]], w: 2.5 },
+  // The dry stick pile over its chest stays dry, with the fire approach in front of it.
+  { kind: "trail", pts: [[63, -221], [66.2, -221]], w: 2.1 },
   // Complete crate-lift pocket: approach, grab/lift ray and reward.
   { kind: "rect", x0: 39.5, x1: 45.2, z0: -236.6, z1: -227.3 },
   // Dry door funnel and the last bank before the Causeway passage.

@@ -118,10 +118,11 @@ describe("the cave under the mountain", () => {
     const dx = Math.max(mouth.groundX0 - pool.x, 0, pool.x - mouth.groundX1);
     const dz = Math.max(mouth.z0 - pool.z, 0, pool.z - mouth.z1);
     expect(Math.hypot(dx, dz)).toBeGreaterThan(pool.r);
+    // The dry-reed stick pile over its chest (a round pile since 2026-11-16).
     const reeds = SECRET_SITES.groveDryReeds.blocker;
-    expect(reeds.kind).toBe("box");
-    if (reeds.kind !== "box") return;
-    expect(mouth.z0).toBeGreaterThan(reeds.z + reeds.hz);
+    expect(reeds.kind).toBe("circle");
+    if (reeds.kind !== "circle") return;
+    expect(mouth.z0).toBeGreaterThan(reeds.z + reeds.r);
   });
 
   it("maps chamber lighting to the middle of the route and continues down the west arm", () => {

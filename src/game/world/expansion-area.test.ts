@@ -93,17 +93,19 @@ it("preserves the base and downstream floor budgets, accounting for the removed 
   // Bridge spans are puzzle surfaces outside the fixed polygons.
   expect(a.canopy).toBeGreaterThanOrEqual(canopyFloor);
   expect(a.canopy - canopyFloor).toBeLessThan(20);
-  // Slice 2 rezones the full former camp disc and removes its prop solids.
-  expect(a.forestBase).toBe(778);
+  // Slice 2 rezones the full former camp disc and removes its prop solids; 2026-11-16 opens the
+  // grass along the Canopy's root wall beside the entrance rope (ROPE_APPROACH_GRASS, +9.75 m²).
+  expect(a.forestBase).toBe(787.75);
   expect(a.canopy).toBeGreaterThanOrEqual(407.75 * 1.7);
   for (const zone of ["forest1", "causeway", "coast"] as const) {
     const area = zone === "forest1" ? a.forestBase : a[zone];
     expect(area / BASELINE_AREA[zone], zone).toBeGreaterThanOrEqual(1.8);
     // Open secret pockets add floor in the forest base; the frozen baseline
     // was measured before those pockets were opened for this flood fill. The
-    // forest's open north side (docs/SEVEN_IMPROVEMENTS.md section 2) adds more.
+    // forest's open north side (docs/SEVEN_IMPROVEMENTS.md section 2) adds more, and so does
+    // the grass opened beside the Canopy's entrance rope (2026-11-16).
     const unchangedArea = area - (zone === "causeway" ? a.causewayFormerStairs : 0);
-    expect(unchangedArea / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(zone === "forest1" ? 2.75 : 2.2);
+    expect(unchangedArea / BASELINE_AREA[zone], zone).toBeLessThanOrEqual(zone === "forest1" ? 2.8 : 2.2);
   }
   expect(a.forestLeftArm).toBeGreaterThan(200);
   expect(a.forestRightArm).toBeGreaterThan(200);

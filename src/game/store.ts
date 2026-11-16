@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PirateId } from "./data/pirates";
-import type { NpcId } from "./data/town";
+import type { FolkId, NpcId } from "./data/town";
 import type { FamilyId } from "./data/family";
 import type { FoodId, MonsterId } from "./types";
 import type { PhraseId } from "./logic/english";
@@ -27,7 +27,7 @@ export interface Settings {
 
 export type MicState = "unknown" | "ready" | "blocked" | "unsupported";
 
-export type Speaker = "maple" | "self" | "game" | MonsterId | NpcId | FamilyId | PirateId;
+export type Speaker = "maple" | "self" | "game" | MonsterId | NpcId | FamilyId | PirateId | FolkId;
 
 export interface Choice {
   id: PhraseId;

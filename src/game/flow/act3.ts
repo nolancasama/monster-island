@@ -7,7 +7,7 @@ import { cb, hooks, resetBeaconFight, travelCombat, wakeUp } from "../combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, effect, rt } from "../runtime";
 import { BEACON, CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, OBSERVATORY, RAIDER_BARRICADE, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
-import { PIER2, SERVICES } from "../world/lowland";
+import { GULL_BERTH, SERVICES } from "../world/lowland";
 import { gatesOf, nearestWalkable, PLAYER_R } from "../world/collision";
 import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, defeatBeacon, discoverSkyFortress, discoverHollow, eatStew, markFamily, observatoryLiftReady, openCloudChest, reachObservatory, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
 import { rested } from "../logic/act2";
@@ -59,12 +59,13 @@ export async function sailWithGull() {
   if (!answer) return;
   const v = rt.voyage;
   v.active = true; v.sail = 0; v.stage = "depart";
-  v.x = PIER2.x; v.z = PIER2.z0 - 3; v.y = -.1; v.yaw = Math.PI;
+  // From the berth alongside the pier, where the boat was waiting.
+  v.x = GULL_BERTH.x; v.z = GULL_BERTH.z; v.y = -.1; v.yaw = GULL_BERTH.yaw;
   rt.player.frozen = true;
   audio.startMusic("island");
   boatPose();
   await say("harbor", "Hold on, friends!", "ともだちも いっしょに しゅっぱつだ!");
-  await boatLeg(6, v.x, v.z - 7);
+  await boatLeg(6, v.x, v.z - 10);
   v.stage = "sail";
   await command("raiseSail", "ほを あげよう!「Raise the sail!」");
   await over(2, k => { v.sail = k; boatPose(); });

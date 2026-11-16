@@ -3,7 +3,7 @@ import { newProgress, type Progress } from "./progress";
 import { newAct2, openChest } from "./act2";
 import { decodeSave, encodeSave } from "./save";
 import { secretEvent, tickSecrets, type SecretProgress } from "./secrets";
-import { ELEMENT_OBJECTS, SECRET_IDS, SECRET_SITES, type ElementEvent, type SecretId } from "../world/elementObjects";
+import { ELEMENT_OBJECTS, PILE, PILES, SECRET_IDS, SECRET_SITES, secretOf, type ElementEvent, type SecretId } from "../world/elementObjects";
 import { CHESTS, ENEMY_SPAWNS, STAGES, zoneAt } from "../world/lowland";
 import { PLAYER_R, gatesOf, isWalkable, moveCircle } from "../world/collision";
 import { secretSolids } from "../world/elementObjects";
@@ -33,7 +33,7 @@ function solveSecret(id: SecretId): SecretProgress {
     case "canopyDryReeds": return tickSecrets(secretEvent(id, "burn", p), 1.5, away);
     case "bubboLedgeKey": return secretEvent(id, "lift", p);
     case "leafyStatues": return secretEvent("leafyStatuesEast", "grab", secretEvent(id, "grab", p));
-    case "puffLeaves": return tickSecrets(secretEvent(id, "wind", p), 0, ELEMENT_OBJECTS.find(o => o.id === id)!);
+    case "puffLeaves": return secretEvent(id, "wind", p);
     case "comboCrateLift": return secretEvent(id, "lift", secretEvent(id, "grab", p));
     case "comboFurnace":
       p = tickSecrets(secretEvent(id, "burn", p), 7.99, away);
@@ -87,12 +87,19 @@ describe("optional secrets", () => {
     }
   });
 
-  it("requires walking onto the revealed leaf trapdoor", () => {
-    const o = ELEMENT_OBJECTS.find(o => o.id === "puffLeaves")!;
-    expect(tickSecrets(fresh(), 1, o).secrets).toEqual([]);
-    const p = secretEvent(o.id, "wind", fresh());
-    expect(tickSecrets(p, 20, away).secrets).toEqual([]);
-    expect(tickSecrets(p, 0, o).secrets).toEqual([o.id]);
+  it("a leaf pile blows away at once in the wind, or burns away; a stick pile only burns", () => {
+    expect(PILES.puffLeaves).toBe("leaves");
+    expect(secretEvent("puffLeaves", "wind", fresh()).secrets).toEqual(["puffLeaves"]);
+    const burning = secretEvent("puffLeaves", "burn", fresh());
+    expect(burning.objects.puffLeaves).toEqual({ state: "burning", remaining: 1.5 });
+    expect(tickSecrets(burning, 1.49, away).secrets).toEqual([]);
+    expect(tickSecrets(burning, 1.5, away).secrets).toEqual(["puffLeaves"]);
+    for (const id of ["emberThicket", "groveDryReeds", "canopyDryReeds"] as const) {
+      expect(PILES[id]).toBe("sticks");
+      const p = fresh();
+      expect(secretEvent(id, "wind", p)).toBe(p);
+      expect(tickSecrets(secretEvent(id, "burn", p), 1.5, away).secrets).toEqual([id]);
+    }
   });
 
   it("requires pulling the crate before lifting it", () => {
@@ -157,22 +164,20 @@ describe("secret placement and collision", () => {
     resetRuntime();
     setGame({ progress: newProgress() });
   });
-  it.each([
-    { id: "groveDryReeds", from: { x: 62.5, z: -219.6 }, to: { x: 67.5, z: -219.6 } },
-    { id: "canopyDryReeds", from: { x: 112.5, z: -210 }, to: { x: 117.5, z: -210 } },
-  ] as const)("burning $id opens a direct optional shortcut", ({ id, from, to }) => {
-    const p = ready();
+  it.each(Object.keys(PILES) as SecretId[])("%s: one round pile covers its chest until cleared, then the chest is in reach", id => {
+    const p = ready(), site = SECRET_SITES[id], o = ELEMENT_OBJECTS.find(o => o.id === id)!;
+    // One pile, centred on the chest, wide enough to cover the chest's whole footprint.
+    expect(site.blocker).toEqual({ kind: "circle", x: site.chest.x, z: site.chest.z, r: PILE.r });
+    expect(PILE.r).toBeGreaterThan(Math.hypot(.5, .36) + .3);
+    expect([o.x, o.z]).toEqual([site.chest.x, site.chest.z]);
+    expect(ELEMENT_OBJECTS.filter(e => secretOf(e) === id)).toHaveLength(1);
+    // Walking at the chest stops at the pile's edge; once cleared the chest can be opened (reach 2.3).
     p.act2.secrets = SECRET_IDS.filter(secret => secret !== id);
-    const closed = gatesOf(p);
-    expect(isWalkable(from.x, from.z, closed, PLAYER_R)).toBe(true);
-    expect(isWalkable(to.x, to.z, closed, PLAYER_R)).toBe(true);
-    const stopped = moveCircle(from.x, from.z, to.x, to.z, PLAYER_R, closed);
-    expect(Math.hypot(stopped.x - to.x, stopped.z - to.z)).toBeGreaterThan(1);
-    const completed = solveSecret(id);
-    p.act2.secrets = [...p.act2.secrets, ...completed.secrets];
-    const reached = moveCircle(from.x, from.z, to.x, to.z, PLAYER_R, gatesOf(p));
-    expect(reached.x).toBeCloseTo(to.x);
-    expect(reached.z).toBeCloseTo(to.z);
+    const stopped = moveCircle(site.approach.x, site.approach.z, site.chest.x, site.chest.z, PLAYER_R, gatesOf(p));
+    expect(Math.hypot(stopped.x - site.chest.x, stopped.z - site.chest.z)).toBeGreaterThan(PILE.r + PLAYER_R - .05);
+    p.act2.secrets = [...p.act2.secrets, ...solveSecret(id).secrets];
+    const reached = moveCircle(site.approach.x, site.approach.z, site.chest.x, site.chest.z, PLAYER_R, gatesOf(p));
+    expect(Math.hypot(reached.x - site.chest.x, reached.z - site.chest.z)).toBeLessThan(1.2);
   });
 
   it.each(["groveHiddenCache", "canopyTreasureLedge"])("%s uses the ordinary one-time persisted chest reward", id => {
@@ -203,10 +208,15 @@ describe("secret placement and collision", () => {
     const objects = ELEMENT_OBJECTS.filter(o => o.id === id || (id === "leafyStatues" && o.id === "leafyStatuesEast"));
     for (const o of objects) {
       expect(zoneAt(o.x, o.z)).toBe(site.stage);
-      expect(isWalkable(o.x, o.z, closedGates, .08)).toBe(!site.solidTarget);
-      expect(isWalkable(o.x, o.z, openGates, .08)).toBe(true);
+      if (PILES[id]) {
+        // A pile is the cover itself: solid until cleared, then its chest stands there.
+        expect(isWalkable(o.x, o.z, closedGates, .08)).toBe(false);
+      } else {
+        expect(isWalkable(o.x, o.z, closedGates, .08)).toBe(!site.solidTarget);
+        expect(isWalkable(o.x, o.z, openGates, .08)).toBe(true);
+      }
       for (const e of ENEMY_SPAWNS) expect(Math.hypot(o.x - e.x, o.z - e.z)).toBeGreaterThanOrEqual(4);
-      for (const c of CHESTS) expect(Math.hypot(o.x - c.x, o.z - c.z)).toBeGreaterThanOrEqual(4);
+      for (const c of CHESTS) if (c.secret !== id) expect(Math.hypot(o.x - c.x, o.z - c.z), c.id).toBeGreaterThanOrEqual(4);
     }
   });
 });

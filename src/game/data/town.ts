@@ -33,3 +33,9 @@ export const NPCS: Record<NpcId, NpcDef> = {
 };
 
 export const NPC_OF: Record<ServiceId, NpcId> = { market: "shopkeeper", clothes: "tailor", trainer: "trainer", inn: "innkeeper", harbor: "harbor" };
+
+/** Townsfolk who run no service: Pippa sits behind the Food Market, found by exploring. */
+export type FolkId = "pippa";
+export const FOLK: Record<FolkId, KeeperLook & { id: FolkId }> = {
+  pippa: { id: "pippa", name: "Pippa", skin: "#f2c9a5", hair: "#b5532e", shirt: "#e83a35", apron: "#fff4dc", hat: "band", hatColor: "#3f9a52", voice: { pitch: 1.3, rate: 0.95 } },
+};

@@ -72,11 +72,9 @@ describe("shared move/object dispatch", () => {
     advance(.15);
     expect(getGame().progress.act2.secrets).toContain("leafyStatues");
 
+    // Puff's wind blows the leaf pile away: the chest is found at once (no trigger to walk onto).
     approach("puffLeaves", "puff");
     expect(basicAttack()).toBe(true);
-    expect(state("puffLeaves").state).toBe("cleared");
-    rt.player.x = 112; rt.player.z = -208;
-    advance(.05);
     expect(getGame().progress.act2.secrets).toContain("puffLeaves");
 
     approach("comboCrateLift", "leafy");
@@ -132,6 +130,26 @@ describe("shared move/object dispatch", () => {
     expect(e.hp).toBeLessThan(100);
   });
 
+  it("fire burns either kind of pile; wind blows away leaves but never sticks", () => {
+    approach("puffLeaves", "ember");
+    expect(basicAttack()).toBe(true);
+    expect(state("puffLeaves").state).toBe("burning");
+    cb.hold = false;
+    advance(1.5);
+    expect(getGame().progress.act2.secrets).toContain("puffLeaves");
+    for (const id of ["groveDryReeds", "canopyDryReeds", "emberThicket"]) {
+      approach(id, "puff");
+      rt.time += 3;
+      expect(basicAttack()).toBe(true);
+      advance(.3);
+      expect(state(id).state, id).toBe("intact");
+      expect(specialAttack()).toBe(true);
+      advance(1);
+      expect(state(id).state, id).toBe("intact");
+      expect(getGame().progress.act2.secrets).not.toContain(id);
+    }
+  });
+
   it("the wrong friend's J, and objects outside the facing cone, remain unchanged", () => {
     approach("emberThicket", "puff");
     expect(basicAttack()).toBe(true);
@@ -157,7 +175,7 @@ describe("shared move/object dispatch", () => {
     approach("puffLeaves", "puff");
     expect(specialAttack()).toBe(true);
     advance(.2);
-    expect(state("puffLeaves").state).toBe("cleared");
+    expect(state("puffLeaves").state).toBe("complete");
     approach("bubboLedgeKey", "bubbo");
     rt.time += 3;
     expect(specialAttack()).toBe(true);

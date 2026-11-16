@@ -11,7 +11,7 @@ import { CLOUD_ENEMY_SPAWNS, CLOUD_ZONES, CLOUD_STAGES, CLOUD_ELECTRIC_PANELS, e
 import { clearCloudStage } from "./logic/act3";
 import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconPylon, tickBeacon } from "./logic/beacon";
 import { PLAYER_R, blocked, gatesOf, isWalkable, moveCircle, nearestWalkable, standY, type Gates } from "./world/collision";
-import { monsterRootY } from "./ride";
+import { breathe, monsterRootY, type MountMotion } from "./ride";
 import { vy } from "./voyageRt";
 import { audio } from "../audio/audio";
 import type { FoodId, MonsterId } from "./types";
@@ -29,6 +29,7 @@ import { hpAfterFall } from "./logic/falls";
 import { canStartPanic, startPanic, updatePanicHeading, recordPanicStep, panicSpeedScale, type Panic } from "./logic/panic";
 import { SWING_DURATION, SWING_PULL, swingDirection, swingRadius, swingSweep, type Swing } from "./logic/swing";
 import { revealSmoke } from "./smoke";
+import { pruneScorches, resetScorches, scorchCone, scorches } from "./scorch";
 import { shallowSpeedFactor, waterAt } from "./logic/water";
 
 /**
@@ -328,6 +329,7 @@ export function resetBeaconFight() {
 /** Back to a clean fight: from saved progress (load) or after a new game. */
 export function resetCombat() {
   resetBeaconFight();
+  resetScorches();
   worldEnemies = {};
   const p = getGame().progress;
   cb.vitals = { hp: p.act2.hp, mp: { ...p.act2.mp } };
@@ -511,6 +513,53 @@ export function mountPose(id: MonsterId): MountPose | null {
   return { x: cx, y: monsterRootY(m, solved, rt.time), z: cz, yaw: p.yaw, scale: 1 };
 }
 
+/** The rider's turning rate (rad/s, smoothed): the ridden friend leans into turns. */
+let rideTurn = 0, rideYaw = 0;
+function trackRideTurn(dt: number) {
+  const yaw = rt.player.yaw, d = Math.atan2(Math.sin(yaw - rideYaw), Math.cos(yaw - rideYaw));
+  rideYaw = yaw;
+  if (dt > 0) rideTurn += (Math.max(-12, Math.min(12, d / dt)) - rideTurn) * Math.min(1, dt * 8);
+}
+
+const STILL: MountMotion = { bob: 0, roll: 0, pitch: 0, squash: 1 };
+/**
+ * The ridden friend's body motion (scene/Monsters moves its rig by it, and
+ * scene/Characters moves the rider with the same values through `seatOffset`, so
+ * the two move as one): the stride while running (Bubbo waddles side to side,
+ * Ember gallops), breathing, the lunge of its own attacks, a jolt when the rider
+ * is hit, and a lean into turns. Render only: gameplay and the camera keep the
+ * steady seat (`riderSeatY`).
+ */
+export function mountMotion(): MountMotion {
+  const f = cb.stance.friend;
+  if (!f || COMBAT[f].stance !== "ride" || cb.stance.k <= 0) return STILL;
+  const p = rt.player, t = rt.time, m = rt.monsters[f];
+  const walk = Math.min(1, p.speed / 4), stride = Math.sin(p.step * Math.PI);
+  let bob = Math.sin(t * 2.4 + m.x) * 0.012, roll = 0, pitch = 0;
+  if (f === "bubbo") {
+    bob += Math.abs(stride) * 0.07 * walk;
+    roll += stride * 0.1 * walk;
+  } else {
+    bob += Math.abs(stride) * 0.09 * walk;
+    pitch += -Math.sin(p.step * Math.PI * 2) * 0.05 * walk;
+    roll += stride * 0.03 * walk;
+  }
+  const mv = cb.move;
+  if (mv && mv.friend === f) {
+    const k = (t - mv.t0) / (mv.kind === "special" ? 0.7 : 0.45);
+    if (k >= 0 && k < 1) { pitch += Math.sin(k * Math.PI) * (mv.kind === "special" ? 0.16 : 0.1); bob += Math.sin(k * Math.PI) * 0.04; }
+  }
+  const hit = t - cb.hurtT;
+  if (hit >= 0 && hit < 0.4) {
+    const k = 1 - hit / 0.4;
+    roll += Math.sin(hit * 38) * 0.09 * k;
+    bob -= 0.05 * k;
+  }
+  roll += Math.max(-0.12, Math.min(0.12, -rideTurn * 0.05));
+  const clamp = (v: number) => Math.max(-0.22, Math.min(0.22, v));
+  return { bob, roll: clamp(roll), pitch: clamp(pitch), squash: breathe(m, t) };
+}
+
 /** The rider's seat height (absolute), for the player's body. */
 export function riderSeatY(): number | null {
   const f = cb.stance.friend;
@@ -523,6 +572,7 @@ function updateStance(dt: number) {
   const g = getGame();
   const s = cb.stance;
   const active = g.progress.active as CompanionId | null;
+  trackRideTurn(dt);
   // Scenes (conversations, powers, the rope) take the friend off; play puts it back.
   const want = inHostileZone() && active && !isRunning() && rt.player.climbY === null && !cb.knockedOut ? active : null;
   if (s.leaving) {
@@ -1171,6 +1221,8 @@ function fireTick(inferno: boolean, now: number) {
   hitBeaconShape("ember", range, ux, uz, "cone", degrees);
   fireRange = range; fireDegrees = degrees;
   dispatchObjects(move.shape, fireObjectCone);
+  // The grass, leaves and wood the flames sweep char for a while (stone and water never do).
+  scorchCone(p.x, p.z, p.yaw, range, degrees, now);
   for (const e of coneTargets(range, degrees)) {
     if (now - e.lastFireT > 1 + 1e-9) e.fireTicks = 0;
     e.fireTicks++;
@@ -2021,7 +2073,8 @@ export function combatTick(dt: number) {
   const g = getGame();
   if (g.screen !== "game" || !act2Live()) return;
   const world = onCloudIsle() ? "cloud" : "home";
-  if (cb.world !== world) travelCombat();
+  if (cb.world !== world) { travelCombat(); resetScorches(); }
+  if (scorches.length) pruneScorches(rt.time);
   const paused = g.journalOpen || g.settingsOpen;
   const p = rt.player;
   // Areas (null on the rope and anywhere south of the cliff).

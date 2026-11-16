@@ -10,7 +10,8 @@ import { smoothMat, shadowMaterial } from "./materials";
 import { KNEE_Y, PLAYER_OUTFIT, armGeometry, bodyGeometry, shinGeometry, thighGeometry } from "./models/people";
 import { CLIMB_PULL } from "../game/world/rope";
 import { HIP_Y, SEATED, SEATED_EMBER, squatAmount, squatPose } from "./poses";
-import { rideK } from "../game/combat";
+import { RIDE_SEAT, mountMotion, rideK } from "../game/combat";
+import { seatOffset } from "../game/ride";
 import { mapleArmGeometry, mapleBodyGeometry, mapleLegGeometry } from "./models/maple";
 import { foodGeometry } from "./models/props";
 import { vy } from "../game/voyageRt";
@@ -128,7 +129,17 @@ export function Player() {
     const g = root.current;
     if (!g) return;
     g.position.set(p.x, p.y, p.z);
-    g.rotation.y = p.yaw;
+    g.rotation.order = "YXZ";
+    g.rotation.set(0, p.yaw, 0);
+    // Riding a friend in a fight: move with its body (the same stride, lunge, jolt and lean).
+    const mounted = p.riding ? 0 : rideK();
+    const friend = getGame().progress.active;
+    if (mounted > 0 && (friend === "bubbo" || friend === "ember")) {
+      const mm = mountMotion(), off = seatOffset(mm, RIDE_SEAT[friend], p.yaw);
+      g.position.x += off.x * mounted; g.position.y += off.y * mounted; g.position.z += off.z * mounted;
+      g.rotation.x = mm.pitch * mounted;
+      g.rotation.z = mm.roll * mounted;
+    }
     g.visible = getGame().screen !== "title";
     const walk = Math.min(1, p.speed / 4);
     const s = Math.sin(p.step * Math.PI);

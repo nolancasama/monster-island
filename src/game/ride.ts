@@ -43,6 +43,25 @@ export function monsterRootY(m: MonsterRt, solved: readonly ObstacleId[], t: num
  */
 export const BUBBO_SEAT = { back: 0.2, up: 0.82 };
 
+/** A ridden friend's body motion on top of its root: lift, then pitch (about local x) and roll (about local z). */
+export interface MountMotion { bob: number; roll: number; pitch: number; squash: number }
+
+/**
+ * Where the rider's seat point moves (world offset) when the friend's body moves
+ * by `m`: the seat is `up` above the body's root and `back` behind its centre.
+ * Matches the scene's rig (position.y = bob, rotation x = pitch then z = roll,
+ * scale y = squash, under the body's yaw), so the rider stays on the back.
+ */
+export function seatOffset(m: MountMotion, seat: { up: number; back: number }, yaw: number): { x: number; y: number; z: number } {
+  // The squash keeps volume: taller by `squash`, narrower and shorter by its square root.
+  const up = seat.up * m.squash, back = seat.back / Math.sqrt(m.squash);
+  const sr = Math.sin(m.roll), cr = Math.cos(m.roll), sp = Math.sin(m.pitch), cp = Math.cos(m.pitch);
+  // Roll first (about the body's forward axis), then pitch (about its right axis).
+  const lx = -up * sr, ly = up * cr * cp + back * sp, lz = up * cr * sp - back * cp;
+  const dx = lx, dy = m.bob + ly - seat.up, dz = lz + seat.back;
+  return { x: dx * Math.cos(yaw) + dz * Math.sin(yaw), y: dy, z: -dx * Math.sin(yaw) + dz * Math.cos(yaw) };
+}
+
 /** World position of the saddle (the rider's seat point). */
 export function bubboSeat(m: MonsterRt, solved: readonly ObstacleId[], t: number): { x: number; y: number; z: number } {
   return {
