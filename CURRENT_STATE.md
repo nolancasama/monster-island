@@ -1,6 +1,6 @@
 # Current State
 
-## Riding comfort and Port Town geometry fixes (not merged, not deployed): `feature/ride-town-fixes` (from `main` `21812d9`)
+## Riding comfort and Port Town geometry fixes (deployed 2026-11-17, Pages run 44075359362, bundle `index-DcqdwmMG.js`): `feature/ride-town-fixes` (from `main` `21812d9`)
 The user's plan of 2026-11-17, built by Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md`
 "2026-11-17 — Riding comfort and Port Town geometry fixes". Riding: the rider follows only the seat's
 smoothed height (`game/ride.ts` `riderLift`). Town (`scene/models/town.ts`): blade-sign arms span the board,
@@ -14,7 +14,7 @@ inn moon sign layered and hung.
 - **Not verified:** flicker in motion is only judged from 3–4 slightly moved still frames, not live play;
   riding comfort needs a real play-test. The capture spec logged one 40 m camera step during the
   departure (voyage preview camera, not touched here): worth a look.
-- **Next:** the user plays it; merge/deploy on approval.
+- **Next:** the user plays it on the live site (CI unit tests, incl. the ground golden, passed on x64 at deploy).
 
 ## Environment, town and voyage improvements (merged and deployed 2026-11-17): `feature/env-town-voyage` (from `main` `d2a2613`)
 The user's 22-item plan "Environment, Collision, Town and Pirate Voyage Improvements" (2026-11-16), built by
