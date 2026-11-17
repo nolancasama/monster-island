@@ -1,6 +1,6 @@
 # Current State
 
-## Environment, town and voyage improvements (not merged, not deployed): `feature/env-town-voyage` (from `main` `d2a2613`)
+## Environment, town and voyage improvements (merged and deployed 2026-11-17): `feature/env-town-voyage` (from `main` `d2a2613`)
 The user's 22-item plan "Environment, Collision, Town and Pirate Voyage Improvements" (2026-11-16), built by
 Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md` "2026-11-16 — Environment, town and
 voyage improvements". Commits `34a0a9d` (voyage items 14–22), `7d7a366` (items 1–13), then Pippa's final spot
@@ -19,7 +19,8 @@ and evidence-spec fixes, then the golden re-record. Worktree: `~/Projects/mi-voy
   hashes from CI's unit job. The re-record was checked cell by cell against `main` first: only intended
   areas changed (the four solid counters, the Seaside chest, Pippa, the statue and its lamps, the four piles,
   the rope-approach grass now in forest1, the pier deck −0.47 m, the raised rope bank).
-- **Next:** the user plays it (`?debug=1`); full e2e suite not run; merge/deploy on approval.
+- **Next:** the user plays it (`?debug=1` for the voyage); the full e2e suite has not finished on this branch
+  (CI browser job of run 44060253399 was still running at deploy).
 
 ## Pirate voyage (merged and deployed 2026-11-16 as a debug-menu preview): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
 The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) was implemented by Claude
@@ -117,6 +118,11 @@ brief) is in place, and the decisions are in `DESIGN_DECISIONS.md` (two 2026-11-
   e2e suite has not been run on this branch.
 
 ## Live
+**2026-11-17:** `main` was fast-forwarded to `c33bd54` (`feature/env-town-voyage`) and deployed at the user's
+request (Pages run 44064615607, success; live bundle `index-C7bm8Sf5.js`). Students now get the town, forest,
+scorch and riding changes; the voyage stays a debug-menu preview and Cloud Isle stays locked. Before deploy:
+tsc, all unit tests on CI (x64), renders judged by Claude. The full e2e suite was not run to completion.
+
 **2026-11-16:** `main` was fast-forwarded to `401ee51` (`feature/pirate-voyage`) and deployed at the user's
 request (Pages run 43769527914, success; live bundle `index-DcXhxUWP.js`). The pirate voyage is live only as
 the debug-menu preview (`?debug=1` → "Pirate voyage (preview)"); students still get the original crossing
@@ -193,7 +199,9 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
--2. `feature/env-town-voyage` (top section): the user reviews and plays it; merge and deploy only on approval.
+-2. `feature/env-town-voyage` is live (top section): the user plays it; check its CI browser-suite result.
+   Unmerged leftovers: `origin/feature/elemental-combat` has one Cloud Isle commit (`2130cca`, rock-horn landmark,
+   2026-11-01) never merged; `feature/physical-stage-passages` is superseded.
 -1. The pirate voyage and the Port Town revamp are live (the voyage as a debug-menu preview): the user plays
    the voyage (its **Next** list above).
 0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway
