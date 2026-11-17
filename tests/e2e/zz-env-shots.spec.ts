@@ -364,3 +364,76 @@ test("voyage cooking: the panel, the markers and the held dish", async ({ page }
   }
   if (held) await page.keyboard.up("KeyJ");
 });
+
+/** Riding comfort and Port Town geometry fixes (2026-11-17): every sign, the awnings, pier, hat and inn sign. */
+test("town geometry fixes", async ({ page }) => {
+  test.skip(Boolean(ONLY) && ONLY !== "fixes");
+  test.setTimeout(900_000);
+  await enter(page, save(77, -303, "port"));
+  await hook(page, "combatFixture", { enemies: [] });
+  // Every sign board, face on and from the plaza side.
+  const signs: Array<[string, number, number, number]> = [
+    ["market", 64.05, 2.1, -296.3], ["clothes", 89.95, 2.3, -296.3], ["trainer", 64.05, 2.2, -309.55],
+    ["inn", 89.45, 3.5, -309.3], ["harbor", 66, 2.2, -317.4], ["gate", 76, 4.6, -288.1],
+  ];
+  for (const [name, x, y, z] of signs) {
+    const g = await hook(page, "groundAt", x, z) as number;
+    await view(page, `sign-${name}`, [x, g + y + 0.5, z + 3.2], [x, g + y, z]);
+    await view(page, `sign-${name}-angle`, [x + (x < 77 ? 3 : -3), g + y + 1.2, z + 3], [x, g + y, z]);
+  }
+  // The awnings: front, the high camera's angle, and from below; then a slow camera slide for flicker.
+  for (const [name, x, dir] of [["market", 63.45, 1], ["clothes", 90.55, -1]] as const) {
+    const g = await hook(page, "groundAt", x, -299) as number;
+    await view(page, `awning-${name}-front`, [x + dir * 4, g + 2.6, -299], [x, g + 2.7, -299]);
+    await view(page, `awning-${name}-high`, [x + dir * 6, g + 7, -293], [x, g + 2.7, -299]);
+    await view(page, `awning-${name}-end`, [x + dir * 1.6, g + 2.2, -295.6], [x, g + 2.75, -298]);
+    for (let i = 0; i < 4; i++) await view(page, `awning-${name}-slide-${i}`, [x + dir * 9, g + 6, -291 + i * 0.07], [x, g + 2.7, -299]);
+  }
+  // Each awning's south support from beside and below, where it meets the fabric.
+  for (const [name, x, dir] of [["market", 63.2, 1], ["clothes", 90.8, -1]] as const) {
+    const g = await hook(page, "groundAt", x, -301.5) as number;
+    await view(page, `awning-${name}-support`, [x + dir * 2.4, g + 2.1, -303.8], [x + dir * .3, g + 2.55, -301.5]);
+    await view(page, `awning-${name}-support-top`, [x + dir * 2.2, g + 4.2, -303.2], [x + dir * .4, g + 2.6, -301.5]);
+  }
+  // The pier: above, side, walking along it; a slide for flicker; and Gull's boat beside it.
+  const q = await hook(page, "groundAt", 76, -321) as number;
+  await view(page, "pier-above", [79, q + 9, -320], [76, q, -330]);
+  await view(page, "pier-side-low", [81.5, q + 1.2, -326], [76, q, -329]);
+  for (let i = 0; i < 4; i++) await view(page, `pier-slide-${i}`, [86, q + 5, -318 + i * 0.07], [76, q, -330]);
+  await pose(page, "pier-walk", 76, -330);
+  // The hat: from the plaza and from both side approaches.
+  await closeUp(page, "hat-plaza", 93, -299, [-12, -4], 6.5, 5);
+  await closeUp(page, "hat-north-approach", 93, -299, [-4, 11], 6, 5);
+  await closeUp(page, "hat-south-approach", 93, -299, [-5, -9], 6, 5);
+  await closeUp(page, "hat-level", 93, -299, [0, 9], 5.3, 5.3);
+  // The inn's moon sign (no words) and its SEASIDE INN board.
+  const ig = await hook(page, "groundAt", 89.7, -314.5) as number;
+  await view(page, "inn-moon", [86.7, ig + 3, -314.5], [89.7, ig + 2.62, -314.5]);
+  await view(page, "inn-moon-angle", [87, ig + 3.6, -312], [89.7, ig + 2.62, -314.5]);
+  for (let i = 0; i < 3; i++) await view(page, `inn-both-slide-${i}`, [84, ig + 4, -306 + i * 0.07], [89.6, ig + 3, -312]);
+});
+
+test("riding comfort", async ({ page }) => {
+  test.skip(Boolean(ONLY) && ONLY !== "ride");
+  test.setTimeout(900_000);
+  await enter(page, save(107.5, -196, "forest1", "leafy"));
+  await hook(page, "combatFixture", { enemies: [] });
+  for (const f of ["bubbo", "ember"] as const) {
+    await page.keyboard.press(f === "bubbo" ? "Digit2" : "Digit4");
+    await hook(page, "teleport", 100, -190, Math.PI / 2, true);
+    await hook(page, "renderFrames", 60);
+    await snap(page, `ride-${f}-0-still`);
+    // Walking east, seen side-on by the follow camera: a burst through a few strides.
+    await page.keyboard.down("KeyD");
+    await page.waitForTimeout(400);
+    for (let i = 0; i < 6; i++) { await snap(page, `ride-${f}-1-walk-${i}`); await page.waitForTimeout(90); }
+    await page.keyboard.up("KeyD");
+    // A turn, then an attack.
+    await page.keyboard.down("KeyW");
+    await page.waitForTimeout(250);
+    await snap(page, `ride-${f}-2-turn`);
+    await page.keyboard.up("KeyW");
+    await page.keyboard.press("KeyJ");
+    for (let i = 0; i < 3; i++) { await page.waitForTimeout(110); await snap(page, `ride-${f}-3-attack-${i}`); }
+  }
+});

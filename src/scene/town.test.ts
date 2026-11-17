@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { ANCHOR, BRACKET_ABOVE, giantHatGeometry, hatBase, signSpots, statueGeometry, townGeometry } from "./models/town";
+import { ANCHOR, BRACKET_ABOVE, HAT_BRIM_R, HAT_BRIM_T, giantHatGeometry, hatBase, hatBrimY, signSpots, statueGeometry, townGeometry } from "./models/town";
 import {
   CHESTS, GULL_BERTH, LAMPS, PIER2, PIPPA, PLAZA_STATUE, PORT, SEASIDE_CHEST, SERVICES, customerSpot, lowlandDeckY, lowlandSolids, type ServiceId,
 } from "../game/world/lowland";
@@ -69,21 +69,31 @@ describe("shop signs clear of the roofs", () => {
 });
 
 describe("the clothes shop's giant hat", () => {
-  it("sits on the roof: the brim halves lie on the two slopes and nothing is below the roof's top at the ridge", () => {
-    const g = giantHatGeometry(), pos = g.getAttribute("position") as THREE.BufferAttribute;
-    const base = hatBase(), house = SERVICES.clothes.house, slope = 1.7 / (house.d / 2);
-    let lowest = Infinity;
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i), z = pos.getZ(i);
-      // The roof's top surface at this distance from the ridge.
-      const roofTop = base - Math.abs(z) * slope;
-      lowest = Math.min(lowest, y - roofTop);
-    }
-    // Embedded by at most a couple of centimetres (the brim's underside), never cutting deep.
-    expect(lowest).toBeGreaterThan(-0.05);
-    const box = new THREE.Box3().setFromBufferAttribute(pos);
-    expect(box.max.y - base).toBeGreaterThan(1.2);
-    expect(box.max.x - box.min.x).toBeGreaterThan(2);
+  const pos = giantHatGeometry().getAttribute("position") as THREE.BufferAttribute;
+  const pts = Array.from({ length: pos.count }, (_, i) => ({ x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) }));
+  const brim = hatBrimY();
+
+  it("has one level, round brim: every point beyond the crown lies on the brim's two flat faces, all round", () => {
+    // (The bow on the band, above the brim, is not brim.)
+    const rim = pts.filter((p) => Math.hypot(p.x, p.z) > 0.7 && p.y < brim + HAT_BRIM_T + 0.005);
+    expect(rim.length).toBeGreaterThan(20);
+    for (const p of rim) expect([brim, brim + HAT_BRIM_T].some((y) => Math.abs(p.y - y) < 1e-4), JSON.stringify(p)).toBe(true);
+    // A full circle: rim points in every quarter, all at the brim's radius.
+    for (let q = 0; q < 4; q++) expect(rim.some((p) => Math.floor(((Math.atan2(p.z, p.x) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 2)) === q)).toBe(true);
+    for (const p of rim.filter((p) => Math.hypot(p.x, p.z) > 0.9)) expect(Math.hypot(p.x, p.z)).toBeCloseTo(HAT_BRIM_R, 3);
+  });
+
+  it("rests on the ridge and never cuts into the slopes; the upright crown stands in the roof", () => {
+    const house = SERVICES.clothes.house, slope = 1.7 / (house.d / 2), base = hatBase();
+    // The brim is above the roof's top surface everywhere, and touches the ridge beam (top at base + about .01).
+    for (const p of pts.filter((p) => Math.hypot(p.x, p.z) > 0.7 && p.y < brim + 0.2)) expect(p.y - (base - Math.abs(p.z) * slope)).toBeGreaterThan(-0.03);
+    expect(brim).toBeLessThan(base + 0.03);
+    // The crown is centred and upright: as wide at the front as at the back, and tall.
+    const crown = pts.filter((p) => Math.hypot(p.x, p.z) < 0.7 && Math.hypot(p.x, p.z) > 0.5 && p.y < brim);
+    expect(Math.max(...crown.map((p) => p.z)) + Math.min(...crown.map((p) => p.z))).toBeCloseTo(0, 2);
+    expect(Math.max(...pts.map((p) => p.y)) - brim).toBeGreaterThan(1.2);
+    // Its foot is inside the roof, so no gap shows under it.
+    expect(Math.min(...crown.map((p) => p.y))).toBeLessThan(base - 0.6 * slope);
   });
 });
 

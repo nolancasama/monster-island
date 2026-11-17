@@ -2868,3 +2868,21 @@ The user's 22-item plan ("Environment, Collision, Town and Pirate Voyage Improve
 - **Wider ship (22).** `BEAM` 1.5: hull, hold, galley, fishing deck, rails and every spot widen
   together; furniture keeps its size against its wall. Cannons and deck barrels are now solid;
   steering lanes are 12 m apart so a passing rock clears the hull.
+
+## 2026-11-17 — Riding comfort and Port Town geometry fixes (user plan, implemented by Claude directly)
+On `feature/ride-town-fixes` from `main` `21812d9`.
+- **Riding.** Reverses 2026-11-16's rider sync: the rider no longer takes the friend's stride, lunge,
+  jolt, turn lean, pitch or roll (dizzying). The friend keeps all of its motion; the rider follows only
+  the seat's height, low-passed (`riderLift`, 0.35 s), so they sit at the stride's average height with
+  under 2 cm of slow drift. Rejected: freezing the rider at the steady seat (the back would rise ~8 cm
+  into them each stride) and damping the friend's own motion (the plan keeps it).
+- **Blade signs.** Cause found in render: the iron arm stopped at the board's middle, so the outer hanger
+  hung from nothing. The arm now spans the whole board. The harbour plaque and the gate board were fine.
+- **Awnings.** Stripes abut exactly (a 1 cm overlap put two colours on one plane: the shimmer); the
+  supports run from the wall to 6 cm under the fabric (they rose ~5 cm through it).
+- **Pier.** Post tops sat exactly on the deck's top plane; they stop 4 cm under it. Deck and collision unchanged.
+- **Giant hat.** Reverses 2026-11-16's brim on both slopes: one level round brim resting on the ridge beam,
+  the crown carried down into the roof so nothing floats. Rejected: a support post (the crown already
+  reaches the roof).
+- **Inn moon sign.** Board, moon and the crescent's cut piece were coplanar; each now stands 2 cm proud of
+  the one behind. Two hangers added (the board hung 8 cm below its arm with nothing holding it).

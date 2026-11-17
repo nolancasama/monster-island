@@ -1,5 +1,21 @@
 # Current State
 
+## Riding comfort and Port Town geometry fixes (not merged, not deployed): `feature/ride-town-fixes` (from `main` `21812d9`)
+The user's plan of 2026-11-17, built by Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md`
+"2026-11-17 — Riding comfort and Port Town geometry fixes". Riding: the rider follows only the seat's
+smoothed height (`game/ride.ts` `riderLift`). Town (`scene/models/town.ts`): blade-sign arms span the board,
+awning stripes abut and supports end under the fabric, pier posts stop under the deck, one level hat brim,
+inn moon sign layered and hung.
+- **Verified 2026-11-17:** tsc; unit tests 1105 of 1107 (the two failures are the arm64-only ground golden,
+  untouched by this change; CI on x64 is the judge); renders at 1366×768 judged by Claude, before
+  `.tmp/shots/env/b0`, after `b1` (`SHOT_ONLY=fixes|ride`): every sign, both awnings incl. supports,
+  pier, hat from the plaza and both sides, inn moon sign, riding bursts on Bubbo and Ember; boarding
+  Gull's boat and the voyage capture (`SHOT_ONLY=capture`) pass.
+- **Not verified:** flicker in motion is only judged from 3–4 slightly moved still frames, not live play;
+  riding comfort needs a real play-test. The capture spec logged one 40 m camera step during the
+  departure (voyage preview camera, not touched here): worth a look.
+- **Next:** the user plays it; merge/deploy on approval.
+
 ## Environment, town and voyage improvements (merged and deployed 2026-11-17): `feature/env-town-voyage` (from `main` `d2a2613`)
 The user's 22-item plan "Environment, Collision, Town and Pirate Voyage Improvements" (2026-11-16), built by
 Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md` "2026-11-16 — Environment, town and

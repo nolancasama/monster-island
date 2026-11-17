@@ -148,11 +148,16 @@ function anchor(b: PartBuilder, ax: number, z: number) {
 function serviceProps(b: PartBuilder, id: ServiceId, l: Look, w: number, d: number, north: [number, number]) {
   const fz = d / 2;
   // A shallow awning: deep ones hide everything under them from the high camera.
+  // Stripes abut exactly (overlapping ones shared a plane and flickered), and each
+  // support runs from the wall to just under the fabric instead of through it.
   const awning = (c1: string, c2: string) => {
-    const n = 7, span = w - .8;
-    for (let i = 0; i < n; i++) b.boxAt(span / n + .01, .06, 1, [-span / 2 + span * (i + .5) / n, 2.74, fz + .45], [.36, 0, 0], i % 2 ? c2 : c1);
+    const n = 7, span = w - .8, tilt = .36, y0 = 2.74, z0 = fz + .45, t = .06;
+    for (let i = 0; i < n; i++) b.boxAt(span / n, t, 1, [-span / 2 + span * (i + .5) / n, y0, z0], [tilt, 0, 0], i % 2 ? c2 : c1);
     b.boxAt(span + .1, .1, .1, [0, 2.57, fz + .93], [0, 0, 0], c1);
-    for (const s of [-1, 1]) b.boxAt(.08, .08, .8, [s * (span / 2 - .1), 2.45, fz + .35], [-.6, 0, 0], l.trim);
+    const under = (z: number) => y0 - Math.tan(tilt) * (z - z0) - t / 2 / Math.cos(tilt);
+    const a = { y: 2.24, z: fz }, top = { z: fz + .55, y: under(fz + .55) - .06 };
+    const dy = top.y - a.y, dz = top.z - a.z, len = Math.hypot(dy, dz);
+    for (const s of [-1, 1]) b.boxAt(.08, .08, len, [s * (span / 2 - .1), (a.y + top.y) / 2, (a.z + top.z) / 2], [Math.atan2(-dy, dz), 0, 0], l.trim);
   };
   if (id === "market") {
     awning("#e8553f", "#ffffff");
@@ -199,11 +204,14 @@ function serviceProps(b: PartBuilder, id: ServiceId, l: Look, w: number, d: numb
       b.boxAt(.2, .28, .2, [s * .85, 2.05, fz + .16], [0, 0, 0], "#3c3c44");
       b.boxAt(.13, .18, .13, [s * .85, 2.05, fz + .2], [0, 0, 0], "#ffe27a");
     }
+    // The moon sign hangs from its arm on two hangers. Board, moon and the navy piece that
+    // cuts the crescent are each 2 cm proud of the one behind (equal depths flickered).
     const sx = -north[0] * (w / 2 - .5);
     b.boxAt(.08, .08, .9, [sx, 3.05, fz + .45], [0, 0, 0], DARKWOOD);
+    for (const o of [-.26, .26]) b.boxAt(.03, .12, .03, [sx + o, 2.97, fz + .8], [0, 0, 0], "#3c3c44");
     b.boxAt(.72, .62, .06, [sx, 2.62, fz + .8], [0, 0, 0], "#2f3f74");
-    b.boxAt(.16, .36, .07, [sx - .08, 2.64, fz + .8], [0, 0, .3], "#ffe27a");
-    b.boxAt(.14, .26, .07, [sx + .02, 2.6, fz + .8], [0, 0, -.5], "#2f3f74");
+    b.boxAt(.16, .36, .1, [sx - .08, 2.64, fz + .8], [0, 0, .3], "#ffe27a");
+    b.boxAt(.14, .26, .14, [sx + .02, 2.6, fz + .8], [0, 0, -.5], "#2f3f74");
   } else if (id === "harbor") {
     // The keeper's side is the north (back) wall: an anchor, a ship's wheel, rope and barrels.
     // (Local x runs west here: the sign hangs at world x ≈ 65, the keeper stands at 69.8.)
@@ -237,22 +245,26 @@ const merge = (parts: THREE.BufferGeometry[]) => {
 };
 
 /**
- * The clothes shop's landmark, in the shop's frame: a giant purple top hat sitting
- * astride the ridge. The brim is two halves, each lying on its roof slope, so the
- * roof carries it and nothing cuts through; the crown stands upright on the ridge.
+ * The clothes shop's landmark, in the shop's frame: a giant purple top hat on the
+ * ridge. The brim is one level disc resting on the ridge beam (2026-11-17: two halves
+ * tilted to the slopes read as a bent brim); the upright crown runs down into the
+ * roof, so it stands on the roof and no gap shows under it.
  */
 export function giantHatGeometry(): THREE.BufferGeometry {
   const hat = new PartBuilder(0);
-  const c = SERVICES.clothes.house, l = LOOK.clothes;
-  const slope = Math.atan2(l.rise, c.d / 2), base = hatBase();
-  for (const side of [1, -1]) {
-    const half = new THREE.CylinderGeometry(1.05, 1.05, .1, 12, 1, false, side > 0 ? -Math.PI / 2 : Math.PI / 2, Math.PI);
-    hat.add(half, "#7b4fc9", [0, base + .05, 0], [side * slope, 0, 0]);
-  }
-  hat.cyl(.62, .58, 1.3, 0, base - .02, 0, "#7b4fc9", 10);
-  hat.cyl(.635, .6, .26, 0, base + .05, 0, "#ff7eb6", 10);
-  for (const s of [-1, 1]) hat.boxAt(.42, .3, .1, [s * .26, base + .18, .62], [0, 0, s * .4], "#ff4f8b");
+  const base = hatBase(), brim = hatBrimY(), crown0 = base - .55, top = brim + 1.3;
+  hat.cyl(HAT_BRIM_R, HAT_BRIM_R, HAT_BRIM_T, 0, brim, 0, "#7b4fc9", 20);
+  hat.cyl(.62, .58, top - crown0, 0, crown0, 0, "#7b4fc9", 10);
+  const band = brim + HAT_BRIM_T - .01;
+  hat.cyl(.635, .6, .26, 0, band, 0, "#ff7eb6", 10);
+  for (const s of [-1, 1]) hat.boxAt(.42, .3, .1, [s * .26, band + .13, .62], [0, 0, s * .4], "#ff4f8b");
   return hat.build();
+}
+export const HAT_BRIM_R = 1.05, HAT_BRIM_T = .1;
+/** The brim's underside (shop frame): 2 cm into the top of the ridge beam (roof()), so it rests on it. */
+export function hatBrimY(): number {
+  const l = LOOK.clothes;
+  return l.h + l.rise + .17 - .02;
 }
 /** Height (shop frame) of the roof's top surface along the clothes shop's ridge: where the hat sits. */
 export function hatBase(): number {
@@ -272,8 +284,9 @@ export function townGeometry(): THREE.BufferGeometry {
   // it (scene/CloudIsle CloudBoat at GULL_BERTH), the same boat that sails out on every voyage.
   const deck = qy + PIER2.deckY;
   b.box(PIER2.half * 2, 0.16, PIER2.z1 - PIER2.z0, PIER2.x, deck - 0.16, (PIER2.z0 + PIER2.z1) / 2, "#b88a52");
+  // The posts stop 4 cm under the deck's top: level with it, their tops shared its plane and flickered.
   for (let z = PIER2.z0 + 0.6; z < PIER2.z1; z += 2.4)
-    for (const side of [-1, 1]) b.cyl(0.12, 0.12, deck + 3.6, PIER2.x + side * (PIER2.half - 0.05), -3.6, z, "#7a5532", 6);
+    for (const side of [-1, 1]) b.cyl(0.12, 0.12, deck + 3.6 - 0.04, PIER2.x + side * (PIER2.half - 0.05), -3.6, z, "#7a5532", 6);
   const lx = 99, lz = -327;
   b.add(rockGeometry(3, 2.5, 1800, 1), "#7a6c61", [lx, SEA_Y - 1, lz]);
   b.cyl(0.9, 1.3, 8, lx, SEA_Y + 1.2, lz, "#ffffff", 10);
@@ -390,9 +403,10 @@ export function townDetailGeometry(): THREE.BufferGeometry {
     b.boxAt(s.w + .14, s.h + .14, .07, [s.x, s.y, s.z - .045], [0, 0, 0], "#5a3c26");
     if (s.blade) {
       // An iron arm out of the wall, a plate where it is fixed, and two short hangers to the board.
-      const wallX = s.x - Math.sign(77 - s.x) * 1.05, armY = s.y + BRACKET_ABOVE;
-      b.boxAt(Math.abs(s.x - wallX) + .14, .09, .09, [(s.x + wallX) / 2 + Math.sign(77 - s.x) * .04, armY, s.z - .045], [0, 0, 0], "#3c3c44");
-      b.boxAt(.05, .34, .2, [wallX + Math.sign(77 - s.x) * .03, armY - .08, s.z - .045], [0, 0, 0], "#3c3c44");
+      // The arm runs right across the board, over both hangers (it used to stop at the middle).
+      const out = Math.sign(77 - s.x), wallX = s.x - out * 1.05, armY = s.y + BRACKET_ABOVE, endX = s.x + out * (s.w / 2 + .07);
+      b.boxAt(Math.abs(endX - wallX), .09, .09, [(endX + wallX) / 2, armY, s.z - .045], [0, 0, 0], "#3c3c44");
+      b.boxAt(.05, .34, .2, [wallX + out * .03, armY - .08, s.z - .045], [0, 0, 0], "#3c3c44");
       for (const o of [-.6, .6]) b.boxAt(.03, .2, .03, [s.x + o, s.y + s.h / 2 + .12, s.z - .045], [0, 0, 0], "#3c3c44");
     }
   }

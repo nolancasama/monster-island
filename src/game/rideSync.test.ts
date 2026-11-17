@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RIDE_SEAT, cb, mountMotion, resetCombat } from "./combat";
-import { seatOffset, type MountMotion } from "./ride";
+import { riderLift, seatOffset, type MountMotion } from "./ride";
 import { newProgress } from "./logic/progress";
 import { setGame } from "./store";
 import { rt } from "./runtime";
@@ -87,5 +87,38 @@ describe("the ridden friend's motion", () => {
     expect(jolt.bob).toBeLessThan(0);
     rt.time += 1;
     expect(Math.abs(mountMotion().roll)).toBeLessThan(1e-9);
+  });
+});
+
+describe("the rider stays steady on a moving friend (2026-11-17)", () => {
+  /** Run riderLift at 60 fps against a seat height signal and return the last second's range and mean. */
+  function settle(target: (t: number) => number) {
+    let y = 0;
+    const late: number[] = [];
+    for (let i = 0; i < 300; i++) { const t = i / 60; y = riderLift(y, target(t), 1 / 60); if (t >= 4) late.push(y); }
+    return { range: Math.max(...late) - Math.min(...late), mean: late.reduce((a, b) => a + b, 0) / late.length };
+  }
+
+  it("a stride's bob (0.09 m at about 2.5 Hz) reaches the rider as less than 2 cm of drift", () => {
+    const stride = (t: number) => Math.abs(Math.sin(t * Math.PI * 2.5)) * 0.09;
+    const { range, mean } = settle(stride);
+    expect(range).toBeLessThan(0.02);
+    // The rider sits at the stride's average height, so the friend's back never parts far from the seat.
+    expect(mean).toBeGreaterThan(0.045);
+    expect(mean).toBeLessThan(0.07);
+  });
+
+  it("a hit's jolt is a small, slow dip, not a shake", () => {
+    let y = 0, low = 0;
+    for (let i = 0; i < 60; i++) {
+      const t = i / 60, k = t < 0.4 ? 1 - t / 0.4 : 0;
+      y = riderLift(y, Math.sin(t * 38) * 0.02 * k - 0.05 * k, 1 / 60);
+      low = Math.min(low, y);
+    }
+    expect(low).toBeGreaterThan(-0.03);
+  });
+
+  it("a steady change of height is followed within a second", () => {
+    expect(settle(() => 0.05).mean).toBeCloseTo(0.05, 3);
   });
 });

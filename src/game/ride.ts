@@ -62,6 +62,19 @@ export function seatOffset(m: MountMotion, seat: { up: number; back: number }, y
   return { x: dx * Math.cos(yaw) + dz * Math.sin(yaw), y: dy, z: -dx * Math.sin(yaw) + dz * Math.cos(yaw) };
 }
 
+/**
+ * How quickly the rider follows the seat's height on a moving friend (seconds).
+ * Riders never take the friend's stride, lunge, jolt or lean directly (2026-11-17:
+ * that made the view dizzying): only the seat's height, low-passed, so the rider
+ * rises and settles with the friend's average stance but the rhythm never arrives.
+ */
+export const RIDER_SMOOTH = 0.35;
+
+/** One frame of the rider's steady lift toward the seat's `target` height offset (no tilt, no sway). */
+export function riderLift(prev: number, target: number, dt: number, tau = RIDER_SMOOTH): number {
+  return prev + (target - prev) * (1 - Math.exp(-Math.max(0, dt) / tau));
+}
+
 /** World position of the saddle (the rider's seat point). */
 export function bubboSeat(m: MonsterRt, solved: readonly ObstacleId[], t: number): { x: number; y: number; z: number } {
   return {

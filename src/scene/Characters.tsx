@@ -11,7 +11,7 @@ import { KNEE_Y, PLAYER_OUTFIT, armGeometry, bodyGeometry, shinGeometry, thighGe
 import { CLIMB_PULL } from "../game/world/rope";
 import { HIP_Y, SEATED, SEATED_EMBER, squatAmount, squatPose } from "./poses";
 import { RIDE_SEAT, mountMotion, rideK } from "../game/combat";
-import { seatOffset } from "../game/ride";
+import { riderLift, seatOffset } from "../game/ride";
 import { mapleArmGeometry, mapleBodyGeometry, mapleLegGeometry } from "./models/maple";
 import { foodGeometry } from "./models/props";
 import { vy } from "../game/voyageRt";
@@ -48,6 +48,7 @@ export function Player() {
   }, []);
   const root = useRef<THREE.Group>(null);
   const pose = useRef<THREE.Group>(null);
+  const riderY = useRef(0);
   const legL = useRef<THREE.Group>(null);
   const legR = useRef<THREE.Group>(null);
   const shinL = useRef<THREE.Group>(null);
@@ -124,22 +125,22 @@ export function Player() {
     }
   }
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const p = rt.player;
     const g = root.current;
     if (!g) return;
     g.position.set(p.x, p.y, p.z);
     g.rotation.order = "YXZ";
     g.rotation.set(0, p.yaw, 0);
-    // Riding a friend in a fight: move with its body (the same stride, lunge, jolt and lean).
+    // Riding a friend in a fight: the friend strides, lunges and leans under a steady rider, who
+    // only follows the seat's height, smoothed (game/ride.ts riderLift): no shake, tilt or sway.
     const mounted = p.riding ? 0 : rideK();
     const friend = getGame().progress.active;
     if (mounted > 0 && (friend === "bubbo" || friend === "ember")) {
-      const mm = mountMotion(), off = seatOffset(mm, RIDE_SEAT[friend], p.yaw);
-      g.position.x += off.x * mounted; g.position.y += off.y * mounted; g.position.z += off.z * mounted;
-      g.rotation.x = mm.pitch * mounted;
-      g.rotation.z = mm.roll * mounted;
-    }
+      const target = seatOffset(mountMotion(), RIDE_SEAT[friend], p.yaw).y * mounted;
+      riderY.current = riderLift(riderY.current, target, dt);
+      g.position.y += riderY.current;
+    } else riderY.current = 0;
     g.visible = getGame().screen !== "title";
     const walk = Math.min(1, p.speed / 4);
     const s = Math.sin(p.step * Math.PI);
