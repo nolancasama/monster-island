@@ -148,16 +148,23 @@ describe("Pippa behind the Food Market", () => {
     const m = SERVICES.market.house;
     expect(PIPPA.x).toBeLessThan(m.x - m.d / 2);
     expect(walk(PIPPA.x, PIPPA.z, 0.05)).toBe(false);
-    // From the plaza by the market, south round the market, then north behind it.
+    // From the plaza by the market, west along the market's south end, then to her.
     let p = { x: 66, z: -304 };
-    for (const to of [{ x: 61, z: -305.5 }, { x: 56.6, z: -305 }, { x: PIPPA.x + 0.2, z: PIPPA.z - 1.3 }]) p = moveCircle(p.x, p.z, to.x, to.z, PLAYER_R, gates);
+    for (const to of [{ x: 61, z: -305.5 }, { x: 57.5, z: -307.6 }, { x: 56.4, z: -307.6 }]) p = moveCircle(p.x, p.z, to.x, to.z, PLAYER_R, gates);
     expect(Math.hypot(p.x - PIPPA.x, p.z - PIPPA.z)).toBeLessThan(2.6);
+    // Arriving there, she is in front of the fixed camera (which sits north of the player, looking south).
+    expect(PIPPA.z).toBeLessThan(p.z);
   });
 
-  it("is out of sight from the plaza: the market stands between her and the plaza camera", () => {
-    for (const player of [{ x: 77, z: -303 }, { x: 70, z: -300 }, { x: 72, z: -296 }]) {
-      const camera = { x: player.x, z: player.z + 8 };
-      expect(blockedByHouse(camera, PIPPA, "market"), JSON.stringify(player)).toBe(true);
+  it("is out of sight from the plaza: outside the plaza camera's view or behind a building", () => {
+    // The fixed lowland camera sits about 8 m north of the player and looks south (-z).
+    const halfFov = 40 * Math.PI / 180;
+    for (let x = 64; x <= 90; x += 2) for (let z = -312; z <= -292; z += 2) {
+      if (!walk(x, z)) continue;
+      const camera = { x, z: z + 8 }, dx = PIPPA.x - camera.x, dz = PIPPA.z - camera.z;
+      const inView = dz < 0 && Math.abs(Math.atan2(dx, -dz)) < halfFov;
+      const hidden = blockedByHouse(camera, PIPPA, "market") || blockedByHouse(camera, PIPPA, "trainer");
+      expect(!inView || hidden, `from ${x},${z}`).toBe(true);
     }
   });
 });

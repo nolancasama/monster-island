@@ -672,10 +672,12 @@ export interface ChestDef {
   relic?: RelicId;
 }
 /**
- * Pippa, behind the Food Market (west of it): out of sight from the plaza, found
- * by walking round the market's south end. She faces the way in.
+ * Pippa, behind the Food Market (west of it, at the south end of the strip behind
+ * it and the trainer's yard): out of sight from the plaza, found by walking round
+ * the market's south end, where she stands in front of the fixed camera. She faces
+ * the way in.
  */
-export const PIPPA = { x: 56.4, z: -299.6, yaw: Math.PI * 0.85 };
+export const PIPPA = { x: 55.6, z: -308.6, yaw: 1.05 };
 /** A chest behind the Seaside Inn, on the paved strip by its back wall: the inn hides it from the plaza. */
 export const SEASIDE_CHEST = { x: 98.6, z: -314, yaw: 0 };
 

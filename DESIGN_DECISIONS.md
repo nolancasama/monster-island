@@ -2812,3 +2812,59 @@ Built by Claude directly, without the router, at the user's request.
   menu, so the voyage can ship to `main` without replacing the existing crossing.
 - **Rejected:** keeping the voyage behind the Cloud Isle ship toggle alone (that silently replaced the
   original crossing for every debug playtest and broke `act3.spec.ts`).
+
+## 2026-11-16 — Environment, town and voyage improvements (user plan, implemented by Claude directly)
+The user's 22-item plan ("Environment, Collision, Town and Pirate Voyage Improvements"), on
+`feature/env-town-voyage` from `main` `d2a2613`. What was decided, and where the plan was changed:
+- **Canopy rope grass (1).** Cause: the forest bank stays flat for 1.2 m beyond every walk shape,
+  including the raised canopy decks, so a strip along the root wall and the corner east of the rope
+  looked open but were not; an old seam at x 111 (two rects only touching) was a second invisible
+  wall. Fix: `ROPE_APPROACH_GRASS` opens that grass, and near the rope (`ROPE_BANK`) the bank rises
+  right at the walkable edge. Rejected: tightening the bank everywhere (it reshapes every lowland
+  view and needs a full visual review).
+- **Riding (2).** `mountMotion()` (stride, attack lunge, hit jolt, turn lean, breathing) moves the
+  ridden friend's rig, and `seatOffset()` moves the rider by exactly the same transform. Render only:
+  gameplay and the camera keep the steady seat, so nothing shakes the camera.
+- **Cover piles (3).** The four burn/wind secrets (Puff's leaves, both dry-reed beds and Ember's
+  thicket) are one round pile centred on the chest; the pile is both target and solid. Leaves: fire
+  or wind; sticks: fire only. The leaves' separate walk-on trigger is gone (wind completes at once).
+  The canopy reed chest moved 1.2 m east so the two canopy piles stand 4 m apart. Statues, crates,
+  the furnace and the key keep their own mechanics.
+- **Scorch (4).** A pool of 32 ground decals (one draw): grass, leaves, the canopy's wood and the
+  Upper Canopy char; stone (Causeway, town, cave, summit), water and Cloud Isle never do. Normal →
+  black in 0.6 s → 7 s → recovers over 6 s; no spread; cleared piles stay cleared (save rules).
+  Rejected: per-object material swaps (scenery is merged static meshes).
+- **Town (5–13).** Blade signs hang below the eave (`SIGN_BELOW_EAVE`); the inn keeps its height;
+  the harbour plaque drops under its eave and clears the window. Counters are service data,
+  solid, and stand between keeper and customer (they stood behind four keepers); `goToTarget`
+  uses the counter's customer side. The giant hat's brim is two halves lying on both slopes. The
+  anchor is one shape. A hero-monster statue on the fountain's footprint; the two lamps beside it
+  are gone. The pier deck is level with the quay (`deckY` 0.55 → 0.08). Gull's own boat lies at
+  `GULL_BERTH` beside the pier (shown near the town whatever the story stage) and both departures
+  leave from it; the town mesh's red boat is gone. Pippa behind the Food Market ("Do you like
+  apples?", either answer, repeatable, never required), at the south end of the strip behind it:
+  the fixed camera looks south, so she stands in view as the player rounds the market (a spot
+  further north was behind the camera on arrival); the plaza camera never sees her. A chest behind the Seaside Inn: 20 coins
+  and a fish, once.
+- **Voyage camera (14).** Cause: the rig snaps to the scripted shot every frame while Gull's boat
+  is ridden, so each `shot()` was a cut. The script now glides between shots (`glide`).
+- **Sails (15).** Reverses 2026-11-15's "slack sail hangs at 60% height": every sail runs from
+  boom to gaff (95% while slack, luffing about the mast; filling changes depth). The mainsail's
+  gaff sits under the lookout (a topmast rig). Stripes are per-face colours on rows that lie on the
+  stripe edges, so they stay crisp.
+- **Capture (16).** No swinging aboard: ropes, a fade to black, then the party huddled (player,
+  Gull, four friends) and the seven pirates round them leaning in, the stern side open for the
+  camera. Posture only, no weapons.
+- **Interrogation bag (17).** A top-centre panel with every food and its count, the asked food lit
+  (shown as 0 when absent), live as the food is taken.
+- **No combat at sea (18).** Cause found: on the ship no combat stance exists, so `basicAttack` was
+  already inert; what looked like combat was the generic `freeTool` burst (fireball/vine/wind effects
+  and sounds) on J with nothing to do. It is removed (J with no job target does nothing), and
+  `voyageOwnsCombat()` also guards both attacks, the held-J repeat, breath and Inferno.
+- **Job panel (19).** Top centre as asked; the reason it had moved left (friend-switch toasts
+  covered it) is handled by moving toasts below it while it shows. Narrow windows: under the top row.
+- **Cooking (20–21).** One gold marker: over the finished dish, then over the pirate who ordered it.
+  The dish is held on both hands in front of the torso (carry arm pose).
+- **Wider ship (22).** `BEAM` 1.5: hull, hold, galley, fishing deck, rails and every spot widen
+  together; furniture keeps its size against its wall. Cannons and deck barrels are now solid;
+  steering lanes are 12 m apart so a passing rock clears the hull.

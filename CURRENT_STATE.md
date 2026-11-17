@@ -1,5 +1,26 @@
 # Current State
 
+## Environment, town and voyage improvements (not merged, not deployed): `feature/env-town-voyage` (from `main` `d2a2613`)
+The user's 22-item plan "Environment, Collision, Town and Pirate Voyage Improvements" (2026-11-16), built by
+Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md` "2026-11-16 — Environment, town and
+voyage improvements". Commits `34a0a9d` (voyage items 14–22), `7d7a366` (items 1–13), then Pippa's final spot
+and evidence-spec fixes. Worktree: `~/Projects/mi-voyage`. Not pushed.
+- **Verified 2026-11-17 on this Mac:** tsc; 1101 of 1103 unit tests (the two failures are
+  `layers-ground.test.ts`, below); renders at 1366×768 judged by Claude from `tests/e2e/zz-env-shots.spec.ts`
+  (`SHOT_TAG=after` and `a2`, `.tmp/shots/env/`): town signs, counters (solid: the harbour probe stops on the
+  customer side), hat, anchor, statue, pier, Gull's berth, Pippa (in view when rounding the market), the
+  Seaside chest; rope-approach grass; the four piles, wind and fire clearing them; scorch on grass, then
+  recovered; ship width, sails, capture fade and huddle, the interrogation bag, the job panel, cooking
+  markers and the held dish. Riding sync is covered by `rideSync.test.ts`; its stills were not usable.
+- **`layers-ground.test.ts` golden must be re-recorded on x64 before merging.** The hashes store exact IEEE
+  bytes, and arm64 V8 differs in the last bits: `main` itself fails it on this Mac (Node 22 and 26) but
+  passes on CI (Linux x64). This branch also changes the ground on purpose. A cell-by-cell diff against
+  `main` shows only intended areas: the four solid counters, the Seaside chest, Pippa, the statue (lamps
+  gone), the four piles, the rope-approach grass (now forest1), the pier deck (−0.47 m) and the raised rope
+  bank. Way forward: push the branch (needs the user's go-ahead), take the received hashes from CI's unit
+  job, update the golden and its comment. Rosetta is not installed here, so no local x64 Node.
+- **Next:** golden as above; the user plays it (`?debug=1`); full e2e suite not run; merge/deploy on approval.
+
 ## Pirate voyage (merged and deployed 2026-11-16 as a debug-menu preview): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
 The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) was implemented by Claude
 directly, without the router, at the user's request. The frozen spec is `docs/PIRATE_VOYAGE.md`. The
@@ -65,9 +86,9 @@ also jumps to the departure or any checkpoint. E2e uses the `openPirateVoyage` h
    Judge the feel on a real Chromebook: the frame rate at sea, the rain, and the heat band's difficulty.
 2. Built 2026-11-16: debug jumps to each voyage checkpoint (spec §0.9), in the same debug panel.
 3. Not run: the full e2e suite on this branch (about 1.5 h).
-4. Merge order on approval: `feature/port-town-revamp` first, then this branch.
+4. Both `feature/port-town-revamp` and this branch are merged and live (2026-11-15/16).
 
-## Development work (not merged, not deployed): `feature/port-town-revamp` (from `main` `a0dca15`)
+## Port Town revamp (live since the 2026-11-15 deploy): `feature/port-town-revamp` (from `main` `a0dca15`)
 The user's plan "Port Town area and its town systems" (2026-11-15) was implemented by Claude directly, without
 the router, at the user's request. The frozen spec `docs/PORT_TOWN_REVAMP.md` (§0 lists every change from the
 brief) is in place, and the decisions are in `DESIGN_DECISIONS.md` (two 2026-11-15 entries).
@@ -172,9 +193,10 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
--1. The pirate voyage is built and its e2e passes: the user reviews `feature/pirate-voyage` (its **Next**
-   list at the top) and `feature/port-town-revamp`, which the voyage branch depends on. Merge and deploy
-   only on approval.
+-2. `feature/env-town-voyage` (top section): re-record the ground golden on x64, then the user reviews and
+   plays it; merge and deploy only on approval.
+-1. The pirate voyage and the Port Town revamp are live (the voyage as a debug-menu preview): the user plays
+   the voyage (its **Next** list above).
 0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway
    canopy; diagnose the coast "hit" timeout in `act2.spec.ts:341`). Real-Chromebook
    check of the mic level meter and ankle-water frame rate.
