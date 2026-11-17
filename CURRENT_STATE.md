@@ -4,7 +4,8 @@
 The user's 22-item plan "Environment, Collision, Town and Pirate Voyage Improvements" (2026-11-16), built by
 Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md` "2026-11-16 — Environment, town and
 voyage improvements". Commits `34a0a9d` (voyage items 14–22), `7d7a366` (items 1–13), then Pippa's final spot
-and evidence-spec fixes. Worktree: `~/Projects/mi-voyage`. Not pushed.
+and evidence-spec fixes, then the golden re-record. Worktree: `~/Projects/mi-voyage`. Pushed 2026-11-17 to
+`origin/feature/env-town-voyage` at the user's request (the test workflow only; nothing deploys).
 - **Verified 2026-11-17 on this Mac:** tsc; 1101 of 1103 unit tests (the two failures are
   `layers-ground.test.ts`, below); renders at 1366×768 judged by Claude from `tests/e2e/zz-env-shots.spec.ts`
   (`SHOT_TAG=after` and `a2`, `.tmp/shots/env/`): town signs, counters (solid: the harbour probe stops on the
@@ -12,14 +13,13 @@ and evidence-spec fixes. Worktree: `~/Projects/mi-voyage`. Not pushed.
   Seaside chest; rope-approach grass; the four piles, wind and fire clearing them; scorch on grass, then
   recovered; ship width, sails, capture fade and huddle, the interrogation bag, the job panel, cooking
   markers and the held dish. Riding sync is covered by `rideSync.test.ts`; its stills were not usable.
-- **`layers-ground.test.ts` golden must be re-recorded on x64 before merging.** The hashes store exact IEEE
-  bytes, and arm64 V8 differs in the last bits: `main` itself fails it on this Mac (Node 22 and 26) but
-  passes on CI (Linux x64). This branch also changes the ground on purpose. A cell-by-cell diff against
-  `main` shows only intended areas: the four solid counters, the Seaside chest, Pippa, the statue (lamps
-  gone), the four piles, the rope-approach grass (now forest1), the pier deck (−0.47 m) and the raised rope
-  bank. Way forward: push the branch (needs the user's go-ahead), take the received hashes from CI's unit
-  job, update the golden and its comment. Rosetta is not installed here, so no local x64 Node.
-- **Next:** golden as above; the user plays it (`?debug=1`); full e2e suite not run; merge/deploy on approval.
+- **`layers-ground.test.ts` golden re-recorded 2026-11-17 from CI's x64 hashes** (run 44059824724). The
+  hashes store exact IEEE bytes, and arm64 V8 differs in the last bits: the test fails on this Mac (Node 22
+  and 26) even on `main`, and passes on CI (Linux x64). Re-record only on x64: push, read the received
+  hashes from CI's unit job. The re-record was checked cell by cell against `main` first: only intended
+  areas changed (the four solid counters, the Seaside chest, Pippa, the statue and its lamps, the four piles,
+  the rope-approach grass now in forest1, the pier deck −0.47 m, the raised rope bank).
+- **Next:** the user plays it (`?debug=1`); full e2e suite not run; merge/deploy on approval.
 
 ## Pirate voyage (merged and deployed 2026-11-16 as a debug-menu preview): `feature/pirate-voyage` (from `feature/port-town-revamp` `39b0cbc`)
 The user's plan "Monster Island — Pirate Voyage Adventure" (2026-11-15) was implemented by Claude
@@ -193,8 +193,7 @@ from below, spec corrections; see `DESIGN_DECISIONS.md` "Render budget after the
 The six failing tests were rerun individually and pass; the full suite has not been rerun end to end.
 
 ## Next steps
--2. `feature/env-town-voyage` (top section): re-record the ground golden on x64, then the user reviews and
-   plays it; merge and deploy only on approval.
+-2. `feature/env-town-voyage` (top section): the user reviews and plays it; merge and deploy only on approval.
 -1. The pirate voyage and the Port Town revamp are live (the voyage as a debug-menu preview): the user plays
    the voyage (its **Next** list above).
 0. Fix the three pre-existing e2e failures above (`defeat()` must stay on the ground layer near the Causeway

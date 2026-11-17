@@ -9,18 +9,23 @@ import { isWalkable, obstaclesFor, solidsFor, standY, type Gates } from "./colli
  * for the intended entrance ferry restoration: the deep channel/steeper bed,
  * restored tree/log/crate solids, dry central door approach and Forest-side
  * zone assignment. Door planes and cave pockets stay unchanged. Both
- * historical pocket variants include this new Grove layout. */
+ * historical pocket variants include this new Grove layout.
+ * Re-recorded 2026-11-17 only for the intended 2026-11-16 ground changes,
+ * checked cell by cell against main: solid shop counters, the Seaside chest,
+ * Pippa, the hero statue (its lamps gone), the four cover piles, the canopy
+ * rope-approach grass, the lower pier deck and the raised rope bank.
+ * Record on x64 (CI): arm64 V8 differs in the last bits of some heights. */
 const BEFORE_LAYERS: Record<string, string> = {
   // Ground without mouth pockets, including the restored entrance stream.
-  closed: "75bf94a22ab0fcba6b1211a12b3b30200a56f1500a2a0b17916a5348477dc659",
-  grove: "ca0adb216ec0b7e58a419a7c4b97932ea7e0f911087489a397b57b4b25129df4",
-  open: "bf06fd3b0c21c154eb6c140b91656ba8a12c714647c80ecd1c2638ee9cdfd8fc",
+  closed: "d04233f5dbe920cc95bc9bfe470baf6e8c51b94e0cdcee000d01ec5fc7c1286c",
+  grove: "f69e6767fa17d3c4457a6b4eaf32a4309a0344f6096f592baaabc1ecd1c84364",
+  open: "09832d7269d40bafa294d0ffe1567ac6e97a8a37594991557e1d8799719e3d42",
 };
 /** Mouth A ground, including the restored entrance stream. */
 const GOLDEN: Record<string, string> = {
-  closed: "b8487bfa5e64f9241d30506ec9ef255fddd5ec29ec851304cb4d47aa92b04ee8",
-  grove: "aaf1168b43926dc33012ac80c8a63b90bb20f1ee43d65c3f3042d8e844e310fb",
-  open: "2f574a0f1ee6a749d399e3430b3ad1c90629814f6b3705825e09d7d34a470d2a",
+  closed: "1095647470548abc9221e71ed89f70743a58fd4fa4fed6c87e14d823a4cef63c",
+  grove: "ecd33f5ffaba08dea21c8797b60c5c5f5d73426dfffc5ada1181ac5435502b6b",
+  open: "919035eafd09823761adfa65d427085bf5b0d4b199ee187c63f656ca5d825f80",
 };
 const STATES: Record<string, Gates> = {
   // Keep the dark-mouth gate open here to isolate the intended ground layout
