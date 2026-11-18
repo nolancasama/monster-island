@@ -71,7 +71,7 @@ export type PhraseId =
   | "theyreMyFriends" | "yesTheyCan" | "noTheyCant" | "howManyFish" | "whatDoYouWant" | "hereYouAre"
   | "onTheTable" | "underTheTable" | "onTheShelf" | "underTheShelf" | "inTheBox" | "byTheDoor"
   | "turnRight" | "goStraight" | "leafyHelp" | "bubboHelp" | "puffHelp" | "whereIsHe" | "weNeedWood"
-  | "three" | "putItHere" | "where";
+  | "three" | "putItHere" | "where" | "iCanSeeAShip" | "iCanSeeAFish";
 
 const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
 const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
@@ -298,6 +298,9 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   weNeedWood: { id: "weNeedWood", en: "We need wood!", keys: [WOOD] },
   three: { id: "three", en: "Three!", keys: [NUMBER_WORDS[3]] },
   putItHere: { id: "putItHere", en: "Put it here!", keys: [PUT, HERE_WORDS] },
+  // The spyglass on Gull's boat: "What can you see?"
+  iCanSeeAShip: { id: "iCanSeeAShip", en: "I can see a ship!", keys: [SHIP], forbid: FOOD_WORDS.fish },
+  iCanSeeAFish: { id: "iCanSeeAFish", en: "I can see a fish!", keys: [FOOD_WORDS.fish], forbid: SHIP },
   where: { id: "where", en: "Where?", keys: [WHERE] }
 };
 

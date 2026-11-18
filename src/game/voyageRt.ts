@@ -51,6 +51,8 @@ const fresh = () => ({
   active: false,
   /** The ship's offset from its mooring while it sails in (world units), and its bob. */
   shipOffset: { x: 0, z: 0 },
+  /** The ship's heading while it sails in (scene yaw about its origin; 0 = bow south at its mooring). */
+  shipYaw: 0,
   shipBob: 0,
   /** Visual roll and pitch of the whole ship (the storm, the break-up), radians. */
   shipRoll: 0,
@@ -114,6 +116,8 @@ const fresh = () => ({
   islandSide: 0,
   /** Gull's boat sailing in to Cloud Isle's dock, 0..1 (1 = tied up, the normal state). */
   boatIn: 1,
+  /** The spyglass on Gull's boat: 0 lowered … 1 at the eye (narrows the lens, draws its ring). */
+  spyglass: 0,
 });
 
 export const vy = fresh();

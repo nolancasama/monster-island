@@ -14,12 +14,16 @@ const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 import { voyageRoll } from "./voyageWeather";
+import { vy } from "../game/voyageRt";
 
 /** The live camera, for projecting world labels to the screen. */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
 
 /** Height (px) of the prompt / dialogue stack at the bottom of the screen, kept by the UI. */
 export const bottomPanel = { height: 0 };
+
+/** The field of view through Gull's spyglass (a distant ship fills most of the ring). */
+export const SPYGLASS_FOV = 9;
 
 /**
  * Third-person camera: steady and smoothed, no bobbing or automatic spinning.
@@ -278,7 +282,10 @@ export function CameraRig() {
     const cam = camera as THREE.PerspectiveCamera;
     // The mountain's real beacon and the nearby player need a taller sky view
     // than the lowland. Physical follow offsets remain exactly the same.
-    const fov = ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
+    const lensFov = ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
+    // Gull's spyglass narrows the lens toward SPYGLASS_FOV (eased, so the zoom starts and lands gently).
+    const spy = vy.spyglass * vy.spyglass * (3 - 2 * vy.spyglass);
+    const fov = spy > 0 ? lensFov + (SPYGLASS_FOV - lensFov) * spy : lensFov;
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const h = window.innerHeight;
     const wantShift = ferryBank ? 0 : (c.framing === "cloud" || c.framing === "fixed" || lowland ? h * (selected.viewShift ?? 0) : 0) + (g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0);

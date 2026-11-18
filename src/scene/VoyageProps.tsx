@@ -1,4 +1,5 @@
 import { useMemo, useRef } from "react";
+import { BOAT_DECK_Y, BOAT_INNER, BOAT_SCALE } from "../game/world/gullBoat";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -35,7 +36,8 @@ const dishGeo = (f: FoodId) => (dishGeos[f] ??= dishGeometry(DISH_COLOR[f]));
 
 const shipX = (lx: number) => SHIP.x + vy.shipOffset.x + lx;
 const shipZ = (lz: number) => SHIP.z + vy.shipOffset.z + lz;
-const onDeck = () => vy.active && rt.world === "home";
+// Props are placed in the ship's mooring frame (no yaw): hidden while it is still turning in.
+const onDeck = () => vy.active && rt.world === "home" && vy.shipYaw === 0;
 
 const bubbleMat = new THREE.MeshLambertMaterial({ color: "#a8e4ff", transparent: true, opacity: 0.5, depthWrite: false });
 
@@ -274,7 +276,9 @@ function MooringRopes() {
       if (!show) return;
       const v = rt.voyage, k = Math.min(1, vy.ropes);
       a.set(shipX(hullHalf(lz) - 0.25), DECK_Y + 0.95, shipZ(lz));
-      b.set(v.x - 0.9, 0.75 + Math.sin(rt.time * 1.5) * 0.03, v.z + dz);
+      // Tied to the boat's gunwale on the ship's side (local +x at its mooring), wherever the boat points.
+      const lx = BOAT_INNER.halfX, lz = -dz * BOAT_SCALE, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
+      b.set(v.x + lx * cy + lz * sy, v.y + BOAT_DECK_Y + 0.3 * BOAT_SCALE + Math.sin(rt.time * 1.5) * 0.03, v.z - lx * sy + lz * cy);
       b.lerpVectors(a, b, k);
       span(m, a, b, 0.045);
     });

@@ -127,7 +127,7 @@ export function PirateShip() {
   const ship = useMemo(pirateShipGeometries, []);
   const sails = useMemo(() => SAILS.map((s) => sailGeometry(s.h)), []);
   const tornSail = useMemo(() => sailGeometry(SAILS[1].h, true), []);
-  const outer = useRef<THREE.Group>(null), mainMast = useRef<THREE.Group>(null);
+  const yawed = useRef<THREE.Group>(null), outer = useRef<THREE.Group>(null), mainMast = useRef<THREE.Group>(null);
   const sailRefs = useRef<Array<THREE.Mesh | null>>([]);
   const dir = useMemo(() => new THREE.Vector3(), []);
   useFrame((state) => {
@@ -137,11 +137,16 @@ export function PirateShip() {
     const len = Math.hypot(dir.x, dir.z) || 1;
     const near = Math.hypot(rt.player.x - SHIP.x, rt.player.z - SHIP.z) < 40;
     updateShipCut(rt.player.x, rt.player.z, dir.x / len, dir.z / len, vy.active && vy.cut && near);
-    if (!g) return;
+    const y = yawed.current;
+    if (!g || !y) return;
     const c = rt.camera.pos;
-    g.visible = vy.active && rt.world === "home" && Math.hypot(c.x - SHIP.x - vy.shipOffset.x, c.z - SHIP.z - vy.shipOffset.z) < 170;
-    if (!g.visible) return;
-    g.position.set(SHIP.x + vy.shipOffset.x, PIVOT.y + vy.shipBob - vy.shipSink, SHIP.z + vy.shipOffset.z + PIVOT.z);
+    // Far enough for the sighting on the horizon (the fog hides it beyond).
+    y.visible = vy.active && rt.world === "home" && Math.hypot(c.x - SHIP.x - vy.shipOffset.x, c.z - SHIP.z - vy.shipOffset.z) < 300;
+    if (!y.visible) return;
+    // Heading about the ship's origin (its interception), then the storm's pitch and roll about the stern pivot.
+    y.position.set(SHIP.x + vy.shipOffset.x, vy.shipBob - vy.shipSink, SHIP.z + vy.shipOffset.z);
+    y.rotation.set(0, vy.shipYaw, 0);
+    g.position.set(0, PIVOT.y, PIVOT.z);
     g.rotation.set(vy.shipPitch, 0, vy.shipRoll);
     if (mainMast.current) mainMast.current.rotation.set(0, 0, -vy.mastFall * 1.3);
     sailRefs.current.forEach((m, i) => {
@@ -160,7 +165,8 @@ export function PirateShip() {
     <>
       <VoyageSea />
       <Wake />
-      <group ref={outer} visible={false}>
+      <group ref={yawed} visible={false}>
+      <group ref={outer}>
         <group position={[0, -PIVOT.y, -PIVOT.z]}>
           <mesh geometry={ship.base} material={flatMat} />
           <mesh geometry={ship.tall} material={tallMat} />
@@ -173,6 +179,7 @@ export function PirateShip() {
           ))}
           {CREW_IDS.map((id) => <CrewMember key={id} id={id} />)}
         </group>
+      </group>
       </group>
       <VoyageProps />
     </>
