@@ -2886,3 +2886,17 @@ On `feature/ride-town-fixes` from `main` `21812d9`.
   reaches the roof).
 - **Inn moon sign.** Board, moon and the crescent's cut piece were coplanar; each now stands 2 cm proud of
   the one behind. Two hangers added (the board hung 8 cm below its arm with nothing holding it).
+
+## 2026-11-19 — Pirate ship rigging, open galley and staircases
+
+- Rigging runs from each masthead to its boom, with a forestay to the bowsprit and a
+  bobstay to the stem at the waterline. The mainmast's topping lift falls with its
+  mast and boom. Low shrouds and other stays were omitted to keep deck routes clear.
+- Removing the galley bulkhead and overhead beams opens access from the main deck.
+  The pans sit on the serving counter, and the cooking stations retain their positions.
+- Both staircases have wooden stringers and treads under clear, guarded openings.
+  A shared profile gives the player and companions a continuous slope with flat
+  landings. The slope bisects each riser. Rises are at most 12 cm because keeping
+  feet within 6 cm of both adjacent tread tops requires that limit.
+- Rejected stepwise floor heights and per-step collision, which would make walking
+  and companion movement jump at each riser.

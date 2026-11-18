@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type * as THREE from "three";
-import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, raftGeometry, raftSailGeometry, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
-import { DECK_Y, SPOT } from "../../game/world/pirateShip";
+import * as THREE from "three";
+import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, raftGeometry, raftSailGeometry, riggingLines, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
+import { BOW_Z, DECK_Y, HOLD_RAMP, HOLD_STAIRS, MASTS, SPOT, STERN_RAMP, STERN_STAIRS, shipWalkable, shipWorld } from "../../game/world/pirateShip";
+import { SEA_Y } from "../../game/world/island";
 
 const tris = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 
@@ -39,5 +40,73 @@ describe("the pirate ship's budget (docs/PIRATE_VOYAGE.md §8)", () => {
       g.computeBoundingBox();
       expect(g.boundingBox!.min.y).toBeGreaterThanOrEqual(-0.01);
     }
+  });
+});
+
+describe("pirate ship attachments and stair geometry", () => {
+  it("builds ropes at their named anchors in the correct mesh frame", () => {
+    const meshes = pirateShipGeometries();
+    const ropes = riggingLines();
+    expect(ropes.filter(({ mesh }) => mesh === "main").map(({ fromOn, toOn }) => [fromOn, toOn]))
+      .toEqual([["mast:main", "boom:main"]]);
+    expect(ropes.some(({ fromOn, toOn }) => fromOn === "bowsprit" && toOn === "stem")).toBe(true);
+    for (const { from, to, mesh, fromOn, toOn } of ropes) {
+      const vertices = meshes[mesh].attributes.position;
+      for (const [point, anchor] of [[from, fromOn], [to, toOn]] as const) {
+        const [x, y, z] = point;
+        if (anchor.startsWith("mast:")) {
+          const mast = MASTS[anchor.slice(5) as keyof typeof MASTS];
+          const radius = THREE.MathUtils.lerp(0.24, 0.13, (y - DECK_Y) / mast.h);
+          expect(Math.hypot(x - mast.x, z - mast.z)).toBeLessThan(radius * Math.cos(Math.PI / 8));
+          expect(y).toBeGreaterThan(DECK_Y);
+          expect(y).toBeLessThan(DECK_Y + mast.h);
+        }
+        if (anchor.startsWith("boom:")) {
+          const mast = MASTS[anchor.slice(5) as keyof typeof MASTS];
+          expect(Math.abs(x - mast.x)).toBeLessThan(0.08);
+          expect(Math.abs(y - DECK_Y - 2.25)).toBeLessThan(0.08);
+          expect(Math.abs(z - mast.z - 2.2)).toBeLessThan(2.3);
+        }
+        if (anchor === "stem") {
+          expect([x, y]).toEqual([0, SEA_Y]);
+          expect(z).toBeLessThan(BOW_Z);
+        }
+        const local = new THREE.Vector3(...point);
+        if (mesh === "main") local.sub(new THREE.Vector3(MASTS.main.x, DECK_Y, MASTS.main.z));
+        const vertex = new THREE.Vector3();
+        let found = false;
+        for (let i = 0; i < vertices.count && !found; i++) {
+          found = vertex.fromBufferAttribute(vertices, i).distanceToSquared(local) < 1e-8;
+        }
+        expect(found, anchor).toBe(true);
+      }
+      for (let i = 0; i <= 100; i++) {
+        const [x, y, z] = from.map((value, axis) => THREE.MathUtils.lerp(value, to[axis], i / 100));
+        const world = shipWorld({ x, z });
+        if (shipWalkable(world.x, world.z)) expect(y - 0.025).toBeGreaterThanOrEqual(DECK_Y + 2.2);
+      }
+    }
+  });
+
+  it("renders each tread at its computed height with an open corridor above it", () => {
+    const { base, tall, main } = pirateShipGeometries();
+    const wood = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = [base, tall, main].map((geometry) => new THREE.Mesh(geometry, wood));
+    meshes[2].position.set(MASTS.main.x, DECK_Y, MASTS.main.z);
+    meshes[2].updateMatrixWorld();
+    const ray = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    for (const [ramp, stairs] of [[HOLD_RAMP, HOLD_STAIRS], [STERN_RAMP, STERN_STAIRS]] as const) {
+      for (const { z0, z1, y } of stairs.steps) {
+        for (const x of [ramp.x0 + 0.01, (ramp.x0 + ramp.x1) / 2, ramp.x1 - 0.01]) {
+          for (const z of [z0 + 0.01, (z0 + z1) / 2, z1 - 0.01]) {
+            ray.set(new THREE.Vector3(x, y + 2, z), down);
+            const [hit] = ray.intersectObjects(meshes);
+            expect(hit?.point.y, `tread at ${x}, ${z}`).toBeCloseTo(y, 5);
+          }
+        }
+      }
+    }
+    wood.dispose();
   });
 });
