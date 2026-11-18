@@ -1,6 +1,6 @@
 # Current State
 
-## Boat departure, pirate encounter and ship interior fixes (2026-11-19, NOT merged, NOT deployed): `feature/voyage-encounter` (from `main` `70ec479`)
+## Boat departure, pirate encounter and ship interior fixes (deployed 2026-11-19, Pages run 44385039891, bundle `index-QRlcXrKr.js`; `main` fast-forwarded to `3edadaf`): `feature/voyage-encounter` (from `main` `70ec479`)
 The user's six-item plan, decided in `DESIGN_DECISIONS.md` (three 2026-11-19 entries). Worktree: `~/Projects/mi-voyage`.
 Codex built the boat (`feature/ve-boat`, worktree `~/Projects/mi-ve-boat`) and the ship interior (`feature/ve-interior`,
 `~/Projects/mi-ve-interior`); both are reviewed and merged into this branch, and those worktrees can be removed. Claude built the
@@ -18,7 +18,7 @@ encounter and spyglass. Still a debug-menu preview: the voyage is not unlocked f
 - **Not verified:** real-time feel of the chase and the spyglass zoom (judged from stepped frames and stills); a real Chromebook (frame
   rate with the ship drawn to 300 m); the full e2e suite; CI x64 golden. Known, not changed: Gull's sail looks dark from behind
   (pre-existing material); the moving pirate ship has no bow wave or wake.
-- **Next:** the user plays it (`?debug=1` → "Pirate voyage (preview)"); decide merge/deploy.
+- **Next:** the user plays it on the live site (`?debug=1` → "Pirate voyage (preview)"). CI's x64 unit tests (incl. the ground golden) passed in the deploy run.
 
 ## Riding comfort and Port Town geometry fixes (deployed 2026-11-17, Pages run 44075359362, bundle `index-DcqdwmMG.js`): `feature/ride-town-fixes` (from `main` `21812d9`)
 The user's plan of 2026-11-17, built by Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md`
