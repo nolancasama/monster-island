@@ -9,6 +9,7 @@ import { PLAYER_R, gatesOf, isWalkable, moveCircle, standY } from "../game/world
 import { newProgress } from "../game/logic/progress";
 import { openChest } from "../game/logic/act2";
 import { STAGES } from "../game/world/lowland";
+import { BOAT_HALF_BEAM, BOAT_HALF_LENGTH } from "../game/world/gullBoat";
 
 /** Port Town's walkers: Act 2 started, every stage cleared. */
 const gates = (() => {
@@ -138,7 +139,7 @@ describe("the pier and Gull's boat", () => {
   });
 
   it("Gull's boat lies alongside the pier, clear of it and of the quay, and the town draws no other boat", () => {
-    const halfBeam = 1.56, halfLength = 3.2;
+    const halfBeam = BOAT_HALF_BEAM, halfLength = BOAT_HALF_LENGTH;
     expect(GULL_BERTH.x - halfBeam).toBeGreaterThan(PIER2.x + PIER2.half);
     expect(GULL_BERTH.x - halfBeam - (PIER2.x + PIER2.half)).toBeLessThan(0.4);
     expect(GULL_BERTH.z + halfLength).toBeLessThan(PORT.z0);

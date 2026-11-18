@@ -22,7 +22,7 @@ export interface CloudGates { cleared?: readonly string[]; solved?: readonly str
 const rect = (x0: number, x1: number, z0: number, z1: number): WalkShape => ({ kind: "rect", x0, x1, z0, z1 });
 const disc = (x: number, z: number, r: number): WalkShape => ({ kind: "disc", x, z, r });
 const trail = (pts: Array<[number, number]>, w: number): WalkShape => ({ kind: "trail", pts, w });
-export const CLOUD_DOCK = { spawn: { x: 0, z: 1 }, gull: { x: -2.2, z: 2.5 }, rest: { x: 1.8, z: 1.5 }, boat: { x: 0, z: -8 } };
+export const CLOUD_DOCK = { spawn: { x: 0, z: 1 }, gull: { x: -2.2, z: 2.5 }, rest: { x: 1.8, z: 1.5 }, boat: { x: 0, z: -28 } };
 export const HOLLOW = {
   entrance: { x: -10, z: 190 }, center: { x: -13, z: 197 },
   tala: { x: -12, z: 194.5 }, bo: { x: -17, z: 198 }, kiko: { x: -10, z: 199 },

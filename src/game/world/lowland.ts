@@ -8,6 +8,7 @@ import type { RelicId } from "../logic/act2";
 import { CANOPY_GAPS, CANOPY_VOIDS, HOME_PONDS, ISLET, POND, canopyGapDeck } from "./hazards";
 import { LAYER_WORLDS, type LayerZone } from "./layers";
 import type { Layer } from "./region";
+import { BOAT_HALF_BEAM } from "./gullBoat";
 export { CANOPY_GAPS, ISLET, POND } from "./hazards";
 
 /**
@@ -216,7 +217,7 @@ export const PORT = rect(54, 100, -322.5, -289.5);
 /** The town pier: its deck sits just above the quay (no step up from the plaza). */
 export const PIER2 = { x: 76, half: 1.2, z0: -337, z1: -322, deckY: 0.08 };
 /** Captain Gull's boat lies alongside the pier, bow to the sea; both departures leave from here. */
-export const GULL_BERTH = { x: PIER2.x + PIER2.half + 1.75, z: PIER2.z0 + 6, yaw: Math.PI };
+export const GULL_BERTH = { x: PIER2.x + PIER2.half + BOAT_HALF_BEAM + .19, z: PIER2.z0 + 6, yaw: Math.PI };
 export const SHRINE = disc(106.5, -251.5, 4.8);
 /** Full statue silhouettes sit at least .6m beyond the east walk boundary. */
 export const SHRINE_STATUES = [{ x: 114.2, z: -253.7 }, { x: 114.2, z: -249.3 }];
