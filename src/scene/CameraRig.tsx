@@ -23,7 +23,7 @@ export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current:
 export const bottomPanel = { height: 0 };
 
 /** The field of view through Gull's spyglass (a distant ship fills most of the ring). */
-export const SPYGLASS_FOV = 9;
+export const SPYGLASS_FOV = 15;
 
 /**
  * Third-person camera: steady and smoothed, no bobbing or automatic spinning.

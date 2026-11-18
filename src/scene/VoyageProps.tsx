@@ -277,8 +277,8 @@ function MooringRopes() {
       const v = rt.voyage, k = Math.min(1, vy.ropes);
       a.set(shipX(hullHalf(lz) - 0.25), DECK_Y + 0.95, shipZ(lz));
       // Tied to the boat's gunwale on the ship's side (local +x at its mooring), wherever the boat points.
-      const lx = BOAT_INNER.halfX, lz = -dz * BOAT_SCALE, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
-      b.set(v.x + lx * cy + lz * sy, v.y + BOAT_DECK_Y + 0.3 * BOAT_SCALE + Math.sin(rt.time * 1.5) * 0.03, v.z - lx * sy + lz * cy);
+      const bx = BOAT_INNER.halfX, bz = -dz * BOAT_SCALE, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
+      b.set(v.x + bx * cy + bz * sy, v.y + BOAT_DECK_Y + 0.3 * BOAT_SCALE + Math.sin(rt.time * 1.5) * 0.03, v.z - bx * sy + bz * cy);
       b.lerpVectors(a, b, k);
       span(m, a, b, 0.045);
     });

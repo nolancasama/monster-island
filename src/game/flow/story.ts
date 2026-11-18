@@ -7,7 +7,7 @@ import { clearSave, encodeSave, readSave, writeSave } from "../logic/save";
 import { getGame, setGame, toast, useGame } from "../store";
 import { animate, effect, resetRuntime, rt } from "../runtime";
 import { BRAMBLE, CLIFF_TOP_SPOT, CROSSING, MAPLE, MONSTER_STONE, ROPE, SPAWN, VOLCANO, groundY } from "../world/island";
-import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
+import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "../world/collision";
 import { say, wait } from "./ask";
 import { fadeThrough, frameTwo, run, shot, turnPlayerTo } from "./script";
 import { poofTo, besidePlayer } from "./companion";
@@ -168,6 +168,8 @@ export async function continueGame() {
   const safe = nearestWalkable(spot.x, spot.z, PLAYER_R, gates);
   rt.player.x = safe.x;
   rt.player.z = safe.z;
+  // Standing on the saved floor from the first frame (a ship's hold or deck as much as the ground).
+  rt.player.y = standY(safe.x, safe.z, p.solved, rt.player.layer);
   rt.player.yaw = save.player.yaw;
   rt.playTime = save.seconds;
   rt.camera.snap = true;

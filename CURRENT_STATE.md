@@ -1,5 +1,25 @@
 # Current State
 
+## Boat departure, pirate encounter and ship interior fixes (2026-11-19, NOT merged, NOT deployed): `feature/voyage-encounter` (from `main` `70ec479`)
+The user's six-item plan, decided in `DESIGN_DECISIONS.md` (three 2026-11-19 entries). Worktree: `~/Projects/mi-voyage`.
+Codex built the boat (`feature/ve-boat`, worktree `~/Projects/mi-ve-boat`) and the ship interior (`feature/ve-interior`,
+`~/Projects/mi-ve-interior`); both are reviewed and merged into this branch, and those worktrees can be removed. Claude built the
+encounter and spyglass. Still a debug-menu preview: the voyage is not unlocked for students.
+- **Boat:** `world/gullBoat.ts` (1.33× dimensions, measured seats, `boatSeatWorld`); model in `CloudIsle.tsx` `CloudBoat`; berths
+  moved (Port Town gap kept; Cloud Isle at z −28, the old spot was on the beach).
+- **Encounter:** `flow/voyageEncounter.ts` (paths, motion, clearance), `flow/voyage.ts` `depart()`/`capture()`, `vy.shipYaw`,
+  `vy.spyglass`, store `spyglass`, `ui/VoyageHud.tsx` `Spyglass`, `CameraRig` `SPYGLASS_FOV`.
+- **Ship:** `riggingLines()`, open galley, `stairSteps()` in `world/pirateShip.ts` shared by model and floor height.
+- **Verified 2026-11-19 on this Mac:** tsc; unit tests 1121/1123 (the two failures are the arm64-only `layers-ground` golden, as on
+  `main`); `pirate-voyage.spec.ts` 2/2 (whole voyage with E/click spyglass and reloads; new touch test taps the spyglass, then reloads
+  at `captured`). Renders at 1366×768 judged by Claude: `.tmp/shots/encounter/e2` (boat at berth, 11 steps out with side and top views,
+  29 chase frames, 15 top-down, rope pull), `e3` (rigging from 6 angles, open galley, both staircases walked down and up in slow
+  motion), `e4` (Cloud Isle), `.tmp/shots/voyage/v4` (normal-speed story beats incl. spyglass).
+- **Not verified:** real-time feel of the chase and the spyglass zoom (judged from stepped frames and stills); a real Chromebook (frame
+  rate with the ship drawn to 300 m); the full e2e suite; CI x64 golden. Known, not changed: Gull's sail looks dark from behind
+  (pre-existing material); the moving pirate ship has no bow wave or wake.
+- **Next:** the user plays it (`?debug=1` → "Pirate voyage (preview)"); decide merge/deploy.
+
 ## Riding comfort and Port Town geometry fixes (deployed 2026-11-17, Pages run 44075359362, bundle `index-DcqdwmMG.js`): `feature/ride-town-fixes` (from `main` `21812d9`)
 The user's plan of 2026-11-17, built by Claude directly at the user's request. Decisions: `DESIGN_DECISIONS.md`
 "2026-11-17 — Riding comfort and Port Town geometry fixes". Riding: the rider follows only the seat's

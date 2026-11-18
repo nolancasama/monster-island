@@ -144,6 +144,8 @@ export interface GameState {
   drawing: boolean;
   /** The bag shown during Redbeard's "Do you have …?" questions, with the food being asked about. */
   voyageBag: { target: FoodId | null } | null;
+  /** Gull's spyglass prompt on the boat: waiting for the player to raise it, or to lower it. */
+  spyglass: "raise" | "lower" | null;
 }
 
 const SETTINGS_KEY = "mi.settings.v1";
@@ -199,7 +201,8 @@ export const useGame = create<GameState>(() => ({
   banner: null,
   panel: null,
   drawing: false,
-  voyageBag: null
+  voyageBag: null,
+  spyglass: null
 }));
 
 let bannerTimer = 0;

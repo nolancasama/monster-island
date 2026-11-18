@@ -32,6 +32,9 @@ type V = any;
 const voyage = (page: Page): Promise<V> => hook(page, "voyage") as Promise<V>;
 /** Interrogation questions answered with the bag panel checked; cooking steps with the marker checked. */
 let bagChecks = 0, markerChecks = 0;
+/** Spyglass prompts seen and pressed, in order; and how `drive` presses them (E then a click, or taps). */
+const spyglassUsed: string[] = [];
+let spyInput: "keys" | "touch" = "keys";
 
 /** Stand at a ship spot (local), facing a world point. */
 async function standFacing(page: Page, local: { x: number; z: number }, at: { x: number; z: number }) {
@@ -78,6 +81,7 @@ async function answer(page: Page, st: MiState) {
       bagChecks++;
     }
   } else if (c.includes("yesTheyCan")) pick = "yesTheyCan";
+  else if (c.includes("iCanSeeAShip")) pick = "iCanSeeAShip";
   else if (c.includes("yesPlease")) pick = "yesPlease";
   else if (c.includes("turnLeft")) {
     if (q.includes("island is on the left")) pick = "turnLeft";
@@ -115,6 +119,15 @@ async function drive(page: Page, label: string, done: (s: MiState, v: V) => bool
     const isWrong = s.prompt?.status === "wrong";
     if (isWrong && !wasWrong && ++wrong > 3) throw new Error(`wrong answers: ${label} ${JSON.stringify({ prompt: s.prompt, phase: v.phase, hud: v.hud })}`);
     wasWrong = isWrong;
+    // Gull's spyglass: raised with the interact key, lowered with its on-screen button.
+    if (v.spyPrompt && !s.line) {
+      spyglassUsed.push(v.spyPrompt);
+      if (spyInput === "touch") await page.getByTestId(`spyglass-${v.spyPrompt}`).tap();
+      else if (v.spyPrompt === "raise") await page.keyboard.press("KeyE");
+      else await page.getByTestId("spyglass-lower").click();
+      await page.waitForTimeout(120);
+      continue;
+    }
     if (s.prompt?.buttons && s.prompt.status === "ready") { await answer(page, s); continue; }
     if (s.mode === "explore") await free(s, v);
     await page.waitForTimeout(80);
@@ -268,12 +281,16 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
   await drive(page, "capture and interrogation", (s, v) => {
     // Nobody jumps or swings across: the capture fades out and reveals the party in a huddle.
     if (v.active && s.player.y > highest) highest = s.player.y;
-    if (s.line?.en === "Ahoy! I'm Captain Redbeard!") huddled ||= Boolean(v.huddle);
+    // The crew stand round the party from the reveal through the questions (sampled at any moment of it).
+    if (s.line?.en === "Ahoy! I'm Captain Redbeard!" || s.prompt?.choices.some((c) => c === "yesIDo" || c === "theyreMyFriends")) huddled ||= Boolean(v.huddle);
     return s.progress.act3.voyage.stage === "captured" && s.mode === "explore";
   }, async () => {}, 240_000)
     .then(({ s }) => { sawFoodQuestion = s.progress.act3.voyage.interrogated; });
   expect(sawFoodQuestion).toBe(true);
   expect(huddled).toBe(true);
+  // The ship was watched through the spyglass (raised, then lowered) before the capture went on.
+  expect(spyglassUsed.slice(0, 2)).toEqual(["raise", "lower"]);
+  expect((await voyage(page)).spyglass).toBe(0);
   expect(bagChecks).toBeGreaterThan(0);
   expect(highest).toBeLessThan(DECK_Y + 0.5);
   await expect(page.getByTestId("voyage-bag")).toHaveCount(0);
@@ -346,4 +363,35 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
   expect(st.progress.act3.voyageDone).toBe(true);
   await shot(page, "zz-cloud-isle");
   expect(errors.filter((e) => !/favicon|ResizeObserver/.test(e))).toEqual([]);
+});
+
+test.describe("touch", () => {
+  test.use({ hasTouch: true });
+  test("the spyglass on a touch screen: tap to raise, answer, tap to lower; the capture then saves and resumes", async ({ page }) => {
+    test.setTimeout(Number(process.env.MI_LONG_TIMEOUT ?? 900_000));
+    await page.addInitScript((v) => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, JSON.stringify(save({ apples: 1 })));
+    const errors = await boot(page, "fast=1");
+    await chooseMode(page, "tap");
+    await page.getByTestId("btn-continue").click();
+    await waitFor(page, (s) => s.mode === "explore", 90_000, "loaded");
+    await hook(page, "set", { touch: true });
+    await hook(page, "openCloudShip", true);
+    await hook(page, "openPirateVoyage", true);
+    await hook(page, "goTo", "harbor", 1.4);
+    await waitFor(page, (s) => s.focus?.id === "harbor" && s.mode === "explore", 15_000, "at Gull");
+    await page.getByTestId("touch-action").tap();
+    spyInput = "touch"; spyglassUsed.length = 0;
+    await drive(page, "spyglass by touch", (s) => s.progress.act3.voyage.stage === "captured" && s.mode === "explore", async () => {}, 240_000);
+    spyInput = "keys";
+    expect(spyglassUsed.slice(0, 2)).toEqual(["raise", "lower"]);
+    expect(errors).toEqual([]);
+    await continueSaved(page);
+    await waitFor(page, (s) => s.mode === "explore", 60_000, "resumed");
+    const v = await voyage(page), s = await state(page);
+    expect(s.progress.act3.voyage.stage).toBe("captured");
+    expect(v.active).toBe(true);
+    expect(v.spyglass).toBe(0);
+    expect(v.ship.yaw).toBe(0);
+    expect(Math.abs(s.player.x - SHIP.x)).toBeLessThan(HALF_BEAM);
+  });
 });

@@ -126,6 +126,14 @@ const PATHS: Record<string, ReactNode> = {
       fill="currentColor"
     />
   ),
+  spyglass: (
+    <g transform="rotate(-30 32 32)">
+      <rect x="6" y="24" width="18" height="16" rx="3" fill="#8a5a2b" />
+      <rect x="22" y="26" width="20" height="12" rx="2" fill="#c9a06a" />
+      <rect x="40" y="28" width="18" height="8" rx="2" fill="#e0b23a" />
+      <rect x="4" y="22" width="5" height="20" rx="2" fill="#4a2f1e" />
+    </g>
+  ),
   star: <path d="M32 4l8 18 20 2-15 13 5 20-18-11-18 11 5-20L4 24l20-2z" fill="#ffd23f" stroke="#c99a1a" strokeWidth="2.5" strokeLinejoin="round" />,
   heart: <path d="M32 56S6 40 6 22c0-10 8-16 15-16 6 0 9 4 11 7 2-3 5-7 11-7 7 0 15 6 15 16 0 18-26 34-26 34z" fill="#ff5c8a" />,
   path: (

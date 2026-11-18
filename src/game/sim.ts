@@ -1,4 +1,5 @@
 import { MONSTERS, LIVE_MONSTERS } from "./data/monsters";
+import { BOAT_DECK_Y, boatSeatWorld } from "./world/gullBoat";
 import { shallowSpeedFactor } from "./logic/water";
 import { companions, gateOpen, objective } from "./logic/progress";
 import { getGame, setGame, toast } from "./store";
@@ -217,7 +218,11 @@ function upperCanopyTick(dt: number): boolean {
 function movePlayer(dt: number, canMove: boolean) {
   const p = rt.player;
   if (p.hop) { advanceLilyHop(); return; }
-  if (rt.voyage.active) { p.x = rt.voyage.x; p.z = rt.voyage.z; p.y = rt.voyage.y + .75; p.vx = p.vz = p.speed = 0; return; }
+  if (rt.voyage.active) {
+    // Aboard Gull's boat: the player's own seat on the deck, turning with the hull.
+    const seat = boatSeatWorld("player", rt.voyage);
+    p.x = seat.x; p.z = seat.z; p.y = rt.voyage.y + BOAT_DECK_Y; p.vx = p.vz = p.speed = 0; return;
+  }
   if (p.fall) {
     // Keeps its push over the edge; the scene ends it at the landing.
     p.x += p.fall.vx * dt;

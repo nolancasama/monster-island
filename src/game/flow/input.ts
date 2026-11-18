@@ -1,4 +1,5 @@
 import { getGame, setGame } from "../store";
+import { pressSpyglass } from "./voyage";
 import { cancelAsk, chooseIndex, hasLine, micPress, nextLine } from "./ask";
 import { interact, switchByIndex } from "./actions";
 import { audio } from "../../audio/audio";
@@ -26,6 +27,11 @@ export function onKey(code: string) {
   }
   if (g.journalOpen) {
     if (code === "Escape" || code === "KeyM") openJournal(false);
+    return;
+  }
+  // Gull's spyglass waits for the ordinary interact keys (the button on screen takes a click or tap).
+  if (g.spyglass && !hasLine() && (code === "KeyE" || code === "Enter" || code === "NumpadEnter" || code === "Space")) {
+    pressSpyglass();
     return;
   }
   if (hasLine()) {

@@ -57,8 +57,10 @@ test("the pirate ship", async ({ page }) => {
 
 /** Story beats worth a frame, by their line (normal speed: lines wait for Space). */
 const BEATS: Record<string, string> = {
-  "Let's go!": "c1-lets-go", "What a nice day! The sea is calm.": "c2-departure", "Look! A big ship!": "c3-ship-ahead",
-  "Stop! Stop that boat!": "c4-stop", "Ropes, crew! Bring them here!": "c5-ropes", "Ahoy! I'm Captain Redbeard!": "c6-aboard",
+  "Let's go!": "c1-lets-go", "What a nice day! The sea is calm.": "c2-departure", "Look! A ship!": "c3-ship-ahead",
+  "Use the spyglass!": "c3b-use-spyglass", "Yes! A big ship with red sails...": "c3c-spyglass-view",
+  "Red sails... It's a pirate ship! Oh no! Pirates!": "c3d-pirates", "Oh no! The ship is in the way!": "c3e-blocked",
+  "Stop! Stop that boat!": "c4-stop", "Ropes, crew! Pull them in!": "c5-ropes", "Bring them here!": "c5b-alongside", "Ahoy! I'm Captain Redbeard!": "c6-aboard",
   "Monster soup!": "c8-monster-soup", "Okay! Show me!": "c9-show-me",
 };
 
@@ -82,6 +84,13 @@ test("departure, capture, interrogation and the monsters (normal speed)", async 
     const st = await state(page) as any;
     if (st.mode === "explore" && st.progress.act3.voyage.stage === "captured") break;
     if (Date.now() - t0 > 840_000) throw new Error("capture did not finish");
+    const sp = await hook(page, "voyage") as any;
+    if (sp.spyPrompt && !st.line) {
+      await hook(page, "renderFrames", 6); await snap(page, `c3-spy-${sp.spyPrompt}`);
+      await page.keyboard.press("KeyE");
+      await page.waitForTimeout(150);
+      continue;
+    }
     if (st.line && st.line.en !== last) {
       last = st.line.en;
       if (BEATS[last]) { await hook(page, "renderFrames", 8); await snap(page, BEATS[last]); }
@@ -92,7 +101,7 @@ test("departure, capture, interrogation and the monsters (normal speed)", async 
       const food = Object.keys(bag).find(f => q.includes(f));
       // A command shows its sentence among distractors: tap the one that says it.
       const said = st.prompt.kind === "command" ? c.find(id => (PHRASES as any)[id]?.en === st.prompt.sentences[0]) : undefined;
-      const pick = said ?? (c.includes("yesIDo") ? (food && bag[food] ? "yesIDo" : "noIDont") : c.includes("yesTheyCan") ? "yesTheyCan" : c[0]);
+      const pick = said ?? (c.includes("yesIDo") ? (food && bag[food] ? "yesIDo" : "noIDont") : c.includes("yesTheyCan") ? "yesTheyCan" : c.includes("iCanSeeAShip") ? "iCanSeeAShip" : c[0]);
       await tap(page, pick);
       last = "";
     } else if (!st.line) last = "";

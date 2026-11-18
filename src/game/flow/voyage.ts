@@ -3,8 +3,8 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS } from "../data/combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, rt } from "../runtime";
-import { GULL_BERTH, PIER2 } from "../world/lowland";
-import { DECK_Y, HALF_BEAM, SHIP, SPOT, hullHalf, inShipArea, shipWalkable, shipWorld } from "../world/pirateShip";
+import { GULL_BERTH } from "../world/lowland";
+import { DECK_Y, HALF_BEAM, SHIP, SPOT, inShipArea, shipWalkable, shipWorld } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { foodChoices, foodOfHave, handOverFood, interrogationFoods, setVoyageStage, truthfulAnswer, voyageStage, VOYAGE_JOBS, type VoyageJob, type VoyageStage } from "../logic/voyage";
 import type { Progress } from "../logic/progress";
@@ -14,6 +14,8 @@ import { activeFriend, currentPhase } from "../voyageSim";
 import { ask, fastMode, say, wait } from "./ask";
 import { fadeThrough, follow, frameTwo, isRunning, run, shot } from "./script";
 import { boatLeg, boatPose } from "./act3";
+import { BOAT_DECK_Y, BOAT_SCALE } from "../world/gullBoat";
+import { BOAT_CHASE, BOAT_OUT, BOAT_OUT_START, CHASE_SECONDS, MOORED, MOORED_POSE, Motion, SHIP_CHASE_S, SHIP_PATH, boatChaseAt, horizonDrop, shipChaseAt, type Pose } from "./voyageEncounter";
 import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
 import { setVoyageTool } from "../../input/attackInput";
@@ -42,8 +44,8 @@ export async function over(seconds: number, fn: (k: number) => void) {
 export const ease = (t: number) => t * t * (3 - 2 * t);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** Where Gull's boat is tied, alongside the pirate ship's starboard side. */
-export const MOORED = { x: SHIP.x + hullHalf(5.5) + 3.15, z: SHIP.z + 5.5 };
+/** Where Gull's boat is tied, alongside the pirate ship's starboard side (flow/voyageEncounter). */
+export { MOORED };
 /** Where the player stands after boarding (and resumes a saved voyage). */
 export const BOARDED = shipWorld({ x: -2.1, z: 7.4 });
 
@@ -90,7 +92,7 @@ export function voyageSavePoint(): { x: number; z: number } | false | null {
 /** The ship, the sea and the crew in place (after the capture, or on load). */
 export function setScene() {
   vy.active = true; vy.sea = true; vy.storm = 0; vy.flow = 0.6; vy.gullAboard = true; vy.boatMoored = true; vy.ropes = 1;
-  vy.shipOffset = { x: 0, z: 0 }; vy.cut = true;
+  vy.shipOffset = { x: 0, z: 0 }; vy.shipYaw = 0; vy.shipSink = 0; vy.spyglass = 0; vy.cut = true;
   const v = rt.voyage;
   v.active = false; v.x = MOORED.x; v.z = MOORED.z; v.y = -0.1; v.yaw = Math.PI; v.sail = 0.08; v.stage = "moored";
   const done = getGame().progress.act3.voyage.jobs;
@@ -144,9 +146,52 @@ async function depart() {
   rt.player.frozen = true;
   audio.startMusic("island");
   boatPose();
-  await boatLeg(7, PIER2.x + 4, PIER2.z0 - 42);
+  await boatLeg(7, BOAT_OUT_START.x, BOAT_OUT_START.z);
   await say("harbor", "What a nice day! The sea is calm.", "いい てんきだ! うみが しずかだね。");
-  await boatLeg(8, MOORED.x + 3, SHIP.z + 46);
+  // Round the point and out to open water, then west for Cloud Isle; Gull eases off to look at something ahead.
+  const out = new Motion(BOAT_OUT, [[0, 6], [9, 7], [13, 3], [16, 0]], 16, BOAT_OUT.length);
+  // As he slows he lets the sail down (it would hide what lies ahead).
+  await over(16, (k) => { setBoat(out.at(k * 16)); v.sail = k < 0.72 ? 1 : lerp(1, 0.12, ease((k - 0.72) / 0.28)); boatPose(); });
+}
+
+/** Gull's boat at a pose (its yaw is its heading). */
+function setBoat(p: Pose) {
+  const v = rt.voyage;
+  v.x = p.x; v.z = p.z; v.yaw = p.h;
+}
+/** The pirate ship at a pose on its approach: offset from its mooring, turned to its heading, and sunk below the horizon by distance. */
+function setShip(p: Pose) {
+  vy.shipOffset = { x: p.x - SHIP.x, z: p.z - SHIP.z };
+  // Its bow (local −z) points along the heading; exactly 0 once it lies at its mooring.
+  const yaw = Math.atan2(Math.sin(p.h + Math.PI), Math.cos(p.h + Math.PI));
+  vy.shipYaw = Math.abs(yaw) < 1e-4 && Math.hypot(vy.shipOffset.x, vy.shipOffset.z) < 1e-3 ? 0 : yaw;
+  const v = rt.voyage;
+  vy.shipSink = horizonDrop(Math.hypot(p.x - v.x, p.z - v.z));
+}
+/**
+ * Evidence (e2e `encounterPose`): Gull's boat and the ship at one moment of the
+ * encounter — `out` k 0..1 along the way out, `watch` k 0..1 of the ship's watched
+ * leg, `chase` k 0..1 of the chase, `pull` k 0..1 of the rope pull to the mooring.
+ */
+export function poseEncounter(phase: "out" | "watch" | "chase" | "pull", k: number) {
+  const v = rt.voyage;
+  vy.sea = true; vy.active = phase !== "out"; vy.cut = false; vy.gullAboard = false; vy.boatMoored = false;
+  v.active = true; v.sail = phase === "pull" ? 0.08 : 1; v.y = -0.1;
+  vy.crew.gull.visible = false; vy.sails = phase === "pull" ? [0.12, 0.12, 0.12] : [1, 1, 1];
+  rt.player.frozen = true;
+  if (phase === "out") setBoat(BOAT_OUT.at(k * BOAT_OUT.length));
+  else if (phase === "watch") { v.sail = 0.12; setBoat(BOAT_OUT.end); setShip(SHIP_PATH.at(k * SHIP_CHASE_S)); }
+  else if (phase === "chase") { setBoat(boatChaseAt(k * CHASE_SECONDS)); setShip(shipChaseAt(k * CHASE_SECONDS)); if (k >= 1) shipAtRest(); }
+  else {
+    shipAtRest(); vy.ropes = 1;
+    const a = BOAT_CHASE.end, e = ease(k), dh = Math.atan2(Math.sin(MOORED_POSE.h - a.h), Math.cos(MOORED_POSE.h - a.h));
+    setBoat({ x: lerp(a.x, MOORED_POSE.x, e), z: lerp(a.z, MOORED_POSE.z, e), h: a.h + dh * e });
+  }
+  boatPose();
+}
+/** The ship resting at its mooring, level. */
+function shipAtRest() {
+  vy.shipOffset = { x: 0, z: 0 }; vy.shipYaw = 0; vy.shipSink = 0;
 }
 
 type Shot = { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
@@ -167,46 +212,122 @@ async function glide(seconds: number, to: (k: number) => Shot, each?: (k: number
   });
 }
 
-/** The ship far off on the horizon (its offset from the mooring as it sails in). */
-const SIGHTED = { x: 46, z: -60 };
+// ------------------------------------------------------------ the sighting, the spyglass and the chase
+
+let spyPressed = false;
+/** E, Enter, Space or the on-screen button while Gull's spyglass prompt shows (flow/input, ui/VoyageHud). */
+export function pressSpyglass() {
+  if (!getGame().spyglass) return;
+  spyPressed = true;
+  setGame({ spyglass: null });
+}
+async function spyglassPrompt(step: "raise" | "lower") {
+  spyPressed = false;
+  setGame({ spyglass: step });
+  try { await until(() => spyPressed); } finally { if (getGame().spyglass === step) setGame({ spyglass: null }); }
+}
+
+/** The ship's place along its path while it is watched (it sails on slowly toward the chase start). */
+let watchedS = 0;
+function sailWatched(ds: number) { watchedS = Math.min(SHIP_CHASE_S, watchedS + ds); setShip(SHIP_PATH.at(watchedS)); }
+
+/**
+ * Looking out over the bow from the boat's stern quarter, above the rail: the
+ * party and Gull in the lower part of the frame, the ship on the horizon ahead.
+ * `ahead` and `out` are boat-local metres (forward, starboard) before scaling.
+ */
+const lookout = (ahead = -3.2, out = 1.45, up = 2.9): Shot => {
+  const v = rt.voyage, fx = Math.sin(v.yaw), fz = Math.cos(v.yaw), rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw);
+  const ship = { x: SHIP.x + vy.shipOffset.x, z: SHIP.z + vy.shipOffset.z };
+  return {
+    pos: { x: v.x + (fx * ahead + rx * out) * BOAT_SCALE, y: v.y + BOAT_DECK_Y + up, z: v.z + (fz * ahead + rz * out) * BOAT_SCALE },
+    target: { x: ship.x, y: 4.5 - vy.shipSink * 0.6, z: ship.z },
+  };
+};
 
 async function capture() {
   const v = rt.voyage;
-  // A big ship rises over the horizon to the north-east. The camera turns from the
-  // boat's broadside view to look out at it, then follows its approach.
-  vy.active = true; vy.shipOffset = { ...SIGHTED }; vy.flow = 0;
-  const horizon = (): Shot => ({
-    pos: { x: v.x - 9, y: 6.2, z: v.z + 12 },
-    target: { x: SHIP.x + vy.shipOffset.x * 0.85, y: 3.2, z: SHIP.z + vy.shipOffset.z * 0.85 },
-  });
-  await glide(1.8, horizon, (k) => { vy.shipOffset.x = SIGHTED.x - 4 * ease(k); vy.shipOffset.z = SIGHTED.z + 5 * ease(k); });
-  const held = { ...vy.shipOffset };
-  await say("harbor", "Look! A big ship!", "みて! おおきな ふねだ!");
-  const bx = v.x, bz = v.z;
+  // Phase A — far off, dead ahead, only masts and sails show over the horizon; the hull rises as it nears.
+  vy.active = true; vy.flow = 0; vy.cut = false; watchedS = 0;
+  // Under full sail as it comes on; Gull is still in his own boat, not on its deck.
+  vy.sails = [1, 1, 1]; vy.crew.gull.visible = false;
+  setShip(SHIP_PATH.at(0));
+  await glide(2.6, () => lookout(), (k) => sailWatched(k * 0.12));
+  await say("harbor", "Look! A ship!", "みて! ふねだ!");
+  await say("harbor", "Use the spyglass!", "ぼうえんきょうで みてごらん!");
+  // Phase B — the spyglass: raise it with the interact key or the button, look, answer, lower it.
+  await spyglassPrompt("raise");
   audio.play("whoosh");
-  // The approach: the ship sails in alongside while the camera moves to the wide alongside view.
-  const alongside = (): Shot => ({
-    pos: { x: MOORED.x + 17, y: 9.5, z: MOORED.z + 19 },
-    target: { x: SHIP.x + vy.shipOffset.x * 0.6, y: 4, z: SHIP.z + vy.shipOffset.z * 0.6 },
+  await over(1.1, (k) => { vy.spyglass = k; sailWatched(0.08); shot(lookout().pos, lookout().target); });
+  vy.spyglass = 1;
+  // The ship sails on while it is watched (it stays far off; nothing waits on it).
+  let watching = true;
+  void (async () => { while (watching) { sailWatched(0.035); shot(lookout().pos, lookout().target); await wait(16); } })();
+  try {
+    for (;;) {
+      const seen = await ask({ kind: "choice", options: ["iCanSeeAShip", "iCanSeeAFish"], tapAlways: true, readQuestion: true,
+        question: { by: "harbor", en: "What can you see?", ja: "なにが みえる?" }, help: "ぼうえんきょうの なかを みて こたえよう" });
+      if (seen === "iCanSeeAShip") break;
+      await say("harbor", "A fish? Look again!", "さかな? もういちど みてごらん!");
+    }
+    await say("harbor", "Yes! A big ship with red sails...", "そう! あかい ほの おおきな ふねだ…");
+    await spyglassPrompt("lower");
+  } finally { watching = false; }
+  await over(0.9, (k) => { vy.spyglass = 1 - k; shot(lookout().pos, lookout().target); });
+  vy.spyglass = 0;
+  // Phase C — recognition: the rest of its watched leg, then the turn toward the boat begins the chase.
+  const s0 = watchedS;
+  await glide(1.6, () => lookout(-3.6, 1.2, 3.3), (k) => { watchedS = lerp(s0, SHIP_CHASE_S, ease(k)); setShip(SHIP_PATH.at(watchedS)); });
+  watchedS = SHIP_CHASE_S; setShip(SHIP_PATH.at(watchedS));
+  await say("harbor", "Red sails... It's a pirate ship! Oh no! Pirates!", "あかい ほ… かいぞくせんだ! たいへん!");
+  await say("harbor", "Hold on! We turn left!", "つかまって! ひだりへ にげるよ!");
+  await ask({ kind: "command", options: ["turnLeft"], tapAlways: true, readSentence: true, help: "いっしょに「Turn left!」" });
+  audio.play("whoosh");
+  void over(1.4, (k) => { v.sail = lerp(0.12, 1, ease(k)); });
+  // The chase: the ship bears round onto the boat and runs it down; Gull bears away to port, and the
+  // ship hooks across his bow and stops broadside in the way. The camera rides off the boat's
+  // starboard quarter, high enough to keep both vessels in view.
+  const chaseShot = (): Shot => {
+    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw);
+    const ship = { x: SHIP.x + vy.shipOffset.x, z: SHIP.z + vy.shipOffset.z };
+    return {
+      pos: { x: v.x - fx * 15 + fz * 9, y: 11, z: v.z - fz * 15 - fx * 9 },
+      target: { x: v.x + (ship.x - v.x) * 0.45, y: 3.2, z: v.z + (ship.z - v.z) * 0.45 },
+    };
+  };
+  const toChase = currentShot();
+  await over(CHASE_SECONDS, (k) => {
+    const t = k * CHASE_SECONDS;
+    setBoat(boatChaseAt(t)); setShip(shipChaseAt(t)); boatPose();
+    // Ease from the lookout into the chase framing over its first two seconds.
+    const end = chaseShot(), blend = toChase ? ease(Math.min(1, t / 2)) : 1;
+    shot(toChase ? lerp3(toChase.pos, end.pos, blend) : end.pos, toChase ? lerp3(toChase.target, end.target, blend) : end.target);
   });
-  await glide(6, alongside, (k) => {
-    const e = ease(k);
-    vy.shipOffset.x = lerp(held.x, 0, e); vy.shipOffset.z = lerp(held.z, 0, e);
-    v.x = lerp(bx, MOORED.x, e); v.z = lerp(bz, MOORED.z, e); v.yaw = Math.PI;
-    boatPose();
-  });
-  vy.shipOffset = { x: 0, z: 0 };
-  v.sail = 0.08;
+  setBoat(BOAT_CHASE.end); shipAtRest(); boatPose();
+  v.sail = 0.3;
+  // Hove to: the pirates spill their sails.
+  void over(2.4, (k) => { vy.sails = vy.sails.map(() => lerp(1, 0.12, ease(k))); });
+  await say("harbor", "Oh no! The ship is in the way!", "たいへん! ふねが じゃまで すすめない!");
   vy.crew.redbeard.x = HALF_BEAM - 1.6; vy.crew.redbeard.z = 9.4;
-  // Settle on the captain at the rail above the boat.
-  await glide(1.4, () => ({ pos: { x: MOORED.x + 9.5, y: 6.8, z: MOORED.z + 9.5 }, target: { x: SHIP.x + HALF_BEAM - 2, y: DECK_Y + 1.5, z: SHIP.z + 9 } }));
+  // Settle on the captain at the rail, the boat stopped short of the ship's side.
+  const rail = { x: SHIP.x + HALF_BEAM - 2, y: DECK_Y + 1.5, z: SHIP.z + 9 };
+  await glide(1.6, () => ({ pos: { x: v.x + 7.5, y: 6.8, z: v.z + 9.5 }, target: rail }));
   await say("redbeard", "Stop! Stop that boat!", "とまれ! その ふねを とめろ!");
-  await say("harbor", "Oh no! Pirates!", "たいへん! かいぞくだ!");
-  // Three ropes fly across as the captain shouts, and stay as the boat's mooring lines (scene/VoyageProps).
+  // Three ropes fly across as the captain shouts, then haul the boat in alongside, where they stay as its mooring lines.
   audio.play("whip");
-  void over(1.2, (k) => { vy.ropes = Math.max(vy.ropes, k); });
-  await say("redbeard", "Ropes, crew! Bring them here!", "ロープだ! つれてこい!");
+  await over(1.2, (k) => { vy.ropes = Math.max(vy.ropes, k); });
   vy.ropes = 1;
+  await say("redbeard", "Ropes, crew! Pull them in!", "ロープだ! ひきよせろ!");
+  const from: Pose = { x: v.x, z: v.z, h: v.yaw }, dh = Math.atan2(Math.sin(MOORED_POSE.h - from.h), Math.cos(MOORED_POSE.h - from.h));
+  v.sail = 0.08;
+  const alongside = () => shot({ x: v.x + 7.5, y: 6.8, z: v.z + 9.5 }, rail);
+  await over(3, (k) => {
+    const e = ease(k);
+    // boatPose seats everyone and frames the boat's own view: the scene's shot replaces it.
+    setBoat({ x: lerp(from.x, MOORED_POSE.x, e), z: lerp(from.z, MOORED_POSE.z, e), h: from.h + dh * e }); boatPose(); alongside();
+  });
+  setBoat(MOORED_POSE); boatPose(); alongside();
+  await say("redbeard", "Bring them here!", "つれてこい!");
   await surrounded();
 }
 
@@ -225,7 +346,7 @@ export function huddleUp() {
     delete vy.monY[id];
   }
   const g = vy.crew.gull;
-  g.x = HUDDLE_PARTY.gull.x; g.z = HUDDLE_PARTY.gull.z; g.air = 0; g.yaw = Math.atan2(HUDDLE.x - g.x, HUDDLE.z - g.z) + Math.PI;
+  g.visible = true; g.x = HUDDLE_PARTY.gull.x; g.z = HUDDLE_PARTY.gull.z; g.air = 0; g.yaw = Math.atan2(HUDDLE.x - g.x, HUDDLE.z - g.z) + Math.PI;
   for (const id of Object.keys(HUDDLE_PIRATES) as Array<keyof typeof HUDDLE_PIRATES>) {
     const c = vy.crew[id], s = HUDDLE_PIRATES[id];
     c.x = s.x; c.z = s.z; c.air = 0; c.visible = true; c.menace = true;

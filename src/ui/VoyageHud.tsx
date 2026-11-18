@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useGame } from "../game/store";
 import { vy } from "../game/voyageRt";
 import { TOOL } from "../game/voyageSim";
-import { voyaging } from "../game/flow/voyage";
+import { pressSpyglass, voyaging } from "../game/flow/voyage";
 import { rt } from "../game/runtime";
 import { pressAttack, releaseAttack } from "../input/attackInput";
 import { FOODS, islandFoods } from "../game/data/foods";
@@ -60,6 +60,36 @@ function useFrameLoop(fn: () => void) {
   }, [fn]);
 }
 
+/**
+ * Gull's spyglass: a dark ring closes round the view as the lens narrows
+ * (the camera's field of view follows `vy.spyglass`), and a big button raises
+ * or lowers it (E, Enter or Space do the same; flow/input).
+ */
+function Spyglass() {
+  const step = useGame((s) => s.spyglass);
+  const ring = useRef<HTMLDivElement>(null);
+  const fn = useCallback(() => {
+    const r = ring.current;
+    if (!r) return;
+    const k = vy.spyglass;
+    r.style.opacity = `${Math.min(1, k * 1.4)}`;
+    r.style.setProperty("--spy-r", `${130 - 50 * k}vmin`);
+    r.hidden = k <= 0;
+  }, []);
+  useFrameLoop(fn);
+  return <>
+    <div ref={ring} hidden className="spyglass-ring" data-testid="spyglass-ring" aria-hidden="true" />
+    {step && (
+      <button className="spyglass-btn ui" data-testid={`spyglass-${step}`} onClick={() => pressSpyglass()}
+        aria-label={step === "raise" ? "Use the spyglass" : "Put the spyglass down"}>
+        <Icon id="spyglass" size={40} />
+        <span>{step === "raise" ? "Use the spyglass" : "Put it down"}</span>
+        <small>{step === "raise" ? "ぼうえんきょうを つかう" : "ぼうえんきょうを おろす"} · E</small>
+      </button>
+    )}
+  </>;
+}
+
 export function VoyageHud() {
   const mode = useGame((s) => s.mode);
   const touch = useGame((s) => s.touch);
@@ -106,6 +136,7 @@ export function VoyageHud() {
   const tool = active ? TOOL[active] : null;
   return <>
     <VoyageBag />
+    <Spyglass />
     <div ref={flash} className="voyage-flash" aria-hidden="true" />
     <div ref={box} hidden className="panel ui voyage-hud" data-testid="voyage-hud" role="status">
       <div ref={title} className="voyage-title" />

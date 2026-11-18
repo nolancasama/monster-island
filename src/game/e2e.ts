@@ -1,6 +1,6 @@
 import { placePlayer, goToTarget } from "./travel";
 import { resetVoyageRt, vy } from "./voyageRt";
-import { resumeVoyage, setScene } from "./flow/voyage";
+import { poseEncounter, pressSpyglass, resumeVoyage, setScene } from "./flow/voyage";
 import { itemWorld } from "./flow/voyageJobs";
 import { cookMarker } from "./voyageSim";
 import { SHIP } from "./world/pirateShip";
@@ -273,11 +273,21 @@ export function installE2eHook(seed: number) {
     voyageShow(active = true) {
       if (active) setScene(); else resetVoyageRt();
     },
+    /** Gull's boat and the pirate ship at one moment of their encounter (voyage evidence). */
+    encounterPose(phase: "out" | "watch" | "chase" | "pull", k: number) {
+      poseEncounter(phase, k);
+    },
+    /** The spyglass button / E (as the player would press it). */
+    spyglass() {
+      pressSpyglass();
+    },
     /** The voyage's live state, in world coordinates where it matters (pirate-voyage.spec). */
     voyage() {
       const w = (p: { x: number; z: number }) => ({ x: SHIP.x + p.x, z: SHIP.z + p.z });
       return {
-        phase: vy.phase?.name ?? null, hud: vy.hud, active: vy.active, sea: vy.sea, storm: vy.storm, flow: vy.flow,
+        phase: vy.phase?.name ?? null, hud: vy.hud, active: vy.active, spyglass: vy.spyglass, spyPrompt: getGame().spyglass,
+        boat: { x: rt.voyage.x, z: rt.voyage.z, yaw: rt.voyage.yaw, active: rt.voyage.active },
+        ship: { x: SHIP.x + vy.shipOffset.x, z: SHIP.z + vy.shipOffset.z, yaw: vy.shipYaw, sink: vy.shipSink }, sea: vy.sea, storm: vy.storm, flow: vy.flow,
         fish: vy.fish.map((f) => ({ ...w(f), boot: f.boot, state: f.state })), bucket: vy.bucket,
         cargo: vy.cargo, carry: vy.carry, cook: { ...vy.cook }, sails: [...vy.sails], sewn: vy.sewn, lane: vy.lane,
         obstacles: vy.obstacles.map((o) => ({ lane: o.lane, z: o.z })),

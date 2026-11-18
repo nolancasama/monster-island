@@ -2919,3 +2919,43 @@ On `feature/ride-town-fixes` from `main` `21812d9`.
   transfer puts the party on walkable ground at the dock.
 - Rejected scaling only the visible model. Passenger positions, deck height
   and berth clearances also depend on the physical dimensions.
+- (Controller, 2026-11-19) Cloud Isle's dock ends on dry sand (the ground is 0.8 m above the sea to
+  z ≈ −15), so the old berth at z −8 sat on the beach. z −28 is the first spot where the bigger hull
+  floats clear; z −24 was rejected (the bow would sit over a shelving bottom for 4 m gained).
+  `sim.ts` now seats the player at `boatSeatWorld("player")` every frame (it reset them to the boat's
+  centre at the old deck height).
+
+## 2026-11-19 — The pirate ship's interception and Gull's spyglass
+
+The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", items 2 and 3.
+- **Authored paths, not physics.** `flow/voyageEncounter.ts`: each vessel follows straight runs and
+  circular turns (heading = path tangent), with speed eased between keys and integrated, so it
+  accelerates, brakes and turns smoothly. Clearance is proven, not hoped for: `voyageEncounter.test.ts`
+  checks the hull outline (plus bowsprit) against Gull's boat rectangle every 1/60 s of the sighting,
+  chase and rope pull (minimum gap > 1.5 m; ~2.4 m as tuned), and that the ship ends across both the
+  boat's intended and escape headings. Rejected: a boat physics engine; separation pushes at runtime.
+- **The geometry is fixed by the deck play.** Every job and camera assumes the ship lies at `SHIP`,
+  bow south, with the boat moored on its +x side. So the ship comes in from the west sailing east
+  (dead ahead of Gull, who is bound west for Cloud Isle), bears round toward the boat, runs down on it,
+  then hooks south across the boat's bow and stops broadside at its mooring. Gull bears away to port,
+  slows, and stops ~6 m off its side; three ropes then haul the boat in alongside (3 s) — the old
+  "approach from the side" is gone. The ship gets a scene-only yaw (`vy.shipYaw`, 0 at rest); the
+  ship-attached props hide while it is turned (they are placed without yaw).
+- **Horizon.** The world is flat, so `horizonDrop(d)` sinks the ship below the opaque sea with distance
+  (≈4.3 m at the 179 m sighting: masts and sails only; 0 inside 110 m). The ship draws out to 300 m
+  (was 170); the fog (55/70 → 260 m) supplies the haze. It sails slowly while watched and is never
+  spawned in plain view.
+- **Spyglass.** Gull: "Look! A ship!" / "Use the spyglass!". A big button (or E / Enter / Space) raises
+  it; the camera's field of view eases 65° → 15° (`SPYGLASS_FOV`) under a soft dark ring; "What can you
+  see?" with "I can see a ship!" / "I can see a fish!" (new phrases; Speak or Tap like every ask); then
+  the same button lowers it. Rejected: the focus/interact system for the button (interaction is off
+  while a script runs) and a camera dolly (it changes the haze rather than magnifying).
+- **Gull drops his sail as he slows to look** (it hid the ship from every lookout angle) and raises it
+  again for the escape. The escape uses the existing "Turn left!" command (ESL beat). The pirates run
+  under full sail and spill it when hove to. Gull's figure on the pirate deck stays hidden until the
+  huddle (it stood there during the approach).
+- **Lines changed.** "Look! A big ship!" → "Look! A ship!"; "Oh no! Pirates!" moved from after
+  Redbeard's shout to the recognition; new "Oh no! The ship is in the way!"; "Ropes, crew! Bring them
+  here!" split into "Ropes, crew! Pull them in!" (the haul) and "Bring them here!".
+- `continueGame()` now sets the player's standing height when placing them (the first frames read y = 0;
+  the voyage spec's reload check caught it).
