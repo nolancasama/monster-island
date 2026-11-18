@@ -11,6 +11,7 @@ import {
   CLOUD_ZONES, COAST_GATE, HOLLOW_APPROACH, HOLLOW, RAIDER_BARRICADE,
   cloudY, cloudZoneAt, type CloudGates } from "../game/world/cloudisle";
 import { GULL_BERTH, nearestOnTrail, type WalkShape } from "../game/world/lowland";
+import { BOAT_DECK_Y, BOAT_HALF_BEAM, BOAT_HALF_LENGTH, BOAT_HULL_BOTTOM_Y, BOAT_HULL_TOP_Y, BOAT_INNER, BOAT_MAST, BOAT_RAIL, BOAT_RIG, BOAT_SEATS } from "../game/world/gullBoat";
 import { cloudGroundY, cloudLandMask } from "../game/world/cloudTerrain";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
@@ -528,16 +529,38 @@ function DockGull({ geometry }: { geometry: THREE.BufferGeometry }) {
   return <mesh ref={ref} geometry={geometry} material={flatMat} position={ground(CLOUD_DOCK.gull.x, CLOUD_DOCK.gull.z)} rotation={[0, Math.PI, 0]} />;
 }
 
+export function boatHullGeometry() {
+  const b = new PartBuilder();
+  // Fit the seven-sided profile to the gunwale dimensions. The deck uses
+  // the same profile as the gunwale, including the taper at each end.
+  const stern = Math.cos(Math.PI / 7);
+  const beamScale = BOAT_HALF_BEAM / Math.sin(4 * Math.PI / 7);
+  const lengthScale = 2 * BOAT_HALF_LENGTH / (1 + stern);
+  const centerZ = BOAT_HALF_LENGTH - lengthScale;
+  const profile = (bottomRadius: number, bottomY: number, topY: number, color: string) =>
+    b.add(new THREE.CylinderGeometry(1, bottomRadius, topY - bottomY, 7), color,
+      [0, (bottomY + topY) / 2, centerZ], [0, 0, 0], [beamScale, 1, lengthScale]);
+  profile(.7 / 1.2, BOAT_HULL_BOTTOM_Y, BOAT_HULL_TOP_Y, timber);
+  profile(1, BOAT_HULL_TOP_Y, BOAT_DECK_Y, "#ad9469");
+  b.cyl(BOAT_RIG.mastTopRadius, BOAT_MAST.r, BOAT_RIG.mastHeight, BOAT_MAST.x, BOAT_DECK_Y, BOAT_MAST.z, timber, 7);
+  b.box(BOAT_RIG.yardWidth, BOAT_RIG.yardThickness, BOAT_RIG.yardThickness, BOAT_MAST.x, BOAT_RIG.yardY, BOAT_MAST.z, timber);
+  for (const side of [-1, 1]) {
+    b.box(BOAT_RAIL.width, BOAT_RAIL.height, 2 * BOAT_INNER.halfZ,
+      side * (BOAT_INNER.halfX + BOAT_RAIL.width / 2), BOAT_DECK_Y, 0, timber);
+  }
+  return b.build();
+}
+
+export function boatSailGeometry() {
+  const b = new PartBuilder();
+  b.add(new THREE.PlaneGeometry(BOAT_RIG.sailWidth, BOAT_RIG.sailHeight, 2, 2), "#eee1bc", [0, -BOAT_RIG.sailHeight / 2, 0]);
+  return b.build();
+}
+
 export function CloudBoat() {
   const root = useRef<THREE.Group>(null), sail = useRef<THREE.Mesh>(null), keeper = useRef<THREE.Mesh>(null);
-  const hull = useMemo(() => {
-    const b = new PartBuilder(); b.add(new THREE.CylinderGeometry(1.2, .7, .9, 7), timber, [0, .15, 0], [0, 0, 0], [1.3, 1, 3]);
-    b.box(2.8, .15, 6.3, 0, .6, 0, "#ad9469"); b.cyl(.09, .12, 6, 0, .75, -.1, timber, 7);
-    b.box(3.6, .1, .1, 0, 6.5, -.1, timber);
-    for (const x of [-1.3, 1.3]) b.box(.1, .5, 5.2, x, .75, 0, timber);
-    return b.build();
-  }, []);
-  const cloth = useMemo(() => { const b = new PartBuilder(); b.add(new THREE.PlaneGeometry(3.4, 4, 2, 2), "#eee1bc", [0, -2, 0]); return b.build(); }, []);
+  const hull = useMemo(boatHullGeometry, []);
+  const cloth = useMemo(boatSailGeometry, []);
   const clothMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), []);
   const gull = useMemo(() => npcGeometry(NPCS.harbor), []);
   useFrame(() => {
@@ -564,7 +587,12 @@ export function CloudBoat() {
     }
     if (sail.current) sail.current.scale.y = v.active || voyaging ? Math.max(.03, v.sail) : 1;
   });
-  return <><CloudSea crossing /><VoyageRocks /><group ref={root}><mesh geometry={hull} material={flatMat} /><mesh ref={sail} geometry={cloth} material={clothMat} position={[0, 6.4, -.1]} /><mesh ref={keeper} geometry={gull} material={flatMat} position={[.65, .75, 1.9]} rotation={[0, Math.PI, 0]} /></group></>;
+  const seat = BOAT_SEATS.gull;
+  return <><CloudSea crossing /><VoyageRocks /><group ref={root}>
+    <mesh geometry={hull} material={flatMat} />
+    <mesh ref={sail} geometry={cloth} material={clothMat} position={[BOAT_MAST.x, BOAT_RIG.sailY, BOAT_MAST.z]} />
+    <mesh ref={keeper} geometry={gull} material={flatMat} position={[seat.x, BOAT_DECK_Y, seat.z]} rotation={[0, seat.yaw, 0]} />
+  </group></>;
 }
 
 export function CloudIsle() {

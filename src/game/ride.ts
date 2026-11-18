@@ -6,6 +6,7 @@ import type { ObstacleId } from "./types";
 import { getGame } from "./store";
 import { hopPosition } from "./logic/lilyHop";
 import { vy } from "./voyageRt";
+import { BOAT_DECK_Y } from "./world/gullBoat";
 
 /**
  * Where a monster's body stands, and where a rider sits on Bubbo. The scene
@@ -24,7 +25,7 @@ export function monsterRootY(m: MonsterRt, solved: readonly ObstacleId[], t: num
   // The pirate voyage holds friends at authored heights (boarding arcs, the raft, the tow).
   const voyageY = vy.monY[m.id];
   if (voyageY !== undefined) return voyageY + (m.air > 0.05 ? m.air + Math.sin(t * 2.6 + m.x) * 0.06 : 0);
-  if (rt.voyage.active) return rt.voyage.y + .75;
+  if (rt.voyage.active) return rt.voyage.y + BOAT_DECK_Y;
   const hop = rt.player.hop;
   if (hop && getGame().progress.active === m.id)
     return hopPosition(hop, t, standY(hop.fromX, hop.fromZ, solved), standY(hop.toX, hop.toZ, solved)).y;

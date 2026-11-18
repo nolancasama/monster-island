@@ -8,7 +8,8 @@ import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../
 import { animate, effect, rt } from "../runtime";
 import { BEACON, CANOPY_GLIDE, CLOUD_CHESTS, CLOUD_DOCK, CLOUD_OBSTACLE_PLACE, CLOUD_PICKUPS, CLOUD_PUZZLE_RULES, CLOUD_SPAWNS, CLOUD_ZONES, HOLLOW, OBSERVATORY, RAIDER_BARRICADE, cloudZoneAt, cloudY, type CloudPuzzleId } from "../world/cloudisle";
 import { GULL_BERTH, SERVICES } from "../world/lowland";
-import { gatesOf, nearestWalkable, PLAYER_R } from "../world/collision";
+import { BOAT_DECK_Y, BOAT_SCALE, boatSeatWorld } from "../world/gullBoat";
+import { gatesOf, nearestWalkable, PLAYER_R, standY } from "../world/collision";
 import { claimErrand, cloudWakeArea, collectErrandPickup, completeVoyage, cookStew, defeatBeacon, discoverSkyFortress, discoverHollow, eatStew, markFamily, observatoryLiftReady, openCloudChest, reachObservatory, restCloud, solveCloudPuzzle, travelCloud } from "../logic/act3";
 import { rested } from "../logic/act2";
 import { canDo, recordCan } from "../logic/progress";
@@ -111,19 +112,20 @@ export async function sailWithGull() {
 
 export function boatPose() {
   const v = rt.voyage, pl = rt.player;
-  pl.x = v.x; pl.z = v.z; pl.y = v.y + .75; pl.yaw = v.yaw;
-  COMPANION_IDS.forEach((id, i) => {
-    const m = rt.monsters[id]; m.mode = "script";
-    const side = (i % 2 ? 1 : -1) * .85, back = .6 + Math.floor(i / 2) * 1.1;
-    m.x = v.x + Math.cos(v.yaw) * side - Math.sin(v.yaw) * back;
-    m.z = v.z - Math.sin(v.yaw) * side - Math.cos(v.yaw) * back;
-    m.air = m.airTarget = 0; m.look = null;
-  });
+  Object.assign(pl, boatSeatWorld("player", v));
+  pl.y = v.y + BOAT_DECK_Y;
+  pl.action = null;
+  for (const id of COMPANION_IDS) {
+    const m = rt.monsters[id];
+    Object.assign(m, boatSeatWorld(id, v));
+    m.mode = "script"; m.look = null; m.anim = null; m.swimming = false;
+    m.speed = m.lift = m.air = m.airTarget = 0;
+  }
   // A broadside stern view clears the entire sail and keeps the crew, mast
   // and the water ahead together, including while Gull rounds the rocks.
   const forwardX = Math.sin(v.yaw), forwardZ = Math.cos(v.yaw);
-  shot({ x: v.x + Math.cos(v.yaw) * 11 - forwardX * 13, y: v.y + 8.5, z: v.z - Math.sin(v.yaw) * 11 - forwardZ * 13 },
-    { x: v.x + forwardX * 3, y: v.y + 3, z: v.z + forwardZ * 3 });
+  shot({ x: v.x + (forwardZ * 11 - forwardX * 13) * BOAT_SCALE, y: v.y + 8.5 * BOAT_SCALE, z: v.z - (forwardX * 11 + forwardZ * 13) * BOAT_SCALE },
+    { x: v.x + forwardX * 3 * BOAT_SCALE, y: v.y + 3 * BOAT_SCALE, z: v.z + forwardZ * 3 * BOAT_SCALE });
 }
 export async function boatLeg(seconds: number, x: number, z: number) {
   const v = rt.voyage, sx = v.x, sz = v.z, yaw = Math.atan2(x - sx, z - sz);
@@ -139,7 +141,8 @@ export function arrive(world: "cloud" | "home") {
   updateProgress(p => travelCloud(p, world));
   const safe = nearestWalkable(target.x, target.z, PLAYER_R, gatesOf(getGame().progress));
   rt.player.x = safe.x; rt.player.z = safe.z;
-  travelCombat(); gatherParty(); rt.camera.mode = "follow"; rt.camera.shot = null; rt.camera.snap = true;
+  rt.player.y = standY(safe.x, safe.z, getGame().progress.solved);
+  travelCombat(); gatherParty(true); rt.camera.mode = "follow"; rt.camera.shot = null; rt.camera.snap = true;
   rt.player.frozen = false;
   saveNow();
 }

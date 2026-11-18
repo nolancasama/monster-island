@@ -2900,3 +2900,22 @@ On `feature/ride-town-fixes` from `main` `21812d9`.
   feet within 6 cm of both adjacent tread tops requires that limit.
 - Rejected stepwise floor heights and per-step collision, which would make walking
   and companion movement jump at each riser.
+
+## 2026-11-19 — Gull's boat at 1.33x and its seats
+
+- Gull's crossing uses the shared 1.33× boat dimensions for the hull, deck,
+  rails and rig. The deck follows the seven-sided gunwale. Six fixed seats turn
+  with the hull and leave at least 5 cm between bodies, the rails and the mast.
+  The broadside stern shot scales with the boat.
+- The idle horizontal mesh radii, including breathing for companions, measured
+  0.512 m for Leafy, 0.947 m for Bubbo, 0.728 m for Puff and 1.341 m for Ember.
+  The tests use the body, eyes and moving parts from `leafyParts`, `bubboParts`,
+  `puffParts` and `emberParts`, including the gills, wings and tails. The player
+  rig from `models/people` measured 0.380 m against the 0.35 m collision radius.
+  Gull's `npcGeometry(NPCS.harbor)` measured 0.391 m. The layout rounds these
+  envelopes up for clearance.
+- The Port Town boat moves outward to preserve its pier gap. At Cloud Isle it
+  stops offshore in water deep enough for the hull. The existing scripted
+  transfer puts the party on walkable ground at the dock.
+- Rejected scaling only the visible model. Passenger positions, deck height
+  and berth clearances also depend on the physical dimensions.
