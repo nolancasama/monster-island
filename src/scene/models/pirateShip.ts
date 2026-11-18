@@ -1,36 +1,43 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { SEA_Y } from "../../game/world/island";
-import { BOW_Z, BUCKET, CANNONS, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_Y, HALF_BEAM, HOLD, HOLD_RAMP, HOLD_Y, MASTS, MESS, SPOT, STERN_RAMP, STERN_Z, SUPPLY_CRATES, hullHalf } from "../../game/world/pirateShip";
+import { BOW_Z, BUCKET, CANNONS, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_Y, HALF_BEAM, HOLD, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, hullHalf, type Box } from "../../game/world/pirateShip";
 
 /**
  * Captain Redbeard's ship (docs/PIRATE_VOYAGE.md §2, §8) in LOCAL coordinates
  * (the scene places it at SHIP). Cutaway: no ceilings anywhere.
  * - `base`: hull, decks, hold, galley fittings, cannons, helm, fishing deck.
- * - `tall`: fore and mizzen masts, rigging, the galley bulkhead and the stern
+ * - `tall`: fore and mizzen masts, rigging, the galley chimney and the stern
  *   lanterns, drawn with the material that dissolves between camera and player.
  * - `main`: the mainmast, built about its own foot so it can fall in the storm.
  * The three sails are their own meshes so they can billow and tear.
  */
 
 const WOOD = "#6b4a30", DARK = "#4a2f1e", PLANK = "#b88a52", PLANK2 = "#a97d48", HOLDWOOD = "#8d6540", RED = "#b8322a", GOLD = "#e0b23a", IRON = "#3c3f44", SPAR = "#7a5532";
+const HULL_BOTTOM = SEA_Y - 1.4, LOWER_HULL_THICKNESS = 0.35, BULWARK_THICKNESS = 0.3;
+const stemZ = (inset: number) => BOW_Z - 1.4 + inset * 1.5;
 
 /** The hull outline (starboard stern → bow → port stern), with a pointed bow. */
 function outline(inset: number): THREE.Vector2[] {
   const pts: THREE.Vector2[] = [];
   for (let lz = STERN_Z; lz >= BOW_Z; lz -= 1) pts.push(new THREE.Vector2(Math.max(0.05, hullHalf(lz) - inset), -lz));
-  pts.push(new THREE.Vector2(0, -(BOW_Z - 1.4 + inset * 1.5)));
+  pts.push(new THREE.Vector2(0, -stemZ(inset)));
   for (let lz = BOW_Z; lz <= STERN_Z; lz += 1) pts.push(new THREE.Vector2(-Math.max(0.05, hullHalf(lz) - inset), -lz));
   return pts;
 }
 
-/** A ring of hull from y0 to y1 (outer outline minus an inner one), standing up. */
+/** The hull sides and transom, with a passage through to the fishing deck. */
 function hullRing(b: PartBuilder, y0: number, y1: number, color: string, outer = 0, wall = 0.3) {
-  const shape = new THREE.Shape(outline(outer));
-  shape.holes.push(new THREE.Path(outline(outer + wall).reverse()));
+  const shape = new THREE.Shape([...outline(outer), ...outline(outer + wall).reverse()]);
   const g = new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false, curveSegments: 1 });
   g.rotateX(-Math.PI / 2);
   b.add(g, color, [0, y0, 0]);
+  const half = hullHalf(STERN_Z) - outer;
+  const transom = (x0: number, x1: number, top: number) =>
+    b.box(x1 - x0, top - y0, 0.2, (x0 + x1) / 2, y0, STERN_Z + 0.1, color);
+  transom(-half, STERN_RAMP.x0, y1);
+  transom(STERN_RAMP.x1, half, y1);
+  if (y0 < FISH_Y) transom(STERN_RAMP.x0, STERN_RAMP.x1, Math.min(y1, FISH_Y));
 }
 
 /** A flat horizontal shape at height y from local (x, z) points. */
@@ -42,26 +49,70 @@ function floor(b: PartBuilder, pts: Array<[number, number]>, y: number, color: s
   b.add(g, color, [0, y, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
 }
 
-/** A thin round line between two points. */
-function line(b: PartBuilder, a: THREE.Vector3, c: THREE.Vector3, r: number, color: string, seg = 4) {
-  const g = new THREE.CylinderGeometry(r, r, a.distanceTo(c), seg);
-  g.lookAt(c.clone().sub(a));
-  g.rotateX(Math.PI / 2);
-  const mid = a.clone().add(c).multiplyScalar(0.5);
+type Point = [number, number, number];
+type Mast = keyof typeof MASTS;
+type RiggingLine = { from: Point; to: Point; mesh: "base" | "tall" | "main"; fromOn: string; toOn: string };
+
+const MAST_TIP_RADIUS = 0.13;
+const BOOM = { length: 4.6, width: 0.16, z: 2.2, y: SAIL_FOOT - 0.07 };
+const BOWSPRIT: [Point, Point] = [
+  [0, DECK_Y + 0.7, stemZ(BULWARK_THICKNESS / 2)],
+  [0, DECK_Y + 2.4, BOW_Z - 6],
+];
+const bowspritEye = (): Point => [
+  0, THREE.MathUtils.lerp(BOWSPRIT[0][1], BOWSPRIT[1][1], 0.97),
+  THREE.MathUtils.lerp(BOWSPRIT[0][2], BOWSPRIT[1][2], 0.97),
+];
+const masthead = (m: Mast, dx = 0): Point => [MASTS[m].x + dx, DECK_Y + MASTS[m].h - 0.15, MASTS[m].z];
+const boomEnd = (m: Mast): Point => [
+  MASTS[m].x - BOOM.width * 0.375, DECK_Y + BOOM.y, MASTS[m].z + BOOM.z + BOOM.length / 2 - 0.04,
+];
+
+/** All ropes, in ship-local coordinates before the mainmast's origin shift. */
+export function riggingLines(): RiggingLine[] {
+  // Low shrouds cross the walkable strip just inside the rails. The mainmast
+  // carries only its topping lift, so both attachments fall together.
+  const lifts = (["fore", "mizzen", "main"] as const).map((m): RiggingLine => ({
+    // Run outboard of the gaff and the sail as they rise aft.
+    from: masthead(m, -MAST_TIP_RADIUS * 0.8), to: boomEnd(m),
+    mesh: m === "main" ? "main" : "tall", fromOn: `mast:${m}`, toOn: `boom:${m}`,
+  }));
+  return [
+    ...lifts,
+    { from: masthead("fore"), to: bowspritEye(), mesh: "tall", fromOn: "mast:fore", toOn: "bowsprit" },
+    { from: bowspritEye(), to: [0, SEA_Y, stemZ(LOWER_HULL_THICKNESS / 2)], mesh: "base", fromOn: "bowsprit", toOn: "stem" },
+  ];
+}
+
+function cylinderBetween(b: PartBuilder, from: Point, to: Point, r: number, color: string, segments: number) {
+  const a = new THREE.Vector3(...from), c = new THREE.Vector3(...to);
+  const axis = c.clone().sub(a);
+  const g = new THREE.CylinderGeometry(r, r, axis.length(), segments);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize()));
+  const mid = a.add(c).multiplyScalar(0.5);
   b.add(g, color, [mid.x, mid.y, mid.z]);
 }
 
-const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
-
-/** A mast with its boom, gaff and shrouds; `origin` shifts it (the mainmast is built about its foot). */
-function mast(b: PartBuilder, p: { x: number; z: number }, m: { h: number; gaff: number }, origin = { x: 0, y: 0, z: 0 }) {
-  const x = p.x - origin.x, z = p.z - origin.z, y = DECK_Y - origin.y, h = m.h;
-  b.cyl(0.13, 0.24, h, x, y, z, SPAR, 8);
-  b.boxAt(0.16, 0.16, 4.6, [x, y + 2.25, z + 2.2], [0, 0, 0], SPAR);
+/** A mast with its boom and gaff. The mainmast is built about its foot. */
+function mast(b: PartBuilder, m: Mast, origin: Point = [0, 0, 0]) {
+  const p = MASTS[m];
+  const x = p.x - origin[0], z = p.z - origin[2], y = DECK_Y - origin[1], h = p.h;
+  b.cyl(MAST_TIP_RADIUS, 0.24, h, x, y, z, SPAR, 8);
+  b.boxAt(BOOM.width, BOOM.width, BOOM.length, [x, y + BOOM.y, z + BOOM.z], [0, 0, 0], SPAR);
   // The gaff rises aft from its jaws at the sail's head.
-  b.boxAt(0.12, 0.12, 4.0, [x, y + m.gaff + 0.55, z + 1.85], [-0.28, 0, 0], SPAR);
-  for (const s of [-1, 1]) {
-    line(b, new THREE.Vector3(x, y + h - 0.4, z), new THREE.Vector3(s * (hullHalf(p.z) - 0.2) - origin.x, y + 0.9, z + 0.6), 0.025, "#4a3424");
+  b.boxAt(0.12, 0.12, 4.0, [x, y + p.gaff + 0.55, z + 1.85], [-0.28, 0, 0], SPAR);
+}
+
+function staircase(b: PartBuilder, ramp: Box, stairs: typeof HOLD_STAIRS) {
+  const width = ramp.x1 - ramp.x0, x = (ramp.x0 + ramp.x1) / 2;
+  for (const [i, { z0, z1, y }] of stairs.steps.entries()) {
+    b.box(width, 0.16, z1 - z0, x, y - 0.16, (z0 + z1) / 2, i % 2 ? PLANK2 : PLANK);
+  }
+  const { slopeStart, slopeEnd, floorY } = stairs;
+  const run = slopeEnd - slopeStart, rise = floorY(slopeEnd) - floorY(slopeStart);
+  // Stringers sit just outside the treads (never above a walking surface).
+  for (const edge of [ramp.x0 - 0.12, ramp.x1 + 0.12]) {
+    b.boxAt(0.24, 0.26, Math.hypot(run, rise), [edge, (floorY(slopeStart) + floorY(slopeEnd)) / 2 - 0.2, (slopeStart + slopeEnd) / 2], [-Math.atan2(rise, run), 0, 0], DARK);
   }
 }
 
@@ -70,19 +121,27 @@ export interface ShipGeometries { base: THREE.BufferGeometry; tall: THREE.Buffer
 export function pirateShipGeometries(): ShipGeometries {
   const b = new PartBuilder(0), t = new PartBuilder(0), m = new PartBuilder(0);
   // Hull: dark lower hull, a red stripe, wooden bulwarks with a gold cap.
-  hullRing(b, SEA_Y - 1.4, DECK_Y - 0.45, DARK, 0, 0.35);
+  hullRing(b, HULL_BOTTOM, DECK_Y - 0.45, DARK, 0, LOWER_HULL_THICKNESS);
   hullRing(b, DECK_Y - 0.45, DECK_Y - 0.15, RED, -0.02, 0.37);
-  hullRing(b, DECK_Y - 0.15, DECK_Y + 0.85, WOOD, 0, 0.3);
+  hullRing(b, DECK_Y - 0.15, DECK_Y + 0.85, WOOD, 0, BULWARK_THICKNESS);
   hullRing(b, DECK_Y + 0.85, DECK_Y + 0.95, GOLD, -0.03, 0.36);
   // The deck, around the hold opening and the stern stairs; a darker quarterdeck.
-  const inner = outline(0.3).map((v) => [v.x, -v.y] as [number, number]);
-  const holdRim = HOLD.x1 + 0.25, sr = STERN_RAMP;
-  floor(b, inner, DECK_Y, PLANK, [rect(-HOLD.x1 - 0.2, HOLD.x1 + 0.2, -8, -1).reverse(), rect(sr.x0, sr.x1, 12, 15).reverse()]);
+  const inner = outline(BULWARK_THICKNESS).map((v): [number, number] => [v.x, -v.y]);
+  const hr = HOLD_RAMP, sr = STERN_RAMP, h = HOLD;
+  const sternNotch = (edge: number): Array<[number, number]> =>
+    [[sr.x0, edge], [sr.x0, sr.z0], [sr.x1, sr.z0], [sr.x1, edge]];
+  const holdOpening: Array<[number, number]> = [
+    [h.x0, h.z0], [h.x1, h.z0], [h.x1, h.z1], [hr.x1, h.z1], [hr.x1, hr.z1], [hr.x0, hr.z1],
+  ];
+  floor(b, [...inner, ...sternNotch(STERN_Z)], DECK_Y, PLANK, [holdOpening.reverse()]);
+  const atOpening = (x: number, z: number) => [h, hr, sr].some(
+    ({ x0, x1, z0, z1 }) => x >= x0 - 0.025 && x <= x1 + 0.025 && z >= z0 && z <= z1,
+  );
   for (let x = -(HALF_BEAM - 0.6); x <= HALF_BEAM - 0.6; x += 0.62) {
     // Plank seams, clipped to the hull and split around the hold and the stern stairs.
     let start: number | null = null;
     for (let lz = BOW_Z + 0.4; lz <= STERN_Z - 0.2; lz += 0.25) {
-      const inside = Math.abs(x) < hullHalf(lz) - 0.4 && !(Math.abs(x) < holdRim && lz > -8.05 && lz < -0.95) && !(x > sr.x0 - 0.05 && x < sr.x1 + 0.05 && lz > 11.95);
+      const inside = Math.abs(x) < hullHalf(lz) - 0.4 && !atOpening(x, lz);
       if (inside && start === null) start = lz;
       if ((!inside || lz + 0.25 > STERN_Z - 0.2) && start !== null) {
         const end = inside ? lz : lz - 0.25;
@@ -91,32 +150,34 @@ export function pirateShipGeometries(): ShipGeometries {
       }
     }
   }
-  const quarter = hullHalf(14.6) - 0.4;
-  floor(b, rect(-quarter, quarter, 7, 14.6).reverse(), DECK_Y + 0.004, "#a3784a", [rect(sr.x0, sr.x1, 12, 15).reverse()]);
+  const quarterEnd = 14.6, quarter = hullHalf(quarterEnd) - 0.4;
+  floor(b, [
+    [quarter, quarterEnd], [quarter, 7], [-quarter, 7], [-quarter, quarterEnd], ...sternNotch(quarterEnd),
+  ], DECK_Y + 0.004, "#a3784a");
 
   // The hold: floor, walls, the stairs down, rails round the opening.
-  b.box(HOLD.x1 - HOLD.x0 + 0.4, 0.2, HOLD.z1 - HOLD.z0 + 0.4, 0, HOLD_Y - 0.2, (HOLD.z0 + HOLD.z1) / 2, HOLDWOOD);
-  const holdW = 2 * holdRim + 0.2;
-  for (const [x, z, w, d] of [[0, -8.05, holdW, 0.2], [0, -0.95, holdW, 0.2], [-holdRim, -4.5, 0.2, 7.1], [holdRim, -4.5, 0.2, 7.1]] as const)
-    b.box(w, DECK_Y - HOLD_Y, d, x, HOLD_Y, z, z === -0.95 ? WOOD : DARK);
-  const rampLen = Math.hypot(HOLD_RAMP.z1 - HOLD_RAMP.z0, DECK_Y - HOLD_Y), rampTilt = Math.atan2(DECK_Y - HOLD_Y, HOLD_RAMP.z1 - HOLD_RAMP.z0);
-  const rampX = (HOLD_RAMP.x0 + HOLD_RAMP.x1) / 2;
-  b.boxAt(1.0, 0.12, rampLen, [rampX, (HOLD_Y + DECK_Y) / 2 - 0.06, (HOLD_RAMP.z0 + HOLD_RAMP.z1) / 2], [rampTilt, 0, 0], PLANK2);
-  for (let i = 1; i < 10; i++) {
-    const k = i / 10;
-    b.boxAt(1.0, 0.05, 0.08, [rampX, HOLD_Y + (DECK_Y - HOLD_Y) * k + 0.01, HOLD_RAMP.z0 + (HOLD_RAMP.z1 - HOLD_RAMP.z0) * k], [0, 0, 0], DARK);
-  }
-  const railLine = (x0: number, z0: number, x1: number, z1: number, y: number) => {
+  const holdW = h.x1 - h.x0, holdD = h.z1 - h.z0, holdZ = (h.z0 + h.z1) / 2;
+  const bowWall = h.z0 - 0.25;
+  b.box(holdW + 0.4, 0.2, h.z1 - bowWall, 0, HOLD_Y - 0.2, (bowWall + h.z1) / 2, HOLDWOOD);
+  const wallH = DECK_Y - HOLD_Y;
+  b.box(holdW + 0.4, wallH, 0.2, 0, HOLD_Y, bowWall, DARK);
+  b.box(h.x1 - hr.x1 + 0.2, wallH, 0.2, (h.x1 + hr.x1 + 0.2) / 2, HOLD_Y, h.z1 + 0.1, WOOD);
+  for (const x of [h.x0 - 0.1, h.x1 + 0.1]) b.box(0.2, wallH, holdD, x, HOLD_Y, holdZ, DARK);
+  staircase(b, hr, HOLD_STAIRS);
+  const railLine = (x0: number, z0: number, x1: number, z1: number, y: number, endY = y) => {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.1));
-    b.boxAt(Math.abs(x1 - x0) + 0.08, 0.08, Math.abs(z1 - z0) + 0.08, [(x0 + x1) / 2, y + 0.9, (z0 + z1) / 2], [0, 0, 0], GOLD);
-    for (let i = 0; i <= n; i++) b.box(0.08, 0.9, 0.08, x0 + (x1 - x0) * i / n, y, z0 + (z1 - z0) * i / n, WOOD);
+    const postFoot = endY === y ? 0 : 0.25;
+    b.boxAt(Math.abs(x1 - x0) + 0.08, 0.08, Math.hypot(z1 - z0, endY - y) + 0.08,
+      [(x0 + x1) / 2, (y + endY) / 2 + 0.9, (z0 + z1) / 2], [-Math.atan2(endY - y, len), 0, 0], GOLD);
+    for (let i = 0; i <= n; i++) b.box(0.08, 0.9 + postFoot, 0.08, x0 + (x1 - x0) * i / n, y + (endY - y) * i / n - postFoot, z0 + (z1 - z0) * i / n, WOOD);
   };
-  const rampRail = HOLD_RAMP.x1 + 0.15;
-  railLine(-holdRim, -8.05, holdRim, -8.05, DECK_Y);
-  railLine(holdRim, -8.05, holdRim, -0.95, DECK_Y);
-  railLine(-holdRim, -8.05, -holdRim, 2, DECK_Y);
-  railLine(rampRail, -0.95, holdRim, -0.95, DECK_Y);
-  railLine(rampRail, -0.95, rampRail, 2, DECK_Y);
+  const westRail = h.x0 - 0.15, eastRail = h.x1 + 0.15, rampRail = hr.x1 + 0.15;
+  const bowRail = h.z0 - 0.15, aftRail = h.z1 + 0.15;
+  railLine(westRail, bowRail, eastRail, bowRail, DECK_Y);
+  railLine(eastRail, bowRail, eastRail, aftRail, DECK_Y);
+  railLine(westRail, bowRail, westRail, hr.z1, DECK_Y);
+  railLine(rampRail, aftRail, eastRail, aftRail, DECK_Y);
+  railLine(rampRail, aftRail, rampRail, hr.z1, DECK_Y);
   // Hold furniture: a table, a wall shelf, an open box, a red door on the bow wall.
   const tb = SPOT.table;
   b.box(1.6, 0.1, 1.5, tb.x, HOLD_Y + 0.92, tb.z, "#9a6c43");
@@ -135,14 +196,7 @@ export function pirateShipGeometries(): ShipGeometries {
   // Cargo-hold clutter along the walls (not on any slot).
   for (const [x, z] of [[HOLD.x1 - 0.45, -7.4], [HOLD.x1 - 0.45, -1.6]]) { b.cyl(0.28, 0.28, 0.7, x, HOLD_Y, z, "#8a5a32", 8); b.cyl(0.29, 0.29, 0.06, x, HOLD_Y + 0.5, z, IRON, 8); }
 
-  // The galley: a bulkhead with a door (cut away), stove and chimney, the pot, supplies, a counter, pans.
-  for (const [x0, x1] of [[-(HALF_BEAM - 0.1), -1], [1, HALF_BEAM - 0.1]]) {
-    const w = x1 - x0;
-    t.box(w, 2.3, 0.3, (x0 + x1) / 2, DECK_Y, -13, WOOD);
-    t.box(w + 0.05, 0.12, 0.36, (x0 + x1) / 2, DECK_Y + 2.3, -13, GOLD);
-  }
-  t.box(2.2, 0.3, 0.32, 0, DECK_Y + 2.0, -13, WOOD);
-  for (const x of [-1.6, 1.6]) t.boxAt(0.16, 0.16, 5.2, [x, DECK_Y + 2.45, -15.6], [0, 0, 0], DARK);
+  // Open galley: stove and chimney, pot, supplies and a serving counter.
   const st = SPOT.stove;
   b.box(1.4, 0.9, 1.4, st.x, DECK_Y, st.z, "#2e3036");
   b.box(1.2, 0.05, 1.2, st.x, DECK_Y + 0.9, st.z, "#53565e");
@@ -158,17 +212,18 @@ export function pirateShipGeometries(): ShipGeometries {
   }
   const ct = SPOT.counter;
   b.box(0.9, 0.95, 2.2, ct.x, DECK_Y, ct.z, "#8a5f3b");
-  b.box(1.0, 0.06, 2.3, ct.x, DECK_Y + 0.95, ct.z, "#c9a06a");
-  for (const x of [-0.6, 0.2, 1.0]) t.cyl(0.14, 0.12, 0.08, x, DECK_Y + 1.5, -13.2, "#53565e", 8);
+  const counterTop = DECK_Y + 0.95, counterLip = 0.06;
+  b.box(1.0, counterLip, 2.3, ct.x, counterTop, ct.z, "#c9a06a");
+  for (const dz of [-0.84, -0.52, -0.2]) b.cyl(0.14, 0.12, 0.08, ct.x + 0.25, counterTop + counterLip, ct.z + dz, "#53565e", 8);
   // The mess table and its bench outside the galley.
   b.box(1.6, 0.08, 2.4, MESS.x, DECK_Y + 0.72, MESS.z, "#9a6c43");
   for (const [dx, dz] of [[-0.65, -1.0], [0.65, -1.0], [0.65, 1.0], [-0.65, 1.0]]) b.box(0.1, 0.72, 0.1, MESS.x + dx, DECK_Y, MESS.z + dz, DARK);
 
   // Fore and mizzen masts (cut away), the mainmast in its own mesh.
-  mast(t, SPOT.foreMast, MASTS.fore);
-  mast(t, SPOT.mizzenMast, MASTS.mizzen);
-  const mm = SPOT.mainMast, o = { x: mm.x, y: DECK_Y, z: mm.z };
-  mast(m, mm, MASTS.main, o);
+  mast(t, "fore");
+  mast(t, "mizzen");
+  const mainOrigin: Point = [MASTS.main.x, DECK_Y, MASTS.main.z];
+  mast(m, "main", mainOrigin);
   m.cyl(0.75, 0.6, 0.55, 0, CROWS_NEST_Y, 0, SPAR, 10);
   m.box(1.25, 0.8, 0.04, 0.65, 12.3, 0, "#1d1d22");
   m.sphere(0.2, 0.6, 12.75, 0.03, "#f6f2e6", [1, 0.95, 0.4], 7);
@@ -193,14 +248,12 @@ export function pirateShipGeometries(): ShipGeometries {
   for (const x of [-3.6, -1.2, 1.2]) b.box(0.9, 0.9, 0.1, x, DECK_Y - 0.4, STERN_Z + 0.01, "#ffd98a");
 
   // The stern stairs down to the fishing deck, and the fishing deck itself.
-  const sLen = Math.hypot(sr.z1 - sr.z0, DECK_Y - FISH_Y), sTilt = -Math.atan2(DECK_Y - FISH_Y, sr.z1 - sr.z0), srX = (sr.x0 + sr.x1) / 2;
-  b.boxAt(1.2, 0.12, sLen, [srX, (DECK_Y + FISH_Y) / 2 - 0.06, (sr.z0 + sr.z1) / 2], [sTilt, 0, 0], PLANK2);
-  for (let i = 1; i < 11; i++) {
-    const k = i / 11;
-    b.boxAt(1.2, 0.05, 0.08, [srX, DECK_Y + (FISH_Y - DECK_Y) * k + 0.01, sr.z0 + (sr.z1 - sr.z0) * k], [0, 0, 0], DARK);
+  staircase(b, sr, STERN_STAIRS);
+  for (const x of [sr.x0 - 0.15, sr.x1 + 0.15]) {
+    railLine(x, sr.z0, x, sr.z1, DECK_Y, FISH_Y);
   }
-  railLine(sr.x0 - 0.15, 12, sr.x0 - 0.15, 15.4, DECK_Y - 0.6);
-  b.box(FISH_DECK.x1 - FISH_DECK.x0 + 0.4, 0.2, FISH_DECK.z1 - FISH_DECK.z0 + 0.3, 0, FISH_Y - 0.2, (FISH_DECK.z0 + FISH_DECK.z1) / 2 + 0.1, PLANK);
+  const fishDeckEnd = FISH_DECK.z1 + 0.25;
+  b.box(FISH_DECK.x1 - FISH_DECK.x0 + 0.4, 0.2, fishDeckEnd - FISH_DECK.z0, 0, FISH_Y - 0.2, (FISH_DECK.z0 + fishDeckEnd) / 2, PLANK);
   const fx = FISH_DECK.x1 + 0.1, fr = FISH_DECK.x1 + 0.15;
   for (const [x, z] of [[-fx, 18.1], [fx, 18.1], [-fx, 15.6], [fx, 15.6]]) b.cyl(0.12, 0.12, 2.0, x, SEA_Y - 1.4, z, DARK, 6);
   railLine(-fr, 18.15, fr, 18.15, FISH_Y);
@@ -214,8 +267,14 @@ export function pirateShipGeometries(): ShipGeometries {
   b.box(1.6, 0.06, 0.9, 2.1, FISH_Y + 0.005, 17.55, "#4f6b45");
 
   // The bowsprit and a gold scroll at the bow.
-  line(b, new THREE.Vector3(0, DECK_Y + 0.7, BOW_Z - 0.8), new THREE.Vector3(0, DECK_Y + 2.4, BOW_Z - 6), 0.13, SPAR, 6);
+  cylinderBetween(b, ...BOWSPRIT, 0.13, SPAR, 6);
   b.torus(0.3, 0.07, [0, DECK_Y + 0.3, BOW_Z - 1.15], [0, Math.PI / 2, 0], GOLD);
+  const builders = { base: b, tall: t, main: m };
+  const aboutMain = ([x, y, z]: Point): Point => [x - mainOrigin[0], y - mainOrigin[1], z - mainOrigin[2]];
+  for (const { from, to, mesh } of riggingLines()) {
+    const [a, c] = mesh === "main" ? [aboutMain(from), aboutMain(to)] : [from, to];
+    cylinderBetween(builders[mesh], a, c, 0.025, "#4a3424", 4);
+  }
   // Barrels against the bulwarks (clear of every walking line).
   for (const { x, z } of DECK_BARRELS) { b.cyl(0.3, 0.3, 0.8, x, DECK_Y, z, "#8a5a32", 8); b.cyl(0.31, 0.31, 0.06, x, DECK_Y + 0.55, z, IRON, 8); }
   const base = b.build(), tall = t.build(), main = m.build();

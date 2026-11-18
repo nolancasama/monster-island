@@ -37,11 +37,9 @@ export function hullHalf(lz: number): number {
 
 export const HOLD: Box = { x0: -4.2, x1: 4.2, z0: -7.8, z1: -1.2 };
 /** The stairs down into the hold, against its west wall. */
-export const HOLD_RAMP: Box = { x0: -4.15, x1: -3.15, z0: -1.2, z1: 2 };
+export const HOLD_RAMP: Box = { x0: HOLD.x0, x1: -3.15, z0: HOLD.z1, z1: 2 };
 export const STERN_RAMP: Box = { x0: 2.85, x1: 4.05, z0: 12, z1: 15.4 };
 export const FISH_DECK: Box = { x0: -4.5, x1: 4.5, z0: 15.4, z1: 18 };
-/** The bow compartment behind the bulkhead (the hull bounds its sides). */
-export const GALLEY: Box = { x0: -HALF_BEAM, x1: HALF_BEAM, z0: -18.5, z1: -13 };
 /** Where the fish swim, behind the stern. */
 export const FISH_WATER: Box = { x0: -7.5, x1: 7.5, z0: 19.5, z1: 27 };
 
@@ -107,23 +105,42 @@ export const DECK_BARRELS = [{ x: -(HALF_BEAM - 0.6), z: -11.5 }, { x: -(HALF_BE
 
 const around = (c: { x: number; z: number }, hx: number, z0: number, z1: number): Box => ({ x0: c.x - hx, x1: c.x + hx, z0, z1 });
 const H = HOLD, HR = HOLD_RAMP, SR = STERN_RAMP;
+const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.max(0, Math.min(1, k));
+
+/** Fit horizontal treads about a continuous slope with flat landings at both ends. */
+export function stairSteps(ramp: Box, yTop: number, yBottom: number, topEdge: "z0" | "z1") {
+  const landing = 0.25;
+  const slopeStart = ramp.z0 + landing, slopeEnd = ramp.z1 - landing;
+  const y0 = topEdge === "z0" ? yTop : yBottom;
+  const y1 = topEdge === "z0" ? yBottom : yTop;
+  // At each riser the walking height is halfway between the two tread tops.
+  const rises = Math.ceil((yTop - yBottom) / 0.12);
+  const going = (slopeEnd - slopeStart) / rises;
+  const steps = Array.from({ length: rises + 1 }, (_, i) => ({
+    z0: i === 0 ? ramp.z0 : slopeStart + (i - 0.5) * going,
+    z1: i === rises ? ramp.z1 : slopeStart + (i + 0.5) * going,
+    y: lerp(y0, y1, i / rises),
+  }));
+  return { steps, slopeStart, slopeEnd, floorY: (z: number) => lerp(y0, y1, (z - slopeStart) / (slopeEnd - slopeStart)) };
+}
+
+export const HOLD_STAIRS = stairSteps(HR, DECK_Y, HOLD_Y, "z1");
+export const STERN_STAIRS = stairSteps(SR, DECK_Y, FISH_Y, "z0");
 
 /** Solid bands and furniture (local boxes). */
 export const SHIP_SOLIDS: Box[] = [
-  // The hold opening's rails on the main deck (the ramp is the only way down).
-  { x0: H.x1, x1: H.x1 + 0.5, z0: -8.3, z1: -0.7 },
-  { x0: H.x0 - 0.5, x1: H.x0, z0: -8.3, z1: 2 },
-  { x0: H.x0 - 0.5, x1: H.x1 + 0.5, z0: -8.3, z1: -7.8 },
-  { x0: HR.x1, x1: H.x1 + 0.5, z0: -1.2, z1: -0.7 },
-  { x0: HR.x1, x1: HR.x1 + 0.3, z0: -0.7, z1: 2 },
+  // The hold opening's rails on the main deck (the stairs are the only way down).
+  { x0: H.x1, x1: H.x1 + 0.5, z0: H.z0 - 0.5, z1: H.z1 + 0.5 },
+  { x0: H.x0 - 0.5, x1: H.x0, z0: H.z0 - 0.5, z1: HR.z1 },
+  { x0: H.x0 - 0.5, x1: H.x1 + 0.5, z0: H.z0 - 0.5, z1: H.z0 },
+  { x0: HR.x1, x1: H.x1 + 0.5, z0: H.z1, z1: H.z1 + 0.5 },
+  { x0: HR.x1, x1: HR.x1 + 0.3, z0: H.z1 + 0.5, z1: HR.z1 },
   // The stern ramp's rails and the transom either side of it.
-  { x0: SR.x0 - 0.3, x1: SR.x0, z0: 12, z1: 15.4 },
-  { x0: SR.x1, x1: SR.x1 + 0.3, z0: 12, z1: 15.4 },
-  { x0: -HALF_BEAM, x1: SR.x0, z0: 15, z1: 15.4 },
-  { x0: SR.x1, x1: HALF_BEAM, z0: 15, z1: 15.4 },
-  // The galley's bulkhead and its door gap (lx ±1), the stove, the supplies, the counter.
-  { x0: -HALF_BEAM, x1: -1, z0: -13.2, z1: -12.8 },
-  { x0: 1, x1: HALF_BEAM, z0: -13.2, z1: -12.8 },
+  { x0: SR.x0 - 0.3, x1: SR.x0, z0: SR.z0, z1: SR.z1 },
+  { x0: SR.x1, x1: SR.x1 + 0.3, z0: SR.z0, z1: SR.z1 },
+  { x0: -HALF_BEAM, x1: SR.x0, z0: STERN_Z, z1: SR.z1 },
+  { x0: SR.x1, x1: HALF_BEAM, z0: STERN_Z, z1: SR.z1 },
+  // Galley fittings: the stove, supplies and counter.
   around(SPOT.stove, 0.7, -17.2, -15.8),
   around(SPOT.supplies, 0.5, -16.4, -13.6),
   around(SPOT.counter, 0.45, -15.8, -13.6),
@@ -146,7 +163,6 @@ export const SHIP_POSTS: Post[] = [
 
 const inBox = (b: Box, lx: number, lz: number) => lx >= b.x0 && lx <= b.x1 && lz >= b.z0 && lz <= b.z1;
 const touches = (b: Box, lx: number, lz: number, m: number) => lx > b.x0 - m && lx < b.x1 + m && lz > b.z0 - m && lz < b.z1 + m;
-const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.max(0, Math.min(1, k));
 
 /** The ship's bounding area: inside it, the ship alone decides walking and heights. */
 export function inShipArea(x: number, z: number): boolean {
@@ -157,8 +173,8 @@ export function inShipArea(x: number, z: number): boolean {
 /** The floor height under a local point, or null over the sea. */
 export function shipFloorY(lx: number, lz: number): number | null {
   if (inBox(HOLD, lx, lz)) return HOLD_Y;
-  if (inBox(HOLD_RAMP, lx, lz)) return lerp(HOLD_Y, DECK_Y, (lz - HOLD_RAMP.z0) / (HOLD_RAMP.z1 - HOLD_RAMP.z0));
-  if (inBox(STERN_RAMP, lx, lz)) return lerp(DECK_Y, FISH_Y, (lz - STERN_RAMP.z0) / (STERN_RAMP.z1 - STERN_RAMP.z0));
+  if (inBox(HOLD_RAMP, lx, lz)) return HOLD_STAIRS.floorY(lz);
+  if (inBox(STERN_RAMP, lx, lz)) return STERN_STAIRS.floorY(lz);
   if (inBox(FISH_DECK, lx, lz)) return FISH_Y;
   if (lz >= BOW_Z && lz <= STERN_Z && Math.abs(lx) <= hullHalf(lz) - RAIL) return DECK_Y;
   return null;

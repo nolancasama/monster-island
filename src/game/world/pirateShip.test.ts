@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  BEAM, BUCKET, CANNONS, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_Y, HALF_BEAM, HOLD, HOLD_RAMP, HOLD_Y, MASTS, MESS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES,
+  BEAM, BUCKET, CANNONS, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_Y, HALF_BEAM, HOLD, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, MESS, SHIP, SPOT, STERN_RAMP, STERN_STAIRS, SUPPLY_CRATES,
   hullHalf, inShipArea, sailHeight, shipFloorY, shipSolidAt, shipStandY, shipWalkable, shipWorld,
 } from "./pirateShip";
-import { isWalkable, standY } from "./collision";
+import { PLAYER_R, isWalkable, standY } from "./collision";
 
 const R = 0.32;
 const W = (p: { x: number; z: number }) => shipWorld(p);
@@ -24,36 +24,42 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
       expect(walk(p), JSON.stringify(p)).toBe(false);
   });
 
-  it("the hold is reached only down its ramp, and the ramp has no step", () => {
-    // Straight across the hold's rail from the main deck: blocked.
-    for (let x = HOLD_RAMP.x1 + 0.5; x <= HOLD.x1; x += 0.5) expect(walk({ x, z: -0.95 })).toBe(false);
-    // Down the ramp: walkable all the way, heights within a step of each other.
-    const rx = (HOLD_RAMP.x0 + HOLD_RAMP.x1) / 2;
-    let last = shipFloorY(rx, 2.4)!;
-    for (let z = 2.4; z >= -3; z -= 0.1) {
-      expect(walk({ x: rx, z }, 0.25), `z ${z.toFixed(1)}`).toBe(true);
-      const y = shipFloorY(rx, z)!;
-      expect(Math.abs(y - last)).toBeLessThan(0.1);
-      last = y;
-    }
-    expect(last).toBeCloseTo(HOLD_Y, 6);
+  it("guards the hold rim beyond the stair entrance", () => {
+    for (let x = HOLD_RAMP.x1 + 0.5; x <= HOLD.x1; x += 0.5) expect(walk({ x, z: HOLD.z1 })).toBe(false);
   });
 
-  it("the stern stairs lead down to the fishing deck", () => {
-    const sx = (STERN_RAMP.x0 + STERN_RAMP.x1) / 2;
-    let last = shipFloorY(sx, 11.5)!;
-    for (let z = 11.5; z <= 17; z += 0.1) {
-      expect(walk({ x: sx, z }, 0.25), `z ${z.toFixed(1)}`).toBe(true);
-      const y = shipFloorY(sx, z)!;
-      expect(Math.abs(y - last)).toBeLessThan(0.1);
-      last = y;
+  it.each([
+    { name: "hold", ramp: HOLD_RAMP, stairs: HOLD_STAIRS, y0: HOLD_Y, y1: DECK_Y },
+    { name: "stern", ramp: STERN_RAMP, stairs: STERN_STAIRS, y0: DECK_Y, y1: FISH_Y },
+  ])("keeps the $name stairs walkable with flat landings and guarded sides", ({ ramp, stairs, y0, y1 }) => {
+    const x = (ramp.x0 + ramp.x1) / 2;
+    expect(ramp.x1 - ramp.x0).toBeGreaterThanOrEqual(2 * PLAYER_R + 0.2);
+    const endpoints = [ramp.z0 - 0.5, ramp.z1 + 0.5];
+    for (const [start, end] of [endpoints, [...endpoints].reverse()]) {
+      let last = shipFloorY(x, start)!;
+      for (let i = 0; i <= 100; i++) {
+        const z = start + (end - start) * i / 100;
+        expect(walk({ x, z }, PLAYER_R), `z ${z.toFixed(2)}`).toBe(true);
+        const y = shipFloorY(x, z)!;
+        expect(Math.abs(y - last)).toBeLessThan(0.05);
+        last = y;
+      }
     }
-    expect(last).toBeCloseTo(FISH_Y, 6);
+    expect(shipFloorY(x, ramp.z0 - 0.5)).toBeCloseTo(y0, 6);
+    expect(shipFloorY(x, stairs.slopeStart)).toBeCloseTo(y0, 6);
+    expect(shipFloorY(x, stairs.slopeEnd)).toBeCloseTo(y1, 6);
+    expect(shipFloorY(x, ramp.z1 + 0.5)).toBeCloseTo(y1, 6);
+    for (const { z0, z1, y } of stairs.steps) {
+      // Height is monotonic between tread edges, so these bound the error.
+      for (const z of [z0, z1]) expect(Math.abs(shipFloorY(x, z)! - y)).toBeLessThanOrEqual(0.06 + 1e-9);
+      for (const edge of [ramp.x0, ramp.x1]) expect(walk({ x: edge, z: (z0 + z1) / 2 }, PLAYER_R)).toBe(false);
+    }
   });
 
-  it("the galley is entered through its door only", () => {
-    expect(walk({ x: 0, z: -13 })).toBe(true);
-    for (const x of [-2.5, -5, 2.5, 5]) expect(walk({ x, z: -13 })).toBe(false);
+  it("opens the galley across the former bulkhead", () => {
+    for (const x of [-5, -2, 0, 2, 5]) {
+      for (const z of [-13.3, -13, -12.7]) expect(walk({ x, z }, PLAYER_R)).toBe(true);
+    }
   });
 
   it("the game's collision and heights use the ship inside its area only", () => {
