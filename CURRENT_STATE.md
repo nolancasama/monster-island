@@ -1,6 +1,6 @@
 # Current State
 
-## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
+## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19, Pages run 44506811692, bundle `index-C_3qoy0c.js`; `main` fast-forwarded to `0b0a5d5`): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
 Built by Claude directly. Decisions: `DESIGN_DECISIONS.md` "2026-11-19 — Touch-and-hold on gameplay controls". `game-control` class
 (CSS in `styles.css`) plus `installControlGuards()` and the shared `touchHold(slot)` in `input/attackInput.ts`; used by `Act2Hud`,
 `VoyageHud` (tool and spyglass) and `TouchControls` (joystick, action button). Fixed a real stuck state: after a blur or panel during a
