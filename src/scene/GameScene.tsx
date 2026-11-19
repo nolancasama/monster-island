@@ -1,7 +1,8 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { rt } from "../game/runtime";
+import { vy } from "../game/voyageRt";
 import { debugEnabled } from "../game/debugAccess";
 import { debugPaused } from "../game/debugState";
 import { tick } from "../game/sim";
@@ -26,8 +27,11 @@ import { layerView } from "./layerView";
 import { VoyageBoat } from "./VoyageBoat";
 import { PirateShip } from "./PirateShip";
 import { installMouseAttacks } from "../input/attackInput";
+import { homeSceneryVisible, openSeaFactor } from "./voyageHorizon";
+import { islandHazeMaterials } from "./voyageHorizonMaterials";
 
-const collisionDebugAllowed = debugEnabled || new URLSearchParams(window.location.search).get("e2e") === "1";
+const e2e = new URLSearchParams(window.location.search).get("e2e") === "1";
+const collisionDebugAllowed = debugEnabled || e2e;
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -105,6 +109,28 @@ function GroundWorld({ children }: { children: ReactNode }) {
   return <group ref={ref}>{children}</group>;
 }
 
+function HomeScenery({ children }: { children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const canvas = useThree(s => s.gl.domElement);
+  const haze = useMemo(islandHazeMaterials, []);
+  useEffect(() => () => {
+    haze.dispose();
+    if (e2e) delete canvas.dataset.voyageOpenSea;
+  }, [canvas, haze]);
+  useFrame(({ camera, gl }) => {
+    const group = ref.current;
+    if (!group) return;
+    const factor = openSeaFactor(rt.world, vy, rt.voyage, rt.camera.shot?.pos.z ?? camera.position.z);
+    group.visible = homeSceneryVisible(factor);
+    haze.update(group, factor, camera, gl);
+    if (e2e) {
+      const value = String(factor);
+      if (canvas.dataset.voyageOpenSea !== value) canvas.dataset.voyageOpenSea = value;
+    }
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 export function GameScene() {
   const cloud = useGame((s) => s.screen === "game" && s.progress.act3.world === "cloud");
   return (
@@ -119,25 +145,27 @@ export function GameScene() {
       <MouseAttacks />
       <AdaptiveDpr />
       {cloud ? <CloudIsle /> : <>
-      <SkyAndLights />
-      <GroundWorld>
-        <Terrain />
-        <Sea />
-        <FarLand />
-        <BeachDetail>
-          <River />
-          <Rocks />
-          <Vegetation />
-          <Props />
-        </BeachDetail>
-        <Forest />
-        <Volcano />
-        <Lowland />
-        <Maple />
-      </GroundWorld>
-      <Cave />
-      <UpperCanopy />
-      <BubbleRide />
+        <SkyAndLights />
+        <HomeScenery>
+          <GroundWorld>
+            <Terrain />
+            <Sea />
+            <FarLand />
+            <BeachDetail>
+              <River />
+              <Rocks />
+              <Vegetation />
+              <Props />
+            </BeachDetail>
+            <Forest />
+            <Volcano />
+            <Lowland />
+            <Maple />
+          </GroundWorld>
+          <Cave />
+          <UpperCanopy />
+          <BubbleRide />
+        </HomeScenery>
       </>}
       <VoyageBoat />
       <PirateShip />
