@@ -14,6 +14,7 @@ import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
 import { anchors, EMBER_MOUTH, LEAFY_HAND, PUFF_BEAK } from "./anchors";
 import { WornItems } from "./Wearables";
+import { vy } from "../game/voyageRt";
 
 const BUILD: Record<MonsterId, () => MonsterParts> = { leafy: leafyParts, bubbo: bubboParts, puff: puffParts, ember: emberParts, lumo: lumoParts };
 
@@ -149,7 +150,9 @@ function MonsterBody({ id }: { id: MonsterId }) {
     g.rotation.y = m.yaw + pose.spin + pose.shake;
     g.scale.setScalar(0.2 + 0.8 * sm(poof));
     // Act 2: Lumo is in the raiders' cage; a friend in its combat position sits on (or carries) the player.
-    g.visible = (ferry || companionVisible(id)) && !(id === "lumo" && lumoHidden());
+    // In the hold the lens sits just aft of the stairs: a friend following down them would fill the screen.
+    const atLens = vy.inHold && Math.hypot(m.x - rt.camera.pos.x, m.z - rt.camera.pos.z) < 1.4 && !mountPose(id);
+    g.visible = (ferry || companionVisible(id)) && !(id === "lumo" && lumoHidden()) && !atLens;
     const mount = ferry ? null : mountPose(id);
     if (mount) {
       g.position.set(mount.x, mount.y, mount.z);

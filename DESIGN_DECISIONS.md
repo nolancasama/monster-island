@@ -2976,3 +2976,28 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
   Before, a blur or panel during a hold left the source marked down, and the next tap did nothing.
 - **Joystick:** a second finger's release no longer drops the steering thumb, and the stick zeroes its
   input when it unmounts (scenes, journal).
+
+## 2026-11-19 - Voyage polish: ship, galley and enclosed hold
+
+- The fishing platform extends into the bottom landing, with its support below the landing surface.
+  This removes the duplicate tread and transom cap while preserving the continuous walking profile.
+  Rejected depth bias because the geometry supplied two surfaces at the same height.
+- The food crates follow the tapered port bulwark with 34 cm between their bodies. Their coloured
+  lids and raised signs identify the four foods. One canvas atlas shares the existing ship material
+  draw. Pepper stands on the working side of a transverse counter, 2.08 m from the customer spot.
+  Rejected a straight fore-and-aft crate row because it drifts away from or crosses the taper.
+- Planks cover the hold up to the guarded companionway. Lowering the floor gives 2.76 m of room
+  under the ceiling and keeps the cargo layout in the same ship-local footprint. The camera follows
+  from inside the hull and uses the aft stowage bay for clearance. The lantern and its one light
+  draw while the hold view is active. Rejected the old open cutaway and a stair teleport.
+- The stairs share one continuous profile across the two floors. Separate descent and ascent marks
+  define a half-metre hysteresis band. The existing voyage flash element fades from black across
+  the camera change while movement continues.
+- (Claude's review) While the player is in the hold, a companion within 1.4 m of
+  the interior lens is not drawn (unless mounted on the player). The lens sits
+  just aft of the stairs, and friends following down them filled the screen.
+  Rejected: moving the lens forward of the stairs (it then looks back at the
+  player's face on the way down and loses the walking direction).
+- Known gap at merge: a reload while in the hold needs the saved voyage to
+  remember the hold floor (x/z alone is ambiguous under the new deck cover);
+  handled on the integration branch.

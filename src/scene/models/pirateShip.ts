@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { SEA_Y } from "../../game/world/island";
-import { BOW_Z, BUCKET, CANNONS, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_Y, HALF_BEAM, HOLD, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, hullHalf, type Box } from "../../game/world/pirateShip";
+import { BOW_Z, BULWARK_THICKNESS, BUCKET, CANNONS, COUNTER_SIZE, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_AFT_Z, HOLD_BARRELS, HOLD_CEILING_Y, HOLD_HATCH_GUARDS, HOLD_LANTERN, HOLD_PORTAL, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, SUPPLY_SIZE, hullHalf, type Box } from "../../game/world/pirateShip";
 
 /**
  * Captain Redbeard's ship (docs/PIRATE_VOYAGE.md §2, §8) in LOCAL coordinates
- * (the scene places it at SHIP). Cutaway: no ceilings anywhere.
- * - `base`: hull, decks, hold, galley fittings, cannons, helm, fishing deck.
+ * (the scene places it at SHIP).
+ * - `base`: hull, decks, companionway, galley fittings, cannons, helm, fishing deck.
  * - `tall`: fore and mizzen masts, rigging, the galley chimney and the stern
  *   lanterns, drawn with the material that dissolves between camera and player.
  * - `main`: the mainmast, built about its own foot so it can fall in the storm.
@@ -14,7 +14,8 @@ import { BOW_Z, BUCKET, CANNONS, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, 
  */
 
 const WOOD = "#6b4a30", DARK = "#4a2f1e", PLANK = "#b88a52", PLANK2 = "#a97d48", HOLDWOOD = "#8d6540", RED = "#b8322a", GOLD = "#e0b23a", IRON = "#3c3f44", SPAR = "#7a5532";
-const HULL_BOTTOM = SEA_Y - 1.4, LOWER_HULL_THICKNESS = 0.35, BULWARK_THICKNESS = 0.3;
+const HULL_BOTTOM = SEA_Y - 1.4, LOWER_HULL_THICKNESS = 0.35;
+const FISH_PLATFORM_DEPTH = 0.2;
 const stemZ = (inset: number) => BOW_Z - 1.4 + inset * 1.5;
 
 /** The hull outline (starboard stern → bow → port stern), with a pointed bow. */
@@ -37,15 +38,17 @@ function hullRing(b: PartBuilder, y0: number, y1: number, color: string, outer =
     b.box(x1 - x0, top - y0, 0.2, (x0 + x1) / 2, y0, STERN_Z + 0.1, color);
   transom(-half, STERN_RAMP.x0, y1);
   transom(STERN_RAMP.x1, half, y1);
-  if (y0 < FISH_Y) transom(STERN_RAMP.x0, STERN_RAMP.x1, Math.min(y1, FISH_Y));
+  const landingBase = FISH_Y - FISH_PLATFORM_DEPTH - 0.01;
+  if (y0 < landingBase) transom(STERN_RAMP.x0, STERN_RAMP.x1, Math.min(y1, landingBase));
 }
 
 /** A flat horizontal shape at height y from local (x, z) points. */
-function floor(b: PartBuilder, pts: Array<[number, number]>, y: number, color: string, holes: Array<Array<[number, number]>> = []) {
-  const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
-  for (const h of holes) shape.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
+function floor(b: PartBuilder, pts: Array<[number, number]>, y: number, color: string, holes: Array<Array<[number, number]>> = [], underside = false) {
+  const plan = ([x, z]: [number, number]) => new THREE.Vector2(x, underside ? z : -z);
+  const shape = new THREE.Shape(pts.map(plan));
+  for (const h of holes) shape.holes.push(new THREE.Path(h.map(plan)));
   const g = new THREE.ShapeGeometry(shape);
-  g.rotateX(-Math.PI / 2);
+  g.rotateX(underside ? Math.PI / 2 : -Math.PI / 2);
   b.add(g, color, [0, y, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
 }
 
@@ -103,9 +106,10 @@ function mast(b: PartBuilder, m: Mast, origin: Point = [0, 0, 0]) {
   b.boxAt(0.12, 0.12, 4.0, [x, y + p.gaff + 0.55, z + 1.85], [-0.28, 0, 0], SPAR);
 }
 
-function staircase(b: PartBuilder, ramp: Box, stairs: typeof HOLD_STAIRS) {
+function staircase(b: PartBuilder, ramp: Box, stairs: typeof HOLD_STAIRS, omitLast = false) {
   const width = ramp.x1 - ramp.x0, x = (ramp.x0 + ramp.x1) / 2;
-  for (const [i, { z0, z1, y }] of stairs.steps.entries()) {
+  const treads = omitLast ? stairs.steps.slice(0, -1) : stairs.steps;
+  for (const [i, { z0, z1, y }] of treads.entries()) {
     b.box(width, 0.16, z1 - z0, x, y - 0.16, (z0 + z1) / 2, i % 2 ? PLANK2 : PLANK);
   }
   const { slopeStart, slopeEnd, floorY } = stairs;
@@ -116,7 +120,67 @@ function staircase(b: PartBuilder, ramp: Box, stairs: typeof HOLD_STAIRS) {
   }
 }
 
-export interface ShipGeometries { base: THREE.BufferGeometry; tall: THREE.BufferGeometry; main: THREE.BufferGeometry }
+const SIGN_ATLAS = { width: 512, height: 1024, row: 192, inset: 5, whiteV: 0.125 };
+
+export function supplySignAtlas(): THREE.CanvasTexture | null {
+  const canvas = document.createElement("canvas");
+  const { width, height, row } = SIGN_ATLAS;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 105px Arial, sans-serif";
+  for (const [i, crate] of SUPPLY_CRATES.entries()) {
+    const top = i * row;
+    ctx.fillStyle = "#261b19";
+    ctx.fillRect(0, top, width, row);
+    ctx.strokeStyle = crate.color;
+    ctx.lineWidth = 12;
+    ctx.strokeRect(12, top + 12, width - 24, row - 24);
+    ctx.fillStyle = "#fff4d8";
+    ctx.fillText(crate.food.toUpperCase(), width / 2, top + row / 2 + 5, width - 64);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function supplySigns(b: PartBuilder) {
+  const { row, height, width, inset } = SIGN_ATLAS;
+  const signWidth = SUPPLY_SIZE.depth - 0.075, signHeight = 0.46, tilt = Math.PI / 8;
+  for (const [i, c] of SUPPLY_CRATES.entries()) {
+    // Raised wooden signs tilt slightly up toward the gameplay camera.
+    const mount = (g: THREE.BufferGeometry) => g.rotateY(Math.PI / 2).rotateZ(tilt)
+      .translate(SUPPLY_SIZE.width / 2 + Math.sin(tilt) * signHeight / 2 + 0.024, DECK_Y + 0.34, 0)
+      .rotateY(c.yaw).translate(c.x, 0, c.z);
+    const backing = new THREE.BoxGeometry(signWidth, signHeight, 0.045);
+    backing.translate(0, 0, -0.02);
+    const backingUV = backing.attributes.uv;
+    for (let j = 0; j < backingUV.count; j++) backingUV.setXY(j, 0.5, SIGN_ATLAS.whiteV);
+    b.add(mount(backing), DARK, [0, 0, 0]);
+    const face = new THREE.PlaneGeometry(signWidth, signHeight);
+    face.translate(0, 0, 0.004);
+    const uv = face.attributes.uv;
+    for (let j = 0; j < uv.count; j++) {
+      uv.setXY(j, (inset + (width - 2 * inset) * uv.getX(j)) / width,
+        1 - (i * row + inset + (row - 2 * inset) * (1 - uv.getY(j))) / height);
+    }
+    b.add(mount(face), "#ffffff", [0, 0, 0], [0, 0, 0], [1, 1, 1], { vary: false, flatAo: true });
+  }
+}
+
+export interface ShipGeometries {
+  base: THREE.BufferGeometry;
+  tall: THREE.BufferGeometry;
+  main: THREE.BufferGeometry;
+  hold: THREE.BufferGeometry;
+  lantern: THREE.BufferGeometry;
+}
 
 export function pirateShipGeometries(): ShipGeometries {
   const b = new PartBuilder(0), t = new PartBuilder(0), m = new PartBuilder(0);
@@ -125,16 +189,16 @@ export function pirateShipGeometries(): ShipGeometries {
   hullRing(b, DECK_Y - 0.45, DECK_Y - 0.15, RED, -0.02, 0.37);
   hullRing(b, DECK_Y - 0.15, DECK_Y + 0.85, WOOD, 0, BULWARK_THICKNESS);
   hullRing(b, DECK_Y + 0.85, DECK_Y + 0.95, GOLD, -0.03, 0.36);
-  // The deck, around the hold opening and the stern stairs; a darker quarterdeck.
+  // The deck covers the hold from bow to stern, with a single guarded hatch.
   const inner = outline(BULWARK_THICKNESS).map((v): [number, number] => [v.x, -v.y]);
-  const hr = HOLD_RAMP, sr = STERN_RAMP, h = HOLD;
+  const hr = HOLD_RAMP, sr = STERN_RAMP;
   const sternNotch = (edge: number): Array<[number, number]> =>
     [[sr.x0, edge], [sr.x0, sr.z0], [sr.x1, sr.z0], [sr.x1, edge]];
   const holdOpening: Array<[number, number]> = [
-    [h.x0, h.z0], [h.x1, h.z0], [h.x1, h.z1], [hr.x1, h.z1], [hr.x1, hr.z1], [hr.x0, hr.z1],
+    [hr.x0, hr.z0], [hr.x1, hr.z0], [hr.x1, hr.z1], [hr.x0, hr.z1],
   ];
   floor(b, [...inner, ...sternNotch(STERN_Z)], DECK_Y, PLANK, [holdOpening.reverse()]);
-  const atOpening = (x: number, z: number) => [h, hr, sr].some(
+  const atOpening = (x: number, z: number) => [hr, sr].some(
     ({ x0, x1, z0, z1 }) => x >= x0 - 0.025 && x <= x1 + 0.025 && z >= z0 && z <= z1,
   );
   for (let x = -(HALF_BEAM - 0.6); x <= HALF_BEAM - 0.6; x += 0.62) {
@@ -155,14 +219,6 @@ export function pirateShipGeometries(): ShipGeometries {
     [quarter, quarterEnd], [quarter, 7], [-quarter, 7], [-quarter, quarterEnd], ...sternNotch(quarterEnd),
   ], DECK_Y + 0.004, "#a3784a");
 
-  // The hold: floor, walls, the stairs down, rails round the opening.
-  const holdW = h.x1 - h.x0, holdD = h.z1 - h.z0, holdZ = (h.z0 + h.z1) / 2;
-  const bowWall = h.z0 - 0.25;
-  b.box(holdW + 0.4, 0.2, h.z1 - bowWall, 0, HOLD_Y - 0.2, (bowWall + h.z1) / 2, HOLDWOOD);
-  const wallH = DECK_Y - HOLD_Y;
-  b.box(holdW + 0.4, wallH, 0.2, 0, HOLD_Y, bowWall, DARK);
-  b.box(h.x1 - hr.x1 + 0.2, wallH, 0.2, (h.x1 + hr.x1 + 0.2) / 2, HOLD_Y, h.z1 + 0.1, WOOD);
-  for (const x of [h.x0 - 0.1, h.x1 + 0.1]) b.box(0.2, wallH, holdD, x, HOLD_Y, holdZ, DARK);
   staircase(b, hr, HOLD_STAIRS);
   const railLine = (x0: number, z0: number, x1: number, z1: number, y: number, endY = y) => {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.1));
@@ -171,30 +227,12 @@ export function pirateShipGeometries(): ShipGeometries {
       [(x0 + x1) / 2, (y + endY) / 2 + 0.9, (z0 + z1) / 2], [-Math.atan2(endY - y, len), 0, 0], GOLD);
     for (let i = 0; i <= n; i++) b.box(0.08, 0.9 + postFoot, 0.08, x0 + (x1 - x0) * i / n, y + (endY - y) * i / n - postFoot, z0 + (z1 - z0) * i / n, WOOD);
   };
-  const westRail = h.x0 - 0.15, eastRail = h.x1 + 0.15, rampRail = hr.x1 + 0.15;
-  const bowRail = h.z0 - 0.15, aftRail = h.z1 + 0.15;
-  railLine(westRail, bowRail, eastRail, bowRail, DECK_Y);
-  railLine(eastRail, bowRail, eastRail, aftRail, DECK_Y);
-  railLine(westRail, bowRail, westRail, hr.z1, DECK_Y);
-  railLine(rampRail, aftRail, eastRail, aftRail, DECK_Y);
-  railLine(rampRail, aftRail, rampRail, hr.z1, DECK_Y);
-  // Hold furniture: a table, a wall shelf, an open box, a red door on the bow wall.
-  const tb = SPOT.table;
-  b.box(1.6, 0.1, 1.5, tb.x, HOLD_Y + 0.92, tb.z, "#9a6c43");
-  for (const [dx, dz] of [[-0.7, -0.65], [0.7, -0.65], [0.7, 0.65], [-0.7, 0.65]]) b.box(0.1, 0.92, 0.1, tb.x + dx, HOLD_Y, tb.z + dz, DARK);
-  const sh = SPOT.shelf;
-  b.box(0.62, 0.08, 2.2, sh.x + 0.05, HOLD_Y + 1.25, sh.z, "#9a6c43");
-  for (const dz of [-0.9, 0.9]) b.boxAt(0.5, 0.08, 0.08, [sh.x + 0.05, HOLD_Y + 1.1, sh.z + dz], [0, 0, 0.6], DARK);
-  const bx = SPOT.box;
-  b.box(1.2, 0.08, 1.2, bx.x, HOLD_Y, bx.z, "#c79a5c");
-  for (const [dx, dz, w, d] of [[0, -0.56, 1.2, 0.08], [0, 0.56, 1.2, 0.08], [-0.56, 0, 0.08, 1.2], [0.56, 0, 0.08, 1.2]] as const) b.box(w, 0.55, d, bx.x + dx, HOLD_Y, bx.z + dz, "#d8a865");
-  const dr = SPOT.door;
-  b.box(1.0, 1.6, 0.1, dr.x, HOLD_Y, -7.9, "#c0392b");
-  b.box(1.16, 0.12, 0.12, dr.x, HOLD_Y + 1.6, -7.88, DARK);
-  for (const s of [-1, 1]) b.box(0.1, 1.6, 0.12, dr.x + s * 0.55, HOLD_Y, -7.88, DARK);
-  b.sphere(0.05, dr.x + 0.32, HOLD_Y + 0.85, -7.82, GOLD, [1, 1, 1], 6);
-  // Cargo-hold clutter along the walls (not on any slot).
-  for (const [x, z] of [[HOLD.x1 - 0.45, -7.4], [HOLD.x1 - 0.45, -1.6]]) { b.cyl(0.28, 0.28, 0.7, x, HOLD_Y, z, "#8a5a32", 8); b.cyl(0.29, 0.29, 0.06, x, HOLD_Y + 0.5, z, IRON, 8); }
+  for (const { x0, x1, z0, z1 } of HOLD_HATCH_GUARDS) {
+    const x = (x0 + x1) / 2, z = (z0 + z1) / 2;
+    b.box(x1 - x0, 0.2, z1 - z0, x, DECK_Y - 0.07, z, DARK);
+    if (z1 === hr.z1) railLine(x, hr.z0 - 0.125, x, z1, DECK_Y);
+    else railLine(x0 - 0.125, z, x1 + 0.125, z, DECK_Y);
+  }
 
   // Open galley: stove and chimney, pot, supplies and a serving counter.
   const st = SPOT.stove;
@@ -205,16 +243,17 @@ export function pirateShipGeometries(): ShipGeometries {
   // The pot on the stove.
   b.cyl(0.42, 0.36, 0.42, st.x, DECK_Y + 0.95, st.z, "#3a3d44", 10);
   b.torus(0.42, 0.04, [st.x, DECK_Y + 1.37, st.z], [Math.PI / 2, 0, 0], "#5a5e66");
-  // Supply crates: fish, meat, apples, bananas (labels on top match the food).
+  // The coloured lids and the signs follow the angle of the port bulwark.
   for (const c of SUPPLY_CRATES) {
-    b.box(0.95, 0.6, 0.72, c.x, DECK_Y, c.z, "#a77a46");
-    b.boxAt(0.8, 0.12, 0.6, [c.x, DECK_Y + 0.64, c.z], [0, 0, 0], c.color);
+    const { width, depth, height } = SUPPLY_SIZE;
+    b.boxAt(width, height - 0.1, depth, [c.x, DECK_Y + (height - 0.1) / 2, c.z], [0, c.yaw, 0], "#a77a46");
+    b.boxAt(width - 0.1, 0.1, depth - 0.1, [c.x, DECK_Y + height - 0.05, c.z], [0, c.yaw, 0], c.color);
   }
   const ct = SPOT.counter;
-  b.box(0.9, 0.95, 2.2, ct.x, DECK_Y, ct.z, "#8a5f3b");
+  b.box(COUNTER_SIZE.width - 0.1, 0.95, COUNTER_SIZE.depth - 0.1, ct.x, DECK_Y, ct.z, "#8a5f3b");
   const counterTop = DECK_Y + 0.95, counterLip = 0.06;
-  b.box(1.0, counterLip, 2.3, ct.x, counterTop, ct.z, "#c9a06a");
-  for (const dz of [-0.84, -0.52, -0.2]) b.cyl(0.14, 0.12, 0.08, ct.x + 0.25, counterTop + counterLip, ct.z + dz, "#53565e", 8);
+  b.box(COUNTER_SIZE.width, counterLip, COUNTER_SIZE.depth, ct.x, counterTop, ct.z, "#c9a06a");
+  for (const dx of [-0.84, -0.52, -0.2]) b.cyl(0.14, 0.12, 0.08, ct.x + dx, counterTop + counterLip, ct.z - 0.25, "#53565e", 8);
   // The mess table and its bench outside the galley.
   b.box(1.6, 0.08, 2.4, MESS.x, DECK_Y + 0.72, MESS.z, "#9a6c43");
   for (const [dx, dz] of [[-0.65, -1.0], [0.65, -1.0], [0.65, 1.0], [-0.65, 1.0]]) b.box(0.1, 0.72, 0.1, MESS.x + dx, DECK_Y, MESS.z + dz, DARK);
@@ -248,12 +287,18 @@ export function pirateShipGeometries(): ShipGeometries {
   for (const x of [-3.6, -1.2, 1.2]) b.box(0.9, 0.9, 0.1, x, DECK_Y - 0.4, STERN_Z + 0.01, "#ffd98a");
 
   // The stern stairs down to the fishing deck, and the fishing deck itself.
-  staircase(b, sr, STERN_STAIRS);
+  staircase(b, sr, STERN_STAIRS, true);
   for (const x of [sr.x0 - 0.15, sr.x1 + 0.15]) {
     railLine(x, sr.z0, x, sr.z1, DECK_Y, FISH_Y);
   }
-  const fishDeckEnd = FISH_DECK.z1 + 0.25;
-  b.box(FISH_DECK.x1 - FISH_DECK.x0 + 0.4, 0.2, fishDeckEnd - FISH_DECK.z0, 0, FISH_Y - 0.2, (FISH_DECK.z0 + fishDeckEnd) / 2, PLANK);
+  const fishDeckEnd = FISH_DECK.z1 + 0.25, left = FISH_DECK.x0 - 0.2, right = FISH_DECK.x1 + 0.2;
+  const platform = new THREE.Shape([
+    [left, fishDeckEnd], [right, fishDeckEnd], [right, FISH_DECK.z0], [sr.x1, FISH_DECK.z0],
+    [sr.x1, FISH_LANDING_Z], [sr.x0, FISH_LANDING_Z], [sr.x0, FISH_DECK.z0], [left, FISH_DECK.z0],
+  ].map(([x, z]) => new THREE.Vector2(x, -z)));
+  const fishingDeck = new THREE.ExtrudeGeometry(platform, { depth: FISH_PLATFORM_DEPTH, bevelEnabled: false });
+  fishingDeck.rotateX(-Math.PI / 2);
+  b.add(fishingDeck, PLANK, [0, FISH_Y - FISH_PLATFORM_DEPTH, 0]);
   const fx = FISH_DECK.x1 + 0.1, fr = FISH_DECK.x1 + 0.15;
   for (const [x, z] of [[-fx, 18.1], [fx, 18.1], [-fx, 15.6], [fx, 15.6]]) b.cyl(0.12, 0.12, 2.0, x, SEA_Y - 1.4, z, DARK, 6);
   railLine(-fr, 18.15, fr, 18.15, FISH_Y);
@@ -277,9 +322,85 @@ export function pirateShipGeometries(): ShipGeometries {
   }
   // Barrels against the bulwarks (clear of every walking line).
   for (const { x, z } of DECK_BARRELS) { b.cyl(0.3, 0.3, 0.8, x, DECK_Y, z, "#8a5a32", 8); b.cyl(0.31, 0.31, 0.06, x, DECK_Y + 0.55, z, IRON, 8); }
+  const untextured = b.vertexCount;
+  supplySigns(b);
+  // Reserve a second white atlas sample for the shade drawn over the unlit stairs.
+  const shade = new THREE.PlaneGeometry(hr.x1 - hr.x0 + 0.3, DECK_Y - HOLD_Y);
+  const shadeUV = shade.attributes.uv;
+  for (let i = 0; i < shadeUV.count; i++) shadeUV.setXY(i, 0.875, SIGN_ATLAS.whiteV);
+  b.add(shade, "#211611", [(hr.x0 + hr.x1) / 2, (HOLD_Y + DECK_Y) / 2, HOLD_PORTAL.enterZ - 0.12]);
   const base = b.build(), tall = t.build(), main = m.build();
+  const uv = base.attributes.uv;
+  for (let i = 0; i < untextured; i++) uv.setXY(i, 0.5, SIGN_ATLAS.whiteV);
   for (const g of [base, tall, main]) g.computeVertexNormals();
-  return { base, tall, main };
+  return { base, tall, main, hold: holdGeometry(), lantern: holdLanternGeometry() };
+}
+
+function holdGeometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0), h = HOLD, hr = HOLD_RAMP;
+  const width = h.x1 - h.x0, length = HOLD_AFT_Z - h.z0, midZ = (h.z0 + HOLD_AFT_Z) / 2;
+  const room: Array<[number, number]> = [
+    [h.x0, h.z0], [h.x1, h.z0], [h.x1, HOLD_AFT_Z], [h.x0, HOLD_AFT_Z],
+    [h.x0, hr.z1], [hr.x1, hr.z1], [hr.x1, hr.z0], [h.x0, hr.z0],
+  ];
+  floor(b, room, HOLD_Y, HOLDWOOD);
+  floor(b, room, HOLD_CEILING_Y, "#94704e", [], true);
+  const wallH = DECK_Y - HOLD_Y;
+  for (const z of [h.z0 - 0.09, HOLD_AFT_Z + 0.09]) b.box(width + 0.36, wallH, 0.18, 0, HOLD_Y, z, WOOD);
+  for (const x of [h.x0 - 0.09, h.x1 + 0.09]) b.box(0.18, wallH, length, x, HOLD_Y, midZ, WOOD);
+  // Plank seams on the floor and ceiling, and visible ribs along the room.
+  for (let x = h.x0 + 0.45; x < h.x1; x += 0.6) {
+    const end = x < hr.x1 ? h.z1 : HOLD_AFT_Z;
+    b.box(0.023, 0.009, end - h.z0, x, HOLD_Y + 0.001, (end + h.z0) / 2, DARK);
+    b.box(0.028, 0.012, end - h.z0, x, HOLD_CEILING_Y - 0.013, (end + h.z0) / 2, DARK);
+  }
+  for (const z of [h.z0 + 0.37, h.z0 + 2.35, h.z0 + 4.45, h.z1 + 0.3, HOLD_AFT_Z - 0.25]) {
+    const left = z > hr.z0 && z < hr.z1 ? hr.x1 : h.x0;
+    b.box(h.x1 - left, 0.075, 0.19, (left + h.x1) / 2, HOLD_CEILING_Y - 0.076, z, DARK);
+    for (const x of [h.x0 + 0.055, h.x1 - 0.055]) b.box(0.11, wallH - 0.14, 0.17, x, HOLD_Y, z, DARK);
+  }
+  for (const y of [HOLD_Y + 0.4, HOLD_Y + 0.9, HOLD_Y + 1.4, HOLD_Y + 1.9, HOLD_Y + 2.4]) {
+    for (const x of [h.x0 + 0.005, h.x1 - 0.005]) b.box(0.012, 0.02, length, x, y, midZ, DARK);
+    b.box(width, 0.02, 0.012, 0, y, h.z0 + 0.005, DARK);
+  }
+  // Show where the room ends beside the staircase, with a low stowage rack behind it.
+  const binX = (hr.x1 + h.x1) / 2;
+  b.box(h.x1 - hr.x1, 0.64, 0.17, binX, HOLD_Y, h.z1 + 0.09, DARK);
+  for (const [x, z, w, y] of [[-1.70, 0.1, 1.02, 0.76], [-0.52, -0.3, 1.08, 0.68], [1.2, 0.13, 1.4, 0.87], [3.4, 0.5, 0.96, 0.68]]) {
+    b.box(w, y, 0.85, x, HOLD_Y, z, "#a57443");
+    for (const dx of [-0.35, 0.35]) b.box(0.1, y + 0.016, 0.87, x + dx * w, HOLD_Y, z, DARK);
+  }
+  const tb = SPOT.table;
+  b.box(1.6, 0.1, 1.5, tb.x, HOLD_Y + 0.92, tb.z, "#9a6c43");
+  for (const [dx, dz] of [[-0.7, -0.65], [0.7, -0.65], [0.7, 0.65], [-0.7, 0.65]]) b.box(0.1, 0.92, 0.1, tb.x + dx, HOLD_Y, tb.z + dz, DARK);
+  const sh = SPOT.shelf;
+  for (const y of [1.25, 1.91]) b.box(0.62, 0.08, 2.2, sh.x + 0.05, HOLD_Y + y, sh.z, "#9a6c43");
+  for (const dz of [-0.9, 0.9]) b.boxAt(0.5, 0.08, 0.08, [sh.x + 0.05, HOLD_Y + 1.1, sh.z + dz], [0, 0, 0.6], DARK);
+  const bx = SPOT.box;
+  b.box(1.2, 0.08, 1.2, bx.x, HOLD_Y, bx.z, "#c79a5c");
+  for (const [dx, dz, w, d] of [[0, -0.56, 1.2, 0.08], [0, 0.56, 1.2, 0.08], [-0.56, 0, 0.08, 1.2], [0.56, 0, 0.08, 1.2]] as const) b.box(w, 0.55, d, bx.x + dx, HOLD_Y, bx.z + dz, "#d8a865");
+  const dr = SPOT.door, doorZ = h.z0 + 0.045;
+  b.box(1.0, 1.8, 0.09, dr.x, HOLD_Y, doorZ, "#c0392b");
+  b.box(1.16, 0.12, 0.12, dr.x, HOLD_Y + 1.8, doorZ, DARK);
+  for (const s of [-1, 1]) b.box(0.1, 1.8, 0.12, dr.x + s * 0.55, HOLD_Y, doorZ, DARK);
+  b.sphere(0.05, dr.x + 0.32, HOLD_Y + 0.95, doorZ + 0.071, GOLD, [1, 1, 1], 6);
+  for (const { x, z } of HOLD_BARRELS) {
+    b.cyl(0.28, 0.28, 0.76, x, HOLD_Y, z, "#9a6838", 8);
+    for (const y of [0.16, 0.57]) b.cyl(0.3, 0.3, 0.065, x, HOLD_Y + y, z, IRON, 8);
+  }
+  const l = HOLD_LANTERN;
+  b.box(0.07, 0.25, 0.07, l.x, l.y + 0.19, l.z, IRON);
+  b.cyl(0.14, 0.18, 0.075, l.x, l.y + 0.125, l.z, IRON, 8);
+  b.cyl(0.18, 0.15, 0.075, l.x, l.y - 0.2, l.z, IRON, 8);
+  for (const [dx, dz] of [[0.12, 0.1], [0.12, -0.1], [-0.12, 0.1], [-0.12, -0.1]]) b.box(0.028, 0.25, 0.028, l.x + dx, l.y - 0.125, l.z + dz, IRON);
+  const geometry = b.build();
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function holdLanternGeometry(): THREE.BufferGeometry {
+  const glass = new THREE.CylinderGeometry(0.145, 0.145, 0.25, 8);
+  return glass.translate(HOLD_LANTERN.x, HOLD_LANTERN.y, HOLD_LANTERN.z);
 }
 
 /**

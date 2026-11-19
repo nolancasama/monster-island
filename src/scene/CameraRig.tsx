@@ -14,7 +14,8 @@ const tunnelRoof = groundY(TUNNEL.x, TUNNEL.z1) + TUNNEL.roof;
 import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 import { voyageRoll } from "./voyageWeather";
-import { vy } from "../game/voyageRt";
+import { updateHoldView, vy } from "../game/voyageRt";
+import { HOLD, HOLD_CEILING_Y, HOLD_RAMP, SHIP, inShipArea } from "../game/world/pirateShip";
 
 /** The live camera, for projecting world labels to the screen. */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -24,6 +25,7 @@ export const bottomPanel = { height: 0 };
 
 /** The field of view through Gull's spyglass (a distant ship fills most of the ring). */
 export const SPYGLASS_FOV = 15;
+const HOLD_FADE_MS = 360;
 
 /**
  * Third-person camera: steady and smoothed, no bobbing or automatic spinning.
@@ -53,6 +55,22 @@ export function CameraRig() {
   const ferryAge = useRef(0);
   const ferryFrom = useMemo(() => new THREE.Vector3(), []);
   const ferryLookFrom = useMemo(() => new THREE.Vector3(), []);
+  const holdFade = useRef<Animation | null>(null);
+
+  // After movement and before the ship and camera read the new view.
+  useFrame(() => {
+    const p = rt.player;
+    const aboard = vy.active && rt.world === "home" && !rt.voyage.active && inShipArea(p.x, p.z);
+    if (!updateHoldView(p.x, p.z, aboard)) return;
+    holdFade.current?.cancel();
+    if (aboard && !rt.camera.snap) {
+      holdFade.current = document.querySelector(".voyage-flash")?.animate([
+        { opacity: 1, backgroundColor: "#170f0a" },
+        { opacity: 0, backgroundColor: "#170f0a" },
+      ], { duration: HOLD_FADE_MS, easing: "ease-out" }) ?? null;
+    }
+    rt.camera.snap = true;
+  }, -2);
 
   /** Raise the endpoint until the whole target-to-camera line clears the ground and the big rocks. */
   const lift = (target: THREE.Vector3, candidate: THREE.Vector3): number => {
@@ -91,6 +109,7 @@ export function CameraRig() {
     }
     ferryWasActive.current = ferryBank !== null;
     const cloud = g.screen === "game" && g.progress.act3.world === "cloud";
+    const inside = g.screen === "game" && vy.inHold;
     const rope = g.screen === "game" && p.climbY !== null && p.z < -140;
     const wasRope = c.framing === "rope";
     const leavingRope = !rope && (wasRope || c.shot !== null && c.shot === ropeShot.current);
@@ -121,7 +140,7 @@ export function CameraRig() {
       const d = Math.atan2(Math.sin(target.yaw - c.yaw), Math.cos(target.yaw - c.yaw));
       framing.current.yaw = c.snap ? target.yaw : c.yaw + d * (1 - Math.exp(-dt * 3));
     }
-    c.profile = ferryBank ? "grove-stream-ferry" : selected.id;
+    c.profile = inside ? "pirate-hold" : ferryBank ? "grove-stream-ferry" : selected.id;
     if (rope && !wasRope) {
       ropeAge.current = 0;
       ropeOffset.set(pos.current.x - p.x, pos.current.y - p.y, pos.current.z - p.z);
@@ -158,6 +177,26 @@ export function CameraRig() {
       const horizontal = selected.dist * Math.cos(selected.pitch);
       want.current.set(p.x + Math.sin(selected.yaw) * horizontal, p.y + 1.1 + selected.dist * Math.sin(selected.pitch), p.z + Math.cos(selected.yaw) * horizontal);
       wantLook.current.set(p.x, p.y + 1.1, p.z);
+    } else if (inside) {
+      const shot = c.mode === "shot" ? c.shot : null;
+      const clamp = THREE.MathUtils.clamp;
+      const eyeY = HOLD_CEILING_Y - 0.22;
+      // The aft stowage bay gives the lens room behind the player and keeps
+      // the same walking direction up and down the stairs.
+      want.current.set(
+        clamp(shot?.pos.x ?? p.x, SHIP.x + HOLD.x0 + 0.24, SHIP.x + HOLD.x1 - 0.24),
+        eyeY,
+        clamp(shot?.pos.z ?? p.z + 3.15, SHIP.z + HOLD.z0 + 0.24, SHIP.z + HOLD_RAMP.z1 - 0.85),
+      );
+      wantLook.current.set(shot?.target.x ?? p.x, Math.min(shot?.target.y ?? p.y + 0.92, HOLD_CEILING_Y - 0.14), shot?.target.z ?? p.z);
+      // A scripted cargo close-up can be pinned close to a wall. Aim from the aisle.
+      if (shot && want.current.distanceTo(wantLook.current) < 1.4) {
+        want.current.x = wantLook.current.x + (wantLook.current.x > SHIP.x ? -1.8 : 1.8);
+      }
+      c.framing = shot ? "shot" : "fixed";
+      c.yaw = Math.atan2(want.current.x - wantLook.current.x, want.current.z - wantLook.current.z);
+      c.pitch = Math.atan2(want.current.y - wantLook.current.y, Math.hypot(want.current.x - wantLook.current.x, want.current.z - wantLook.current.z));
+      c.dist = want.current.distanceTo(wantLook.current);
     } else if (c.mode === "shot" && c.shot && !leavingRope) {
       c.framing = "shot";
       want.current.set(c.shot.pos.x, c.shot.pos.y, c.shot.pos.z);
@@ -229,11 +268,11 @@ export function CameraRig() {
         want.current.y += Math.max(Math.min(up, 8), mesaCameraLift(wantLook.current, want.current));
       }
     }
-    if (!rope && !lowland && !rt.voyage.active) {
+    if (!inside && !rope && !lowland && !rt.voyage.active) {
       const floor = Math.max(standY(want.current.x, want.current.z, g.progress.solved), -0.4) + 0.7;
       if (want.current.y < floor) want.current.y = floor;
     }
-    if (!ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank) {
+    if (inside || !ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank) {
       pos.current.copy(want.current);
       look.current.copy(wantLook.current);
       ready.current = true;
@@ -256,7 +295,7 @@ export function CameraRig() {
     } else {
       pos.current.lerp(want.current, k);
       look.current.lerp(wantLook.current, k);
-      if (!rt.voyage.active && !fixedLens) {
+      if (!inside && !rt.voyage.active && !fixedLens) {
         const floor = standY(pos.current.x, pos.current.z, g.progress.solved);
         // Lowland bank framing keeps its bounded lift, but a raised deck is
         // solid even while smoothing from the previous camera position.
@@ -269,12 +308,12 @@ export function CameraRig() {
       pos.current.y = Math.min(pos.current.y, tunnelRoof - .55);
     }
     // Smoothing can sweep a clear endpoint back through a mesa corner.
-    if (!fixedLens && !cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && !rope)
+    if (!inside && !fixedLens && !cloud && g.screen === "game" && (c.mode === "follow" || leavingRope) && !rope)
       pos.current.y += mesaCameraLift(look.current, pos.current);
     camera.position.copy(pos.current);
     camera.lookAt(look.current);
     // At sea on the pirate voyage: a gentle sway, and the storm's slow roll.
-    const roll = voyageRoll(rt.time);
+    const roll = inside ? 0 : voyageRoll(rt.time);
     if (roll) camera.rotateZ(roll);
     // Lens shift: while a prompt or line covers the bottom of the screen, the
     // view slides up by half its height (at most 30% of the screen), so the
@@ -282,7 +321,7 @@ export function CameraRig() {
     const cam = camera as THREE.PerspectiveCamera;
     // The mountain's real beacon and the nearby player need a taller sky view
     // than the lowland. Physical follow offsets remain exactly the same.
-    const lensFov = ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
+    const lensFov = inside ? 72 : ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
     // Gull's spyglass narrows the lens toward SPYGLASS_FOV (eased, so the zoom starts and lands gently).
     const spy = vy.spyglass * vy.spyglass * (3 - 2 * vy.spyglass);
     const fov = spy > 0 ? lensFov + (SPYGLASS_FOV - lensFov) * spy : lensFov;

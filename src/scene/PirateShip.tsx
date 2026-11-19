@@ -3,10 +3,10 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { flatMat, shipCutMaterial, smoothMat, updateShipCut } from "./materials";
 import { npcGeometry } from "./models/lowland";
-import { pirateShipGeometries, sailGeometry } from "./models/pirateShip";
+import { pirateShipGeometries, sailGeometry, supplySignAtlas } from "./models/pirateShip";
 import { PIRATES } from "../game/data/pirates";
 import { NPCS } from "../game/data/town";
-import { DECK_Y, MASTS, SAIL_FOOT, SHIP, SPOT, hullHalf, sailHeight, shipFloorY } from "../game/world/pirateShip";
+import { COUNTER_CUSTOMER, DECK_Y, HOLD_LANTERN, MASTS, SAIL_FOOT, SHIP, SPOT, hullHalf, sailHeight, shipFloorY } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { CREW_IDS, vy, type CrewId } from "../game/voyageRt";
 import { rt } from "../game/runtime";
@@ -16,6 +16,7 @@ import { VoyageProps, foodGeo } from "./VoyageProps";
 const SAILS = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ mast: m, h: sailHeight(m) }));
 const tallMat = shipCutMaterial(flatMat, "tall");
 const sailMat = shipCutMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), "sail");
+const lanternGlass = new THREE.MeshLambertMaterial({ color: "#e9a04c", emissive: "#ffb45c", emissiveIntensity: 1.15 });
 /** The break-up tips the bow down about a pivot at the stern. */
 const PIVOT = { y: DECK_Y, z: 12 };
 
@@ -27,12 +28,16 @@ function CrewMember({ id }: { id: CrewId }) {
   useFrame(() => {
     const g = ref.current, c = vy.crew[id];
     if (!g) return;
-    g.visible = c.visible;
-    if (!c.visible) return;
+    const below = id === "bill" && c.x === SPOT.bill.x && c.z === SPOT.bill.z;
+    g.visible = c.visible && below === vy.inHold;
+    if (!g.visible) return;
     // Face the player when close (local frame), as the town's keepers do; round the captured
     // party, face in toward the huddle.
     const px = rt.player.x - SHIP.x - vy.shipOffset.x, pz = rt.player.z - SHIP.z - vy.shipOffset.z;
-    const want = c.menace ? c.yaw : Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
+    const atCounter = id === "pepper" && c.x === SPOT.cook.x && c.z === SPOT.cook.z;
+    const faceCustomer = atCounter && pz < SPOT.counter.z;
+    const want = faceCustomer ? Math.atan2(COUNTER_CUSTOMER.x - c.x, COUNTER_CUSTOMER.z - c.z)
+      : c.menace ? c.yaw : Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
     let d = want - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * 0.1;
@@ -42,7 +47,7 @@ function CrewMember({ id }: { id: CrewId }) {
     g.rotation.x = lean.current;
     g.rotation.z = lean.current * Math.sin(rt.time * 1.6 + c.x * 3) * 0.35;
     const cheer = rt.time - c.cheer < 1.6 ? Math.abs(Math.sin((rt.time - c.cheer) * 9)) * 0.28 : 0;
-    g.position.set(c.x, (shipFloorY(c.x, c.z) ?? DECK_Y) + c.air + cheer + Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02, c.z);
+    g.position.set(c.x, (shipFloorY(c.x, c.z, below) ?? DECK_Y) + c.air + cheer + Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02, c.z);
     const h = held.current;
     if (h) {
       const food = c.hold === "fish3" ? "fish" : c.hold;
@@ -77,7 +82,7 @@ function VoyageSea() {
   useFrame(() => {
     const m = ref.current;
     if (!m) return;
-    m.visible = vy.sea && rt.world === "home";
+    m.visible = vy.sea && rt.world === "home" && !vy.inHold;
     if (!m.visible) return;
     // Centred on what the camera looks at, snapped to the grid so the facets never swim.
     const cx = Math.round(rt.camera.target.x / STEP) * STEP, cz = Math.round(rt.camera.target.z / STEP) * STEP;
@@ -101,7 +106,7 @@ function Wake() {
   useFrame(() => {
     const m = ref.current;
     if (!m) return;
-    m.visible = vy.active && vy.flow > 0.05 && vy.raft.on === false;
+    m.visible = vy.active && vy.flow > 0.05 && vy.raft.on === false && !vy.inHold;
     if (!m.visible) return;
     for (let i = 0; i < COUNT; i++) {
       // Foam is born at the bow and slides aft along both sides with the water. It fades before
@@ -125,9 +130,28 @@ function Wake() {
 /** Captain Redbeard's ship and crew, drawn only while the voyage needs them. */
 export function PirateShip() {
   const ship = useMemo(pirateShipGeometries, []);
+  const hatchOpen = useMemo(() => ({ value: false }), []);
+  const deckMat = useMemo(() => {
+    const material = flatMat.clone();
+    material.map = supplySignAtlas();
+    // The hatch shade uses a reserved white atlas sample, so the exterior
+    // base and the four coloured signs can stay in one draw.
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uHoldOpen = hatchOpen;
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform bool uHoldOpen;")
+        .replace("#include <map_fragment>", `
+#ifdef USE_MAP
+if (uHoldOpen && vMapUv.x > 0.8 && vMapUv.y < 0.2) discard;
+#endif
+#include <map_fragment>`);
+    };
+    return material;
+  }, [hatchOpen]);
   const sails = useMemo(() => SAILS.map((s) => sailGeometry(s.h)), []);
   const tornSail = useMemo(() => sailGeometry(SAILS[1].h, true), []);
   const yawed = useRef<THREE.Group>(null), outer = useRef<THREE.Group>(null), mainMast = useRef<THREE.Group>(null);
+  const hold = useRef<THREE.Group>(null);
   const sailRefs = useRef<Array<THREE.Mesh | null>>([]);
   const dir = useMemo(() => new THREE.Vector3(), []);
   useFrame((state) => {
@@ -143,6 +167,8 @@ export function PirateShip() {
     // Far enough for the sighting on the horizon (the fog hides it beyond).
     y.visible = vy.active && rt.world === "home" && Math.hypot(c.x - SHIP.x - vy.shipOffset.x, c.z - SHIP.z - vy.shipOffset.z) < 300;
     if (!y.visible) return;
+    if (hold.current) hold.current.visible = vy.inHold;
+    hatchOpen.value = vy.inHold;
     // Heading about the ship's origin (its interception), then the storm's pitch and roll about the stern pivot.
     y.position.set(SHIP.x + vy.shipOffset.x, vy.shipBob - vy.shipSink, SHIP.z + vy.shipOffset.z);
     y.rotation.set(0, vy.shipYaw, 0);
@@ -168,7 +194,13 @@ export function PirateShip() {
       <group ref={yawed} visible={false}>
       <group ref={outer}>
         <group position={[0, -PIVOT.y, -PIVOT.z]}>
-          <mesh geometry={ship.base} material={flatMat} />
+          <mesh geometry={ship.base} material={deckMat} />
+          <group ref={hold} visible={false}>
+            <mesh geometry={ship.hold} material={flatMat} />
+            <mesh geometry={ship.lantern} material={lanternGlass} />
+            <pointLight color="#ffba68" intensity={20} distance={11} decay={2}
+              position={[HOLD_LANTERN.x, HOLD_LANTERN.y - 0.16, HOLD_LANTERN.z]} />
+          </group>
           <mesh geometry={ship.tall} material={tallMat} />
           <group ref={mainMast} position={[mm.x, DECK_Y, mm.z]}>
             <mesh geometry={ship.main} material={tallMat} />

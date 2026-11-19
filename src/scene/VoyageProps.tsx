@@ -84,11 +84,12 @@ function Cargo() {
     ITEMS.forEach((item, i) => {
       const m = refs.current[i];
       if (!m) return;
-      m.visible = onDeck();
+      const carried = vy.carry?.kind === "cargo" && vy.carry.item === item;
+      m.visible = onDeck() && (carried || vy.inHold);
       if (!m.visible) return;
-      if (vy.carry?.kind === "cargo" && vy.carry.item === item) {
+      if (carried) {
         // Held up by Leafy's vine above the player's head.
-        m.position.set(rt.player.x, rt.player.y + 2.15 + Math.sin(rt.time * 3) * 0.05, rt.player.z);
+        m.position.set(rt.player.x, rt.player.y + (vy.inHold ? 1.8 : 2.15) + Math.sin(rt.time * 3) * 0.05, rt.player.z);
         m.rotation.set(0, rt.time * 0.8, 0);
         return;
       }

@@ -2,7 +2,7 @@ import { SEA_Y } from "./island";
 
 /**
  * Captain Redbeard's pirate ship (docs/PIRATE_VOYAGE.md §2): a static, walkable,
- * cutaway deck region in the open sea south of Port Town. One authored list
+ * deck and cargo hold in the open sea south of Port Town. One authored list
  * drives walking, standing heights, the camera and the model. Coordinates are
  * local to SHIP (lx east, lz north); the bow points south (−z), the stern is
  * nearest the fixed camera.
@@ -10,7 +10,8 @@ import { SEA_Y } from "./island";
 
 export const SHIP = { x: 76, z: -470 };
 export const DECK_Y = SEA_Y + 2.4;
-export const HOLD_Y = SEA_Y + 0.6;
+export const HOLD_Y = SEA_Y - 0.5;
+export const HOLD_CEILING_Y = DECK_Y - 0.14;
 export const FISH_Y = SEA_Y + 0.7;
 export const BOW_Z = -21;
 export const STERN_Z = 15;
@@ -24,7 +25,7 @@ export const BEAM = 1.5;
 /** Half the beam amidships (outside face of the rails). */
 export const HALF_BEAM = 4.5 * BEAM;
 
-export interface Box { x0: number; x1: number; z0: number; z1: number }
+export interface Box { x0: number; x1: number; z0: number; z1: number; yaw?: number }
 export interface Post { x: number; z: number; r: number }
 
 /** The hull's half-width at deck level (outside face of the rails). */
@@ -37,7 +38,10 @@ export function hullHalf(lz: number): number {
 
 export const HOLD: Box = { x0: -4.2, x1: 4.2, z0: -7.8, z1: -1.2 };
 /** The stairs down into the hold, against its west wall. */
-export const HOLD_RAMP: Box = { x0: HOLD.x0, x1: -3.15, z0: HOLD.z1, z1: 2 };
+export const HOLD_RAMP: Box = { x0: HOLD.x0, x1: -2.5, z0: HOLD.z1, z1: 2 };
+/** The windowless stowage bay aft of the hold floor, beside the stairs. */
+export const HOLD_AFT_Z = HOLD_RAMP.z1 + 0.4;
+export const HOLD_LANTERN = { x: 0.1, y: HOLD_CEILING_Y - 0.46, z: -3.75 };
 export const STERN_RAMP: Box = { x0: 2.85, x1: 4.05, z0: 12, z1: 15.4 };
 export const FISH_DECK: Box = { x0: -4.5, x1: 4.5, z0: 15.4, z1: 18 };
 /** Where the fish swim, behind the stern. */
@@ -48,6 +52,16 @@ export const STEER_LANE = 12;
 
 /** The mess table on the main deck, outside the galley; Tom, Sam and Max eat there. */
 export const MESS = { x: 3.75, z: -10.5 };
+
+/** Inside face of the tapered port bulwark, with the crate row running along it. */
+export const BULWARK_THICKNESS = 0.3;
+export const SUPPLY_SIZE = { width: 0.9, depth: 1.1, height: 0.72, signDepth: 0.21 };
+const SUPPLY_PITCH = 1.44;
+const SUPPLY_YAW = -Math.atan((hullHalf(-13) - hullHalf(BOW_Z)) / (-13 - BOW_Z));
+const supplyZ = -16.35;
+const supplyX = -hullHalf(supplyZ) + BULWARK_THICKNESS + (SUPPLY_SIZE.width / 2 + 0.045) / Math.cos(SUPPLY_YAW);
+
+export const COUNTER_SIZE = { width: 2.3, depth: 1 };
 
 /**
  * The three masts: height above the deck, and where the gaff's jaws ride (the
@@ -72,14 +86,14 @@ export const SPOT = {
   helm: { x: 0, z: 11.5 },
   captain: { x: -2.4, z: 11.6 },
   gull: { x: 1.95, z: 10.8 },
-  cook: { x: 1.35, z: -15.4 },
+  cook: { x: 2.9, z: -15.7 },
   bill: { x: -0.9, z: -3.6 },
   finn: { x: -2.1, z: 16.2 },
   crew: [{ x: MESS.x - 1.5, z: -10.1 }, { x: MESS.x - 1.5, z: -11.3 }, { x: MESS.x, z: -12.35 }],
   stove: { x: 0, z: -16.5 },
   pot: { x: 0, z: -16.5 },
-  supplies: { x: -3.15, z: -15 },
-  counter: { x: 2.9, z: -14.7 },
+  supplies: { x: supplyX, z: supplyZ },
+  counter: { x: 2.9, z: -14.55 },
   mainMast: { x: MASTS.main.x, z: MASTS.main.z },
   foreMast: { x: MASTS.fore.x, z: MASTS.fore.z },
   mizzenMast: { x: MASTS.mizzen.x, z: MASTS.mizzen.z },
@@ -91,19 +105,26 @@ export const SPOT = {
 } as const;
 
 /** The supply crates in the galley, each with its food (the cook's job). */
-export const SUPPLY_CRATES = [
-  { food: "fish" as const, x: SPOT.supplies.x, z: -15.9, color: "#5a7ea0" },
-  { food: "meat" as const, x: SPOT.supplies.x, z: -15.1, color: "#a8433a" },
-  { food: "apples" as const, x: SPOT.supplies.x, z: -14.3, color: "#e83a35" },
-  { food: "bananas" as const, x: SPOT.supplies.x, z: -13.6, color: "#ffd23f" },
-];
+export const SUPPLY_CRATES = ([
+  { food: "fish", color: "#5a7ea0" },
+  { food: "meat", color: "#a8433a" },
+  { food: "apples", color: "#e83a35" },
+  { food: "bananas", color: "#ffd23f" },
+] as const).map(({ food, color }, i, crates) => {
+  const run = (i - (crates.length - 1) / 2) * SUPPLY_PITCH;
+  return { food, color, yaw: SUPPLY_YAW, x: supplyX + Math.sin(SUPPLY_YAW) * run, z: supplyZ + Math.cos(SUPPLY_YAW) * run };
+});
+export const crateApproach = (crate: typeof SUPPLY_CRATES[number], d = 1.15) => ({
+  x: crate.x + Math.cos(crate.yaw) * d, z: crate.z - Math.sin(crate.yaw) * d,
+});
+export const COUNTER_CUSTOMER = { x: SPOT.counter.x, z: SPOT.counter.z + COUNTER_SIZE.depth / 2 + 0.43 };
 /** The fish bucket on the fishing deck (clear of the stairs' landing). */
 export const BUCKET = { x: -3.6, z: 15.9 };
 /** Cannons along both rails and barrels against the bulwarks: solid, clear of every walking line. */
 export const CANNONS = [-1, 1].flatMap((s) => [-5.5, 0.5, 6].map((z) => ({ x: s * (HALF_BEAM - 0.55), z, side: s })));
 export const DECK_BARRELS = [{ x: -(HALF_BEAM - 0.6), z: -11.5 }, { x: -(HALF_BEAM - 0.6), z: 9.5 }, { x: HALF_BEAM - 0.6, z: 9.8 }];
 
-const around = (c: { x: number; z: number }, hx: number, z0: number, z1: number): Box => ({ x0: c.x - hx, x1: c.x + hx, z0, z1 });
+const around = (c: { x: number }, hx: number, z0: number, z1: number): Box => ({ x0: c.x - hx, x1: c.x + hx, z0, z1 });
 const H = HOLD, HR = HOLD_RAMP, SR = STERN_RAMP;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.max(0, Math.min(1, k));
 
@@ -126,33 +147,57 @@ export function stairSteps(ramp: Box, yTop: number, yBottom: number, topEdge: "z
 
 export const HOLD_STAIRS = stairSteps(HR, DECK_Y, HOLD_Y, "z1");
 export const STERN_STAIRS = stairSteps(SR, DECK_Y, FISH_Y, "z0");
+/** The fishing platform itself extends forward through the stairs' bottom landing. */
+export const FISH_LANDING_Z = STERN_STAIRS.steps[STERN_STAIRS.steps.length - 1].z0;
+
+const HATCH_GUARD = 0.25;
+export const HOLD_HATCH_GUARDS: Box[] = [
+  { x0: HR.x0 - HATCH_GUARD, x1: HR.x0, z0: HR.z0 - HATCH_GUARD, z1: HR.z1 },
+  { x0: HR.x1, x1: HR.x1 + HATCH_GUARD, z0: HR.z0 - HATCH_GUARD, z1: HR.z1 },
+  { x0: HR.x0, x1: HR.x1, z0: HR.z0 - HATCH_GUARD, z1: HR.z0 },
+];
+
+/** Two overlapping walking surfaces share the stairs. The portal is inside their opening. */
+export const HOLD_PORTAL = { enterZ: -0.48, exitZ: 0.02 };
+
+const SUPPLY_ROW_HALF = ((SUPPLY_CRATES.length - 1) * SUPPLY_PITCH + SUPPLY_SIZE.depth) / 2;
+const signOffset = SUPPLY_SIZE.signDepth / 2;
+const supplySolidCenter = { x: supplyX + Math.cos(SUPPLY_YAW) * signOffset, z: supplyZ - Math.sin(SUPPLY_YAW) * signOffset };
+export const SUPPLY_SOLID: Box = {
+  ...around(supplySolidCenter, SUPPLY_SIZE.width / 2 + signOffset, supplySolidCenter.z - SUPPLY_ROW_HALF, supplySolidCenter.z + SUPPLY_ROW_HALF),
+  yaw: SUPPLY_YAW,
+};
+export const COUNTER_SOLID = around(SPOT.counter, COUNTER_SIZE.width / 2,
+  SPOT.counter.z - COUNTER_SIZE.depth / 2, SPOT.counter.z + COUNTER_SIZE.depth / 2);
+export const STOVE_SOLID = around(SPOT.stove, 0.7, -17.2, -15.8);
 
 /** Solid bands and furniture (local boxes). */
 export const SHIP_SOLIDS: Box[] = [
-  // The hold opening's rails on the main deck (the stairs are the only way down).
-  { x0: H.x1, x1: H.x1 + 0.5, z0: H.z0 - 0.5, z1: H.z1 + 0.5 },
-  { x0: H.x0 - 0.5, x1: H.x0, z0: H.z0 - 0.5, z1: HR.z1 },
-  { x0: H.x0 - 0.5, x1: H.x1 + 0.5, z0: H.z0 - 0.5, z1: H.z0 },
-  { x0: HR.x1, x1: H.x1 + 0.5, z0: H.z1, z1: H.z1 + 0.5 },
-  { x0: HR.x1, x1: HR.x1 + 0.3, z0: H.z1 + 0.5, z1: HR.z1 },
+  ...HOLD_HATCH_GUARDS,
   // The stern ramp's rails and the transom either side of it.
   { x0: SR.x0 - 0.3, x1: SR.x0, z0: SR.z0, z1: SR.z1 },
   { x0: SR.x1, x1: SR.x1 + 0.3, z0: SR.z0, z1: SR.z1 },
   { x0: -HALF_BEAM, x1: SR.x0, z0: STERN_Z, z1: SR.z1 },
   { x0: SR.x1, x1: HALF_BEAM, z0: STERN_Z, z1: SR.z1 },
   // Galley fittings: the stove, supplies and counter.
-  around(SPOT.stove, 0.7, -17.2, -15.8),
-  around(SPOT.supplies, 0.5, -16.4, -13.6),
-  around(SPOT.counter, 0.45, -15.8, -13.6),
-  // The hold's table, shelf and open box.
-  around(SPOT.table, 0.8, -6.5, -4.9),
-  { x0: H.x0, x1: H.x0 + 0.65, z0: -6.8, z1: -4.6 },
-  around(SPOT.box, 0.6, -3.2, -2),
+  STOVE_SOLID,
+  SUPPLY_SOLID,
+  COUNTER_SOLID,
   // The mess table on the main deck, and the fishing deck's bucket (clear of the stairs' landing).
   around(MESS, 0.9, -11.8, -9.2),
   around(BUCKET, 0.3, 15.6, 16.2),
   // The cannons' carriages.
   ...CANNONS.map((c) => around(c, 0.3, c.z - 0.38, c.z + 0.38)),
+];
+
+export const HOLD_BARRELS = [{ x: H.x1 - 0.43, z: H.z0 + 0.47 }, { x: H.x1 - 0.43, z: H.z1 - 0.44 }];
+export const HOLD_SOLIDS: Box[] = [
+  around(SPOT.table, 0.8, SPOT.table.z - 0.75, SPOT.table.z + 0.75),
+  around({ x: SPOT.shelf.x + 0.05 }, 0.31, SPOT.shelf.z - 1.1, SPOT.shelf.z + 1.1),
+  around(SPOT.box, 0.6, SPOT.box.z - 0.6, SPOT.box.z + 0.6),
+  ...HOLD_BARRELS.map((p) => around(p, 0.33, p.z - 0.33, p.z + 0.33)),
+  // Stair stringers and companionway sides span the overlap on this level too.
+  ...HOLD_HATCH_GUARDS.slice(0, 2).map((b) => ({ ...b, z0: HR.z0 })),
 ];
 
 /** Round solids: masts, the helm and the deck barrels. */
@@ -162,7 +207,28 @@ export const SHIP_POSTS: Post[] = [
 ];
 
 const inBox = (b: Box, lx: number, lz: number) => lx >= b.x0 && lx <= b.x1 && lz >= b.z0 && lz <= b.z1;
-const touches = (b: Box, lx: number, lz: number, m: number) => lx > b.x0 - m && lx < b.x1 + m && lz > b.z0 - m && lz < b.z1 + m;
+export function touches(b: Box, lx: number, lz: number, m: number): boolean {
+  if (b.yaw) {
+    const x = (b.x0 + b.x1) / 2, z = (b.z0 + b.z1) / 2;
+    const dx = lx - x, dz = lz - z;
+    const cos = Math.cos(b.yaw), sin = Math.sin(b.yaw);
+    lx = x + dx * cos - dz * sin;
+    lz = z + dx * sin + dz * cos;
+  }
+  return lx > b.x0 - m && lx < b.x1 + m && lz > b.z0 - m && lz < b.z1 + m;
+}
+
+export function holdLayerAt(lx: number, lz: number, below: boolean): boolean {
+  if (inBox(HR, lx, lz)) return below ? lz < HOLD_PORTAL.exitZ : lz <= HOLD_PORTAL.enterZ;
+  return below && inBox(H, lx, lz);
+}
+
+// The ship's collision entry points share the live traversal floor. Static
+// callers can ask for either floor explicitly, including when both overlap.
+let occupiedHold = false;
+export function setShipHoldOccupancy(below: boolean) {
+  occupiedHold = below;
+}
 
 /** The ship's bounding area: inside it, the ship alone decides walking and heights. */
 export function inShipArea(x: number, z: number): boolean {
@@ -171,9 +237,9 @@ export function inShipArea(x: number, z: number): boolean {
 }
 
 /** The floor height under a local point, or null over the sea. */
-export function shipFloorY(lx: number, lz: number): number | null {
-  if (inBox(HOLD, lx, lz)) return HOLD_Y;
+export function shipFloorY(lx: number, lz: number, below = false): number | null {
   if (inBox(HOLD_RAMP, lx, lz)) return HOLD_STAIRS.floorY(lz);
+  if (below) return inBox(HOLD, lx, lz) ? HOLD_Y : null;
   if (inBox(STERN_RAMP, lx, lz)) return STERN_STAIRS.floorY(lz);
   if (inBox(FISH_DECK, lx, lz)) return FISH_Y;
   if (lz >= BOW_Z && lz <= STERN_Z && Math.abs(lx) <= hullHalf(lz) - RAIL) return DECK_Y;
@@ -181,25 +247,26 @@ export function shipFloorY(lx: number, lz: number): number | null {
 }
 
 /** A solid overlaps the circle (world coordinates). */
-export function shipSolidAt(x: number, z: number, r: number): boolean {
+export function shipSolidAt(x: number, z: number, r: number, below = occupiedHold): boolean {
   const lx = x - SHIP.x, lz = z - SHIP.z;
+  if (below) return HOLD_SOLIDS.some((b) => touches(b, lx, lz, r));
   return SHIP_SOLIDS.some((b) => touches(b, lx, lz, r)) || SHIP_POSTS.some((p) => Math.hypot(lx - p.x, lz - p.z) < p.r + r);
 }
 
 const RING = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
 
 /** Floor all round the circle and no solid in it (world coordinates). */
-export function shipWalkable(x: number, z: number, m = 0): boolean {
+export function shipWalkable(x: number, z: number, m = 0, below = occupiedHold): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
   const lx = x - SHIP.x, lz = z - SHIP.z;
-  if (shipFloorY(lx, lz) === null) return false;
-  if (m > 0 && RING.some(([dx, dz]) => shipFloorY(lx + dx * m, lz + dz * m) === null)) return false;
-  return !shipSolidAt(x, z, m);
+  if (shipFloorY(lx, lz, below) === null) return false;
+  if (m > 0 && RING.some(([dx, dz]) => shipFloorY(lx + dx * m, lz + dz * m, below) === null)) return false;
+  return !shipSolidAt(x, z, m, below);
 }
 
 /** Standing height on the ship (world coordinates); the sea between decks. */
-export function shipStandY(x: number, z: number): number {
-  return shipFloorY(x - SHIP.x, z - SHIP.z) ?? SEA_Y;
+export function shipStandY(x: number, z: number, below = occupiedHold): number {
+  return shipFloorY(x - SHIP.x, z - SHIP.z, below) ?? SEA_Y;
 }
 
 /** Local → world. */

@@ -5,13 +5,13 @@ import { test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
-import { SHIP } from "../../src/game/world/pirateShip";
+import { COUNTER_CUSTOMER, DECK_Y, FISH_LANDING_Z, FISH_Y, HOLD, HOLD_PORTAL, HOLD_RAMP, SHIP, STERN_RAMP, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
 
 const TAG = process.env.SHOT_TAG ?? "v1";
 const DIR = `.tmp/shots/voyage/${TAG}`;
-test.skip(!process.env.SHOT_TAG, "controller evidence run only");
 const ONLY = process.env.SHOT_ONLY;
+test.skip(!process.env.SHOT_TAG && !ONLY, "controller evidence run only");
 
 function save(bag: Record<string, number> = {}) {
   const p = newProgress();
@@ -27,6 +27,90 @@ function save(bag: Record<string, number> = {}) {
 const snap = (page: Page, name: string) => page.screenshot({ path: `${DIR}/${name}.png` });
 const L = (x: number, z: number) => ({ x: SHIP.x + x, z: SHIP.z + z });
 
+async function shotReady(page: Page, label: string, ready: Parameters<typeof waitFor>[1]) {
+  try {
+    await waitFor(page, ready, 15_000, label);
+  } catch (error) {
+    throw new Error(`HARNESS_PRECONDITION_FAILED - ${label}`, { cause: error });
+  }
+}
+
+async function boardForShots(page: Page) {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.addInitScript(v => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, JSON.stringify(save()));
+  await boot(page, "fast=1");
+  await chooseMode(page, "tap");
+  await page.getByTestId("btn-continue").click();
+  await shotReady(page, "loaded the save", s => s.mode === "explore");
+  await hook(page, "voyageJump", "jobs");
+  await shotReady(page, "on the pirate ship", s => s.mode === "explore" && s.camera.profile === "pirate-ship");
+}
+
+test("fishing stairs and galley polish", async ({ page }) => {
+  test.skip(Boolean(ONLY) && ONLY !== "hold" && ONLY !== "galley");
+  await boardForShots(page);
+  const landing = L((STERN_RAMP.x0 + STERN_RAMP.x1) / 2, FISH_LANDING_Z);
+  await hook(page, "teleport", landing.x, landing.z + 1, Math.PI, true);
+  await shotReady(page, "standing on the fishing platform", s => Math.abs(s.player.y - FISH_Y) < 0.03);
+  const angles = [[-3, 2.0, 3.2], [0.2, 2.6, 4.0], [3.3, 2.0, 2.5], [3.0, 1.55, 2.3], [2.7, 1.3, 2.1]];
+  for (const [i, [dx, dy, dz]] of angles.entries()) {
+    const angle = [landing.x + dx, FISH_Y + dy, landing.z + dz];
+    await hook(page, "look", angle, [landing.x, FISH_Y + 0.18, landing.z + 0.18]);
+    await shotReady(page, `fishing lens ${i + 1}`, s => Math.abs(s.camera.pos.x - angle[0]) < 0.08 && Math.abs(s.camera.pos.z - angle[2]) < 0.08);
+    await snap(page, `fishing-landing-${i + 1}`);
+  }
+  await hook(page, "follow");
+  const front = crateApproach(SUPPLY_CRATES[2], 2.6);
+  const galley = L(front.x, SUPPLY_CRATES[3].z + 1.2);
+  await hook(page, "teleport", galley.x, galley.z, Math.PI, true);
+  await shotReady(page, "galley approach in follow view", s => s.camera.mode === "follow" && Math.abs(s.player.x - galley.x) < 0.1 && Math.abs(s.player.z - galley.z) < 0.1);
+  await snap(page, "galley-crate-labels");
+  const customer = L(COUNTER_CUSTOMER.x, COUNTER_CUSTOMER.z);
+  await hook(page, "teleport", customer.x, customer.z, Math.PI, true);
+  await shotReady(page, "Cook Pepper within reach across the counter", s => s.focus?.id === "crew:pepper");
+  await snap(page, "galley-pepper-counter");
+});
+
+test("covered hold and walking through the companionway", async ({ page }) => {
+  test.skip(Boolean(ONLY) && ONLY !== "hold");
+  test.setTimeout(90_000);
+  await boardForShots(page);
+  const aboveHold = L(0.4, (HOLD.z0 + HOLD.z1) / 2);
+  await hook(page, "teleport", aboveHold.x, aboveHold.z, Math.PI, true);
+  await shotReady(page, "walking over the covered hold", s => Math.abs(s.player.y - DECK_Y) < 0.03 && s.camera.profile === "pirate-ship");
+  await snap(page, "hold-covered-deck");
+  const x = (HOLD_RAMP.x0 + HOLD_RAMP.x1) / 2;
+  const entry = L(x, HOLD_RAMP.z1 + 0.6);
+  await hook(page, "teleport", entry.x, entry.z, Math.PI, true);
+  await shotReady(page, "at the open end of the companionway", s => Math.abs(s.player.x - entry.x) < 0.08 && Math.abs(s.player.z - entry.z) < 0.08);
+  await hook(page, "timeScale", 0.32);
+  await snap(page, "hold-down-01-coaming");
+  async function step(name: string, z: number, inside: boolean, down: boolean) {
+    await shotReady(page, name, s => (down ? s.player.z <= SHIP.z + z : s.player.z >= SHIP.z + z) &&
+      (inside ? s.camera.profile === "pirate-hold" : s.camera.profile === "pirate-ship"));
+    await snap(page, name);
+  }
+  await page.keyboard.down("ArrowUp");
+  try {
+    await step("hold-down-02-treads", HOLD_RAMP.z1 - 0.55, false, true);
+    await step("hold-down-03-transition", HOLD_PORTAL.enterZ - 0.04, true, true);
+    await step("hold-down-04-landing", HOLD_RAMP.z0 - 0.6, true, true);
+    await step("hold-down-05-interior", -3.45, true, true);
+  } finally {
+    await page.keyboard.up("ArrowUp");
+  }
+  await page.keyboard.down("ArrowDown");
+  try {
+    await step("hold-up-01-interior", -2.55, true, false);
+    await step("hold-up-02-treads", HOLD_PORTAL.exitZ - 0.28, true, false);
+    await step("hold-up-03-transition", HOLD_PORTAL.exitZ + 0.04, false, false);
+    await step("hold-up-04-coaming", HOLD_RAMP.z1 + 0.42, false, false);
+  } finally {
+    await page.keyboard.up("ArrowDown");
+    await hook(page, "timeScale", 1);
+  }
+});
+
 test("the pirate ship", async ({ page }) => {
   test.skip(Boolean(ONLY) && ONLY !== "ship");
   test.setTimeout(600_000);
@@ -37,7 +121,7 @@ test("the pirate ship", async ({ page }) => {
   await waitFor(page, st => st.mode === "explore", 90_000, "loaded");
   await page.setViewportSize({ width: 1366, height: 768 });
   await hook(page, "voyageShow", true);
-  for (const [name, x, z] of [["deck-stern", 0, 6], ["deck-mid", 0.5, -10.5], ["hold", 0, -4.5], ["galley", 0, -14.5], ["fishing", 0.3, 17], ["quarterdeck", 0, 9]] as const) {
+  for (const [name, x, z] of [["deck-stern", 0, 6], ["deck-mid", 0.5, -10.5], ["deck-over-hold", 0, -4.5], ["galley", 0, -14.5], ["fishing", 0.3, 17], ["quarterdeck", 0, 9]] as const) {
     const w = L(x, z);
     await hook(page, "follow");
     await hook(page, "teleport", w.x, w.z, Math.PI, true);

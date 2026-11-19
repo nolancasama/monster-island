@@ -3,7 +3,7 @@ import type { FoodId } from "./types";
 import type { CargoItem, CargoState } from "./logic/voyage";
 import type { CompanionId } from "./data/combat";
 import type { Focus } from "./store";
-import { SPOT } from "./world/pirateShip";
+import { SHIP, SPOT, holdLayerAt, setShipHoldOccupancy } from "./world/pirateShip";
 
 export type Candidate = { focus: Focus; reach: number };
 /** The running free-play step (a job, a storm emergency, a raft step): it owns E, J and a tick. */
@@ -41,7 +41,7 @@ export interface VoyageHudState { title: string; ja: string; value?: number; ban
 const home = (): Record<CrewId, CrewSpot> => {
   const s = (p: { x: number; z: number }, yaw: number): CrewSpot => ({ x: p.x, z: p.z, yaw, visible: true, cheer: -10, air: 0, hold: null, menace: false });
   return {
-    redbeard: s(SPOT.captain, 0), gull: s(SPOT.gull, 0.3), pepper: s(SPOT.cook, Math.PI), bill: s(SPOT.bill, 0), finn: s(SPOT.finn, 0.4),
+    redbeard: s(SPOT.captain, 0), gull: s(SPOT.gull, 0.3), pepper: s(SPOT.cook, 0), bill: s(SPOT.bill, 0), finn: s(SPOT.finn, 0.4),
     tom: s(SPOT.crew[0], -Math.PI / 2), sam: s(SPOT.crew[1], -Math.PI / 2), max: s(SPOT.crew[2], Math.PI),
   };
 };
@@ -49,6 +49,8 @@ const home = (): Record<CrewId, CrewSpot> => {
 const fresh = () => ({
   /** The ship and its crew are in the world (from the capture to the break-up). */
   active: false,
+  /** Derived room view, rebuilt from the walking floor and local position. */
+  inHold: false,
   /** The ship's offset from its mooring while it sails in (world units), and its bob. */
   shipOffset: { x: 0, z: 0 },
   /** The ship's heading while it sails in (scene yaw about its origin; 0 = bow south at its mooring). */
@@ -122,6 +124,15 @@ const fresh = () => ({
 
 export const vy = fresh();
 
+/** Update the occupied floor and view from the two stair thresholds. */
+export function updateHoldView(x: number, z: number, aboard: boolean): boolean {
+  const next = aboard && holdLayerAt(x - SHIP.x, z - SHIP.z, vy.inHold);
+  const changed = next !== vy.inHold;
+  vy.inHold = next;
+  if (changed) setShipHoldOccupancy(next);
+  return changed;
+}
+
 let fxId = 1;
 export function addFx(kind: FxKind, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, life: number, t0: number) {
   vy.fx.push({ id: fxId++, kind, x: from.x, y: from.y, z: from.z, tx: to.x, ty: to.y, tz: to.z, t0, life });
@@ -134,6 +145,7 @@ export const voyageEpoch = () => epoch;
 
 export function resetVoyageRt() {
   epoch++;
+  setShipHoldOccupancy(false);
   Object.assign(vy, fresh());
 }
 
