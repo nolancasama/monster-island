@@ -2960,6 +2960,20 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
 - `continueGame()` now sets the player's standing height when placing them (the first frames read y = 0;
   the voyage spec's reload check caught it).
 
+## 2026-11-19 - Voyage polish: Gull's boat wake and sail
+
+- CloudBoat measures horizontal speed and yaw rate from consecutive rendered
+  poses. A short history of world-space stern positions lays down the two wake
+  arms as the boat turns. Hull foam and expanding ripples share the same dynamic
+  mesh. The ribbons follow the rendered sea surface, and ties and berths leave
+  only faint ripples. Rejected a hull-mounted decal because the whole wake would
+  swing with the boat on each turn.
+- The existing sail raise value controls how much canvas hangs from the yard
+  and how much it can fill. A small indexed grid bows forward around its fixed
+  head and mast seam. Smoothed yaw rate shifts the belly during turns, and low
+  wind pressure adds a light flutter. Rejected cloth physics because this
+  needs only one deformed mesh and has no effect on the boat or its riders.
+
 ## 2026-11-19 — Touch-and-hold on gameplay controls (plan item 11)
 - **Scope: gameplay controls only.** Every on-screen game control (attack/power/eat buttons, the voyage tool,
   the spyglass, the action button, the joystick) carries the `game-control` class. CSS on it removes the

@@ -3,16 +3,17 @@
 // interception (stepped frame by frame), the rigging, the open galley and both staircases.
 import { test, type Page } from "@playwright/test";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { GULL_BERTH, STAGES } from "../../src/game/world/lowland";
 import { DECK_Y, HOLD_RAMP, SHIP, STERN_RAMP } from "../../src/game/world/pirateShip";
 import { CLOUD_DOCK } from "../../src/game/world/cloudisle";
+import { BOAT_OUT } from "../../src/game/flow/voyageEncounter";
 
 const TAG = process.env.SHOT_TAG ?? "e1";
 const DIR = `.tmp/shots/encounter/${TAG}`;
-test.skip(!process.env.SHOT_TAG, "controller evidence run only");
 const ONLY = process.env.SHOT_ONLY;
+test.skip(!process.env.SHOT_TAG && ONLY !== "boatwake", "controller evidence run only");
 
 function save() {
   const p = newProgress();
@@ -27,9 +28,9 @@ function save() {
 const snap = (page: Page, name: string) => page.screenshot({ path: `${DIR}/${name}.png` });
 const pad = (i: number) => String(i).padStart(2, "0");
 
-async function start(page: Page) {
+async function start(page: Page, query = "fast=1") {
   await page.addInitScript((v) => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, JSON.stringify(save()));
-  await boot(page, "fast=1");
+  await boot(page, query);
   await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (st) => st.mode === "explore", 90_000, "loaded");
@@ -70,6 +71,100 @@ test("Gull's boat: berth, departure and turns", async ({ page }) => {
       await snap(page, `b3${pad(i)}-out-top`);
     }
   }
+});
+
+test("Gull's wake and sail through the departure and escape", async ({ page }) => {
+  test.skip(ONLY !== "boatwake");
+  test.setTimeout(240_000);
+  await start(page, "").catch((error: unknown) => {
+    throw new Error("HARNESS_PRECONDITION_FAILED - loaded a normal-speed Port Town save", { cause: error });
+  });
+
+  type BoatState = { x: number; z: number; yaw: number; active: boolean; sail: number };
+  const boat = (st: MiState) => (st as MiState & { act3: { voyage: BoatState } }).act3.voyage;
+  const ready = (label: string, predicate: (st: MiState) => boolean, timeout = 25_000) =>
+    waitFor(page, predicate, timeout, `HARNESS_PRECONDITION_FAILED - ${label}`);
+  const nextLine = async (en: string) => {
+    await ready(en, st => st.line?.en === en);
+    await page.keyboard.press("Space");
+  };
+  const choose = async (phrase: string) => {
+    await ready(`answer ${phrase}`, st => Boolean(st.prompt?.buttons && st.prompt.choices.includes(phrase)
+      && st.prompt.status !== "correct" && st.prompt.status !== "wrong"));
+    await tap(page, phrase);
+  };
+  const capture = async (name: string, atBerth = false, resume = 1) => {
+    await hook(page, "timeScale", 0);
+    const b = atBerth ? GULL_BERTH : boat(await state(page));
+    const fx = Math.sin(b.yaw), fz = Math.cos(b.yaw);
+    await hook(page, "look", [b.x - fx * 13 + fz * 12, 9.5, b.z - fz * 13 - fx * 12],
+      [b.x - fx * 3, 2.7, b.z - fz * 3]);
+    await hook(page, "renderFrames", 2);
+    await snap(page, `wake-${name}`);
+    await hook(page, "timeScale", resume);
+  };
+
+  await hook(page, "teleport", GULL_BERTH.x - 3.2, GULL_BERTH.z + 7, Math.PI, true);
+  const berth = await ready("Gull's boat idle at its berth", st => st.mode === "explore" && !boat(st).active);
+  await ready("berth ripples have had time to form", st => st.time >= berth.time + 1);
+  await capture("00-berth", true);
+
+  await hook(page, "openCloudShip", true);
+  await hook(page, "openPirateVoyage", true);
+  await hook(page, "goTo", "harbor", 1.4);
+  await ready("Gull in interaction range", st => st.focus?.id === "harbor" && st.mode === "explore");
+  await page.keyboard.press("KeyE");
+  await choose("yesIAm");
+  await nextLine("Let's go!");
+  await choose("letsGo");
+  await nextLine("What a nice day! The sea is calm.");
+
+  // The real departure builds wake history over time. A single encounterPose
+  // jump places the hull but cannot supply speed or lay a trail.
+  const fast = BOAT_OUT.at(43);
+  await ready("fast straight leg of the departure", st => {
+    const b = boat(st);
+    return b.active && Math.hypot(b.x - fast.x, b.z - fast.z) < 4;
+  });
+  await capture("01-fast");
+  let step = await ready("inside the departure's second turn", st => boat(st).active && boat(st).yaw > fast.h + 0.22);
+  for (let i = 0; i < 4; i++) {
+    await capture(`02-turn-${pad(i)}`);
+    if (i < 3) {
+      const previous = step;
+      step = await ready("next pose in the turning sequence", st => st.time >= previous.time + 0.16
+        && boat(st).yaw > boat(previous).yaw + 0.035);
+    }
+  }
+
+  for (const [i, high, low] of [[0, 0.88, 0.68], [1, 0.59, 0.37], [2, 0.27, 0.13]] as const) {
+    await ready("sail lowering as the boat slows", st => boat(st).active && boat(st).sail <= high && boat(st).sail > low);
+    await capture(`03-lowering-${pad(i)}${i === 2 ? "-slow" : ""}`);
+  }
+
+  await nextLine("Look! A ship!");
+  await nextLine("Use the spyglass!");
+  await page.getByTestId("spyglass-raise").waitFor({ state: "visible", timeout: 15_000 }).catch(() => {
+    throw new Error("HARNESS_PRECONDITION_FAILED - spyglass raise button");
+  });
+  await page.getByTestId("spyglass-raise").click();
+  await choose("iCanSeeAShip");
+  await nextLine("Yes! A big ship with red sails...");
+  await page.getByTestId("spyglass-lower").waitFor({ state: "visible", timeout: 15_000 }).catch(() => {
+    throw new Error("HARNESS_PRECONDITION_FAILED - spyglass lower button");
+  });
+  await page.getByTestId("spyglass-lower").click();
+  await nextLine("Red sails... It's a pirate ship! Oh no! Pirates!");
+  await nextLine("Hold on! We turn left!");
+  await ready("sail down before the escape", st => boat(st).active && boat(st).sail <= 0.12);
+  await capture("04-escape-sail-down", false, 0.4);
+  await choose("turnLeft");
+  for (const [i, low, high] of [[0, 0.22, 0.45], [1, 0.5, 0.74], [2, 0.8, 0.97]] as const) {
+    await ready("sail rising on the escape", st => boat(st).active && boat(st).sail >= low && boat(st).sail < high);
+    await capture(`05-raising-${pad(i)}`, false, 0.4);
+  }
+  await ready("sail fully raised", st => boat(st).active && boat(st).sail >= 0.99);
+  await capture("06-full-sail");
 });
 
 test("the interception, frame by frame", async ({ page }) => {

@@ -13,9 +13,49 @@ import { PLAYER_R } from "./collision";
 import { CLOUD_DOCK, cloudWalkable } from "./cloudisle";
 import { cloudGroundY } from "./cloudTerrain";
 import {
-  BOAT_DECK_Y, BOAT_HALF_BEAM, BOAT_HALF_LENGTH, BOAT_HULL_BOTTOM_Y, BOAT_INNER, BOAT_MAST, BOAT_RIG, BOAT_SEATS, boatSeatWorld,
+  BOAT_DECK_Y, BOAT_HALF_BEAM, BOAT_HALF_LENGTH, BOAT_HULL_BOTTOM_Y, BOAT_INNER, BOAT_MAST, BOAT_RIG, BOAT_SEATS,
+  boatBillow, boatFlutter, boatSailDepth, boatSeatWorld, boatWakeIntensity,
 } from "./gullBoat";
 import { GULL_BERTH } from "./lowland";
+
+describe("Gull's boat motion effects", () => {
+  it("builds a stronger wake at higher speeds and suppresses it at rest or tied up", () => {
+    expect(boatWakeIntensity(0, false)).toBe(0);
+    expect(boatWakeIntensity(0.1, false)).toBe(0);
+    expect(boatWakeIntensity(2, false)).toBeGreaterThan(0);
+    expect(boatWakeIntensity(6, false)).toBeGreaterThan(boatWakeIntensity(2, false));
+    expect(boatWakeIntensity(40, false)).toBe(1);
+    expect(boatWakeIntensity(6, true)).toBe(0);
+  });
+
+  it("fills progressively as the sail opens and flutters more at low pressure", () => {
+    expect(boatBillow(1, 8, 0)).toBe(0);
+    expect(boatBillow(1, 8, 0.12)).toBe(0);
+    const partial = boatBillow(0.8, 5, 0.5), full = boatBillow(0.8, 5, 1);
+    expect(partial).toBeGreaterThan(0);
+    expect(full).toBeGreaterThan(partial);
+    expect(boatBillow(1, 5, 1)).toBeGreaterThan(full);
+    expect(boatBillow(0.8, 8, 1)).toBeGreaterThan(full);
+    expect(boatBillow(10, 40, 2)).toBeLessThanOrEqual(0.75);
+    expect(boatFlutter(0, 0, 0.12)).toBe(0);
+    expect(boatFlutter(0.2, 1, 1)).toBeGreaterThan(boatFlutter(0.8, 1, 1));
+    expect(boatFlutter(0.2, 1, 1)).toBeGreaterThan(boatFlutter(0.2, 7, 1));
+  });
+
+  it("pins the head and luff while shifts in yaw move the belly across the sail", () => {
+    for (const yawRate of [-1, 0, 1]) {
+      for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+        expect(boatSailDepth(fraction, 0, 0.6, 0.09, yawRate, 1)).toBe(0);
+        expect(boatSailDepth(0.5, fraction, 0.6, 0.09, yawRate, 1)).toBe(0);
+      }
+    }
+    const depth = (u: number, v: number, turn: number) => boatSailDepth(u, v, 0.6, 0, turn, 1);
+    expect(depth(0.25, 0.5, 0)).toBeCloseTo(depth(0.75, 0.5, 0));
+    expect(depth(0.75, 0.5, 0)).toBeGreaterThan(depth(0.75, 0.2, 0));
+    expect(depth(0.75, 0.5, 1)).toBeGreaterThan(depth(0.25, 0.5, 1));
+    expect(depth(0.25, 0.5, -1)).toBeGreaterThan(depth(0.75, 0.5, -1));
+  });
+});
 
 function horizontalRadius(geometry: THREE.BufferGeometry, pivot = [0, 0, 0], rotation = new THREE.Euler()) {
   const positions = geometry.getAttribute("position");
