@@ -158,6 +158,38 @@ test.describe("touch", () => {
     await b.dispatchEvent("pointerup", { pointerId: 1, pointerType: "touch", button: 0, buttons: 0 });
     await waitFor(page, s => s.act2.breath === null, 3000, "touch release stops");
   });
+
+  test("a long press opens no browser menu, and an interruption never sticks the button", async ({ page }) => {
+    await enterForest(page, "ember");
+    await hook(page, "set", { touch: true });
+    await faceEnemy(page, "ember");
+    await hook(page, "timeScale", .2);
+    const b = page.getByTestId("btn-basic");
+    const menuAllowed = (selector: string) => page.evaluate((sel) =>
+      document.querySelector(sel)!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })), selector);
+    const press = () => b.dispatchEvent("pointerdown", { pointerId: 1, pointerType: "touch", button: 0, buttons: 1 });
+    // Chrome fires contextmenu mid-hold on a long press: blocked on controls, the hold goes on.
+    await press();
+    await waitFor(page, s => (s.act2.breath?.age ?? 0) > .2, 20_000, "touch hold breathes");
+    expect(await menuAllowed("[data-testid=btn-basic] .move-word")).toBe(false);
+    expect(await menuAllowed("[data-testid=joystick]")).toBe(false);
+    const t = (await state(page)).time;
+    await waitFor(page, s => s.time > t + .5, 20_000, "hold continues");
+    expect((await state(page)).act2.breath).not.toBeNull();
+    // Outside gameplay controls the browser keeps its menu.
+    expect(await menuAllowed("body")).toBe(true);
+    // A blur drops the hold while the finger's pointerup is lost; the next press must still fire.
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await waitFor(page, s => s.act2.breath === null, 3000, "blur stops");
+    await press();
+    await waitFor(page, s => (s.act2.breath?.age ?? 0) > .2, 20_000, "press after blur breathes");
+    await b.dispatchEvent("lostpointercapture", { pointerId: 1, pointerType: "touch" });
+    await waitFor(page, s => s.act2.breath === null, 3000, "lost capture stops");
+    await press();
+    await waitFor(page, s => (s.act2.breath?.age ?? 0) > .2, 20_000, "press again breathes");
+    await b.dispatchEvent("pointercancel", { pointerId: 1, pointerType: "touch" });
+    await waitFor(page, s => s.act2.breath === null, 3000, "cancel stops");
+  });
 });
 
 /** The state hook gains these for Leafy's whip; the helper type stays general. */

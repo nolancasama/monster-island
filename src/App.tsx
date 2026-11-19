@@ -8,6 +8,7 @@ import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, TitleScreen } from "./ui/Screens";
 import { Banner } from "./ui/Act2Hud";
 import { installKeyboard } from "./input/keyboard";
+import { installControlGuards } from "./input/attackInput";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave } from "./game/flow/story";
 import { setGame, useGame } from "./game/store";
@@ -48,6 +49,7 @@ export function App() {
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => installDebugControls(), []);
   useEffect(() => installKeyboard(onKey), []);
+  useEffect(() => installControlGuards(), []);
   useEffect(() => tts.onSpeakingChange((on) => audio.setSpeaking(on)), []);
   useEffect(() => installAutosave(), []);
   useEffect(() => {

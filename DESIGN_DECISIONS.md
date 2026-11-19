@@ -2959,3 +2959,20 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
   here!" split into "Ropes, crew! Pull them in!" (the haul) and "Bring them here!".
 - `continueGame()` now sets the player's standing height when placing them (the first frames read y = 0;
   the voyage spec's reload check caught it).
+
+## 2026-11-19 — Touch-and-hold on gameplay controls (plan item 11)
+- **Scope: gameplay controls only.** Every on-screen game control (attack/power/eat buttons, the voyage tool,
+  the spyglass, the action button, the joystick) carries the `game-control` class. CSS on it removes the
+  iOS callout, selection, image drag and browser gestures; `installControlGuards()` (`input/attackInput.ts`)
+  cancels `contextmenu`, `dragstart` and `selectstart` only when the target is inside one. Rejected: a global
+  `contextmenu` block. Not changed: the existing `user-select: none; touch-action: none` on `html, body`
+  (the game was already full-screen and gesture-free; removing it was outside this plan's scope).
+- **One hold helper, `touchHold(slot)`**, shared by the combat buttons and the voyage tool. The pointer is
+  captured, so a thumb that slides off the button keeps holding (the plan's "moves off the control where
+  appropriate": for fire, cooking heat and powers it is not appropriate, since children's thumbs drift).
+  Release on pointerup, pointercancel and lostpointercapture. The voyage tool used to stop on sliding off;
+  it now behaves like the combat buttons.
+- **Every touch press is fresh.** A press first releases the slot's touch source, as the mouse path did.
+  Before, a blur or panel during a hold left the source marked down, and the next tap did nothing.
+- **Joystick:** a second finger's release no longer drops the steering thumb, and the stick zeroes its
+  input when it unmounts (scenes, journal).

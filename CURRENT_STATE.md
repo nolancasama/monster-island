@@ -1,5 +1,17 @@
 # Current State
 
+## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
+Built by Claude directly. Decisions: `DESIGN_DECISIONS.md` "2026-11-19 — Touch-and-hold on gameplay controls". `game-control` class
+(CSS in `styles.css`) plus `installControlGuards()` and the shared `touchHold(slot)` in `input/attackInput.ts`; used by `Act2Hud`,
+`VoyageHud` (tool and spyglass) and `TouchControls` (joystick, action button). Fixed a real stuck state: after a blur or panel during a
+touch hold, the next press did nothing.
+- **Verified 2026-11-19 on this Mac:** tsc; unit tests 1121/1123 (the arm64 ground golden, as on `main`); `combat-feel`, `elements`,
+  `pirate-voyage` e2e 21/21. The new test (`combat-feel.spec.ts` "a long press opens no browser menu…") was shown to fail with the guard
+  removed and with the press recovery removed.
+- **Not verified:** a real touchscreen Chromebook or phone (Playwright fires synthetic events; real long-press timing, the iOS callout
+  and the Android selection handles are only covered by CSS).
+- **Next:** the user tests the plan's 7 checks on a Chromebook and a phone.
+
 ## Boat departure, pirate encounter and ship interior fixes (deployed 2026-11-19, Pages run 44385039891, bundle `index-QRlcXrKr.js`; `main` fast-forwarded to `3edadaf`): `feature/voyage-encounter` (from `main` `70ec479`)
 The user's six-item plan, decided in `DESIGN_DECISIONS.md` (three 2026-11-19 entries). Worktree: `~/Projects/mi-voyage`.
 Codex built the boat (`feature/ve-boat`, worktree `~/Projects/mi-ve-boat`) and the ship interior (`feature/ve-interior`,

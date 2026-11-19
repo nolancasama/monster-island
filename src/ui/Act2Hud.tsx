@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { setGame, useGame } from "../game/store";
 import { stageStatus, cloudStageStatus, cb, eat, inHostileZone } from "../game/combat";
-import { pressAttack, releaseAttack, type AttackSlot } from "../input/attackInput";
+import { GAME_CONTROL, releaseAttack, touchHold } from "../input/attackInput";
 import { COMBAT, FOOD_RESTORE, MAX_HP, MAX_MP, PRICES, type CompanionId } from "../game/data/combat";
 import { FOODS } from "../game/data/foods";
 import { RELIC_NAMES, favouriteFood } from "../game/logic/act2";
@@ -119,7 +119,7 @@ function Moves() {
   const effect = count ? `${Word} ×${count} · +${restore.hp} HP · +${restore.mp} ${MONSTERS[active].name} MP` : `No ${word} · ${MONSTERS[active].name} loves ${word}!`;
   const eatButton = (
     <button
-      className={touch ? "move-btn eat" : "eat-key"}
+      className={touch ? `move-btn eat ${GAME_CONTROL}` : "eat-key"}
       onPointerDown={touch ? (e) => {
         e.preventDefault();
         eat();
@@ -136,22 +136,12 @@ function Moves() {
     </button>
   );
   if (touch) {
-    const hold = (slot: AttackSlot, on: boolean) => (e: React.PointerEvent) => {
-      e.preventDefault();
-      if (on) pressAttack(slot, "touch");
-      else releaseAttack(slot, "touch");
-      // Capture keeps the hold when a finger slides off; it must never block the attack.
-      if (on) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
-    };
     return (
       <div className="touch-moves ui">
         <div className="eat-effect">{effect}</div>
         <button
-          className="move-btn special"
-          onPointerDown={hold("special", true)}
-          onPointerUp={hold("special", false)}
-          onPointerCancel={hold("special", false)}
-          onPointerLeave={hold("special", false)}
+          className={`move-btn special ${GAME_CONTROL}`}
+          {...touchHold("special")}
           data-testid="btn-special"
           aria-label={c.special.word}
         >
@@ -159,11 +149,8 @@ function Moves() {
           <small>{beacon ? "0 MP" : `${c.special.cost} MP`}</small>
         </button>
         <button
-          className="move-btn basic"
-          onPointerDown={hold("basic", true)}
-          onPointerUp={hold("basic", false)}
-          onPointerCancel={hold("basic", false)}
-          onPointerLeave={hold("basic", false)}
+          className={`move-btn basic ${GAME_CONTROL}`}
+          {...touchHold("basic")}
           data-testid="btn-basic"
           aria-label={c.basic.word}
         >

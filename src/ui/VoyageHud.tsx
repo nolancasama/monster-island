@@ -4,7 +4,7 @@ import { vy } from "../game/voyageRt";
 import { TOOL } from "../game/voyageSim";
 import { pressSpyglass, voyaging } from "../game/flow/voyage";
 import { rt } from "../game/runtime";
-import { pressAttack, releaseAttack } from "../input/attackInput";
+import { GAME_CONTROL, releaseAttack, touchHold } from "../input/attackInput";
 import { FOODS, islandFoods } from "../game/data/foods";
 import { Icon } from "./icons";
 import { Ja } from "./Talk";
@@ -80,7 +80,7 @@ function Spyglass() {
   return <>
     <div ref={ring} hidden className="spyglass-ring" data-testid="spyglass-ring" aria-hidden="true" />
     {step && (
-      <button className="spyglass-btn ui" data-testid={`spyglass-${step}`} onClick={() => pressSpyglass()}
+      <button className={`spyglass-btn ui ${GAME_CONTROL}`} data-testid={`spyglass-${step}`} onClick={() => pressSpyglass()}
         aria-label={step === "raise" ? "Use the spyglass" : "Put the spyglass down"}>
         <Icon id="spyglass" size={40} />
         <span>{step === "raise" ? "Use the spyglass" : "Put it down"}</span>
@@ -149,9 +149,7 @@ export function VoyageHud() {
     </div>
     {touch && onBoard && mode === "explore" && tool && (
       <div className="touch-moves ui">
-        <button className="move-btn basic" data-testid="voyage-tool"
-          onPointerDown={(e) => { e.preventDefault(); pressAttack("basic", "touch"); }}
-          onPointerUp={() => releaseAttack("basic", "touch")} onPointerCancel={() => releaseAttack("basic", "touch")} onPointerLeave={() => releaseAttack("basic", "touch")}>
+        <button className={`move-btn basic ${GAME_CONTROL}`} data-testid="voyage-tool" {...touchHold("basic")}>
           {tool.name}<small>{tool.ja}</small>
         </button>
       </div>

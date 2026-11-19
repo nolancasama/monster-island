@@ -1,5 +1,6 @@
 import { basicAttack, canFight, cb, specialAttack, stopBreath, stopFire } from "../game/combat";
 import { getGame, useGame } from "../game/store";
+import type { PointerEvent as ReactPointerEvent } from "react";
 
 export type AttackSlot = "basic" | "special";
 export type AttackSource = "key" | "mouse" | "touch";
@@ -36,6 +37,40 @@ export function releaseAllAttacks(): void {
 }
 
 export const isAttackHeld = (slot: AttackSlot): boolean => held[slot].size > 0;
+
+/** Pointer handlers for a held touch button. Capture keeps the hold when a finger slides off; any end of the pointer releases it. */
+export function touchHold(slot: AttackSlot) {
+  const end = () => releaseAttack(slot, "touch");
+  return {
+    onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
+      e.preventDefault();
+      // A fresh press: recover from a release lost to blur, a panel or a scene.
+      releaseAttack(slot, "touch");
+      pressAttack(slot, "touch");
+      // Capture must never block the attack.
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
+    },
+    onPointerUp: end,
+    onPointerCancel: end,
+    onLostPointerCapture: end,
+    // Only reached without capture.
+    onPointerLeave: end,
+  };
+}
+
+/** Marks a gameplay control: long presses there open no browser menu, drag nothing and select nothing. */
+export const GAME_CONTROL = "game-control";
+
+export function installControlGuards(): () => void {
+  const guard = (e: Event) => {
+    const node = e.target as Node | null;
+    const el = node instanceof Element ? node : node?.parentElement;
+    if (el?.closest(`.${GAME_CONTROL}`)) e.preventDefault();
+  };
+  const types = ["contextmenu", "dragstart", "selectstart"];
+  for (const type of types) document.addEventListener(type, guard, true);
+  return () => { for (const type of types) document.removeEventListener(type, guard, true); };
+}
 
 // Observe transitions immediately, including panels opened and closed between frames.
 useGame.subscribe((g, before) => {

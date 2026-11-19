@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GAME_CONTROL } from "../input/attackInput";
 import { useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { interact } from "../game/flow/actions";
@@ -28,16 +29,23 @@ function Joystick() {
     rt.joy.y = Math.abs(ny) < dead ? 0 : ny;
     rt.joy.active = true;
   };
-  const end = () => {
+  const stop = () => {
     pointer.current = null;
-    setKnob({ x: 0, y: 0 });
     rt.joy.x = 0;
     rt.joy.y = 0;
     rt.joy.active = false;
   };
+  // A second finger's release must not drop the thumb that steers.
+  const end = (e: React.PointerEvent) => {
+    if (pointer.current !== null && pointer.current !== e.pointerId) return;
+    stop();
+    setKnob({ x: 0, y: 0 });
+  };
+  // The stick unmounts for scenes and the journal, and its pointerup never arrives.
+  useEffect(() => stop, []);
   return (
     <div
-      className="joystick ui"
+      className={`joystick ui ${GAME_CONTROL}`}
       data-testid="joystick"
       onPointerDown={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
@@ -51,6 +59,7 @@ function Joystick() {
       }}
       onPointerUp={end}
       onPointerCancel={end}
+      onLostPointerCapture={end}
     >
       <div className="joystick-knob" style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }} />
     </div>
@@ -68,7 +77,7 @@ export function TouchControls() {
     <>
       {mode === "explore" && <Joystick />}
       {mode === "explore" && focus && (
-        <button className={`touch-action ui ${inHostileZone() ? "raised" : ""}`} onClick={() => interact()} aria-label={`${focus.verb} ${focus.noun}`} data-testid="touch-action">
+        <button className={`touch-action ui ${GAME_CONTROL} ${inHostileZone() ? "raised" : ""}`} onClick={() => interact()} aria-label={`${focus.verb} ${focus.noun}`} data-testid="touch-action">
           <Icon id="hand" size={44} />
           <span>
             {focus.verb} {focus.noun}

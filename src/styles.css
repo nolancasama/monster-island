@@ -1406,6 +1406,16 @@ kbd {
   box-shadow: var(--shadow);
 }
 
+/* Gameplay controls: a long press opens no callout, selection or drag (installControlGuards stops the menu). */
+.game-control,
+.game-control * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+}
+
 .touch-action {
   position: absolute;
   right: 22px;
