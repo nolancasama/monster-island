@@ -1,5 +1,21 @@
 # Current State
 
+## Voyage visual polish (paused 2026-11-19, not merged): `feature/voyage-polish` (from `main` `0b0a5d5`), worktree `~/Projects/mi-vp`
+The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and Enclosed Cargo Hold". Paused at the user's
+request after wave 1; nothing merged to `main` or deployed. Decisions: the `DESIGN_DECISIONS.md` "2026-11-19 - Voyage polish" entries.
+- **Done (8 of 10), reviewed and committed:** 1 Gull's boat wake + sail (`scene/BoatWake.ts`, `world/gullBoat.ts`); 3 fishing-stair
+  landing; 4 crates spaced along the bulwark; 5 crate labels (one atlas); 6 Pepper behind the counter; 8 enclosed hold
+  (`world/pirateShip.ts` two walking floors via `holdLayerAt`/`setShipHoldOccupancy`, `vy.inHold`, interior camera, save flag
+  `act3.voyage.inHold`); 9 steering (`logic/steerPath.ts`, `scene/VoyageObstacles.tsx`, clears the hull and Gull's moored boat);
+  10 home island fades at sea (`scene/voyageHorizon*.ts`; the sky dome follows the camera at sea).
+- **Verified 2026-11-19 on this Mac:** tsc; unit tests 1191/1193 (the arm64 ground golden only); `pirate-voyage.spec.ts` 2/2
+  (incl. reload inside the hold); renders judged by Claude: `SHOT_ONLY=hold|horizon|steer|boat|boatwake` (`.tmp/shots/`).
+- **Not started:** item 7 (friends' powers from their combat stances) and item 2 (Redbeard close-ups). Ready work orders:
+  `.ai/work-order-stance.json`, `.ai/work-order-redbeard.json` (machine-local); run them one at a time through the router (four
+  Codex runs in parallel stalled for over an hour on 2026-11-19).
+- **Next:** resume item 7, then item 2, then the full e2e suite; merge/deploy only with the user's go-ahead. The slice worktrees
+  `mi-vp-ship`, `mi-vp-boat`, `mi-vp-island`, `mi-vp-steer` are merged and can be removed.
+
 ## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
 Built by Claude directly. Decisions: `DESIGN_DECISIONS.md` "2026-11-19 — Touch-and-hold on gameplay controls". `game-control` class
 (CSS in `styles.css`) plus `installControlGuards()` and the shared `touchHold(slot)` in `input/attackInput.ts`; used by `Act2Hud`,
