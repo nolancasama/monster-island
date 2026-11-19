@@ -124,6 +124,12 @@ const fresh = () => ({
 
 export const vy = fresh();
 
+/** Put the player's floor (and view) straight on the hold or the deck, e.g. when a save loads. */
+export function restoreHold(below: boolean) {
+  vy.inHold = below;
+  setShipHoldOccupancy(below);
+}
+
 /** Update the occupied floor and view from the two stair thresholds. */
 export function updateHoldView(x: number, z: number, aboard: boolean): boolean {
   const next = aboard && holdLayerAt(x - SHIP.x, z - SHIP.z, vy.inHold);

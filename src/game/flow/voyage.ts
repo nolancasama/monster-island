@@ -8,7 +8,7 @@ import { DECK_Y, HALF_BEAM, SHIP, SPOT, inShipArea, shipWalkable, shipWorld } fr
 import { PLAYER_R } from "../world/collision";
 import { foodChoices, foodOfHave, handOverFood, interrogationFoods, setVoyageStage, truthfulAnswer, voyageStage, VOYAGE_JOBS, type VoyageJob, type VoyageStage } from "../logic/voyage";
 import type { Progress } from "../logic/progress";
-import { voyageEpoch, vy, type CrewId } from "../voyageRt";
+import { restoreHold, voyageEpoch, vy, type CrewId } from "../voyageRt";
 import { DebugScriptCancelled } from "../debugLifecycle";
 import { activeFriend, currentPhase } from "../voyageSim";
 import { ask, fastMode, say, wait } from "./ask";
@@ -487,7 +487,15 @@ export async function resumeVoyage() {
   if (stage === "raft") { guard(startRaft()); return; }
   setScene();
   const p = rt.player;
-  placeOnDeck(inShipArea(p.x, p.z) && shipWalkable(p.x, p.z, PLAYER_R) && stage !== "storm" ? { x: p.x, z: p.z } : BOARDED);
+  // A save made below deck resumes on the hold floor; the deck cover lies above the same x/z.
+  restoreHold(getGame().progress.act3.voyage.inHold === true && stage !== "storm");
+  const keep = inShipArea(p.x, p.z) && shipWalkable(p.x, p.z, PLAYER_R) && stage !== "storm";
+  if (!keep) restoreHold(false);
+  placeOnDeck(keep ? { x: p.x, z: p.z } : BOARDED);
+  if (vy.inHold) {
+    // Friends wait beside the player in the hold, not up on the deck.
+    COMPANION_IDS.forEach((id, i) => { const m = rt.monsters[id]; m.x = p.x + (i - 1.5) * 0.7; m.z = p.z + 0.9; });
+  }
   if (stage === "storm") { guard(startStorm()); return; }
   freeRoam();
   toast({ en: "On the pirate ship!", ja: "かいぞくせんの うえ!", tone: "info" }, 2200);

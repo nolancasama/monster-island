@@ -24,7 +24,7 @@ export interface MiState {
     };
     act3: {
       world: "home" | "cloud"; voyageDone: boolean;
-      voyage: { stage: string; jobs: string[]; interrogated: boolean; hat: boolean };
+      voyage: { stage: string; jobs: string[]; interrogated: boolean; hat: boolean; inHold?: boolean };
       [k: string]: unknown;
     };
   };

@@ -1,5 +1,5 @@
 import { placePlayer, goToTarget } from "./travel";
-import { resetVoyageRt, vy } from "./voyageRt";
+import { resetVoyageRt, restoreHold, vy } from "./voyageRt";
 import { poseEncounter, pressSpyglass, resumeVoyage, setScene } from "./flow/voyage";
 import { itemWorld } from "./flow/voyageJobs";
 import { cookMarker } from "./voyageSim";
@@ -156,6 +156,10 @@ export function installE2eHook(seed: number) {
     teleport(x: number, z: number, yaw = 0, snap = true, layer: Layer = "ground") {
       placePlayer(x, z, x + Math.sin(yaw), z + Math.cos(yaw), layer);
       rt.camera.snap = snap;
+    },
+    /** Put the player on the hold floor or the deck above it (a teleport skips the stairs). */
+    shipFloor(below: boolean) {
+      restoreHold(below);
     },
     /** Pin the camera (screenshots). */
     look(pos: [number, number, number], at: [number, number, number]) {

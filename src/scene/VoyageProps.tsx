@@ -6,16 +6,17 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { flatMat, smoothMat } from "./materials";
 import { foodGeometry } from "./models/props";
 import { npcGeometry } from "./models/lowland";
-import { bootGeometry, cargoGeometry, dishGeometry, fireGeometry, floatBarrelGeometry, islandGeometry, lifeboatGeometry, plankGeometry, raftGeometry, raftSailGeometry, rockGeometry, sparGeometry } from "./models/pirateShip";
+import { bootGeometry, cargoGeometry, dishGeometry, fireGeometry, floatBarrelGeometry, islandGeometry, lifeboatGeometry, plankGeometry, raftGeometry, raftSailGeometry, sparGeometry } from "./models/pirateShip";
 import { PIRATES } from "../game/data/pirates";
 import { NPCS } from "../game/data/town";
-import { BUCKET, DECK_Y, FISH_Y, HALF_BEAM, SHIP, SPOT, STEER_LANE, hullHalf } from "../game/world/pirateShip";
+import { BUCKET, DECK_Y, FISH_Y, HALF_BEAM, SHIP, SPOT, hullHalf } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { vy, type CrewId } from "../game/voyageRt";
 import { cargoSpot, cookMarker } from "../game/voyageSim";
 import { rt } from "../game/runtime";
 import type { FoodId } from "../game/types";
 import type { CargoItem } from "../game/logic/voyage";
+import { VoyageObstacles } from "./VoyageObstacles";
 
 /**
  * Everything the voyage's jobs, storm and raft show (docs/PIRATE_VOYAGE.md §3–§5,
@@ -37,7 +38,9 @@ const dishGeo = (f: FoodId) => (dishGeos[f] ??= dishGeometry(DISH_COLOR[f]));
 const shipX = (lx: number) => SHIP.x + vy.shipOffset.x + lx;
 const shipZ = (lz: number) => SHIP.z + vy.shipOffset.z + lz;
 // Props are placed in the ship's mooring frame (no yaw): hidden while it is still turning in.
-const onDeck = () => vy.active && rt.world === "home" && vy.shipYaw === 0;
+// Ship-attached props are placed without yaw: hidden while the ship is turned, except for the
+// small heading change while steering (flow/voyageJobs steerOne).
+const onDeck = () => vy.active && rt.world === "home" && (vy.shipYaw === 0 || Boolean(vy.phase?.name.startsWith("steer-")));
 
 const bubbleMat = new THREE.MeshLambertMaterial({ color: "#a8e4ff", transparent: true, opacity: 0.5, depthWrite: false });
 
@@ -182,27 +185,6 @@ function CookMarkers() {
     m.scale.setScalar(pulse);
   });
   return <mesh ref={ref} geometry={geo} material={mat} renderOrder={20} visible={false} />;
-}
-
-// ------------------------------------------------------------ obstacles (ship and raft lanes)
-
-function Obstacles() {
-  const rock = useMemo(rockGeometry, []), barrel = useMemo(floatBarrelGeometry, []);
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame(() => {
-    const m = ref.current, o = vy.obstacles[0];
-    if (!m) return;
-    m.visible = Boolean(o) && vy.sea && rt.world === "home";
-    if (!o || !m.visible) return;
-    const g = o.kind === "rock" ? rock : barrel;
-    if (m.geometry !== g) m.geometry = g;
-    const raft = vy.raft.on, w = raft ? 4.5 : STEER_LANE, s = raft ? 0.75 : 1.3;
-    const cx = raft ? vy.raft.x : SHIP.x, cz = raft ? vy.raft.z : SHIP.z;
-    m.position.set(cx + (o.lane - vy.laneVis) * w, SEA_Y + (o.kind === "rock" ? -0.3 : 0.1) + Math.sin(rt.time * 2 + o.id) * 0.08, cz + o.z);
-    m.scale.setScalar(s);
-    m.rotation.set(0, o.id * 1.7 + (o.kind === "barrel" ? rt.time * 0.4 : 0), o.kind === "barrel" ? Math.sin(rt.time * 1.6) * 0.2 : 0);
-  });
-  return <mesh ref={ref} geometry={rock} material={flatMat} visible={false} />;
 }
 
 // ------------------------------------------------------------ storm props
@@ -472,7 +454,7 @@ export function VoyageProps() {
     <FishSchool />
     <Cargo />
     <Galley />
-    <Obstacles />
+    <VoyageObstacles />
     <StormProps />
     <MooringRopes />
     <Lifeboats />

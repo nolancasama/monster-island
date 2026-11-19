@@ -10,6 +10,7 @@ import { COUNTER_CUSTOMER, DECK_Y, HOLD_LANTERN, MASTS, SAIL_FOOT, SHIP, SPOT, h
 import { SEA_Y } from "../game/world/island";
 import { CREW_IDS, vy, type CrewId } from "../game/voyageRt";
 import { rt } from "../game/runtime";
+import { steeringWaterX, steeringWaveFlow } from "../game/flow/voyageJobs";
 import { VoyageProps, foodGeo } from "./VoyageProps";
 
 /** The three gaff sails: mizzen, main, fore (the order of `vy.sails`), each from its boom to its gaff. */
@@ -89,7 +90,7 @@ function VoyageSea() {
     m.position.set(cx, 0, cz);
     mat.color.copy(fair).lerp(stormy, vy.storm);
     const p = geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < p.count; i++) p.setY(i, seaHeight(p.getX(i) + cx, p.getZ(i) + cz, rt.time, vy.storm, vy.flowDist));
+    for (let i = 0; i < p.count; i++) p.setY(i, seaHeight(p.getX(i) + cx - steeringWaterX(), p.getZ(i) + cz, rt.time, vy.storm, steeringWaveFlow()));
     p.needsUpdate = true;
   });
   return <mesh ref={ref} geometry={geometry} material={mat} visible={false} />;
@@ -116,7 +117,7 @@ function Wake() {
       const z = -20 + k * 33;
       const x = side * (Math.max(hullHalf(z), hullHalf(-13) * 0.4) + 0.25 + (z + 20) * 0.025 + Math.sin(i * 3.1) * 0.25);
       const s = Math.sin(k * Math.PI) * Math.min(1, vy.flow);
-      dummy.position.set(SHIP.x + x, seaHeight(SHIP.x + x, SHIP.z + z, rt.time, vy.storm, vy.flowDist) + 0.05, SHIP.z + z);
+      dummy.position.set(SHIP.x + x, seaHeight(SHIP.x + x - steeringWaterX(), SHIP.z + z, rt.time, vy.storm, steeringWaveFlow()) + 0.05, SHIP.z + z);
       dummy.scale.set(1 + s, 1, Math.max(0.01, s) * (1.2 + Math.min(1, vy.flow) * 0.8));
       dummy.rotation.set(0, side * 0.12, 0);
       dummy.updateMatrix();

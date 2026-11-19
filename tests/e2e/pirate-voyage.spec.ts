@@ -8,7 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
-import { DECK_Y, HALF_BEAM, MASTS, SHIP, SPOT } from "../../src/game/world/pirateShip";
+import { DECK_Y, HALF_BEAM, HOLD, HOLD_Y, MASTS, SHIP, SPOT, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
 
 const TAG = process.env.SHOT_TAG;
@@ -37,14 +37,18 @@ const spyglassUsed: string[] = [];
 let spyInput: "keys" | "touch" = "keys";
 
 /** Stand at a ship spot (local), facing a world point. */
+/** A teleport skips the companionway: spots over the hold's footprint mean the hold floor. */
+const inHoldBox = (local: { x: number; z: number }) => local.x >= HOLD.x0 && local.x <= HOLD.x1 && local.z >= HOLD.z0 && local.z <= HOLD.z1;
 async function standFacing(page: Page, local: { x: number; z: number }, at: { x: number; z: number }) {
   const s = L(local.x, local.z);
+  await hook(page, "shipFloor", inHoldBox(local));
   await hook(page, "teleport", s.x, s.z, Math.atan2(at.x - s.x, at.z - s.z), true);
 }
 /** Stand near a world point (the game snaps to the nearest walkable spot), facing it. */
 async function nearFacing(page: Page, at: { x: number; z: number }, from: { x: number; z: number }, dist = 1.2) {
   const dx = from.x - at.x, dz = from.z - at.z, d = Math.hypot(dx, dz) || 1;
   const x = at.x + (dx / d) * dist, z = at.z + (dz / d) * dist;
+  await hook(page, "shipFloor", inHoldBox({ x: x - SHIP.x, z: z - SHIP.z }));
   await hook(page, "teleport", x, z, Math.atan2(at.x - x, at.z - z), true);
 }
 async function pressJ(page: Page) { await page.keyboard.press("KeyJ"); await page.waitForTimeout(120); }
@@ -151,7 +155,6 @@ const SAIL_STAND = [{ x: 0, z: 6.0 }, { x: 0, z: 6.0 }, { x: 0, z: -11.6 }];
 const HUNGRY_STAND: Record<string, { x: number; z: number }> = {
   tom: { x: SPOT.crew[0].x - 1.45, z: -9.8 }, sam: { x: SPOT.crew[1].x - 1.45, z: -11.7 }, max: { x: SPOT.crew[2].x - 1.15, z: -12.3 },
 };
-const CRATE_Z: Record<string, number> = { fish: -15.9, meat: -15.1, apples: -14.3, bananas: -13.6 };
 
 async function startJob(page: Page, job: string) {
   const j = JOB_SPOT[job];
@@ -191,7 +194,7 @@ async function play(page: Page, _s: MiState, v: V) {
       if (v.carry?.kind === "dish" && c.order) { expect(v.marker?.who).toBe(c.order.who); markerChecks++; await standFacing(page, HUNGRY_STAND[c.order.who], v.crew[c.order.who]); await pressE(page, `crew:${c.order.who}`); return; }
       if (!c.dish && v.carry?.kind !== "dish") expect(v.marker).toBeNull();
       if (v.carry?.kind === "food") { await standFacing(page, { x: -0.5, z: -15.4 }, L(0, -16.5)); await pressE(page, "pot"); return; }
-      if (c.order && !v.carry) { const z = CRATE_Z[c.order.food]; await standFacing(page, { x: SPOT.supplies.x + 1.15, z }, L(SPOT.supplies.x, z)); await pressE(page, `crate:${c.order.food}`); return; }
+      if (c.order && !v.carry) { const crate = SUPPLY_CRATES.find((k) => k.food === c.order!.food)!; await standFacing(page, crateApproach(crate), L(crate.x, crate.z)); await pressE(page, `crate:${c.order.food}`); return; }
       const next = ["tom", "sam", "max"].find((id) => !c.orders.some((o: any) => o.who === id));
       if (next) { await standFacing(page, HUNGRY_STAND[next], v.crew[next]); await pressE(page, `crew:${next}`); }
       return;
@@ -329,7 +332,11 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
       expect(v.active).toBe(true);
       expect(Math.abs(st.player.x - SHIP.x)).toBeLessThan(HALF_BEAM);
       expect(Math.abs(st.player.z - SHIP.z)).toBeLessThan(21);
-      expect(st.player.y).toBeGreaterThan(0);
+      // Cargo ends below deck: the save remembers the hold floor, and the reload comes back
+      // to it with the interior view (the deck cover lies above the same x/z).
+      expect(st.progress.act3.voyage.inHold).toBe(true);
+      expect(st.player.y).toBeCloseTo(HOLD_Y, 1);
+      expect(st.camera.profile).toBe("pirate-hold");
     }
   }
 

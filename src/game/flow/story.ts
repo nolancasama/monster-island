@@ -18,6 +18,7 @@ import { cb, resetCombat } from "../combat";
 import { CLIFF_ROPE, CHESTS, zoneAt } from "../world/lowland";
 import { gatherParty, kidnapScene, placeMapleForAct2, startAct2Scene } from "./act2";
 import type { ObstacleId } from "../types";
+import { vy } from "../voyageRt";
 import { cloudZoneAt } from "../world/cloudisle";
 
 /**
@@ -48,7 +49,12 @@ export function saveNow() {
   // Act 2's live HP and MP are written in with the rest of the progress.
   const progress = g.progress.act2.started ? { ...g.progress, act2: { ...g.progress.act2, hp: Math.round(cb.vitals.hp), mp: { ...cb.vitals.mp }, zone: g.progress.act3.world === "cloud" ? g.progress.act2.zone : zoneAt(at.x, at.z) },
     act3: { ...g.progress.act3, area: g.progress.act3.world === "cloud" ? cloudZoneAt(p.x,p.z) ?? "cloudDock" : g.progress.act3.area } } : g.progress;
-  const text = encodeSave(progress, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
+  // Below deck the saved spot is on the hold floor (x/z alone would load on the deck above).
+  // The flag is live state: set or stripped on every save, never carried over from a load.
+  const { inHold: _wasBelow, ...voyage } = progress.act3.voyage;
+  const below = Boolean(voyageAt) && vy.inHold;
+  const saved = below || _wasBelow !== undefined ? { ...progress, act3: { ...progress.act3, voyage: below ? { ...voyage, inHold: true } : voyage } } : progress;
+  const text = encodeSave(saved, { x: at.x, z: at.z, yaw: p.yaw }, Math.round(rt.playTime));
   if (text === lastSaved) return;
   lastSaved = text;
   writeSave(text);

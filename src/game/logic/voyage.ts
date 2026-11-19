@@ -21,6 +21,11 @@ export interface Voyage {
   interrogated: boolean;
   /** The Captain Hat was given (never twice). */
   hat: boolean;
+  /**
+   * Saved in free roam below deck: the hold floor lies under the deck cover, so the
+   * saved x/z alone cannot say which floor. Optional; older saves load on deck.
+   */
+  inHold?: boolean;
 }
 
 export const newVoyage = (): Voyage => ({ stage: "none", jobs: [], interrogated: false, hat: false });
@@ -45,6 +50,7 @@ export function readVoyage(raw: unknown, voyageDone: boolean): Voyage {
   if (v.stage === "storm" || v.stage === "raft") v.jobs = [...VOYAGE_JOBS];
   v.hat = allJobsDone(v) && raw.hat === true;
   if (v.stage === "captured" && v.jobs.length) v.stage = "jobs";
+  if (raw.inHold === true && (v.stage === "captured" || v.stage === "jobs")) v.inHold = true;
   return v;
 }
 

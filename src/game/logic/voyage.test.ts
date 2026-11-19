@@ -163,3 +163,13 @@ describe("steering in three lanes", () => {
     }
   });
 });
+
+describe("saved below deck", () => {
+  it("keeps the hold floor only in free roam, and older saves load on deck", () => {
+    expect(readVoyage({ stage: "jobs", jobs: ["cargo"], inHold: true }, false).inHold).toBe(true);
+    expect(readVoyage({ stage: "captured", inHold: true }, false).inHold).toBe(true);
+    expect(readVoyage({ stage: "jobs", jobs: ["cargo"] }, false).inHold).toBeUndefined();
+    expect(readVoyage({ stage: "storm", inHold: true }, false).inHold).toBeUndefined();
+    expect(readVoyage({ stage: "jobs", inHold: "yes" }, false).inHold).toBeUndefined();
+  });
+});
