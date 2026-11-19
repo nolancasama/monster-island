@@ -3015,3 +3015,25 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
 - Known gap at merge: a reload while in the hold needs the saved voyage to
   remember the hold floor (x/z alone is ambiguous under the new deck cover);
   handled on the integration branch.
+## 2026-11-19 - Voyage polish: the home island recedes at sea
+
+- Departure keeps the full Port Town coast in view. Island haze eases in from 8 m
+  beyond the lowland basin's southern edge and reaches full cover at 95 m.
+  The outbound boat supplies the distance, with up to 6 m of adjustment for
+  the camera. The ship's sighting and the rest of the voyage keep full cover.
+- Home scenery uses its own material variants only during the fade. After the
+  fog step they blend each pixel toward the sky dome's own colour along that
+  pixel's view ray (the dome's gradient, in output colour space), so the island
+  melts into exactly the sky behind it. At full cover the home scenery group is
+  invisible and its original materials are restored. Rejected (Claude's review):
+  tinting to the fog colour plus a screen-door dither dissolve - the dither read
+  as a stipple pattern and the fog-coloured silhouette stood out pale against
+  the bluer upper sky.
+- The sky dome (420 m radius, at the origin) follows the camera while the voyage
+  sea is on. The ship lies ~470 m south, outside the dome, where the clear
+  colour showed through as a pale "mountain peak" behind the vessels (also in
+  earlier encounter shots). On the island the dome stays put, unchanged.
+- The voyage sea, ship, sky and raft silhouette keep their existing rendering
+  and fog. Landing and returning home use the existing world lifecycle.
+  The evidence harness reads the rendered factor from the canvas's
+  `data-voyage-open-sea` attribute with `?e2e=1`.

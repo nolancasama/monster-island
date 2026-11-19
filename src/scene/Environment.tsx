@@ -71,7 +71,12 @@ export function SkyAndLights() {
   }, [scene, gl]);
   const hemi = useRef<THREE.HemisphereLight>(null), ambient = useRef<THREE.AmbientLight>(null), sky = useRef<THREE.Group>(null);
   const caveLast = useRef(0);
-  useFrame(() => {
+  const domeMesh = useRef<THREE.Mesh>(null);
+  useFrame(({ camera }) => {
+    // The voyage sails beyond the dome's 420 m radius: there the dome follows
+    // the lens, or the clear colour shows through as a pale peak. On the
+    // island it stays put, exactly as before.
+    if (domeMesh.current) domeMesh.current.position.set(vy.sea ? camera.position.x : 0, 0, vy.sea ? camera.position.z : 0);
     // Inside the cave the sky is gone and the sun barely reaches: characters
     // are dark but for their eyes, warmed only by the torches near them.
     const cave = caveAtmosphere.k;
@@ -105,7 +110,7 @@ export function SkyAndLights() {
   return (
     <group>
       <group ref={sky}>
-        <mesh geometry={dome} material={domeMat} renderOrder={-10} />
+        <mesh ref={domeMesh} geometry={dome} material={domeMat} renderOrder={-10} />
         <mesh ref={sun} position={[-140, 260, 200]} renderOrder={-9}>
           <circleGeometry args={[16, 24]} />
           <meshBasicMaterial color="#fff6dc" fog={false} />
