@@ -30,7 +30,7 @@ export const BOAT_RIG = {
   yardY: 6.5 * BOAT_SCALE,
   sailWidth: 3.4 * BOAT_SCALE,
   sailHeight: 4 * BOAT_SCALE,
-  sailY: 6.4 * BOAT_SCALE,
+  sailY: 6.46 * BOAT_SCALE, // The head meets the lower front face of the yard.
 } as const;
 
 export const BOAT_SEATS = {
@@ -41,6 +41,37 @@ export const BOAT_SEATS = {
   puff: { x: 0.8, z: 0.6, yaw: 0 },
   ember: { x: -0.15, z: -1.95, yaw: 0 },
 } as const;
+
+const unit = (n: number) => Math.max(0, Math.min(1, n));
+
+/** Intensity of the moving wake. Ambient ripples have a separate, faint floor. */
+export function boatWakeIntensity(speed: number, tiedUp: boolean) {
+  return tiedUp ? 0 : unit((speed - 0.2) / 7);
+}
+
+// The existing lookout and mooring poses leave a narrow strip on the yard.
+const openSail = (raise: number) => unit((raise - 0.12) / 0.88);
+const sailPressure = (wind: number, speed: number) => unit(0.6 * unit(wind) + 0.5 * unit(speed / 8));
+
+/** Peak displacement in metres before the sail's edge and turn weights. */
+export function boatBillow(wind: number, speed: number, raise: number) {
+  const open = openSail(raise);
+  return 0.75 * sailPressure(wind, speed) * open * open;
+}
+
+export function boatFlutter(wind: number, speed: number, raise: number) {
+  return 0.095 * (1 - sailPressure(wind, speed)) * openSail(raise) ** 2;
+}
+
+/** The square rig's luff lies on the central mast (u=.5); v=0 is the yard. */
+export function boatSailDepth(u: number, v: number, billow: number, flutter: number, yawRate: number, time: number) {
+  const turn = Math.max(-1, Math.min(1, yawRate / 0.55));
+  const across = 2 * u - 1;
+  const luff = unit(Math.abs(across) * 4);
+  const belly = luff * (1 - across * across) * 4 * v * (1 - v);
+  const gust = flutter * Math.sin(8.3 * time - 8 * u - 5 * v);
+  return belly * Math.max(0, billow * (1 + 0.6 * turn * across) + gust);
+}
 
 export function boatSeatWorld(id: keyof typeof BOAT_SEATS, boat: { x: number; z: number; yaw: number }) {
   const seat = BOAT_SEATS[id];

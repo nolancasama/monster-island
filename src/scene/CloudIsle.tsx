@@ -11,7 +11,8 @@ import {
   CLOUD_ZONES, COAST_GATE, HOLLOW_APPROACH, HOLLOW, RAIDER_BARRICADE,
   cloudY, cloudZoneAt, type CloudGates } from "../game/world/cloudisle";
 import { GULL_BERTH, nearestOnTrail, type WalkShape } from "../game/world/lowland";
-import { BOAT_DECK_Y, BOAT_HALF_BEAM, BOAT_HALF_LENGTH, BOAT_HULL_BOTTOM_Y, BOAT_HULL_TOP_Y, BOAT_INNER, BOAT_MAST, BOAT_RAIL, BOAT_RIG, BOAT_SEATS } from "../game/world/gullBoat";
+import { BOAT_DECK_Y, BOAT_HALF_BEAM, BOAT_HALF_LENGTH, BOAT_HULL_BOTTOM_Y, BOAT_HULL_TOP_Y, BOAT_INNER, BOAT_MAST, BOAT_RAIL, BOAT_RIG, BOAT_SEATS,
+  boatBillow, boatFlutter, boatSailDepth, boatWakeIntensity } from "../game/world/gullBoat";
 import { cloudGroundY, cloudLandMask } from "../game/world/cloudTerrain";
 import { additiveSprite, flatMat, occluderMat } from "./materials";
 import { PartBuilder } from "./partBuilder";
@@ -23,6 +24,7 @@ import { CloudRoutes } from "./CloudRoutes";
 import { Observatory, SummitWeather, SkyFortress, CagedLumo, HollowAftermath } from "./Observatory";
 import { cloudTreePlacements, coniferY, landscapeKits, shelterKits } from "./cloudScenery";
 import { StormBeacon } from "./StormBeacon";
+import { BoatWake } from "./BoatWake";
 
 export const CLOUD_FOG = { color: "#71818c", near: 60, far: 260 };
 export const cloudView = { visible: false, fog: CLOUD_FOG, barriers: { coast: 0, tunnel: 0 } };
@@ -551,18 +553,71 @@ export function boatHullGeometry() {
   return b.build();
 }
 
+const SAIL_COLUMNS = 16;
+const SAIL_ROWS = 10;
+
+function sailRestDepth(x: number) {
+  // The head sits just inside the yard's front face and wraps forward around
+  // the mast. Hold the two columns next to the luff forward of the mast too,
+  // so the triangles between them never cross the spar.
+  const spacing = BOAT_RIG.sailWidth / SAIL_COLUMNS;
+  const mastClearance = 1 - THREE.MathUtils.clamp(Math.abs(x) / spacing - 1, 0, 1);
+  return THREE.MathUtils.lerp(BOAT_RIG.yardThickness * 0.44, BOAT_MAST.r + 0.015, mastClearance);
+}
+
 export function boatSailGeometry() {
-  const b = new PartBuilder();
-  b.add(new THREE.PlaneGeometry(BOAT_RIG.sailWidth, BOAT_RIG.sailHeight, 2, 2), "#eee1bc", [0, -BOAT_RIG.sailHeight / 2, 0]);
-  return b.build();
+  const geometry = new THREE.PlaneGeometry(BOAT_RIG.sailWidth, BOAT_RIG.sailHeight, SAIL_COLUMNS, SAIL_ROWS);
+  geometry.translate(0, -BOAT_RIG.sailHeight / 2, 0);
+  const positions = geometry.attributes.position as THREE.BufferAttribute;
+  const normals = geometry.attributes.normal as THREE.BufferAttribute;
+  positions.setUsage(THREE.DynamicDrawUsage);
+  normals.setUsage(THREE.DynamicDrawUsage);
+  for (let i = 0; i < positions.count; i++) positions.setZ(i, sailRestDepth(positions.getX(i)));
+  geometry.computeBoundingSphere();
+  geometry.boundingSphere!.radius += 1.2;
+  return geometry;
+}
+
+function deformBoatSail(geometry: THREE.BufferGeometry, billow: number, flutter: number, yawRate: number, time: number) {
+  const positions = geometry.attributes.position as THREE.BufferAttribute;
+  const normals = geometry.attributes.normal as THREE.BufferAttribute;
+  const stride = SAIL_COLUMNS + 1;
+  for (let row = 0; row <= SAIL_ROWS; row++) {
+    for (let col = 0; col <= SAIL_COLUMNS; col++) {
+      const i = row * stride + col;
+      const depth = boatSailDepth(col / SAIL_COLUMNS, row / SAIL_ROWS, billow, flutter, yawRate, time);
+      positions.setZ(i, sailRestDepth(positions.getX(i)) + depth);
+    }
+  }
+  // Differentiating the indexed grid keeps the curved canvas smoothly lit
+  // without allocating scratch vectors every frame.
+  for (let row = 0; row <= SAIL_ROWS; row++) {
+    for (let col = 0; col <= SAIL_COLUMNS; col++) {
+      const i = row * stride + col;
+      const left = col > 0 ? i - 1 : i, right = col < SAIL_COLUMNS ? i + 1 : i;
+      const top = row > 0 ? i - stride : i, bottom = row < SAIL_ROWS ? i + stride : i;
+      const nx = (positions.getZ(left) - positions.getZ(right)) / (positions.getX(right) - positions.getX(left));
+      const ny = (positions.getZ(bottom) - positions.getZ(top)) / (positions.getY(top) - positions.getY(bottom));
+      const length = Math.hypot(nx, ny, 1);
+      normals.setXYZ(i, nx / length, ny / length, 1 / length);
+    }
+  }
+  positions.needsUpdate = normals.needsUpdate = true;
 }
 
 export function CloudBoat() {
   const root = useRef<THREE.Group>(null), sail = useRef<THREE.Mesh>(null), keeper = useRef<THREE.Mesh>(null);
   const hull = useMemo(boatHullGeometry, []);
   const cloth = useMemo(boatSailGeometry, []);
-  const clothMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), []);
+  const clothMat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#eee1bc", side: THREE.DoubleSide }), []);
   const gull = useMemo(() => npcGeometry(NPCS.harbor), []);
+  const wake = useMemo(() => new BoatWake(), []);
+  const motion = useRef({ x: 0, z: 0, yaw: 0, speed: 0, turn: 0, time: 0, visible: false, tiedUp: true, world: rt.world });
+  useEffect(() => () => {
+    wake.dispose();
+    cloth.dispose();
+    clothMat.dispose();
+  }, [wake, cloth, clothMat]);
   useFrame(() => {
     if (!root.current) return;
     const v = rt.voyage;
@@ -585,10 +640,43 @@ export function CloudBoat() {
       root.current.position.set(p.x, -.1 + Math.sin(rt.time * 1.5) * .035, p.z);
       root.current.rotation.set(0, rt.world === "cloud" ? 0 : GULL_BERTH.yaw, Math.sin(rt.time) * .008);
     }
-    if (sail.current) sail.current.scale.y = v.active || voyaging ? Math.max(.03, v.sail) : 1;
+    const { x, z } = root.current.position, yaw = root.current.rotation.y;
+    const last = motion.current;
+    const dt = rt.time - last.time;
+    const dx = x - last.x, dz = z - last.z;
+    const distance = Math.hypot(dx, dz);
+    const dyaw = Math.atan2(Math.sin(yaw - last.yaw), Math.cos(yaw - last.yaw));
+    const tiedUp = berthed || (voyaging && (vy.boatMoored || vy.ropes > 0))
+      || (rt.world === "cloud" && !v.active && vy.boatIn >= 1);
+    const visible = root.current.visible;
+    const discontinuity = !last.visible || last.world !== rt.world || dt < 0 || dt > 0.3
+      || distance > Math.max(3, 38 * dt);
+    if (!visible || discontinuity || (tiedUp && !last.tiedUp)) {
+      last.speed = last.turn = 0;
+      wake.clear(rt.time);
+    } else if (dt > 0) {
+      const blend = 1 - Math.exp(-dt / 0.19);
+      last.speed += (distance / dt - last.speed) * blend;
+      last.turn += (dyaw / dt - last.turn) * blend;
+    }
+    last.x = x;
+    last.z = z;
+    last.yaw = yaw;
+    last.time = rt.time;
+    last.visible = visible;
+    last.tiedUp = tiedUp;
+    last.world = rt.world;
+    if (!visible) return;
+    wake.update(x, z, yaw, dx, dz, dyaw, discontinuity ? 0 : dt, boatWakeIntensity(last.speed, tiedUp));
+    const raise = v.active || voyaging ? v.sail : 1;
+    if (sail.current) sail.current.scale.y = Math.max(.03, raise);
+    const wind = tiedUp ? 0.1 : 0.53 + 0.37 * voyageStorm() + 0.15 * Math.sin(rt.time * 1.1);
+    deformBoatSail(cloth, boatBillow(wind, last.speed, raise), boatFlutter(wind, last.speed, raise), last.turn, rt.time);
   });
   const seat = BOAT_SEATS.gull;
-  return <><CloudSea crossing /><VoyageRocks /><group ref={root}>
+  return <><CloudSea crossing /><VoyageRocks />
+  <mesh geometry={wake.geometry} material={wake.material} frustumCulled={false} />
+  <group ref={root}>
     <mesh geometry={hull} material={flatMat} />
     <mesh ref={sail} geometry={cloth} material={clothMat} position={[BOAT_MAST.x, BOAT_RIG.sailY, BOAT_MAST.z]} />
     <mesh ref={keeper} geometry={gull} material={flatMat} position={[seat.x, BOAT_DECK_Y, seat.z]} rotation={[0, seat.yaw, 0]} />
