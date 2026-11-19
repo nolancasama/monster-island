@@ -3037,3 +3037,16 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
   and fog. Landing and returning home use the existing world lifecycle.
   The evidence harness reads the rendered factor from the canvas's
   `data-voyage-open-sea` attribute with `?e2e=1`.
+## 2026-11-19 - Voyage polish: steering clears the hull
+
+- The helm shot and walking coordinates stay fixed. An authored lateral curve moves the obstacle by
+  the lane change after an answer, with a brief heading change and bank in the turn's direction.
+  The curve settles before the bow. The existing 12 m lanes provide enough room to pass. The scene
+  can sample the same lateral offset for the waves and use the steering wave flow to scroll them aft.
+- Each animation frame measures horizontal clearance from the yawed hull outline, including the
+  pointed stem, to the obstacle's radius at scale 1.3 with a 0.25 m margin. An unsafe answer brakes to
+  the padded contact distance, wobbles the hull gently, and sends the obstacle drifting back before
+  the existing retry. The initial lane offset and neutral ship pose are sampled afresh on each attempt.
+- The raft retains its own obstacle origin, lane spacing, scale and lane easing. The existing read-only
+  voyage hook exposes the sailing job's approach, pass, bump and retreat through `voyage().phase`,
+  alongside obstacle lanes and distances, ship yaw, and the active lane.

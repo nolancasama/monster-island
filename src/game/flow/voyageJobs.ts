@@ -4,13 +4,14 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS, type CompanionId } from "../data/combat";
 import { getGame, toast, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
-import { BUCKET, DECK_Y, FISH_DECK, FISH_Y, SPOT, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
+import { BUCKET, DECK_Y, FISH_DECK, FISH_Y, SPOT, STEER_LANE, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
 import { SEA_Y } from "../world/island";
-import { ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, safeCommand, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
+import { ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
+import { STEER_APPROACH_SECONDS, makeSteerPath, sampleSteerPath, type SteerFrame, type SteerObstacleKind } from "../logic/steerPath";
 import { giveWearable, wear } from "../logic/wardrobe";
-import { vy, type Candidate, type CrewId, type Fish, type Phase } from "../voyageRt";
+import { voyageEpoch, vy, type Candidate, type CrewId, type Fish, type Obstacle, type Phase } from "../voyageRt";
 import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, toolFx } from "../voyageSim";
-import { ask, say } from "./ask";
+import { ask, fastMode, say } from "./ask";
 import { fadeThrough, frameTwo, shot } from "./script";
 import { switchTo } from "./companion";
 import { crewWorld, ease, guard, lerp, over, placeOnDeck, scene, until } from "./voyage";
@@ -515,6 +516,19 @@ async function sailing() {
 }
 
 const OBSTACLE_JA = { rock: "いわ", barrel: "たる" };
+const steerFrames = new WeakMap<Obstacle, SteerFrame>();
+export const steeringObstacleFrame = (o: Obstacle): Readonly<SteerFrame> | undefined => steerFrames.get(o);
+
+let waterEpoch = -1, waterX = 0, waveOffset = 0;
+let waveStart: number | null = null;
+const hasSteeringWater = () => !vy.raft.on && voyageEpoch() === waterEpoch;
+/** Wave sampling offsets held between obstacles and reset with the voyage. */
+export const steeringWaterX = () => hasSteeringWater() ? waterX : 0;
+export function steeringWaveFlow() {
+  if (!hasSteeringWater()) return vy.flowDist;
+  // seaHeight adds flow to z. Reverse its sampling direction so waves move aft like the debris.
+  return waveStart === null ? vy.flowDist + waveOffset : 2 * waveStart - vy.flowDist;
+}
 
 async function steering() {
   await scene(async () => {
@@ -524,16 +538,25 @@ async function steering() {
     }, 400);
     rt.player.frozen = true;
     vy.lane = 0; vy.laneVis = 0; vy.obstacles = [];
-    const kinds: Array<"rock" | "barrel"> = ["rock", "barrel", "rock", "barrel"];
-    for (let i = 0; i < kinds.length; i++) {
-      for (;;) if (await steerOne(kinds[i], i)) break;
+    const epoch = voyageEpoch();
+    waterEpoch = epoch; waterX = 0; waveStart = vy.flowDist; waveOffset = 0;
+    try {
+      const kinds: SteerObstacleKind[] = ["rock", "barrel", "rock", "barrel"];
+      for (let i = 0; i < kinds.length; i++) {
+        for (;;) if (await steerOne(kinds[i], i)) break;
+      }
+      steerShot();
+      await say("redbeard", "We're here! Say: Stop!", "ついたぞ! 「Stop!」と いおう!");
+      await say1("cmdStop", "「Stop!」と いおう");
+      await over(1.5, (k) => { vy.flow = lerp(2, 0.5, k); });
+      cheer("redbeard", "gull"); friendCheers("puff");
+      await say("redbeard", "It's windy! Great job!", "かぜが いっぱい! よくやった!");
+    } finally {
+      if (voyageEpoch() === epoch) {
+        waveOffset = steeringWaveFlow() - vy.flowDist;
+        waveStart = null;
+      }
     }
-    steerShot();
-    await say("redbeard", "We're here! Say: Stop!", "ついたぞ! 「Stop!」と いおう!");
-    await say1("cmdStop", "「Stop!」と いおう");
-    await over(1.5, (k) => { vy.flow = lerp(2, 0.5, k); });
-    cheer("redbeard", "gull"); friendCheers("puff");
-    await say("redbeard", "It's windy! Great job!", "かぜが いっぱい! よくやった!");
   });
 }
 
@@ -542,34 +565,65 @@ const steerShot = () => shot(
   { x: L(0, 0).x, y: 0, z: L(0, -34).z });
 
 /** One obstacle: the captain calls it, the student steers; a wrong lane is a gentle bump and a retry. */
-async function steerOne(kind: "rock" | "barrel", i: number): Promise<boolean> {
+async function steerOne(kind: SteerObstacleKind, i: number): Promise<boolean> {
   steerShot();
   const lane = vy.lane as Lane;
   const options: Lane[] = lane === 0 ? [-1, 0, 1] : [lane, 0];
   const at = options[(i * 2 + 1) % options.length];
-  const o = { id: i, kind, lane: at, z: -110, hit: 0 };
+  let path = makeSteerPath(lane, at, "goStraight", kind);
+  const frame = sampleSteerPath(path, 0);
+  const o: Obstacle = { id: i, kind, lane: at, z: frame.z, hit: 0 };
+  steerFrames.set(o, frame);
   vy.obstacles = [o];
-  await over(2.6, (k) => { o.z = lerp(-110, -58, k); });
-  const side = obstacleSide(lane, at);
-  const word = kind === "rock" ? "Rocks" : "A barrel";
-  const call = side === "ahead" ? `${word} ahead!` : `${word} on the ${side}!`;
-  const ja = side === "ahead" ? `まえに ${OBSTACLE_JA[kind]}!` : side === "left" ? `ひだりに ${OBSTACLE_JA[kind]}!` : `みぎに ${OBSTACLE_JA[kind]}!`;
-  const said = (await ask({ kind: "choice", options: ["turnLeft", "goStraight", "turnRight"], tapAlways: true, readQuestion: true,
-    question: { by: "redbeard", en: call, ja }, help: "ぶつからない ほうへ!" })) as SteerCommand | null;
-  const cmd: SteerCommand = said ?? "goStraight";
-  const safe = safeCommand(lane, at, cmd);
-  vy.lane = steer(lane, cmd);
-  audio.play("creak");
-  await over(2.2, (k) => { o.z = lerp(-58, safe ? 30 : -25, k); });
-  if (!safe) {
-    o.hit = rt.time; audio.play("bump");
-    await over(0.6, (k) => { vy.shipRoll = Math.sin(k * Math.PI * 3) * 0.05 * (1 - k); });
-    vy.shipRoll = 0;
-    vy.obstacles = [];
+  let from = 0, to = STEER_APPROACH_SECONDS, started = rt.time, speed = 1;
+  let bumped = false;
+  const fast = fastMode();
+  const phase: Phase = { name: frame.phase, tick() {
+    sampleSteerPath(path, Math.min(to, from + (rt.time - started) * speed), frame);
+    phase.name = frame.phase;
+    o.z = frame.z; // Also used by the old renderer and the voyage debug hook.
+    vy.shipYaw = frame.yaw;
+    vy.shipRoll = frame.roll;
+    waterX = -lane * STEER_LANE + frame.driftX;
+    if (!path.safe && frame.t >= path.contactTime && !bumped) {
+      bumped = true;
+      o.hit = rt.time;
+      audio.play("bump");
+    }
+  } };
+  const play = async (start: number, end: number) => {
+    from = start;
+    to = end;
+    started = rt.time;
+    speed = fast ? (end - start) / 0.25 : 1;
+    phase.tick?.(0);
+    await until(() => frame.t === end);
+  };
+  setPhase(phase);
+  try {
+    await play(0, STEER_APPROACH_SECONDS);
+    const side = obstacleSide(lane, at);
+    const word = kind === "rock" ? "Rocks" : "A barrel";
+    const call = side === "ahead" ? `${word} ahead!` : `${word} on the ${side}!`;
+    const ja = side === "ahead" ? `まえに ${OBSTACLE_JA[kind]}!` : side === "left" ? `ひだりに ${OBSTACLE_JA[kind]}!` : `みぎに ${OBSTACLE_JA[kind]}!`;
+    const said = (await ask({ kind: "choice", options: ["turnLeft", "goStraight", "turnRight"], tapAlways: true, readQuestion: true,
+      question: { by: "redbeard", en: call, ja }, help: "ぶつからない ほうへ!" })) as SteerCommand | null;
+    const cmd: SteerCommand = said ?? "goStraight";
+    path = makeSteerPath(lane, at, cmd, kind);
+    vy.lane = steer(lane, cmd);
+    audio.play("creak");
+    await play(STEER_APPROACH_SECONDS, path.duration);
+  } finally {
+    if (vy.phase === phase) {
+      setPhase(null);
+      vy.shipYaw = vy.shipRoll = 0;
+      vy.obstacles = [];
+    }
+  }
+  if (!path.safe) {
     await say("redbeard", "Bump! Oops! Try again!", "ゴツン! もう いちど!");
     return false;
   }
-  vy.obstacles = [];
   audio.play("correct");
   await say("redbeard", i % 2 ? "Phew! Good!" : "Good steering!", "よし! いいぞ!");
   return true;
