@@ -1,9 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { MOORED_POSE } from "../../src/game/flow/voyageEncounter";
 import { newProgress } from "../../src/game/logic/progress";
 import { STEER_ANSWER_Z } from "../../src/game/logic/steerPath";
 import type { Lane, SteerCommand } from "../../src/game/logic/voyage";
 import { STAGES } from "../../src/game/world/lowland";
-import { MASTS, SHIP, SPOT } from "../../src/game/world/pirateShip";
+import { DECK_Y, MASTS, SHIP, SPOT } from "../../src/game/world/pirateShip";
 import { boot, chooseMode, hook, tap, waitFor, type MiState } from "./helpers";
 
 const DIR = ".tmp/shots/steer";
@@ -15,6 +16,7 @@ interface VoyageState {
   phase: string | null;
   lane: Lane;
   sails: number[];
+  boat: { x: number; z: number; yaw: number };
   ship: { yaw: number };
   obstacles: Array<{ lane: Lane; z: number }>;
 }
@@ -78,15 +80,17 @@ async function openSteering(page: Page) {
 }
 
 async function awaitPrompt(page: Page, command: SteerCommand, lane: Lane, obstacle: Lane) {
-  await precondition(`${command} prompt, lane ${lane}, obstacle ${obstacle}, from the helm`, async () => {
-    await page.waitForFunction(({ command, lane, obstacle, ship, answerZ }) => {
+  await precondition(`${command} prompt, lane ${lane}, obstacle ${obstacle}, stern view with Gull alongside`, async () => {
+    await page.waitForFunction(({ command, lane, obstacle, ship, moored, deckY, answerZ }) => {
       const api = (window as unknown as SteeringHook).__mi;
       const { prompt, camera } = api.state(), v = api.voyage();
       return prompt?.status === "ready" && prompt.buttons && prompt.choices.includes(command)
         && v.phase === "steer-approach" && v.lane === lane && v.obstacles[0]?.lane === obstacle && v.obstacles[0]?.z === answerZ
-        && !v.ship.yaw && camera.mode === "shot" && Math.abs(camera.pos.z - ship.z - 34) < 1
-        && Math.abs(camera.target.x - ship.x) < 1 && Math.abs(camera.target.z - ship.z + 34) < 1;
-    }, { command, lane, obstacle, ship: SHIP, answerZ: STEER_ANSWER_Z }, { timeout: TIMEOUT });
+        && Math.hypot(v.boat.x - moored.x, v.boat.z - moored.z) < 0.01 && Math.cos(v.boat.yaw - moored.h) > 0.999
+        && !v.ship.yaw && camera.mode === "shot"
+        && Math.hypot(camera.pos.x - ship.x + 11, camera.pos.y - deckY - 30, camera.pos.z - ship.z - 36) < 1
+        && Math.hypot(camera.target.x - ship.x - 1, camera.target.z - ship.z + 30) < 1;
+    }, { command, lane, obstacle, ship: SHIP, moored: MOORED_POSE, deckY: DECK_Y, answerZ: STEER_ANSWER_Z }, { timeout: TIMEOUT });
   });
 }
 
@@ -124,7 +128,7 @@ async function attempt(page: Page, command: SteerCommand, lane: Lane, obstacle: 
     await capture(page, `${name}-03-lane`, { phase: "steer-pass", atLeastZ: -33 });
     if (safe) {
       await capture(page, `${name}-04-bow`, { phase: "steer-pass", atLeastZ: -19 });
-      await capture(page, `${name}-05-amidships`, { phase: "steer-pass", atLeastZ: -2 });
+      await capture(page, `${name}-05-amidships`, { phase: "steer-pass", atLeastZ: MOORED_POSE.z - SHIP.z });
       await capture(page, `${name}-06-stern`, { phase: "steer-pass", atLeastZ: 14 });
     } else {
       const contact = await capture(page, `${name}-04-contact`, { phase: "steer-bump" });

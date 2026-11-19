@@ -560,9 +560,12 @@ async function steering() {
   });
 }
 
+// Hold one view through the call, pass or bump, and retry: from behind the stern, so
+// "left" and "right" on screen are the ship's port and starboard, raised and a little
+// to port so the sightline to the stem clears the sails (a wrong answer's bump is seen).
 const steerShot = () => shot(
-  { x: L(0, 0).x, y: DECK_Y + 13, z: L(0, 34).z },
-  { x: L(0, 0).x, y: 0, z: L(0, -34).z });
+  { x: L(-11, 0).x, y: DECK_Y + 30, z: L(0, 36).z },
+  { x: L(1, 0).x, y: 0, z: L(0, -30).z });
 
 /** One obstacle: the captain calls it, the student steers; a wrong lane is a gentle bump and a retry. */
 async function steerOne(kind: SteerObstacleKind, i: number): Promise<boolean> {
@@ -570,7 +573,8 @@ async function steerOne(kind: SteerObstacleKind, i: number): Promise<boolean> {
   const lane = vy.lane as Lane;
   const options: Lane[] = lane === 0 ? [-1, 0, 1] : [lane, 0];
   const at = options[(i * 2 + 1) % options.length];
-  let path = makeSteerPath(lane, at, "goStraight", kind);
+  const boatMoored = vy.boatMoored;
+  let path = makeSteerPath(lane, at, "goStraight", kind, boatMoored);
   const frame = sampleSteerPath(path, 0);
   const o: Obstacle = { id: i, kind, lane: at, z: frame.z, hit: 0 };
   steerFrames.set(o, frame);
@@ -609,7 +613,7 @@ async function steerOne(kind: SteerObstacleKind, i: number): Promise<boolean> {
     const said = (await ask({ kind: "choice", options: ["turnLeft", "goStraight", "turnRight"], tapAlways: true, readQuestion: true,
       question: { by: "redbeard", en: call, ja }, help: "ぶつからない ほうへ!" })) as SteerCommand | null;
     const cmd: SteerCommand = said ?? "goStraight";
-    path = makeSteerPath(lane, at, cmd, kind);
+    path = makeSteerPath(lane, at, cmd, kind, boatMoored);
     vy.lane = steer(lane, cmd);
     audio.play("creak");
     await play(STEER_APPROACH_SECONDS, path.duration);

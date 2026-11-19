@@ -3039,14 +3039,23 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
   `data-voyage-open-sea` attribute with `?e2e=1`.
 ## 2026-11-19 - Voyage polish: steering clears the hull
 
-- The helm shot and walking coordinates stay fixed. An authored lateral curve moves the obstacle by
-  the lane change after an answer, with a brief heading change and bank in the turn's direction.
-  The curve settles before the bow. The existing 12 m lanes provide enough room to pass. The scene
-  can sample the same lateral offset for the waves and use the steering wave flow to scroll them aft.
-- Each animation frame measures horizontal clearance from the yawed hull outline, including the
-  pointed stem, to the obstacle's radius at scale 1.3 with a 0.25 m margin. An unsafe answer brakes to
-  the padded contact distance, wobbles the hull gently, and sends the obstacle drifting back before
-  the existing retry. The initial lane offset and neutral ship pose are sampled afresh on each attempt.
+- An authored lateral curve moves the obstacle after an answer, with a brief heading change and bank
+  in the turn's direction. The curve settles before the bow. Waves follow the logical lane change and
+  scroll aft with the steering wave flow.
+- Each frame measures horizontal clearance from the yawed hull, including the pointed stem, and from
+  Gull's boat while moored. The boat's footprint uses its mooring position, heading and hull dimensions
+  in the fixed ship frame. The obstacle radius uses scale 1.3 and a 0.25 m margin. The near starboard
+  line leaves a metre between the boat and the padded rock's edge. The original 12 m line crossed
+  the boat's footprint, and widening every lane would have moved passes that already had room.
+- The steering camera holds one view for the call, approach, bump, retreat and retry: behind the
+  stern, raised (deck + 30 m) and 11 m to port. Behind the stern keeps screen left/right equal to the
+  ship's port/starboard for the "Turn left / Turn right" answers. Rejected (Claude's review): the
+  centered stern view (the sails hid the bow) and a distant starboard quarter view (~75 m; the ship
+  and rock were too small to read, and left/right no longer matched the screen).
+- An unsafe answer brakes and slides onto the bow's port shoulder (2.4 m to port, the camera's side),
+  stopping at the padded contact solved against the real hull, then wobbles the hull gently and
+  drifts back. Dead ahead, the bow itself hid the contact from the steering camera. Each attempt
+  starts with its own lane offset and a neutral ship pose.
 - The raft retains its own obstacle origin, lane spacing, scale and lane easing. The existing read-only
   voyage hook exposes the sailing job's approach, pass, bump and retreat through `voyage().phase`,
   alongside obstacle lanes and distances, ship yaw, and the active lane.
