@@ -13,6 +13,7 @@ import { DebugScriptCancelled } from "../debugLifecycle";
 import { activeFriend, currentPhase } from "../voyageSim";
 import { ask, fastMode, say, wait } from "./ask";
 import { fadeThrough, follow, frameTwo, isRunning, run, shot } from "./script";
+import { closeUp, endCloseUp } from "./closeUp";
 import { boatLeg, boatPose } from "./act3";
 import { BOAT_DECK_Y, BOAT_SCALE } from "../world/gullBoat";
 import { BOAT_CHASE, BOAT_OUT, BOAT_OUT_START, CHASE_SECONDS, MOORED, MOORED_POSE, Motion, SHIP_CHASE_S, SHIP_PATH, boatChaseAt, horizonDrop, shipChaseAt, type Pose } from "./voyageEncounter";
@@ -390,6 +391,8 @@ async function surrounded() {
 async function interrogation() {
   frameTwo(rt.player, crewWorld("redbeard"), 0.9);
   rt.player.yaw = Math.atan2(crewWorld("redbeard").x - rt.player.x, crewWorld("redbeard").z - rt.player.z);
+  // The captain's questions are his: a medium close-up from his introduction to the food handed over.
+  closeUp("redbeard");
   await say("redbeard", "Ahoy! I'm Captain Redbeard!", "やあ! わしは キャプテン・レッドビアードだ!");
   // The bag stays open on screen through every question (ui/VoyageBag).
   setGame({ voyageBag: { target: null } });
@@ -397,6 +400,7 @@ async function interrogation() {
     await say("redbeard", "We are hungry. Let's see your bag!", "はらぺこだ。バッグを みせろ!");
     await questions();
   } finally {
+    endCloseUp();
     setGame({ voyageBag: null });
   }
 }
@@ -440,13 +444,16 @@ async function monstersScene() {
   const mid = shipWorld(HUDDLE);
   shot({ x: mid.x + 5.2, y: DECK_Y + 5.4, z: mid.z + 6.2 }, { x: mid.x, y: DECK_Y + 0.8, z: mid.z - 0.6 });
   await say("redbeard", "What's that? Monsters!", "なんだ それは? モンスター!");
+  closeUp("redbeard");
   await say("redbeard", "Monsters! Delicious!", "モンスター! おいしそう!");
+  endCloseUp();
   // The cook leans in on the huddle.
   const pep = vy.crew.pepper, from = { ...HUDDLE_PIRATES.pepper };
   void over(0.6, (k) => { pep.x = lerp(from.x, lerp(from.x, HUDDLE.x, 0.3), ease(k)); pep.z = lerp(from.z, lerp(from.z, HUDDLE.z, 0.3), ease(k)); });
   await say("pepper", "Monster soup!", "モンスタースープだ!");
   for (const id of COMPANION_IDS) { animate(id, "hide"); audio.voice(id, "surprised"); }
   await ask({ kind: "command", options: ["theyreMyFriends"], tapAlways: true, readSentence: true, help: "ともだちを まもろう!" });
+  closeUp("redbeard");
   await say("redbeard", "Your friends? Hmm...", "ともだち? ふむ…");
   for (;;) {
     const said = await ask({ kind: "choice", options: ["yesTheyCan", "noTheyCant"], tapAlways: true, readQuestion: true,
@@ -458,9 +465,10 @@ async function monstersScene() {
   for (const id of COMPANION_IDS) { animate(id, "yes"); audio.voice(id, "excited"); }
   for (const c of Object.values(vy.crew)) c.menace = false;
   await say("redbeard", "Okay! Show me!", "よし! みせてみろ!");
-  // The crew go back to work (behind a short fade, so nobody slides across the deck).
-  await fadeThrough(() => { crewHome(); frameTwo(rt.player, crewWorld("redbeard"), 0.9); }, 350);
+  // The crew go back to work (behind a short fade, so nobody slides across the deck); the fade hides the cut.
+  await fadeThrough(() => { crewHome(); frameTwo(rt.player, crewWorld("redbeard"), 0.9); closeUp("redbeard", { cut: true }); }, 350);
   await say("redbeard", "My crew needs help. Talk to them!", "クルーが こまっている。はなしかけて みろ!");
+  endCloseUp();
   banner({ title: "The Pirate Ship", sub: "Help the crew: fish, cook, cargo and sails!", ja: "かいぞくせん — クルーを てつだおう!", tone: "place" }, 4200);
 }
 

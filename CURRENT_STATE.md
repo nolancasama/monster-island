@@ -7,21 +7,24 @@ The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and 
   boat wake + sail; 3 fishing-stair landing; 4 crates along the bulwark; 5 crate labels; 6 Pepper behind the counter; 8 enclosed
   hold (`holdLayerAt`/`setShipHoldOccupancy`, `vy.inHold`, interior camera, save flag `act3.voyage.inHold`); 9 steering
   (`logic/steerPath.ts`); 10 home island fades at sea. Still a debug-menu preview for students.
-- **Item 7 built 2026-11-20, UNCOMMITTED in this worktree (14 files + new `scene/voyageAnchors.ts`), not deployed:** friends' powers from their combat stances. Pose-only
-  `setActivityStance` hook in `game/combat.ts` (registered by `flow/voyage.ts`; each job phase's `stance()`): Ember ridden at
-  the stove breathing from its mouth, Leafy on the back with carry vines in the hold, Bubbo ridden on the fishing platform,
-  Puff perched for gusts. `toolFx` sources from the friend (`scene/voyageAnchors.ts`). Codex built it; Claude fixed a
-  regression (Monsters.tsx had dropped `companionVisible`, which hides Lumo and inactive friends in fights) and the Puff shot.
-  Verified: tsc; unit 1205/1207 (arm64 golden only); `pirate-voyage.spec.ts` 2/2 at low load; `SHOT_ONLY=powers` renders
-  judged (`.tmp/shots/voyage/m1`, `m2`). **Not run:** `combat-feel.spec.ts` and `elements.spec.ts` (stopped by the user
-  2026-11-20): item 7 changes `updateStance`, `playerRadius`, rider yaw and friend visibility used in every normal fight, so
-  run those two before deploying. Puff's gust reads small in the fixed ship camera (the `look` hook is ignored aboard).
-- **Machine load:** macOS XProtect scans push the load to 8-10; then the full voyage spec twice timed out on the last cargo
-  put (passed 3x at low load). Its timeout message now prints carry/cargo/focus/stance; look there if it recurs. Playwright
-  serves the existing `dist` (no rebuild): always `npm run build` first.
-- **Next:** review and commit item 7 (user's call), run the two combat specs; then item 2 (Redbeard close-ups, `.ai/work-order-redbeard.json`; the user said "no codex" on 2026-11-20 for this
-  plan, so Claude builds it), then the full e2e suite; deploy item 7 with the user's go-ahead. Slice worktrees `mi-vp-ship`,
-  `mi-vp-boat`, `mi-vp-island`, `mi-vp-steer` are merged and can be removed.
+- **Item 7 committed 2026-11-21 (`02ea20a`, not pushed or deployed):** friends' powers from their combat stances (pose-only
+  `setActivityStance` in `game/combat.ts`; `toolFx` sources from the friend via `scene/voyageAnchors.ts`). Verified: tsc; unit
+  tests; `pirate-voyage.spec.ts` 2/2; `combat-feel.spec.ts` + `elements.spec.ts` 19/19 (2026-11-21); renders `.tmp/shots/voyage/m1`,
+  `m2`. Known: Puff's gust reads small in the fixed ship camera.
+- **Item 2 Redbeard close-ups committed 2026-11-21 (not pushed or deployed), built by Claude ("no codex"):** `flow/closeUp.ts`
+  (`closeUp`/`endCloseUp`, candidate angles rejected through masts, sails, helm, barrels, people or off deck; `frameTwo`
+  fallback) and an eased 0.75 s blend in `CameraRig` via `rt.camera.ease` (close-ups only). Used in the interrogation, the
+  monsters scene, "My crew needs help", the sailing intro and the finale's gift. Decision: "Voyage polish: Redbeard close-ups".
+  Verified: tsc; unit 1226/1228 (only the arm64 ground golden); `closeUp.test.ts` 21 (shown to fail with mast clearance off and
+  with the face aimed low); `pirate-voyage.spec.ts` 2/2 (before the final framing constants); renders judged at 1366x768 and
+  1280x800 `.tmp/shots/voyage/r4` (`SHOT_ONLY=redbeard`). **Not verified:** the blend's smoothness frame by frame (SwiftShader
+  screenshots catch ~3 frames per 0.75 s blend; the camera track JSON shows decreasing steps and a settled end); the finale's
+  close-up was not rendered (unit-tested framing only); real Chromebook feel.
+- **Machine load:** macOS XProtect scans push the load to 8-10; then the full voyage spec can time out on the last cargo
+  put. Playwright serves the existing `dist` (no rebuild): always `npm run build` first.
+- **Next:** the full e2e suite on this branch (`MI_LONG_TIMEOUT=3600000`, ~1.5 h); then the user's go-ahead to push and deploy
+  items 7 and 2 (still a debug-menu preview). Remaining plan items: none besides those listed above. Slice worktrees
+  `mi-vp-ship`, `mi-vp-boat`, `mi-vp-island`, `mi-vp-steer` are merged and can be removed.
 
 ## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
 Built by Claude directly. Decisions: `DESIGN_DECISIONS.md` "2026-11-19 — Touch-and-hold on gameplay controls". `game-control` class

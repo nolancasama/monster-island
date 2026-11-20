@@ -3082,3 +3082,25 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
   input gate still admits contextual J and touch-hold, which drive the original
   heat rates and cooking band. The controller can read the shared pose with
   `window.__mi.state().act2.stance` and the job with `window.__mi.voyage().phase`.
+
+## 2026-11-19 - Voyage polish: Redbeard close-ups
+Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" for this plan).
+- **What:** `flow/closeUp.ts` adds `closeUp(who, { cut })` / `endCloseUp()`. A medium close-up: lens 2.5-3.3 m from the face,
+  0.14 m above it, 28-65° off the subject's line of sight to the player, on the camera's current side first; the look-at
+  point is 0.32 m below the face so the face sits in the upper middle. The rig's existing panel lens shift keeps it above
+  the dialogue panel (unit-tested at 1366x768 and 1280x800 with 0/180/260 px panels).
+- **Clearance:** candidates are rejected if the lens leaves the deck (0.7 m inside the rails) or its line to the face passes
+  a mast, the helm, a deck barrel, a gaff sail's span (boom to gaff, ±0.9 m billow) or anyone on deck (player, friends,
+  crew). No clear candidate falls back to the existing `frameTwo` framing.
+- **Blend:** `rt.camera.ease` (seconds) asks the rig for a smoothstep blend from the rendered view over 0.75 s, in and out,
+  overriding only the exponential lag for that one transition. A cut, the hold, a rope or the ferry cancel it. Nothing else
+  in the rig changed; no shake, roll or bob was added (the storm's existing roll still applies at sea).
+- **Restore:** `endCloseUp()` restores the mode and shot that were active before the close-up; if a flow has set another
+  shot in the meantime, it leaves that one alone rather than restoring a stale view.
+- **Where:** the interrogation (from "Ahoy!" to the food handed over), "Monsters! Delicious!", "Your friends? Hmm..."
+  through "Okay! Show me!", "My crew needs help" (cut behind the existing fade), the sailing intro ("The wind is gone!"
+  and its answer), and the finale's gift and hat question (back to the wide shot to see the hat on). Not for "What's
+  that? Monsters!" (the reveal needs the huddle), short repeated lines, or free roam.
+- **Rejected:** blending every shot change (would change every existing scripted camera); a fixed offset per scene (the
+  ship's masts and the huddle make one angle unsafe in some scenes); a narrower FOV instead of moving the lens (flattens
+  the face and makes the ship's sway read as shake).

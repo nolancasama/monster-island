@@ -14,6 +14,7 @@ import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, toolFx,
 import { cb } from "../combat";
 import { ask, fastMode, say } from "./ask";
 import { fadeThrough, frameTwo, shot } from "./script";
+import { closeUp, endCloseUp } from "./closeUp";
 import { switchTo } from "./companion";
 import { crewWorld, ease, guard, lerp, over, placeOnDeck, scene, until } from "./voyage";
 import { startStorm } from "./voyageStorm";
@@ -491,8 +492,10 @@ async function whereTask(item: CargoItem) {
 async function sailing() {
   await scene(async () => {
     frameTwo(rt.player, crewWorld("redbeard"), 0.85);
+    closeUp("redbeard");
     await say("redbeard", "The wind is gone! Can you make wind?", "かぜが ない! かぜを おこせる?");
     await yesICan();
+    endCloseUp();
     await friendFor("puff", "redbeard");
     await say("redbeard", "Fill the three sails! Face a sail and press J.", "3まいの ほを ふくらませて! ほの ほうを むいて J!");
   });
@@ -690,12 +693,15 @@ async function crewFinale() {
     cheer("pepper");
     await say("pepper", "No monster soup!", "モンスタースープは なし!");
     for (const f of COMPANION_IDS) friendCheers(f);
+    // The captain's gift and question in close-up; back to the wide view to see the hat on.
+    closeUp("redbeard");
     await say("redbeard", "You're part of my crew now! This is for you!", "きみも なかまだ! これを あげよう!");
     const had = getGame().progress.act3.voyage.hat;
     updateProgress((p) => markHatGiven(giveWearable(p, "captainHat")));
     if (!had) { audio.play("chest"); toast({ en: "Captain Hat!", ja: "せんちょうの ぼうし!", icon: "captainHat", tone: "good" }, 2600); }
     const wearIt = await ask({ kind: "choice", options: ["yesPlease", "noThankYou"], tapAlways: true, readQuestion: true,
       question: { by: "redbeard", en: "Do you want to wear it?", ja: "かぶってみる?" }, help: "かぶる? かぶらない?" });
+    endCloseUp();
     if (wearIt === "yesPlease") updateProgress((p) => wear(p, "captainHat", "player"));
     await say("redbeard", wearIt === "yesPlease" ? "You look great, Captain!" : "Okay! Keep it!", wearIt === "yesPlease" ? "にあってる!" : "わかった! もっていてね!");
     // Thunder: the weather turns.

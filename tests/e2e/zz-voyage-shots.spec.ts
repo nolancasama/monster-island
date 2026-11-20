@@ -338,3 +338,88 @@ test("departure, capture, interrogation and the monsters (normal speed)", async 
   await hook(page, "renderFrames", 30);
   await snap(page, "c10-free-roam");
 });
+
+/** Redbeard's close-ups: the line that starts one, and the line after which the view eases back out. */
+const CLOSE_IN: Record<string, string> = {
+  "Ahoy! I'm Captain Redbeard!": "r1-ahoy", "Monsters! Delicious!": "r2-delicious", "Your friends? Hmm...": "r3-friends",
+  "My crew needs help. Talk to them!": "r4-crew-needs-help",
+};
+const CLOSE_OUT: Record<string, string> = {
+  "Monsters! Delicious!": "r2-out", "My crew needs help. Talk to them!": "r4-out",
+};
+
+/** Sequential frames of the live camera while it moves (no frame stepping: the rig eases in real time). */
+async function sequence(page: Page, name: string, track: Record<string, unknown[]>, ms = 1300) {
+  const t0 = Date.now(), cams: unknown[] = [];
+  for (let i = 0; Date.now() - t0 < ms; i++) {
+    const s = await state(page) as any;
+    cams.push({ t: Date.now() - t0, pos: s.camera.pos, target: s.camera.target, settled: s.camera.settled });
+    await page.screenshot({ path: `${DIR}/${name}-${String(i).padStart(2, "0")}.jpg`, type: "jpeg", quality: 70 });
+  }
+  track[name] = cams;
+}
+
+for (const [w, h] of [[1366, 768], [1280, 800]] as const) {
+  test(`Redbeard close-ups at ${w}x${h} (capture, normal speed)`, async ({ page }) => {
+    test.skip(ONLY !== "redbeard");
+    test.setTimeout(900_000);
+    const vp = `${w}x${h}`, track: Record<string, unknown[]> = {};
+    await page.setViewportSize({ width: w, height: h });
+    const bag: Record<string, number> = { apples: 2, fish: 1 };
+    await page.addInitScript(v => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, JSON.stringify(save(bag)));
+    await boot(page, "");
+    await chooseMode(page, "tap");
+    await page.getByTestId("btn-continue").click();
+    await waitFor(page, st => st.mode === "explore", 90_000, "loaded");
+    await hook(page, "openCloudShip", true);
+    await hook(page, "openPirateVoyage", true);
+    await hook(page, "goTo", "harbor", 1.4);
+    await waitFor(page, st => st.focus?.id === "harbor" && st.mode === "explore", 15_000, "at Gull");
+    await page.keyboard.press("KeyE");
+    let last = "";
+    const t0 = Date.now();
+    for (;;) {
+      const st = await state(page) as any;
+      if (st.mode === "explore" && st.progress.act3.voyage.stage === "captured") break;
+      if (Date.now() - t0 > 840_000) throw new Error("capture did not finish");
+      const sp = await hook(page, "voyage") as any;
+      if (sp.spyPrompt && !st.line) { await page.keyboard.press("KeyE"); await page.waitForTimeout(150); continue; }
+      if (st.line && st.line.en !== last) {
+        last = st.line.en;
+        if (CLOSE_IN[last]) await sequence(page, `${vp}-${CLOSE_IN[last]}`, track);
+        await page.keyboard.press("Space");
+        if (CLOSE_OUT[last]) await sequence(page, `${vp}-${CLOSE_OUT[last]}`, track);
+      } else if (st.prompt?.buttons && st.prompt.status === "ready") {
+        const c = st.prompt.choices as string[], q = st.prompt.question ?? "";
+        if (c.includes("yesIDo") || c.includes("yesTheyCan")) { await hook(page, "renderFrames", 4); await snap(page, `${vp}-r-prompt-${c[0]}`); }
+        const food = Object.keys(bag).find(f => q.includes(f));
+        const said = st.prompt.kind === "command" ? c.find(id => (PHRASES as any)[id]?.en === st.prompt.sentences[0]) : undefined;
+        const pick = said ?? (c.includes("yesIDo") ? (food && bag[food] ? "yesIDo" : "noIDont") : c.includes("yesTheyCan") ? "yesTheyCan" : c.includes("iCanSeeAShip") ? "iCanSeeAShip" : c[0]);
+        await tap(page, pick);
+        last = "";
+      } else if (!st.line) last = "";
+      await page.waitForTimeout(120);
+    }
+    await (await import("node:fs/promises")).writeFile(`${DIR}/${vp}-camera-track.json`, JSON.stringify(track, null, 1));
+  });
+
+  test(`Redbeard close-up at ${w}x${h} (sailing job)`, async ({ page }) => {
+    test.skip(ONLY !== "redbeard");
+    test.setTimeout(300_000);
+    const vp = `${w}x${h}`, track: Record<string, unknown[]> = {};
+    await boardForShots(page);
+    await page.setViewportSize({ width: w, height: h });
+    const v = await voyage(page);
+    await face(page, { x: SPOT.captain.x + 1, z: 10.3 }, v.crew.redbeard);
+    await shotReady(page, "at Redbeard", s => s.focus?.id === "crew:redbeard" && s.mode === "explore");
+    await page.keyboard.press("KeyE");
+    await shotReady(page, "the wind line", s => s.line?.en === "The wind is gone! Can you make wind?");
+    await sequence(page, `${vp}-r5-sailing-in`, track);
+    await page.keyboard.press("Space");
+    await shotReady(page, "yes I can", s => Boolean(s.prompt?.buttons && s.prompt.status === "ready" && s.prompt.choices.includes("yesICan")));
+    await snap(page, `${vp}-r5-sailing-prompt`);
+    await tap(page, "yesICan");
+    await sequence(page, `${vp}-r5-sailing-out`, track);
+    await (await import("node:fs/promises")).writeFile(`${DIR}/${vp}-sailing-track.json`, JSON.stringify(track, null, 1));
+  });
+}

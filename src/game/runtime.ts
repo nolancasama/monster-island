@@ -156,6 +156,8 @@ export const rt = {
     mode: "follow" as "follow" | "shot",
     shot: null as CameraShot | null,
     snap: false,
+    /** Seconds of eased blend into the next camera (close-ups only); the rig consumes it. */
+    ease: 0,
     /** Semantic framing and transition completion, exposed read-only by the capture hook. */
     framing: "fixed" as "fixed" | "lowland" | "cloud" | "rope" | "shot" | "title" | "results",
     profile: "west-beach",
@@ -285,6 +287,7 @@ export function resetRuntime() {
   rt.camera.pitch = 0.46;
   rt.camera.dist = 9;
   rt.camera.snap = true;
+  rt.camera.ease = 0;
   rt.camera.framing = "fixed";
   rt.camera.profile = "west-beach";
   rt.camera.settled = false;

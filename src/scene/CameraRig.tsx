@@ -16,6 +16,7 @@ import { updateOccluderFade } from "./materials";
 import { voyageRoll } from "./voyageWeather";
 import { updateHoldView, vy } from "../game/voyageRt";
 import { HOLD, HOLD_CEILING_Y, HOLD_RAMP, SHIP, inShipArea } from "../game/world/pirateShip";
+import { closeUpEase } from "../game/flow/closeUp";
 
 /** The live camera, for projecting world labels to the screen. */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -56,6 +57,11 @@ export function CameraRig() {
   const ferryFrom = useMemo(() => new THREE.Vector3(), []);
   const ferryLookFrom = useMemo(() => new THREE.Vector3(), []);
   const holdFade = useRef<Animation | null>(null);
+  // Close-ups (flow/closeUp.ts) ease in and out over a fixed time instead of the exponential lag.
+  const easeAge = useRef(0);
+  const easeDur = useRef(0);
+  const easeFrom = useMemo(() => new THREE.Vector3(), []);
+  const easeLookFrom = useMemo(() => new THREE.Vector3(), []);
 
   // After movement and before the ship and camera read the new view.
   useFrame(() => {
@@ -272,14 +278,30 @@ export function CameraRig() {
       const floor = Math.max(standY(want.current.x, want.current.z, g.progress.solved), -0.4) + 0.7;
       if (want.current.y < floor) want.current.y = floor;
     }
-    if (inside || !ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank) {
+    if (c.ease > 0) {
+      easeFrom.copy(pos.current);
+      easeLookFrom.copy(look.current);
+      easeAge.current = 0;
+      easeDur.current = c.ease;
+      c.ease = 0;
+    }
+    // A cut, the hold, a rope or the ferry take over from a close-up blend.
+    if (c.snap || inside || rope || ferryBank) easeAge.current = easeDur.current;
+    const easing = ready.current && easeAge.current < easeDur.current;
+    if (!easing && (inside || !ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank)) {
       pos.current.copy(want.current);
       look.current.copy(wantLook.current);
       ready.current = true;
     }
     c.snap = false;
     const k = 1 - Math.exp(-dt * ((c.mode === "follow" || leavingRope) && g.screen === "game" ? 6 : 2.4));
-    if (ferryBank) {
+    if (easing) {
+      easeAge.current = Math.min(easeDur.current, easeAge.current + dt);
+      const e = closeUpEase(easeAge.current / easeDur.current);
+      pos.current.lerpVectors(easeFrom, want.current, e);
+      look.current.lerpVectors(easeLookFrom, wantLook.current, e);
+      c.settled = e === 1;
+    } else if (ferryBank) {
       ferryAge.current = Math.min(.95, ferryAge.current + dt);
       const t = ferryAge.current / .95, e = t * t * (3 - 2 * t);
       pos.current.lerpVectors(ferryFrom, want.current, e);
