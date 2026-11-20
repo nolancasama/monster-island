@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, raftGeometry, raftSailGeometry, riggingLines, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
-import { BOW_Z, DECK_Y, HOLD_RAMP, HOLD_STAIRS, MASTS, SPOT, STERN_RAMP, STERN_STAIRS, shipWalkable, shipWorld } from "../../game/world/pirateShip";
+import { BOW_Z, CARGO_SIZE, DECK_Y, HOLD_CEILING_Y, HOLD_HEADER_Y, HOLD_PORTAL, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, SPOT, STERN_RAMP, STERN_STAIRS, shipWalkable, shipWorld } from "../../game/world/pirateShip";
 import { SEA_Y } from "../../game/world/island";
 
 const tris = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
@@ -38,7 +38,10 @@ describe("the pirate ship's budget (docs/PIRATE_VOYAGE.md §8)", () => {
     for (const item of ["barrel", "bag", "bottle"] as const) {
       const g = cargoGeometry(item);
       g.computeBoundingBox();
-      expect(g.boundingBox!.min.y).toBeGreaterThanOrEqual(-0.01);
+      const { min, max } = g.boundingBox!;
+      expect(min.y).toBeCloseTo(0, 5);
+      expect(max.y).toBeCloseTo(CARGO_SIZE[item].height, 5);
+      expect(Math.max(max.x, -min.x, max.z, -min.z)).toBeLessThanOrEqual(CARGO_SIZE[item].radius + 1e-5);
     }
   });
 });
@@ -107,6 +110,26 @@ describe("pirate ship attachments and stair geometry", () => {
         }
       }
     }
+    wood.dispose();
+  });
+
+  it("lines the hatch below deck and closes the head of the hold doorway", () => {
+    const { base } = pirateShipGeometries();
+    const wood = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(base, wood), ray = new THREE.Raycaster();
+    const { x0, x1, z0, z1 } = HOLD_RAMP, x = (x0 + x1) / 2;
+    for (const edge of [x0, x1]) {
+      for (const z of [z0 + 0.1, 0.32, z1 - 0.16]) {
+        ray.set(new THREE.Vector3(x, DECK_Y - 0.08, z), new THREE.Vector3(Math.sign(edge - x), 0, 0));
+        expect(ray.intersectObject(mesh)[0]?.point.x).toBeCloseTo(edge, 5);
+      }
+    }
+    for (const y of [(HOLD_HEADER_Y + HOLD_CEILING_Y) / 2, DECK_Y - 0.02]) {
+      ray.set(new THREE.Vector3(x, y, z0 + 0.15), new THREE.Vector3(0, 0, -1));
+      expect(ray.intersectObject(mesh)[0]?.point.z).toBeCloseTo(z0, 5);
+    }
+    ray.set(new THREE.Vector3(x, HOLD_Y + 1.88, 0.15), new THREE.Vector3(0, 0, -1));
+    expect(ray.intersectObject(mesh)[0]?.point.z).toBeCloseTo(HOLD_PORTAL.enterZ - 0.12, 5);
     wood.dispose();
   });
 });

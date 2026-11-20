@@ -12,7 +12,7 @@ import { NPCS } from "../game/data/town";
 import { BUCKET, DECK_Y, FISH_Y, HALF_BEAM, SHIP, SPOT, hullHalf } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { vy, type CrewId } from "../game/voyageRt";
-import { cargoSpot, cookMarker, isPosedToolFx } from "../game/voyageSim";
+import { cargoSpot, carriedCargoY, cookMarker, isPosedToolFx } from "../game/voyageSim";
 import { rt } from "../game/runtime";
 import type { FoodId } from "../game/types";
 import type { CargoItem } from "../game/logic/voyage";
@@ -84,22 +84,23 @@ function Cargo() {
   const geos = useMemo(() => ITEMS.map((i) => cargoGeometry(i)), []);
   const refs = useRef<Array<THREE.Mesh | null>>([]);
   useFrame(() => {
-    ITEMS.forEach((item, i) => {
+    for (let i = 0; i < ITEMS.length; i++) {
+      const item = ITEMS[i];
       const m = refs.current[i];
-      if (!m) return;
+      if (!m) continue;
       const carried = vy.carry?.kind === "cargo" && vy.carry.item === item;
       m.visible = onDeck() && (carried || vy.inHold);
-      if (!m.visible) return;
+      if (!m.visible) continue;
       if (carried) {
         // Held up by Leafy's vine above the player's head.
-        m.position.set(rt.player.x, rt.player.y + (vy.inHold ? 1.8 : 2.15) + Math.sin(rt.time * 3) * 0.05, rt.player.z);
+        m.position.set(rt.player.x, carriedCargoY(rt.player.y, rt.time), rt.player.z);
         m.rotation.set(0, rt.time * 0.8, 0);
-        return;
+        continue;
       }
       const s = cargoSpot(item, vy.cargo[item]);
       m.position.set(shipX(s.x), s.y, shipZ(s.z));
       m.rotation.set(0, i * 0.7, 0);
-    });
+    }
   });
   return <>{ITEMS.map((item, i) => <mesh key={item} ref={(el) => { refs.current[i] = el; }} geometry={geos[i]} material={flatMat} visible={false} />)}</>;
 }

@@ -3104,3 +3104,19 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - **Rejected:** blending every shot change (would change every existing scripted camera); a fixed offset per scene (the
   ship's masts and the huddle make one angle unsafe in some scenes); a narrower FOV instead of moving the lens (flattens
   the face and makes the ship's sway read as shake).
+
+## 2026-11-21 - Ship and raft fixes: Enclosed cargo hold
+
+- The hold uses the frozen 11.8 × 12 m footprint and a floor 1.1 m below sea level. The original deck opening leads to
+  the deeper floor through a lined companionway. Individual tread and riser faces meet the solid shaft walls, and the
+  hatch rails share corner posts. The doorway header closes the ceiling gap. A dark panel covers the view into the room
+  from above until the interior view takes over. Inside, the follow camera stays lined up with the stairs through the
+  doorway, then moves into the room as the player steps away.
+- The round fore-mast pillar, single port shelf, table, open box, and forward door leave 1.2 m walking routes from the
+  landing. The shelf and table each have four legs. The enlarged red barrel, blue bag and green bottle fit all six
+  placements because the job can assign any item to any slot. Leafy's vines and the carried prop share the same lift.
+- Bill is available at his hold post when the player is on the hold floor. The `mi.save.v4` `inHold` flag restores a
+  walkable floor position. Saves on the lower stair slope or positions blocked by the new layout use the stair foot.
+- The controller can read the live camera profile, player height and focus through `window.__mi.state()`, and cargo slot,
+  carry and job state through `window.__mi.voyage()`. The hold shot run captures the hatch, six descent frames, both
+  ends of the room, Bill, and the cargo placements at 1366 × 768 and 1280 × 800.

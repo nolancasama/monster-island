@@ -8,7 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, teleportShip, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
-import { DECK_Y, HALF_BEAM, HOLD, HOLD_Y, MASTS, SHIP, SPOT, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
+import { DECK_Y, HALF_BEAM, HOLD_Y, MASTS, MESS, SHIP, SPOT, SUPPLY_CRATES, crateApproach, shipWalkable } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
 
 const TAG = process.env.SHOT_TAG;
@@ -37,17 +37,15 @@ const spyglassUsed: string[] = [];
 let spyInput: "keys" | "touch" = "keys";
 
 /** Stand at a ship spot (local), facing a world point. */
-/** A teleport skips the companionway: spots over the hold's footprint mean the hold floor. */
-const inHoldBox = (local: { x: number; z: number }) => local.x >= HOLD.x0 && local.x <= HOLD.x1 && local.z >= HOLD.z0 && local.z <= HOLD.z1;
-async function standFacing(page: Page, local: { x: number; z: number }, at: { x: number; z: number }) {
+async function standFacing(page: Page, local: { x: number; z: number }, at: { x: number; z: number }, below = false) {
   const s = L(local.x, local.z);
-  await teleportShip(page, s.x, s.z, Math.atan2(at.x - s.x, at.z - s.z), inHoldBox(local));
+  await teleportShip(page, s.x, s.z, Math.atan2(at.x - s.x, at.z - s.z), below);
 }
 /** Stand near a world point (the game snaps to the nearest walkable spot), facing it. */
-async function nearFacing(page: Page, at: { x: number; z: number }, from: { x: number; z: number }, dist = 1.2) {
+async function nearFacing(page: Page, at: { x: number; z: number }, from: { x: number; z: number }, dist = 1.2, below = false) {
   const dx = from.x - at.x, dz = from.z - at.z, d = Math.hypot(dx, dz) || 1;
   const x = at.x + (dx / d) * dist, z = at.z + (dz / d) * dist;
-  await teleportShip(page, x, z, Math.atan2(at.x - x, at.z - z), inHoldBox({ x: x - SHIP.x, z: z - SHIP.z }));
+  await teleportShip(page, x, z, Math.atan2(at.x - x, at.z - z), below);
 }
 async function pressJ(page: Page) { await page.keyboard.press("KeyJ"); await page.waitForTimeout(120); }
 /** Talk to whatever E targets once the focus is this one. */
@@ -140,11 +138,12 @@ async function drive(page: Page, label: string, done: (s: MiState, v: V) => bool
 
 // Stand points follow the ship's authored layout (world/pirateShip.ts; the beam widened 1.5× on 2026-11-16).
 const JOB_SPOT: Record<string, { crew: string; stand: { x: number; z: number } }> = {
-  cargo: { crew: "bill", stand: { x: SPOT.bill.x + 1.5, z: -3.9 } }, sailing: { crew: "redbeard", stand: { x: SPOT.captain.x + 1, z: 10.3 } },
+  cargo: { crew: "bill", stand: { x: SPOT.bill.x + 1.5, z: SPOT.bill.z } }, sailing: { crew: "redbeard", stand: { x: SPOT.captain.x + 1, z: 10.3 } },
   fishing: { crew: "finn", stand: { x: SPOT.finn.x + 1.3, z: 16.7 } }, cooking: { crew: "pepper", stand: { x: SPOT.cook.x - 1.1, z: -14.4 } },
 };
 const FURN_STAND: Record<string, { x: number; z: number }> = {
-  table: { x: SPOT.table.x - 1.9, z: -5.7 }, shelf: { x: SPOT.shelf.x + 1.1, z: -5.7 }, box: { x: SPOT.box.x + 1.2, z: -2.6 }, door: { x: SPOT.door.x, z: -6.6 },
+  table: { x: SPOT.table.x - 1.9, z: SPOT.table.z }, shelf: { x: SPOT.shelf.x + 1.25, z: SPOT.shelf.z },
+  box: { x: SPOT.box.x - 1.45, z: SPOT.box.z }, door: { x: SPOT.door.x, z: SPOT.door.z + 0.95 },
 };
 const FURN_AT: Record<string, { x: number; z: number }> = { table: SPOT.table, shelf: SPOT.shelf, box: SPOT.box, door: SPOT.door };
 /** The middle of each sail's cloth (voyageSim's SAIL_AIM): mizzen, main, fore. */
@@ -159,7 +158,7 @@ async function startJob(page: Page, job: string) {
   const j = JOB_SPOT[job];
   const s = L(j.stand.x, j.stand.z);
   const v = await voyage(page);
-  await standFacing(page, j.stand, v.crew[j.crew]);
+  await standFacing(page, j.stand, v.crew[j.crew], job === "cargo");
   void s;
   await pressE(page, `crew:${j.crew}`);
 }
@@ -202,12 +201,12 @@ async function play(page: Page, _s: MiState, v: V) {
       const t = putTask(v.hud?.title);
       if (!t) return;
       if (v.carry?.kind === "cargo") {
-        await standFacing(page, FURN_STAND[t.furniture], L(FURN_AT[t.furniture].x, FURN_AT[t.furniture].z));
+        await standFacing(page, FURN_STAND[t.furniture], L(FURN_AT[t.furniture].x, FURN_AT[t.furniture].z), true);
         await pressE(page, `furn:${t.furniture}`);
         return;
       }
       const at = v.items[t.item];
-      await nearFacing(page, at, L(0, -4.5), 1.0);
+      await nearFacing(page, at, { x: SHIP.x, z: at.z }, 1.6, true);
       await pressJ(page);
       return;
     }
@@ -363,7 +362,15 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
       // Reload at `jobs`: the ship comes back with the job kept and no food taken twice.
       await drive(page, "after cargo", (s, v) => s.mode === "explore" && !v.phase, async () => {}, 120_000);
       const bagBefore = JSON.stringify((await state(page)).progress.bag);
-      await page.waitForTimeout(5500); // the 5 s autosave holds the deck spot
+      const belowMess = L(MESS.x, MESS.z);
+      await teleportShip(page, belowMess.x, belowMess.z, Math.PI, true);
+      await requireVoyageState(page, "standing below the deck mess table", s => s.camera.profile === "pirate-hold"
+        && Math.abs(s.player.y - HOLD_Y) < 0.03 && Math.hypot(s.player.x - belowMess.x, s.player.z - belowMess.z) < 0.05);
+      await expect.poll(() => page.evaluate(at => {
+        const saved = JSON.parse(localStorage.getItem("mi.save.v4") ?? "null");
+        return saved?.progress.act3.voyage.inHold === true && saved.progress.act3.voyage.jobs.includes("cargo")
+          && Math.hypot(saved.player.x - at.x, saved.player.z - at.z) < 0.05;
+      }, belowMess), { message: "HARNESS_PRECONDITION_FAILED - the completed cargo job was saved below deck", timeout: 15_000 }).toBe(true);
       await continueSaved(page);
       await requireVoyageState(page, "the saved voyage resumed aboard the ship", (s, v) => s.mode === "explore" && v.active);
       st = await state(page);
@@ -378,6 +385,9 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
       // to it with the interior view (the deck cover lies above the same x/z).
       expect(st.progress.act3.voyage.inHold).toBe(true);
       expect(st.player.y).toBeCloseTo(HOLD_Y, 1);
+      expect(Math.hypot(st.player.x - belowMess.x, st.player.z - belowMess.z)).toBeLessThan(0.05);
+      expect(st.player.falling).toBe(false);
+      expect(shipWalkable(st.player.x, st.player.z, 0.35, true)).toBe(true);
       await expect.poll(async () => (await state(page)).camera.profile).toBe("pirate-hold");
     }
   }

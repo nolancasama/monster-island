@@ -4,7 +4,7 @@ import { COMPANION_IDS } from "../data/combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, rt } from "../runtime";
 import { GULL_BERTH } from "../world/lowland";
-import { DECK_Y, HALF_BEAM, SHIP, SPOT, inShipArea, shipStandY, shipWalkable, shipWorld } from "../world/pirateShip";
+import { DECK_Y, HALF_BEAM, SHIP, SPOT, holdSavePosition, inShipArea, shipStandY, shipWalkable, shipWorld } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { foodChoices, foodOfHave, handOverFood, interrogationFoods, setVoyageStage, truthfulAnswer, voyageStage, VOYAGE_JOBS, type VoyageJob, type VoyageStage } from "../logic/voyage";
 import type { Progress } from "../logic/progress";
@@ -21,7 +21,7 @@ import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
 import { setVoyageTool } from "../../input/attackInput";
 import { setActivityStance } from "../combat";
-import { JOB_GIVER, JOB_NAMES, startJob } from "./voyageJobs";
+import { JOB_GIVER, JOB_NAMES, billAvailable, startJob } from "./voyageJobs";
 import { startStorm } from "./voyageStorm";
 import { startRaft } from "./voyageRaft";
 
@@ -88,6 +88,7 @@ export function voyageSavePoint(): { x: number; z: number } | false | null {
   if (!vy.sea || rt.world !== "home") return null;
   if (!voyageResumable(getGame().progress)) return false;
   const p = rt.player;
+  if (onShip() && vy.inHold) return holdSavePosition(p.x, p.z, PLAYER_R);
   return onShip() && !p.frozen && shipWalkable(p.x, p.z, PLAYER_R) ? { x: p.x, z: p.z } : { ...BOARDED };
 }
 
@@ -498,9 +499,11 @@ export async function resumeVoyage() {
   const p = rt.player;
   // A save made below deck resumes on the hold floor; the deck cover lies above the same x/z.
   restoreHold(getGame().progress.act3.voyage.inHold === true && stage !== "storm");
-  const keep = inShipArea(p.x, p.z) && shipWalkable(p.x, p.z, PLAYER_R) && stage !== "storm";
-  if (!keep) restoreHold(false);
-  placeOnDeck(keep ? { x: p.x, z: p.z } : BOARDED);
+  if (vy.inHold) placeOnDeck(holdSavePosition(p.x, p.z, PLAYER_R));
+  else {
+    const keep = inShipArea(p.x, p.z) && shipWalkable(p.x, p.z, PLAYER_R) && stage !== "storm";
+    placeOnDeck(keep ? { x: p.x, z: p.z } : BOARDED);
+  }
   p.y = shipStandY(p.x, p.z, vy.inHold);
   if (vy.inHold) {
     // Friends wait beside the player in the hold, not up on the deck.
@@ -516,12 +519,16 @@ export async function resumeVoyage() {
 /** E targets on the ship: the running phase's, or the crew in free roam. */
 export function voyageCandidates(): Array<{ focus: Focus; reach: number }> {
   const ph = currentPhase();
-  if (ph) return ph.candidates ? ph.candidates() : [];
+  if (ph) {
+    const out = ph.candidates?.() ?? [];
+    return !billAvailable() && out.some(({ focus }) => focus.id === "crew:bill")
+      ? out.filter(({ focus }) => focus.id !== "crew:bill") : out;
+  }
   if (!onShip()) return [];
   const out: Array<{ focus: Focus; reach: number }> = [];
   for (const id of Object.keys(vy.crew) as CrewId[]) {
     const c = vy.crew[id];
-    if (!c.visible) continue;
+    if (!c.visible || id === "bill" && !billAvailable()) continue;
     const w = crewWorld(id), name = id === "gull" ? "Captain Gull" : PIRATES[id].name;
     out.push({ focus: { id: `crew:${id}`, kind: "npc", verb: "Talk to", noun: name, x: w.x, z: w.z }, reach: 2.4 });
   }
@@ -529,6 +536,7 @@ export function voyageCandidates(): Array<{ focus: Focus; reach: number }> {
 }
 
 export function voyageInteract(f: Focus) {
+  if (f.id === "crew:bill" && !billAvailable()) return;
   const ph = currentPhase();
   if (ph) { ph.interact?.(f); return; }
   if (!f.id.startsWith("crew:")) return;

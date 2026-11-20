@@ -5,9 +5,9 @@ import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { region } from "./world/region";
 import { isAttackHeld, pressAttack, releaseAllAttacks, releaseAttack } from "../input/attackInput";
-import { resetVoyageRt, updateHoldView, vy } from "./voyageRt";
+import { resetVoyageRt, restoreHold, updateHoldView, vy } from "./voyageRt";
 import { hand, isPosedToolFx, L, SAIL_AIM, setPhase, toolFx } from "./voyageSim";
-import { BOARDED, crewWorld, resumeVoyage, setScene, VoyageCancelled } from "./flow/voyage";
+import { BOARDED, crewWorld, resumeVoyage, setScene, voyageCandidates, VoyageCancelled, voyageInteract, voyageSavePoint } from "./flow/voyage";
 import { itemWorld, startJob } from "./flow/voyageJobs";
 import { choose, nextLine } from "./flow/ask";
 import { switchTo } from "./flow/companion";
@@ -15,7 +15,7 @@ import { run } from "./flow/script";
 import { anchors } from "../scene/anchors";
 import { bubboEmitter } from "../scene/voyageAnchors";
 import { moveCircle, PLAYER_R } from "./world/collision";
-import { COUNTER_CUSTOMER, DECK_Y, HOLD_Y, inShipArea, shipSolidAt, shipWalkable, SPOT } from "./world/pirateShip";
+import { COUNTER_CUSTOMER, DECK_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_Y, inShipArea, shipSolidAt, shipWalkable, SPOT } from "./world/pirateShip";
 import { tick } from "./sim";
 import { placePlayer } from "./travel";
 import type { PhraseId } from "./logic/english";
@@ -243,14 +243,14 @@ describe("resumed voyage jobs in the frame loop", () => {
     vi.unstubAllGlobals();
   });
 
-  async function resume(below: boolean) {
+  async function resume(below: boolean, at = below ? holdSpot : BOARDED) {
     const progress = getGame().progress;
     const act3 = progress.act3;
     setGame({ progress: { ...progress, active: "leafy", act3: {
       ...act3, voyage: { ...act3.voyage, stage: "jobs", interrogated: true, ...(below ? { inHold: true } : {}) },
     } } });
     resetVoyageRt();
-    Object.assign(rt.player, below ? holdSpot : BOARDED, { y: DECK_Y });
+    Object.assign(rt.player, at, { y: DECK_Y });
     await resumeVoyage();
   }
 
@@ -264,12 +264,59 @@ describe("resumed voyage jobs in the frame loop", () => {
     await resume(true);
     expect(vy.active && vy.inHold).toBe(true);
     expect(rt.player).toMatchObject({ ...holdSpot, y: HOLD_Y });
+    expect(shipWalkable(rt.player.x, rt.player.z, PLAYER_R, true)).toBe(true);
+    frame();
+    expect(rt.player).toMatchObject({ ...holdSpot, y: HOLD_Y, fall: null });
+  });
+
+  it("moves an old hold save blocked by the new table to the clear stair foot", async () => {
+    const coveredByTable = L(2.6, -7.25);
+    expect(shipWalkable(coveredByTable.x, coveredByTable.z, PLAYER_R, true)).toBe(false);
+    await resume(true, coveredByTable);
+    const entry = L(HOLD_ENTRY.x, HOLD_ENTRY.z);
+    expect(vy.inHold).toBe(true);
+    expect(rt.player).toMatchObject({ ...entry, y: HOLD_Y });
+    expect(shipWalkable(entry.x, entry.z, PLAYER_R, true)).toBe(true);
+    frame();
+    expect(rt.player).toMatchObject({ ...entry, y: HOLD_Y, fall: null });
+  });
+
+  it("saves the stair foot when the hold view is active on the slope", async () => {
+    await resume(true);
+    const stair = L(HOLD_ENTRY.x, HOLD_PORTAL.enterZ - 0.1);
+    placePlayer(stair.x, stair.z, stair.x, stair.z - 1);
+    expect(rt.player.y).toBeGreaterThan(HOLD_Y);
+    expect(voyageSavePoint()).toEqual(L(HOLD_ENTRY.x, HOLD_ENTRY.z));
+  });
+
+  it("offers and interacts with Bill only on the hold floor, even with a phase candidate", async () => {
+    await resume(true);
+    const candidate = voyageCandidates().find(({ focus }) => focus.id === "crew:bill");
+    expect(candidate).toBeDefined();
+    const focus = candidate!.focus;
+    const interact = vi.fn();
+    const approach = L(SPOT.bill.x + 1.5, SPOT.bill.z);
+    restoreHold(false);
+    placePlayer(approach.x, approach.z, focus.x, focus.z);
+    expect(rt.player.y).toBe(DECK_Y);
+    expect(voyageCandidates().some(({ focus }) => focus.id === "crew:bill")).toBe(false);
+    setPhase({ name: "cargo", candidates: () => [candidate!], interact });
+    expect(voyageCandidates()).toEqual([]);
+    voyageInteract(focus);
+    expect(interact).not.toHaveBeenCalled();
+    restoreHold(true);
+    expect(voyageCandidates()).toEqual([]);
+    placePlayer(approach.x, approach.z, focus.x, focus.z);
+    expect(rt.player.y).toBe(HOLD_Y);
+    expect(voyageCandidates()).toEqual([candidate]);
+    voyageInteract(focus);
+    expect(interact).toHaveBeenCalledWith(focus);
   });
 
   it.each([
     { job: "cooking", crew: "pepper", phase: "cooking", friend: "ember", brief: COUNTER_CUSTOMER,
       at: L(0, -13.7), target: L(SPOT.stove.x, SPOT.stove.z), prompts: ["yesICan", "yesICan", "canFire"] },
-    { job: "cargo", crew: "bill", phase: "cargo", friend: "leafy", brief: { x: SPOT.bill.x + 1.5, z: -3.9 },
+    { job: "cargo", crew: "bill", phase: "cargo", friend: "leafy", brief: { x: SPOT.bill.x + 1.5, z: SPOT.bill.z },
       at: L(-.1, -3.8), target: itemWorld("bag"), prompts: ["yesICan"] },
     { job: "fishing", crew: "finn", phase: "fishing", friend: "bubbo", brief: { x: SPOT.finn.x + 1.3, z: 16.7 },
       at: L(-1.7, 16.75), target: L(-8, 17), prompts: ["yesICan", "yesICan", "howManyFish"] },
@@ -299,6 +346,13 @@ describe("resumed voyage jobs in the frame loop", () => {
       expect(answers).toEqual(prompts);
       expect(vy.phase?.name).toBe(phase);
       expect(getGame()).toMatchObject({ mode: "explore", line: null, progress: { active: friend } });
+      if (below) {
+        expect(vy.phase?.candidates?.().some(({ focus }) => focus.id === "crew:bill")).toBe(true);
+        restoreHold(false);
+        placePlayer(intro.x, intro.z, giver.x, giver.z);
+        expect(vy.phase?.candidates?.()).toEqual([]);
+        restoreHold(true);
+      }
 
       placePlayer(at.x, at.z, target.x, target.z);
       frame();

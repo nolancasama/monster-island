@@ -1,7 +1,7 @@
 import { addFx, vy, type Candidate, type CrewId, type FxKind, type Phase as VoyagePhase, type VoyageFx } from "./voyageRt";
 import { animate, effect, rt } from "./runtime";
 import { getGame } from "./store";
-import { DECK_Y, HOLD_Y, MASTS, SAIL_FOOT, SHIP, SPOT, sailHeight } from "./world/pirateShip";
+import { DECK_Y, HOLD_BOX, HOLD_SHELF, HOLD_TABLE, HOLD_Y, MASTS, SAIL_FOOT, SHIP, SPOT, sailHeight } from "./world/pirateShip";
 import { SEA_Y } from "./world/island";
 import type { CargoItem, Placement } from "./logic/voyage";
 import type { CompanionId } from "./data/combat";
@@ -44,19 +44,28 @@ export const TOOL: Record<CompanionId, { kind: FxKind; name: string; ja: string 
 export const L = (x: number, z: number) => ({ x: SHIP.x + x, z: SHIP.z + z });
 
 /** Where each cargo item rests (local, its base height): on/under/in/by, or its own spot on the floor. */
-const FLOOR: Record<CargoItem, { x: number; z: number }> = { barrel: { x: 0.3, z: -6.9 }, bag: { x: -1.35, z: -2.0 }, bottle: { x: 3.5, z: -4.2 } };
-export function cargoSpot(item: CargoItem, pl: Placement | null): { x: number; y: number; z: number } {
-  if (!pl) return { ...FLOOR[item], y: HOLD_Y };
-  const t = SPOT.table, s = SPOT.shelf, b = SPOT.box, d = SPOT.door;
-  switch (`${pl.prep} ${pl.furniture}`) {
-    case "on table": return { x: t.x, y: HOLD_Y + 1.02, z: t.z };
-    case "under table": return { x: t.x, y: HOLD_Y, z: t.z };
-    case "on shelf": return { x: s.x + 0.05, y: HOLD_Y + 1.33, z: s.z };
-    case "under shelf": return { x: s.x + 0.05, y: HOLD_Y, z: s.z };
-    case "in box": return { x: b.x, y: HOLD_Y + 0.08, z: b.z };
-    default: return { x: d.x + 1.05, y: HOLD_Y, z: d.z + 0.15 };
+const FLOOR = {
+  barrel: { x: 0.35, y: HOLD_Y, z: -8.85 },
+  bag: { x: -1.35, y: HOLD_Y, z: -2.25 },
+  bottle: { x: 4.4, y: HOLD_Y, z: -9.15 },
+} as const;
+const CARGO_SLOTS = {
+  table: { on: { ...SPOT.table, y: HOLD_Y + HOLD_TABLE.top }, under: { ...SPOT.table, y: HOLD_Y } },
+  shelf: { on: { ...SPOT.shelf, y: HOLD_Y + HOLD_SHELF.top }, under: { ...SPOT.shelf, y: HOLD_Y } },
+  box: { in: { ...SPOT.box, y: HOLD_Y + HOLD_BOX.base } },
+  door: { by: { x: SPOT.door.x + 1.34, y: HOLD_Y, z: SPOT.door.z + 0.52 } },
+} as const;
+export function cargoSpot(item: CargoItem, pl: Placement | null): Readonly<{ x: number; y: number; z: number }> {
+  if (!pl) return FLOOR[item];
+  if (pl.furniture === "table" || pl.furniture === "shelf") {
+    if (pl.prep === "on" || pl.prep === "under") return CARGO_SLOTS[pl.furniture][pl.prep];
   }
+  if (pl.furniture === "box" && pl.prep === "in") return CARGO_SLOTS.box.in;
+  return CARGO_SLOTS.door.by;
 }
+
+/** Base of the carried prop, shared by the prop mesh and Leafy's supporting vines. */
+export const carriedCargoY = (y: number, time: number) => y + 1.65 + Math.sin(time * 3) * 0.05;
 
 /** The centre of each sail's cloth (mizzen, main, fore), local. */
 export const SAIL_AIM = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ x: m.x + 0.4, y: DECK_Y + SAIL_FOOT + sailHeight(m) * 0.5 + 0.3, z: m.z + 2.0 }));

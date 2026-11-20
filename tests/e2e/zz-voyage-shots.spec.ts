@@ -5,8 +5,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, teleportShip, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
-import { COUNTER_CUSTOMER, DECK_Y, FISH_LANDING_Z, FISH_Y, HOLD, HOLD_PORTAL, HOLD_RAMP, MASTS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
+import { COUNTER_CUSTOMER, DECK_Y, FISH_LANDING_Z, FISH_Y, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_RAMP, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
+import { CARGO_ITEMS, ITEM_NAME, SLOTS, placePhrase, type CargoItem, type Furniture, type Placement } from "../../src/game/logic/voyage";
 
 const TAG = process.env.SHOT_TAG ?? "v1";
 const DIR = `.tmp/shots/voyage/${TAG}`;
@@ -35,8 +36,8 @@ async function shotReady(page: Page, label: string, ready: Parameters<typeof wai
   }
 }
 
-async function boardForShots(page: Page) {
-  await page.setViewportSize({ width: 1366, height: 768 });
+async function boardForShots(page: Page, viewport = { width: 1366, height: 768 }) {
+  await page.setViewportSize(viewport);
   await page.addInitScript(v => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, JSON.stringify(save()));
   await boot(page, "fast=1");
   await chooseMode(page, "tap");
@@ -115,7 +116,7 @@ test.describe("friends' powers on the pirate ship", () => {
   });
 
   test("Leafy carries cargo with vines inside the hold", async ({ page }) => {
-    await startPowerJob(page, "bill", { x: SPOT.bill.x + 1.5, z: -3.9 }, "cargo", ["yesICan"], true);
+    await startPowerJob(page, "bill", { x: SPOT.bill.x + 1.5, z: SPOT.bill.z }, "cargo", ["yesICan"], true);
     const bag = (await voyage(page)).items.bag;
     const from = { x: -.1, z: -3.8 };
     await face(page, from, bag, true);
@@ -215,45 +216,148 @@ test("fishing stairs and galley polish", async ({ page }) => {
   await snap(page, "galley-pepper-counter");
 });
 
-test("covered hold and walking through the companionway", async ({ page }) => {
-  test.skip(Boolean(ONLY) && ONLY !== "hold");
-  test.setTimeout(90_000);
-  await boardForShots(page);
-  const aboveHold = L(0.4, (HOLD.z0 + HOLD.z1) / 2);
-  await hook(page, "teleport", aboveHold.x, aboveHold.z, Math.PI, true);
-  await shotReady(page, "walking over the covered hold", s => Math.abs(s.player.y - DECK_Y) < 0.03 && s.camera.profile === "pirate-ship");
-  await snap(page, "hold-covered-deck");
-  const x = (HOLD_RAMP.x0 + HOLD_RAMP.x1) / 2;
-  const entry = L(x, HOLD_RAMP.z1 + 0.6);
-  await hook(page, "teleport", entry.x, entry.z, Math.PI, true);
-  await shotReady(page, "at the open end of the companionway", s => Math.abs(s.player.x - entry.x) < 0.08 && Math.abs(s.player.z - entry.z) < 0.08);
-  await hook(page, "timeScale", 0.32);
-  await snap(page, "hold-down-01-coaming");
-  async function step(name: string, z: number, inside: boolean, down: boolean) {
-    await shotReady(page, name, s => (down ? s.player.z <= SHIP.z + z : s.player.z >= SHIP.z + z) &&
-      (inside ? s.camera.profile === "pirate-hold" : s.camera.profile === "pirate-ship"));
-    await snap(page, name);
+const CARGO_STANDS: Record<Furniture, { x: number; z: number }> = {
+  table: { x: SPOT.table.x - 1.9, z: SPOT.table.z },
+  shelf: { x: SPOT.shelf.x + 1.25, z: SPOT.shelf.z },
+  box: { x: SPOT.box.x - 1.45, z: SPOT.box.z },
+  door: { x: SPOT.door.x, z: SPOT.door.z + 0.95 },
+};
+const CARGO_PLACEMENTS: Placement[] = Object.entries(SLOTS).flatMap(([furniture, preps]) =>
+  preps.map(prep => ({ furniture: furniture as Furniture, prep })));
+
+function holdInstruction(title: string) {
+  const match = /^Put (.+) (on|under|in|by) the (table|shelf|box|door)!$/.exec(title);
+  const item = CARGO_ITEMS.find(i => ITEM_NAME[i] === match?.[1]);
+  if (!match || !item) throw new Error(`HARNESS_PRECONDITION_FAILED - expected a cargo instruction, got ${title}`);
+  const placement: Placement = { prep: match[2] as Placement["prep"], furniture: match[3] as Furniture };
+  return { item, placement };
+}
+
+async function placeHoldCargo(page: Page, item: CargoItem, placement: Placement) {
+  const at = (await voyage(page)).items[item];
+  const from = { x: at.x - SHIP.x + (at.x < SHIP.x ? 1.6 : -1.6), z: at.z - SHIP.z };
+  await face(page, from, at, true);
+  await shotReady(page, `Leafy at the ${item}`, s => s.mode === "explore" && mountedFor(s, "leafy") && s.camera.profile === "pirate-hold");
+  await page.keyboard.press("KeyJ");
+  await voyageReady(page, `Leafy carrying the ${item}`, v => v.carry?.item === item);
+  const { furniture, prep } = placement;
+  await face(page, CARGO_STANDS[furniture], L(SPOT[furniture].x, SPOT[furniture].z), true);
+  await shotReady(page, `facing the ${furniture} with cargo`, s => s.mode === "explore" && s.focus?.id === `furn:${furniture}`);
+  await page.keyboard.press("KeyE");
+  if (prep === "on" || prep === "under") {
+    const phrase = placePhrase(placement);
+    await shotReady(page, `ready to choose ${phrase}`, s => Boolean(s.prompt?.buttons && s.prompt.status === "ready" && s.prompt.choices.includes(phrase)));
+    await tap(page, phrase);
   }
-  await page.keyboard.down("ArrowUp");
-  try {
-    await step("hold-down-02-treads", HOLD_RAMP.z1 - 0.55, false, true);
-    await step("hold-down-03-transition", HOLD_PORTAL.enterZ - 0.04, true, true);
-    await step("hold-down-04-landing", HOLD_RAMP.z0 - 0.6, true, true);
-    await step("hold-down-05-interior", -3.45, true, true);
-  } finally {
-    await page.keyboard.up("ArrowUp");
-  }
-  await page.keyboard.down("ArrowDown");
-  try {
-    await step("hold-up-01-interior", -2.55, true, false);
-    await step("hold-up-02-treads", HOLD_PORTAL.exitZ - 0.28, true, false);
-    await step("hold-up-03-transition", HOLD_PORTAL.exitZ + 0.04, false, false);
-    await step("hold-up-04-coaming", HOLD_RAMP.z1 + 0.42, false, false);
-  } finally {
-    await page.keyboard.up("ArrowDown");
-    await hook(page, "timeScale", 1);
-  }
-});
+  await voyageReady(page, `${item} ${prep} the ${furniture}`, v => v.cargo[item]?.furniture === furniture && v.cargo[item]?.prep === prep && !v.carry);
+}
+
+for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }]) {
+  const size = `${viewport.width}x${viewport.height}`;
+  test(`enclosed hold and cargo at ${size}`, async ({ page }) => {
+    test.skip(Boolean(ONLY) && ONLY !== "hold");
+    test.setTimeout(150_000);
+    await boardForShots(page, viewport);
+    const detail = (name: string) => snap(page, `hold-${size}-${name}`);
+    const eyeY = HOLD_CEILING_Y - 0.26;
+    async function look(name: string, lens: [number, number, number], target: [number, number, number]) {
+      await hook(page, "look", lens, target);
+      await shotReady(page, `${name} camera`, s => s.camera.mode === "shot" &&
+        Math.hypot(s.camera.pos.x - lens[0], s.camera.pos.y - lens[1], s.camera.pos.z - lens[2]) < 0.09);
+      await hook(page, "renderFrames", 2);
+      await detail(name);
+    }
+
+    const entry = { x: HOLD_ENTRY.x, z: HOLD_RAMP.z1 + 0.6 };
+    await face(page, entry, L(entry.x, HOLD_RAMP.z0), false);
+    await shotReady(page, "on deck at the hatch", s => Math.abs(s.player.y - DECK_Y) < 0.03 && s.camera.profile === "pirate-ship"
+      && Math.hypot(s.player.x - L(entry.x, entry.z).x, s.player.z - L(entry.x, entry.z).z) < 0.08);
+    await look("hatch-from-deck", [SHIP.x + entry.x + 1.2, DECK_Y + 3.8, SHIP.z + entry.z + 1.9], [SHIP.x + entry.x, DECK_Y - 0.8, SHIP.z + 0.45]);
+    await hook(page, "follow");
+    await shotReady(page, "follow view lined up for descent", s => s.camera.mode === "follow" && Math.abs(s.camera.pos.x - s.player.x) < 0.06);
+    const upper = HOLD_RAMP.z1;
+    const descent = [upper - 0.39, upper - 0.98, upper - 1.56, upper - 2.18, HOLD_PORTAL.enterZ - 0.16, HOLD_RAMP.z0 + 0.12];
+    await hook(page, "timeScale", 0.18);
+    await page.keyboard.down("ArrowUp");
+    try {
+      for (const [i, z] of descent.entries()) {
+        const profile = z > HOLD_PORTAL.enterZ ? "pirate-ship" : "pirate-hold";
+        const name = `down-0${i + 1}`;
+        await shotReady(page, name, s => s.player.z <= SHIP.z + z && s.player.z >= SHIP.z + z - 0.22 && s.camera.profile === profile);
+        await hook(page, "timeScale", 0);
+        if (i === 4) await page.waitForFunction(() => !document.querySelector(".voyage-flash")?.getAnimations().some(a => a.playState === "running"),
+          undefined, { timeout: 3000 }).catch(error => { throw new Error("HARNESS_PRECONDITION_FAILED - hold camera fade cleared", { cause: error }); });
+        await detail(name);
+        await hook(page, "timeScale", 0.18);
+      }
+      await shotReady(page, "walked onto the hold floor", s => s.player.z < SHIP.z + HOLD_RAMP.z0 - 0.45 && Math.abs(s.player.y - HOLD_Y) < 0.03 && s.camera.profile === "pirate-hold");
+    } finally {
+      await page.keyboard.up("ArrowUp");
+      await hook(page, "timeScale", 1);
+    }
+    await look("from-stair-foot", [SHIP.x - 3.9, eyeY, SHIP.z - 1.57], [SHIP.x + 0.1, HOLD_Y + 1.07, SHIP.z - 8.7]);
+
+    const far = { x: 2.6, z: -11.85 };
+    await face(page, far, L(0, -5.8), true);
+    await shotReady(page, "on the floor at the forward end", s => s.camera.profile === "pirate-hold" && Math.abs(s.player.y - HOLD_Y) < 0.03
+      && Math.hypot(s.player.x - L(far.x, far.z).x, s.player.z - L(far.x, far.z).z) < 0.08);
+    await look("from-forward-end", [SHIP.x + 2.6, eyeY, SHIP.z - 12.55], [SHIP.x, HOLD_Y + 1.05, SHIP.z - 5.8]);
+
+    const bill = (await voyage(page)).crew.bill;
+    await hook(page, "follow");
+    await face(page, { x: SPOT.bill.x + 1.5, z: SPOT.bill.z }, bill, true);
+    await shotReady(page, "Bill at his post on the hold floor", s => s.camera.profile === "pirate-hold" && s.mode === "explore" && s.focus?.id === "crew:bill");
+    await look("bill", [bill.x + 1.45, HOLD_Y + 1.6, bill.z + 2.15], [bill.x, HOLD_Y + 1.12, bill.z]);
+    await page.keyboard.press("KeyE");
+    await shotReady(page, "Bill's job offer", s => Boolean(s.prompt?.buttons && s.prompt.status === "ready" && s.prompt.choices.includes("yesICan")));
+    await tap(page, "yesICan");
+
+    const canPlace = async (previous?: string) => {
+      await expect.poll(async () => {
+        const [s, v] = await Promise.all([state(page), voyage(page)]);
+        return v.phase === "cargo" && v.hud?.title && v.hud.title !== previous && s.mode === "explore";
+      }, { message: "HARNESS_PRECONDITION_FAILED - cargo placement ready", timeout: 15_000 }).toBeTruthy();
+    };
+    const whereReady = (s: Awaited<ReturnType<typeof state>>) => Boolean(s.prompt?.buttons && s.prompt.status === "ready" && s.prompt.question?.startsWith("Where is"));
+    const seen = new Set<CargoItem>();
+    async function placementShot(item: CargoItem, placement: Placement) {
+      const { furniture, prep } = placement, at = (await voyage(page)).items[item];
+      const lensY = prep === "under" ? HOLD_Y + 1.3 : eyeY;
+      const dx = furniture === "shelf" || furniture === "door" ? 2.0 : -1.65;
+      await look(`${item}-${prep}-${furniture}`, [at.x + dx, lensY, at.z + 0.95], [at.x, at.y + 0.43, at.z]);
+      seen.add(item);
+    }
+
+    await canPlace();
+    for (let i = 0; i < CARGO_PLACEMENTS.length; i++) {
+      const v = await voyage(page), title = v.hud.title as string;
+      const { item, placement } = holdInstruction(title);
+      if (i === CARGO_PLACEMENTS.length - 1) {
+        const missing = CARGO_ITEMS.find(it => it !== item && !seen.has(it));
+        // A shuffled job can alternate between two items. Use a vacant slot
+        // for the third item before completing the final instruction.
+        if (missing) {
+          const occupied = Object.values(v.cargo).filter(Boolean) as Placement[];
+          const spare = CARGO_PLACEMENTS.find(p => placePhrase(p) !== placePhrase(placement)
+            && !occupied.some(o => placePhrase(o) === placePhrase(p)))!;
+          await placeHoldCargo(page, missing, spare);
+          await shotReady(page, "finished Bill's placement hint", s => s.mode === "explore");
+          await placementShot(missing, spare);
+        }
+      }
+      await placeHoldCargo(page, item, placement);
+      const question = i === 2 || i === 5;
+      if (question) await shotReady(page, `where the ${item} was left`, whereReady);
+      else await canPlace(title);
+      await placementShot(item, placement);
+      if (question) {
+        await tap(page, placePhrase(placement));
+        if (i === 2) await canPlace(title);
+      }
+    }
+    await shotReady(page, "completed Bill's cargo job", s => s.mode === "explore" && s.progress.act3.voyage.jobs.includes("cargo"));
+  });
+}
 
 test("the pirate ship", async ({ page }) => {
   test.skip(Boolean(ONLY) && ONLY !== "ship");

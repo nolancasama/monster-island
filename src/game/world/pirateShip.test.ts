@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import {
-  BEAM, BULWARK_THICKNESS, BUCKET, CANNONS, COUNTER_CUSTOMER, COUNTER_SOLID, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_CEILING_Y, HOLD_PORTAL, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, MESS, SHIP, SHIP_SOLIDS, SPOT, STERN_RAMP, STERN_STAIRS, STOVE_SOLID, SUPPLY_CRATES, SUPPLY_SIZE, SUPPLY_SOLID,
+  BEAM, BULWARK_THICKNESS, BUCKET, CANNONS, CARGO_SIZE, COUNTER_CUSTOMER, COUNTER_SOLID, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_BOX, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_PILLAR, HOLD_PORTAL, HOLD_RAMP, HOLD_SHELF, HOLD_SOLIDS, HOLD_STAIRS, HOLD_TABLE, HOLD_Y, MASTS, MESS, SHIP, SHIP_SOLIDS, SPOT, STERN_RAMP, STERN_STAIRS, STOVE_SOLID, SUPPLY_CRATES, SUPPLY_SIZE, SUPPLY_SOLID,
   crateApproach, hullHalf, inShipArea, sailHeight, shipFloorY, shipSolidAt, shipStandY, shipWalkable, shipWorld, touches,
 } from "./pirateShip";
 import { PLAYER_R, isWalkable, standY } from "./collision";
 import { pirateShipGeometries } from "../../scene/models/pirateShip";
 import { cargoSpot } from "../voyageSim";
 import { resetVoyageRt, updateHoldView, vy } from "../voyageRt";
-import type { Placement } from "../logic/voyage";
+import { CARGO_ITEMS, SLOTS, type Furniture, type Placement } from "../logic/voyage";
+import { SEA_Y } from "./island";
 
 const R = 0.32;
 const W = (p: { x: number; z: number }) => shipWorld(p);
@@ -28,7 +29,7 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
     for (const p of [{ x: HALF_BEAM + 0.2, z: 0 }, { x: 0, z: 22 }, { x: 0, z: -22 }, { x: HALF_BEAM - 0.1, z: 0 }]) expect(walk(p, 0), JSON.stringify(p)).toBe(false);
     for (const p of [SPOT.mainMast, SPOT.helm, SPOT.stove, SPOT.counter, SPOT.supplies, MESS, BUCKET])
       expect(walk(p), JSON.stringify(p)).toBe(false);
-    for (const p of [SPOT.table, SPOT.shelf, SPOT.box, { x: HOLD.x1 + 0.2, z: -4 }, { x: 0, z: -8 }])
+    for (const p of [SPOT.table, SPOT.shelf, SPOT.box, { x: HOLD.x1 + 0.2, z: -4 }, { x: 0, z: HOLD.z0 - 0.1 }])
       expect(walk(p, R, true), JSON.stringify(p)).toBe(false);
   });
 
@@ -36,7 +37,6 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
     for (let x = HOLD.x0 + 0.45; x <= HOLD.x1 - 0.4; x += 0.45) {
       for (let z = HOLD.z0 + 0.45; z <= HOLD.z1 - 0.65; z += 0.45) {
         expect(shipFloorY(x, z)).toBe(DECK_Y);
-        expect(walk({ x, z }, PLAYER_R)).toBe(true);
       }
     }
     const { x0, x1, z0, z1 } = HOLD_RAMP;
@@ -57,8 +57,8 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
     const endpoints = [ramp.z0 - 0.5, ramp.z1 + 0.5];
     for (const [start, end] of [endpoints, [...endpoints].reverse()]) {
       let last = shipFloorY(x, start, below(start))!;
-      for (let i = 0; i <= 100; i++) {
-        const z = start + (end - start) * i / 100;
+      for (let i = 0; i <= 140; i++) {
+        const z = start + (end - start) * i / 140;
         expect(walk({ x, z }, PLAYER_R, below(z)), `z ${z.toFixed(2)}`).toBe(true);
         const y = shipFloorY(x, z, below(z))!;
         expect(Math.abs(y - last)).toBeLessThan(0.05);
@@ -111,13 +111,12 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
 });
 
 describe("the wider ship (2026-11-16: the beam is 1.5× the first build)", () => {
-  it("the hull, the hold, the galley and the fishing deck are half as wide again; the length is unchanged", () => {
+  it("the hull, the galley and the fishing deck are half as wide again; the length is unchanged", () => {
     expect(BEAM).toBe(1.5);
     expect(hullHalf(0)).toBeCloseTo(4.5 * 1.5, 6);
     expect(hullHalf(-21)).toBeCloseTo(1.5 * 1.5, 6);
     expect(hullHalf(15)).toBeCloseTo(4 * 1.5, 6);
     expect(hullHalf(16)).toBe(0);
-    expect(HOLD.x1 - HOLD.x0).toBeCloseTo(5.6 * 1.5, 6);
     expect(FISH_DECK.x1 - FISH_DECK.x0).toBeCloseTo(6 * 1.5, 6);
     // The walkable deck amidships spans the new beam less the rails.
     let across = 0;
@@ -171,6 +170,39 @@ describe("the wider ship (2026-11-16: the beam is 1.5× the first build)", () =>
 });
 
 describe("the enclosed cargo hold", () => {
+  it("has the frozen floor and keeps its furniture and mast pillar inside it", () => {
+    expect(HOLD).toEqual({ x0: -5.9, x1: 5.9, z0: -13.2, z1: -1.2 });
+    expect(HOLD_Y).toBe(SEA_Y - 1.1);
+    expect(HOLD_CEILING_Y - HOLD_Y).toBeGreaterThan(3.3);
+    expect(HOLD_PILLAR).toMatchObject({ x: -0.75, z: -10.6 });
+    for (const { x0, x1, z0, z1 } of HOLD_SOLIDS) {
+      expect(x0).toBeGreaterThanOrEqual(HOLD.x0);
+      expect(x1).toBeLessThanOrEqual(HOLD.x1);
+      expect(z0).toBeGreaterThanOrEqual(HOLD.z0);
+      expect(z1).toBeLessThanOrEqual(HOLD.z1);
+      expect(walk({ x: (x0 + x1) / 2, z: (z0 + z1) / 2 }, 0, true)).toBe(false);
+    }
+    const { x, z, r } = HOLD_PILLAR;
+    expect(walk({ x: x - r, z: z - r }, 0, true)).toBe(true);
+    expect(walk({ x, z }, 0, true)).toBe(false);
+  });
+
+  it("leaves connected 1.2 m aisles from the landing around the furniture and pillar", () => {
+    const aisles = [
+      [HOLD_ENTRY, { x: -2.6, z: HOLD_ENTRY.z }, { x: -2.6, z: -12 }],
+      [{ x: -4.9, z: -5.2 }, { x: 4.85, z: -5.2 }, { x: 4.85, z: -10.5 }],
+      [{ x: -4.85, z: -12 }, { x: 4.4, z: -12 }],
+    ];
+    for (const line of aisles) for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i];
+      for (let j = 0; j <= 100; j++) {
+        const p = { x: a.x + (b.x - a.x) * j / 100, z: a.z + (b.z - a.z) * j / 100 };
+        expect(walk(p, 0.6, true), JSON.stringify(p)).toBe(true);
+        expect(shipFloorY(p.x, p.z, true)).toBe(HOLD_Y);
+      }
+    }
+  });
+
   it("changes views only at the corresponding stair threshold", () => {
     resetVoyageRt();
     try {
@@ -195,18 +227,18 @@ describe("the enclosed cargo hold", () => {
   });
 
   it("keeps every floor item and furniture slot inside the room and reachable from the hold floor", () => {
-    expect(HOLD_CEILING_Y - HOLD_Y).toBeGreaterThan(2.5);
-    const placements: Array<Placement | null> = [null, { prep: "on", furniture: "table" }, { prep: "under", furniture: "table" },
-      { prep: "on", furniture: "shelf" }, { prep: "under", furniture: "shelf" }, { prep: "in", furniture: "box" }, { prep: "by", furniture: "door" }];
-    for (const item of ["barrel", "bag", "bottle"] as const) {
+    const placements: Array<Placement | null> = [null, ...Object.entries(SLOTS).flatMap(([furniture, preps]) =>
+      preps.map((prep) => ({ furniture: furniture as Furniture, prep })))];
+    for (const item of CARGO_ITEMS) {
+      const { radius, height } = CARGO_SIZE[item];
       for (const placement of placements) {
         const at = cargoSpot(item, placement);
-        expect(at.x).toBeGreaterThan(HOLD.x0);
-        expect(at.x).toBeLessThan(HOLD.x1);
-        expect(at.z).toBeGreaterThan(HOLD.z0);
-        expect(at.z).toBeLessThan(HOLD.z1);
+        expect(at.x - radius).toBeGreaterThan(HOLD.x0);
+        expect(at.x + radius).toBeLessThan(HOLD.x1);
+        expect(at.z - radius).toBeGreaterThan(HOLD.z0);
+        expect(at.z + radius).toBeLessThan(HOLD.z1);
         expect(at.y).toBeGreaterThanOrEqual(HOLD_Y);
-        expect(at.y).toBeLessThan(HOLD_CEILING_Y);
+        expect(at.y + height).toBeLessThan(HOLD_CEILING_Y);
         expect(shipFloorY(at.x, at.z, true)).toBe(HOLD_Y);
         if (!placement) expect(walk(at, PLAYER_R, true)).toBe(true);
         else {
@@ -217,6 +249,18 @@ describe("the enclosed cargo hold", () => {
             return walk(stand, PLAYER_R, true) && Math.hypot(stand.x - at.x, stand.z - at.z) < 3;
           });
           expect(reachable).toContain(true);
+          const { furniture, prep } = placement;
+          if (furniture === "table" || furniture === "shelf") {
+            const { width, depth, top, board, leg } = furniture === "table" ? HOLD_TABLE : HOLD_SHELF;
+            const inset = prep === "under" ? leg + 0.02 : 0;
+            expect(Math.min(width, depth) - 2 * inset).toBeGreaterThan(2 * radius);
+            if (prep === "under") expect(top - board).toBeGreaterThan(height);
+            expect(at.y).toBe(HOLD_Y + (prep === "on" ? top : 0));
+          } else if (furniture === "box") {
+            expect(Math.min(HOLD_BOX.width, HOLD_BOX.depth) - 2 * HOLD_BOX.wall).toBeGreaterThan(2 * radius);
+            expect(HOLD_BOX.height - HOLD_BOX.base).toBeGreaterThan(height);
+            expect(at.y).toBe(HOLD_Y + HOLD_BOX.base);
+          }
         }
       }
     }

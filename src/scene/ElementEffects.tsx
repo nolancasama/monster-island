@@ -15,7 +15,8 @@ import { createWindFrame, stepWindFrame } from "../game/logic/wind";
 import { inCone } from "../game/logic/elements";
 import { groundY } from "../game/world/island";
 import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
-import { activeFriend, stoveBreath } from "../game/voyageSim";
+import { activeFriend, carriedCargoY, stoveBreath } from "../game/voyageSim";
+import { CARGO_SIZE } from "../game/world/pirateShip";
 import { vy } from "../game/voyageRt";
 
 // Shared batches, including a separate translucent steam batch; empty batches submit none.
@@ -546,15 +547,16 @@ export function ElementEffects() {
       if (vy.active && vy.inHold && rt.world === "home" && vy.phase?.name === "cargo"
         && vy.carry?.kind === "cargo" && activeFriend() === "leafy" && mounted("leafy")) {
         const p = rt.player, rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
-        const cargoY = p.y + 1.8 + Math.sin(t * 3) * .05;
+        const size = CARGO_SIZE[vy.carry.item];
+        const gripY = carriedCargoY(p.y, t) + size.height * 0.46;
         for (let side = -1; side <= 1; side += 2) {
           const root = side < 0 ? anchors.leafyHandL : anchors.leafyHandR;
           if (side < 0 ? !anchors.leafyHandLValid : !anchors.leafyHandRValid) continue;
           for (let i = 0; i < WHIP_POINTS; i++) {
             const k = i / (WHIP_POINTS - 1), bow = Math.sin(k * Math.PI);
-            const out = side * (.17 * k + .48 * bow);
+            const out = side * (size.radius * 0.75 * k + .48 * bow);
             curve[i * 3] = root.x + (p.x - root.x) * k + rx * out;
-            curve[i * 3 + 1] = root.y + (cargoY + .32 - root.y) * k + .12 * bow;
+            curve[i * 3 + 1] = root.y + (gripY - root.y) * k + .12 * bow;
             curve[i * 3 + 2] = root.z + (p.z - root.z) * k + rz * out;
           }
           draw.curve(curve, WHIP_POINTS, pool.vines, .05, .032, root);

@@ -5,6 +5,7 @@ import { OBSTACLES, gateOpen, newProgress, obstacleAvailable, type MonsterRecord
 import { PHRASES, type PhraseId } from "./english";
 import type { FoodId, MonsterId, ObstacleId } from "../types";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable } from "../world/collision";
+import { holdSavePosition } from "../world/pirateShip";
 import { ACT2_OBSTACLES, RELIC_IDS, TUTORIAL_STEPS, bagMax, newAct2, prologueComplete, type Act2, type Checkpoint } from "./act2";
 import { readWardrobe } from "./wardrobe";
 import { readVoyage } from "./voyage";
@@ -331,7 +332,10 @@ function decodeSaveOnGround(text: string | null): SaveData | null {
       p.act2.zone = zoneAt(layeredSpot.x, layeredSpot.z, savedLayer);
     }
   }
-  if (layeredSpot) {
+  if (p.act3.world === "home" && !p.act3.voyageDone && p.act3.voyage.inHold) {
+    layer = "ground";
+    safe = holdSavePosition(savedX, savedZ, PLAYER_R);
+  } else if (layeredSpot) {
     safe = layeredSpot;
   } else if (p.act3.world === "cloud") {
     const oldLayout = !isObj(src.act3) || src.act3.cloudLayout !== 2;

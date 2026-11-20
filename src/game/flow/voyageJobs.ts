@@ -4,9 +4,9 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS, type CompanionId } from "../data/combat";
 import { getGame, toast, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
-import { BUCKET, DECK_Y, FISH_DECK, FISH_Y, SHIP, SPOT, STEER_LANE, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
+import { BUCKET, CARGO_SIZE, DECK_Y, FISH_DECK, FISH_Y, HOLD_Y, SHIP, SPOT, STEER_LANE, SUPPLY_CRATES, onHoldFloor, shipWorld } from "../world/pirateShip";
 import { SEA_Y } from "../world/island";
-import { ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
+import { CARGO_ITEMS, ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
 import { STEER_APPROACH_SECONDS, makeSteerPath, sampleSteerPath, type SteerFrame, type SteerObstacleKind } from "../logic/steerPath";
 import { giveWearable, wear } from "../logic/wardrobe";
 import { voyageEpoch, vy, type Candidate, type CrewId, type Fish, type Obstacle } from "../voyageRt";
@@ -73,7 +73,7 @@ let busy = false;
 
 /** E on a job's pirate: run that job, then the crew's thanks (and the finale after the fourth). */
 export async function startJob(job: VoyageJob): Promise<void> {
-  if (busy || getGame().progress.act3.voyage.jobs.includes(job)) return;
+  if (busy || getGame().progress.act3.voyage.jobs.includes(job) || job === "cargo" && !billAvailable()) return;
   busy = true;
   try {
     await JOBS[job]();
@@ -368,15 +368,21 @@ async function cooking() {
 
 // ------------------------------------------------------------ C. cargo (Leafy)
 
-const FURNITURE: Array<{ id: Furniture; noun: string; at: { x: number; z: number } }> = [
-  { id: "table", noun: "the table", at: SPOT.table }, { id: "shelf", noun: "the shelf", at: SPOT.shelf },
-  { id: "box", noun: "the box", at: SPOT.box }, { id: "door", noun: "the door", at: SPOT.door },
+const FURNITURE: Array<{ id: Furniture; noun: string; at: { x: number; z: number }; reach: number }> = [
+  { id: "table", noun: "the table", at: SPOT.table, reach: 2.55 }, { id: "shelf", noun: "the shelf", at: SPOT.shelf, reach: 2.3 },
+  { id: "box", noun: "the box", at: SPOT.box, reach: 2.35 }, { id: "door", noun: "the door", at: SPOT.door, reach: 2.2 },
 ];
 const ITEM_JA: Record<CargoItem, string> = { barrel: "あかい たる", bag: "あおい ふくろ", bottle: "みどりの びん" };
+const CARGO_TARGETS = [...CARGO_ITEMS];
 const PREP_JA: Record<Prep, string> = { on: "の うえ", under: "の した", in: "の なか", by: "の そば" };
 const FURN_JA: Record<Furniture, string> = { table: "テーブル", shelf: "たな", box: "はこ", door: "ドア" };
 const jaPut = (t: Extract<CargoTask, { kind: "put" }>) => `${ITEM_JA[t.item]}を ${FURN_JA[t.furniture]}${PREP_JA[t.prep]}に おいて!`;
 export const itemWorld = (item: CargoItem) => { const s = cargoSpot(item, vy.cargo[item]); return { ...L(s.x, s.z), y: s.y }; };
+const atCargoFloor = () => vy.inHold && Math.abs(rt.player.y - HOLD_Y) < 0.1 && onHoldFloor(rt.player.x, rt.player.z);
+export function billAvailable(): boolean {
+  const bill = vy.crew.bill;
+  return atCargoFloor() && bill.visible && bill.x === SPOT.bill.x && bill.z === SPOT.bill.z;
+}
 
 async function cargo() {
   await scene(async () => {
@@ -409,15 +415,17 @@ async function putTask(task: Extract<CargoTask, { kind: "put" }>) {
   });
   const phase: Phase = {
     name: "cargo",
-    stance: () => vy.inHold && !done ? "leafy" : null,
+    stance: () => atCargoFloor() && !done ? "leafy" : null,
     keepStanceDuringScene: () => choosingPlacement,
     candidates() {
-      const out: Candidate[] = [crewCandidate("bill")];
-      if (vy.carry?.kind === "cargo") for (const f of FURNITURE) out.push(placeCandidate(`furn:${f.id}`, "Put it at", f.noun, f.at, 2.2));
+      if (!atCargoFloor()) return [];
+      const out: Candidate[] = billAvailable() ? [crewCandidate("bill")] : [];
+      if (vy.carry?.kind === "cargo") for (const f of FURNITURE) out.push(placeCandidate(`furn:${f.id}`, "Put it at", f.noun, f.at, f.reach));
       return out;
     },
     interact(f) {
-      if (f.id === "crew:bill") { void scene(async () => { await say("bill", putLine(task), jaPut(task)); }); return; }
+      if (!atCargoFloor()) return;
+      if (f.id === "crew:bill" && billAvailable()) { void scene(async () => { await say("bill", putLine(task), jaPut(task)); }); return; }
       if (!f.id.startsWith("furn:") || vy.carry?.kind !== "cargo") return;
       const furniture = f.id.slice(5) as Furniture, item = vy.carry.item;
       void scene(async () => {
@@ -452,12 +460,13 @@ async function putTask(task: Extract<CargoTask, { kind: "put" }>) {
       });
     },
     tool(friend) {
+      if (!atCargoFloor()) return false;
       if (friend !== "leafy") { needFriend("leafy"); return false; }
       if (vy.carry) return false;
-      const item = aim(["barrel", "bag", "bottle"] as CargoItem[], (it) => itemWorld(it), 6, 0.9, 3);
+      const item = aim(CARGO_TARGETS, itemWorld, 6.5, 0.9, 3.2);
       if (!item) return false;
       const at = itemWorld(item);
-      toolFx("leafy", { x: at.x, y: at.y + 0.4, z: at.z });
+      toolFx("leafy", { x: at.x, y: at.y + CARGO_SIZE[item].height * 0.46, z: at.z });
       vy.cargo[item] = null; vy.carry = { kind: "cargo", item };
       return true;
     },

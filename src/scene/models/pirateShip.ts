@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { SEA_Y } from "../../game/world/island";
-import { BOW_Z, BULWARK_THICKNESS, BUCKET, CANNONS, COUNTER_SIZE, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_AFT_Z, HOLD_BARRELS, HOLD_CEILING_Y, HOLD_HATCH_GUARDS, HOLD_LANTERN, HOLD_PORTAL, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, SUPPLY_SIZE, hullHalf, type Box } from "../../game/world/pirateShip";
+import { BOW_Z, BULWARK_THICKNESS, BUCKET, CANNONS, CARGO_SIZE, COUNTER_SIZE, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_BARRELS, HOLD_BOX, HOLD_CEILING_Y, HOLD_DOOR, HOLD_HATCH_GUARDS, HOLD_HEADER_Y, HOLD_LANTERN, HOLD_PILLAR, HOLD_PORTAL, HOLD_RAMP, HOLD_SHELF, HOLD_STAIRS, HOLD_TABLE, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, SUPPLY_SIZE, hullHalf, type Box } from "../../game/world/pirateShip";
 
 /**
  * Captain Redbeard's ship (docs/PIRATE_VOYAGE.md §2, §8) in LOCAL coordinates
@@ -120,6 +120,40 @@ function staircase(b: PartBuilder, ramp: Box, stairs: typeof HOLD_STAIRS, omitLa
   }
 }
 
+function holdCompanionway(b: PartBuilder) {
+  const hr = HOLD_RAMP, width = hr.x1 - hr.x0, x = (hr.x0 + hr.x1) / 2;
+  const shaftWood = "#503522";
+  // Each tread and riser owns a single face. The walls cover the stair edges.
+  let lastY = HOLD_Y;
+  for (const [i, { z0, z1, y }] of HOLD_STAIRS.steps.entries()) {
+    b.add(new THREE.PlaneGeometry(width, z1 - z0), i % 2 ? PLANK2 : PLANK, [x, y, (z0 + z1) / 2], [-Math.PI / 2, 0, 0]);
+    if (y > lastY) b.add(new THREE.PlaneGeometry(width, y - lastY), DARK, [x, (lastY + y) / 2, z0], [0, Math.PI, 0]);
+    lastY = y;
+  }
+  // The collar continues down to the floor along both sides. The cap under
+  // the top landing and the header over the lower doorway close the shaft.
+  const [port, starboard, front] = HOLD_HATCH_GUARDS;
+  const collarY = DECK_Y + 0.13;
+  for (const side of [port, starboard]) {
+    b.box(side.x1 - side.x0, collarY - HOLD_Y, side.z1 - side.z0, (side.x0 + side.x1) / 2,
+      HOLD_Y, (side.z0 + side.z1) / 2, shaftWood);
+  }
+  b.box(width, collarY - HOLD_HEADER_Y, front.z1 - front.z0, x, HOLD_HEADER_Y, (front.z0 + front.z1) / 2, shaftWood);
+  b.box(width, DECK_Y - HOLD_Y, 0.16, x, HOLD_Y, hr.z1 + 0.08, shaftWood);
+
+  // The end rail fits between the side rails, which share their corner posts.
+  const rail = 0.09, y = DECK_Y + 0.86, z = (front.z0 + front.z1) / 2;
+  const railXs = [(port.x0 + port.x1) / 2, (starboard.x0 + starboard.x1) / 2];
+  b.box(railXs[1] - railXs[0] - rail, rail, rail, x, y, z, GOLD);
+  for (const railX of railXs) {
+    b.box(rail, rail, hr.z1 - z + rail / 2, railX, y, (z + hr.z1 - rail / 2) / 2, GOLD);
+    for (const postZ of [z, z + 1.1, z + 2.2, hr.z1 - rail]) {
+      b.box(0.1, y - collarY, 0.1, railX, collarY, postZ, WOOD);
+    }
+  }
+  b.box(0.1, y - collarY, 0.1, x, collarY, z, WOOD);
+}
+
 const SIGN_ATLAS = { width: 512, height: 1024, row: 192, inset: 5, whiteV: 0.125 };
 
 export function supplySignAtlas(): THREE.CanvasTexture | null {
@@ -219,7 +253,7 @@ export function pirateShipGeometries(): ShipGeometries {
     [quarter, quarterEnd], [quarter, 7], [-quarter, 7], [-quarter, quarterEnd], ...sternNotch(quarterEnd),
   ], DECK_Y + 0.004, "#a3784a");
 
-  staircase(b, hr, HOLD_STAIRS);
+  holdCompanionway(b);
   const railLine = (x0: number, z0: number, x1: number, z1: number, y: number, endY = y) => {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.1));
     const postFoot = endY === y ? 0 : 0.25;
@@ -227,12 +261,6 @@ export function pirateShipGeometries(): ShipGeometries {
       [(x0 + x1) / 2, (y + endY) / 2 + 0.9, (z0 + z1) / 2], [-Math.atan2(endY - y, len), 0, 0], GOLD);
     for (let i = 0; i <= n; i++) b.box(0.08, 0.9 + postFoot, 0.08, x0 + (x1 - x0) * i / n, y + (endY - y) * i / n - postFoot, z0 + (z1 - z0) * i / n, WOOD);
   };
-  for (const { x0, x1, z0, z1 } of HOLD_HATCH_GUARDS) {
-    const x = (x0 + x1) / 2, z = (z0 + z1) / 2;
-    b.box(x1 - x0, 0.2, z1 - z0, x, DECK_Y - 0.07, z, DARK);
-    if (z1 === hr.z1) railLine(x, hr.z0 - 0.125, x, z1, DECK_Y);
-    else railLine(x0 - 0.125, z, x1 + 0.125, z, DECK_Y);
-  }
 
   // Open galley: stove and chimney, pot, supplies and a serving counter.
   const st = SPOT.stove;
@@ -325,7 +353,7 @@ export function pirateShipGeometries(): ShipGeometries {
   const untextured = b.vertexCount;
   supplySigns(b);
   // Reserve a second white atlas sample for the shade drawn over the unlit stairs.
-  const shade = new THREE.PlaneGeometry(hr.x1 - hr.x0 + 0.3, DECK_Y - HOLD_Y);
+  const shade = new THREE.PlaneGeometry(hr.x1 - hr.x0, DECK_Y - HOLD_Y);
   const shadeUV = shade.attributes.uv;
   for (let i = 0; i < shadeUV.count; i++) shadeUV.setXY(i, 0.875, SIGN_ATLAS.whiteV);
   b.add(shade, "#211611", [(hr.x0 + hr.x1) / 2, (HOLD_Y + DECK_Y) / 2, HOLD_PORTAL.enterZ - 0.12]);
@@ -337,59 +365,66 @@ export function pirateShipGeometries(): ShipGeometries {
 }
 
 function holdGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0), h = HOLD, hr = HOLD_RAMP;
-  const width = h.x1 - h.x0, length = HOLD_AFT_Z - h.z0, midZ = (h.z0 + HOLD_AFT_Z) / 2;
-  const room: Array<[number, number]> = [
-    [h.x0, h.z0], [h.x1, h.z0], [h.x1, HOLD_AFT_Z], [h.x0, HOLD_AFT_Z],
-    [h.x0, hr.z1], [hr.x1, hr.z1], [hr.x1, hr.z0], [h.x0, hr.z0],
-  ];
+  const b = new PartBuilder(0), h = HOLD;
+  const width = h.x1 - h.x0, length = h.z1 - h.z0, midZ = (h.z0 + h.z1) / 2;
+  const room: Array<[number, number]> = [[h.x0, h.z0], [h.x1, h.z0], [h.x1, h.z1], [h.x0, h.z1]];
   floor(b, room, HOLD_Y, HOLDWOOD);
   floor(b, room, HOLD_CEILING_Y, "#94704e", [], true);
   const wallH = DECK_Y - HOLD_Y;
-  for (const z of [h.z0 - 0.09, HOLD_AFT_Z + 0.09]) b.box(width + 0.36, wallH, 0.18, 0, HOLD_Y, z, WOOD);
-  for (const x of [h.x0 - 0.09, h.x1 + 0.09]) b.box(0.18, wallH, length, x, HOLD_Y, midZ, WOOD);
+  const wall = 0.16;
+  b.box(width + 2 * wall, wallH, wall, 0, HOLD_Y, h.z0 - wall / 2, WOOD);
+  const [port, starboard] = HOLD_HATCH_GUARDS;
+  for (const [a, c] of [[h.x0 - wall, port.x0], [starboard.x1, h.x1 + wall]]) {
+    b.box(c - a, wallH, wall, (a + c) / 2, HOLD_Y, h.z1 + wall / 2, WOOD);
+  }
+  for (const x of [h.x0 - wall / 2, h.x1 + wall / 2]) b.box(wall, wallH, length, x, HOLD_Y, midZ, WOOD);
   // Plank seams on the floor and ceiling, and visible ribs along the room.
   for (let x = h.x0 + 0.45; x < h.x1; x += 0.6) {
-    const end = x < hr.x1 ? h.z1 : HOLD_AFT_Z;
-    b.box(0.023, 0.009, end - h.z0, x, HOLD_Y + 0.001, (end + h.z0) / 2, DARK);
-    b.box(0.028, 0.012, end - h.z0, x, HOLD_CEILING_Y - 0.013, (end + h.z0) / 2, DARK);
+    b.box(0.023, 0.009, length - 0.02, x, HOLD_Y + 0.001, midZ, DARK);
+    b.box(0.028, 0.012, length, x, HOLD_CEILING_Y - 0.013, midZ, DARK);
   }
-  for (const z of [h.z0 + 0.37, h.z0 + 2.35, h.z0 + 4.45, h.z1 + 0.3, HOLD_AFT_Z - 0.25]) {
-    const left = z > hr.z0 && z < hr.z1 ? hr.x1 : h.x0;
-    b.box(h.x1 - left, 0.075, 0.19, (left + h.x1) / 2, HOLD_CEILING_Y - 0.076, z, DARK);
-    for (const x of [h.x0 + 0.055, h.x1 - 0.055]) b.box(0.11, wallH - 0.14, 0.17, x, HOLD_Y, z, DARK);
+  for (let z = h.z0 + 0.45; z < h.z1; z += 2.25) {
+    b.box(width, 0.058, 0.19, 0, HOLD_CEILING_Y - 0.058, z, DARK);
+    for (const x of [h.x0 + 0.025, h.x1 - 0.025]) b.box(0.05, HOLD_CEILING_Y - HOLD_Y - 0.058, 0.17, x, HOLD_Y, z, DARK);
   }
-  for (const y of [HOLD_Y + 0.4, HOLD_Y + 0.9, HOLD_Y + 1.4, HOLD_Y + 1.9, HOLD_Y + 2.4]) {
+  for (let y = HOLD_Y + 0.46; y < HOLD_CEILING_Y; y += 0.46) {
     for (const x of [h.x0 + 0.005, h.x1 - 0.005]) b.box(0.012, 0.02, length, x, y, midZ, DARK);
     b.box(width, 0.02, 0.012, 0, y, h.z0 + 0.005, DARK);
   }
-  // Show where the room ends beside the staircase, with a low stowage rack behind it.
-  const binX = (hr.x1 + h.x1) / 2;
-  b.box(h.x1 - hr.x1, 0.64, 0.17, binX, HOLD_Y, h.z1 + 0.09, DARK);
-  for (const [x, z, w, y] of [[-1.70, 0.1, 1.02, 0.76], [-0.52, -0.3, 1.08, 0.68], [1.2, 0.13, 1.4, 0.87], [3.4, 0.5, 0.96, 0.68]]) {
-    b.box(w, y, 0.85, x, HOLD_Y, z, "#a57443");
-    for (const dx of [-0.35, 0.35]) b.box(0.1, y + 0.016, 0.87, x + dx * w, HOLD_Y, z, DARK);
+  const { x, z, r } = HOLD_PILLAR;
+  b.cyl(r - 0.04, r - 0.04, HOLD_CEILING_Y - HOLD_Y, x, HOLD_Y, z, SPAR, 12);
+  for (const y of [0.08, HOLD_CEILING_Y - HOLD_Y - 0.16]) b.cyl(r, r, 0.08, x, HOLD_Y + y, z, DARK, 12);
+
+  for (const [at, size] of [[SPOT.table, HOLD_TABLE], [SPOT.shelf, HOLD_SHELF]] as const) {
+    const { width, depth, top, board, leg } = size;
+    b.box(width, board, depth, at.x, HOLD_Y + top - board, at.z, "#9a6c43");
+    for (const dx of [-1, 1]) for (const dz of [-1, 1]) {
+      b.box(leg, top - board, leg, at.x + dx * (width / 2 - leg / 2 - 0.02), HOLD_Y,
+        at.z + dz * (depth / 2 - leg / 2 - 0.02), DARK);
+    }
   }
-  const tb = SPOT.table;
-  b.box(1.6, 0.1, 1.5, tb.x, HOLD_Y + 0.92, tb.z, "#9a6c43");
-  for (const [dx, dz] of [[-0.7, -0.65], [0.7, -0.65], [0.7, 0.65], [-0.7, 0.65]]) b.box(0.1, 0.92, 0.1, tb.x + dx, HOLD_Y, tb.z + dz, DARK);
-  const sh = SPOT.shelf;
-  for (const y of [1.25, 1.91]) b.box(0.62, 0.08, 2.2, sh.x + 0.05, HOLD_Y + y, sh.z, "#9a6c43");
-  for (const dz of [-0.9, 0.9]) b.boxAt(0.5, 0.08, 0.08, [sh.x + 0.05, HOLD_Y + 1.1, sh.z + dz], [0, 0, 0.6], DARK);
+  const shelfX = HOLD.x0 + 0.33, shelfBottom = HOLD_Y + HOLD_SHELF.top - HOLD_SHELF.board;
+  for (const dz of [-0.86, 0.86]) {
+    b.boxAt(0.9, 0.1, 0.13, [shelfX, shelfBottom - 0.35, SPOT.shelf.z + dz], [0, 0, 0.78], DARK);
+  }
   const bx = SPOT.box;
-  b.box(1.2, 0.08, 1.2, bx.x, HOLD_Y, bx.z, "#c79a5c");
-  for (const [dx, dz, w, d] of [[0, -0.56, 1.2, 0.08], [0, 0.56, 1.2, 0.08], [-0.56, 0, 0.08, 1.2], [0.56, 0, 0.08, 1.2]] as const) b.box(w, 0.55, d, bx.x + dx, HOLD_Y, bx.z + dz, "#d8a865");
-  const dr = SPOT.door, doorZ = h.z0 + 0.045;
-  b.box(1.0, 1.8, 0.09, dr.x, HOLD_Y, doorZ, "#c0392b");
-  b.box(1.16, 0.12, 0.12, dr.x, HOLD_Y + 1.8, doorZ, DARK);
-  for (const s of [-1, 1]) b.box(0.1, 1.8, 0.12, dr.x + s * 0.55, HOLD_Y, doorZ, DARK);
-  b.sphere(0.05, dr.x + 0.32, HOLD_Y + 0.95, doorZ + 0.071, GOLD, [1, 1, 1], 6);
+  const box = HOLD_BOX, boxWall = box.height - box.base;
+  b.box(box.width, box.base, box.depth, bx.x, HOLD_Y, bx.z, "#9a6c43");
+  for (const sign of [-1, 1]) {
+    b.box(box.width, boxWall, box.wall, bx.x, HOLD_Y + box.base, bx.z + sign * (box.depth - box.wall) / 2, "#d8a865");
+    b.box(box.wall, boxWall, box.depth - 2 * box.wall, bx.x + sign * (box.width - box.wall) / 2, HOLD_Y + box.base, bx.z, "#c79659");
+  }
+  const dr = SPOT.door, frame = 0.09, doorH = 1.98;
+  b.box(HOLD_DOOR.width - 2 * frame, doorH, 0.08, dr.x, HOLD_Y, dr.z, "#c0392b");
+  b.box(HOLD_DOOR.width, 0.12, HOLD_DOOR.depth, dr.x, HOLD_Y + doorH, dr.z, DARK);
+  for (const s of [-1, 1]) b.box(frame, doorH, HOLD_DOOR.depth, dr.x + s * (HOLD_DOOR.width - frame) / 2, HOLD_Y, dr.z, DARK);
+  b.sphere(0.05, dr.x + 0.32, HOLD_Y + 1, dr.z + 0.069, GOLD, [1, 1, 1], 6);
   for (const { x, z } of HOLD_BARRELS) {
     b.cyl(0.28, 0.28, 0.76, x, HOLD_Y, z, "#9a6838", 8);
     for (const y of [0.16, 0.57]) b.cyl(0.3, 0.3, 0.065, x, HOLD_Y + y, z, IRON, 8);
   }
   const l = HOLD_LANTERN;
-  b.box(0.07, 0.25, 0.07, l.x, l.y + 0.19, l.z, IRON);
+  b.box(0.07, HOLD_CEILING_Y - l.y - 0.2, 0.07, l.x, l.y + 0.2, l.z, IRON);
   b.cyl(0.14, 0.18, 0.075, l.x, l.y + 0.125, l.z, IRON, 8);
   b.cyl(0.18, 0.15, 0.075, l.x, l.y - 0.2, l.z, IRON, 8);
   for (const [dx, dz] of [[0.12, 0.1], [0.12, -0.1], [-0.12, 0.1], [-0.12, -0.1]]) b.box(0.028, 0.25, 0.028, l.x + dx, l.y - 0.125, l.z + dz, IRON);
@@ -443,17 +478,18 @@ export function sailGeometry(h: number, torn = false): THREE.BufferGeometry {
 /** The hold's cargo: a red barrel, a blue bag, a green bottle (each sits on y = 0). */
 export function cargoGeometry(item: "barrel" | "bag" | "bottle"): THREE.BufferGeometry {
   const b = new PartBuilder(0);
+  const { radius: r, height: h } = CARGO_SIZE[item];
   if (item === "barrel") {
-    b.cyl(0.3, 0.3, 0.72, 0, 0, 0, "#c0392b", 10);
-    for (const y of [0.12, 0.56]) b.cyl(0.315, 0.315, 0.05, 0, y, 0, "#3c3f44", 10);
+    b.cyl(r - 0.025, r - 0.025, h, 0, 0, 0, "#c0392b", 12);
+    for (const y of [0.14, h - 0.21]) b.cyl(r, r, 0.07, 0, y, 0, IRON, 12);
   } else if (item === "bag") {
-    b.sphere(0.32, 0, 0.3, 0, "#2f6fd0", [1, 0.95, 0.85], 10);
-    b.cyl(0.1, 0.16, 0.18, 0, 0.56, 0, "#2f6fd0", 8);
-    b.torus(0.11, 0.03, [0, 0.66, 0], [Math.PI / 2, 0, 0], "#e0b23a");
+    b.sphere(r, 0, h * 0.43, 0, "#2f6fd0", [1, h * 0.43 / r, 0.85], 10);
+    b.cyl(r * 0.33, r * 0.47, h * 0.23, 0, h * 0.77, 0, "#2f6fd0", 8);
+    b.torus(r * 0.35, 0.026, [0, h * 0.87, 0], [Math.PI / 2, 0, 0], GOLD);
   } else {
-    b.cyl(0.17, 0.2, 0.46, 0, 0, 0, "#2ea44f", 10);
-    b.cyl(0.07, 0.15, 0.16, 0, 0.46, 0, "#2ea44f", 8);
-    b.cyl(0.06, 0.06, 0.12, 0, 0.62, 0, "#a77a46", 6);
+    b.cyl(r * 0.91, r, h * 0.59, 0, 0, 0, "#2ea44f", 12);
+    b.cyl(r * 0.36, r * 0.91, h * 0.25, 0, h * 0.59, 0, "#2ea44f", 12);
+    b.cyl(r * 0.33, r * 0.33, h * 0.16, 0, h * 0.84, 0, "#a77a46", 8);
   }
   return b.build();
 }

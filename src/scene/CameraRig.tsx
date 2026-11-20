@@ -15,7 +15,7 @@ import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 import { voyageRoll } from "./voyageWeather";
 import { updateHoldView, vy } from "../game/voyageRt";
-import { HOLD, HOLD_CEILING_Y, HOLD_RAMP, SHIP, inShipArea } from "../game/world/pirateShip";
+import { HOLD, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_HEADER_Y, HOLD_RAMP, HOLD_Y, SHIP, inShipArea } from "../game/world/pirateShip";
 import { closeUpEase } from "../game/flow/closeUp";
 
 /** The live camera, for projecting world labels to the screen. */
@@ -186,13 +186,24 @@ export function CameraRig() {
     } else if (inside) {
       const shot = c.mode === "shot" ? c.shot : null;
       const clamp = THREE.MathUtils.clamp;
-      const eyeY = HOLD_CEILING_Y - 0.22;
-      // The aft stowage bay gives the lens room behind the player and keeps
-      // the same walking direction up and down the stairs.
+      const eyeY = HOLD_CEILING_Y - 0.26;
+      const aftWall = SHIP.z + HOLD.z1 - 0.3;
+      const shaftX = SHIP.x + HOLD_ENTRY.x;
+      // Follow through the doorway while lined up with the stairs. As the
+      // player enters the room or turns aside, bring the lens inside the wall.
+      const shaft = shot ? 0 : (1 - THREE.MathUtils.smoothstep(SHIP.z + HOLD.z1 - p.z, 0, 1.65))
+        * (1 - THREE.MathUtils.smoothstep(Math.abs(p.x - shaftX), 0.41, 0.62));
+      const followZ = p.z + 4.1;
+      const roomZ = clamp(shot?.pos.z ?? followZ, SHIP.z + HOLD.z0 + 0.3, aftWall);
+      const stairZ = Math.min(followZ, SHIP.z + HOLD_RAMP.z1 - 0.65);
+      const roomX = shot?.pos.x ?? p.x + (SHIP.x - p.x) * (1 - THREE.MathUtils.smoothstep(roomZ - p.z, 0.25, 1.5)) * 0.35;
+      const z = THREE.MathUtils.lerp(roomZ, stairZ, shaft);
+      const inShaft = z > aftWall;
       want.current.set(
-        clamp(shot?.pos.x ?? p.x, SHIP.x + HOLD.x0 + 0.24, SHIP.x + HOLD.x1 - 0.24),
-        eyeY,
-        clamp(shot?.pos.z ?? p.z + 3.15, SHIP.z + HOLD.z0 + 0.24, SHIP.z + HOLD_RAMP.z1 - 0.85),
+        clamp(THREE.MathUtils.lerp(roomX, shaftX, shaft), SHIP.x + (inShaft ? HOLD_RAMP.x0 : HOLD.x0) + 0.3,
+          SHIP.x + (inShaft ? HOLD_RAMP.x1 : HOLD.x1) - 0.3),
+        shot ? clamp(shot.pos.y, HOLD_Y + 1.3, eyeY) : THREE.MathUtils.lerp(eyeY, HOLD_HEADER_Y - 0.08, shaft),
+        z,
       );
       wantLook.current.set(shot?.target.x ?? p.x, Math.min(shot?.target.y ?? p.y + 0.92, HOLD_CEILING_Y - 0.14), shot?.target.z ?? p.z);
       // A scripted cargo close-up can be pinned close to a wall. Aim from the aisle.

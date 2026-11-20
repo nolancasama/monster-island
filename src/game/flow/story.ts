@@ -8,6 +8,7 @@ import { getGame, setGame, toast, useGame } from "../store";
 import { animate, effect, resetRuntime, rt } from "../runtime";
 import { BRAMBLE, CLIFF_TOP_SPOT, CROSSING, MAPLE, MONSTER_STONE, ROPE, SPAWN, VOLCANO, groundY } from "../world/island";
 import { PLAYER_R, gatesOf, isWalkable, nearestWalkable, standY } from "../world/collision";
+import { HOLD_Y } from "../world/pirateShip";
 import { say, wait } from "./ask";
 import { fadeThrough, frameTwo, run, shot, turnPlayerTo } from "./script";
 import { poofTo, besidePlayer } from "./companion";
@@ -166,26 +167,33 @@ export async function continueGame() {
   if (!save) return newGame();
   resetRuntime();
   const p = save.progress;
+  const voyage = voyageResumable(p);
+  const below = (voyage === "captured" || voyage === "jobs") && p.act3.voyage.inHold === true;
   rt.world = p.act3.world;
   // The reader already validated the position on its saved layer.
   rt.player.layer = save.player.layer ?? "ground";
   const gates = gatesOf(p);
-  const spot = Number.isFinite(save.player.x) && isWalkable(save.player.x, save.player.z, gates, PLAYER_R) ? save.player : SPAWN;
-  const safe = nearestWalkable(spot.x, spot.z, PLAYER_R, gates);
+  const spot = below || Number.isFinite(save.player.x) && isWalkable(save.player.x, save.player.z, gates, PLAYER_R) ? save.player : SPAWN;
+  const safe = below ? spot : nearestWalkable(spot.x, spot.z, PLAYER_R, gates);
   rt.player.x = safe.x;
   rt.player.z = safe.z;
   // Standing on the saved floor from the first frame (a ship's hold or deck as much as the ground).
-  rt.player.y = standY(safe.x, safe.z, p.solved, rt.player.layer);
+  rt.player.y = below ? HOLD_Y : standY(safe.x, safe.z, p.solved, rt.player.layer);
   rt.player.yaw = save.player.yaw;
   rt.playTime = save.seconds;
   rt.camera.snap = true;
   setGame({ screen: "game", mode: "explore", progress: p, journalOpen: false, settingsOpen: false, fade: 0, hint: null, banner: null, panel: null });
   resetCombat();
   applyWorld(p);
+  if (below) {
+    void resumeVoyage();
+    // The progress subscriber can save before the voyage restores its live floor.
+    saveNow();
+  }
   await beginAudio();
   if (!p.metMaple) void intro();
   // A save made during the pirate voyage puts the ship back around the player.
-  if (voyageResumable(p)) void resumeVoyage();
+  if (voyage && !below) void resumeVoyage();
 }
 
 /** Title screen, a finished prologue: straight to the sanctuary, where the new chapter begins. */
