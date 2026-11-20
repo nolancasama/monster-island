@@ -545,8 +545,7 @@ export function mountPose(id: MonsterId): MountPose | null {
   const x = p.x + fx * seat.back;
   const z = p.z + fz * seat.back;
   // The ship fit check covers the rider's circle, including the steed offset.
-  const fromX = usingActivityStance ? p.x : s.fromX;
-  const fromZ = usingActivityStance ? p.z : s.fromZ;
+  const fromX = s.fromX, fromZ = s.fromZ;
   const cx = fromX + (x - fromX) * e;
   const cz = fromZ + (z - fromZ) * e;
   m.x = cx;
@@ -681,9 +680,16 @@ function updateStance(dt: number) {
     s.k = 0;
     s.fromX = m.x;
     s.fromZ = m.z;
-    if (usingActivityStance && (COMBAT[want].stance === "ride" || !inShipArea(m.x, m.z) || !shipWalkable(m.x, m.z, 0, vy.inHold))) {
-      s.fromX = p.x;
-      s.fromZ = p.z;
+    if (usingActivityStance) {
+      const rider = COMBAT[want].stance === "ride";
+      const onFloor = inShipArea(m.x, m.z) && shipWalkable(m.x, m.z, 0, vy.inHold);
+      const nearbyRide = Math.hypot(m.x - p.x, m.z - p.z) <= 3
+        && shipStandY(m.x, m.z, vy.inHold) === shipStandY(p.x, p.z, vy.inHold);
+      // A nearby steed can move in from its ground position on the same level.
+      if (!onFloor || (rider && !nearbyRide)) {
+        s.fromX = p.x;
+        s.fromZ = p.z;
+      }
     }
     m.mode = "script";
     m.look = null;

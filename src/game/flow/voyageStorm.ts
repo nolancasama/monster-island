@@ -4,8 +4,8 @@ import { setGame, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
 import { DECK_Y, SHIP, SPOT, shipWorld } from "../world/pirateShip";
 import { setVoyageStage } from "../logic/voyage";
-import { vy, type CrewId, type Phase } from "../voyageRt";
-import { L, SAIL_AIM, activeFriend, aim, setPhase, sparkleAt, steamAt, toolFx } from "../voyageSim";
+import { vy, type CrewId } from "../voyageRt";
+import { L, SAIL_AIM, activeFriend, aim, setPhase, sparkleAt, stanceReady, steamAt, toolFx, type Phase } from "../voyageSim";
 import { ask, say, wait } from "./ask";
 import { shot } from "./script";
 import { switchTo } from "./companion";
@@ -48,6 +48,9 @@ function friendHint(f: CompanionId) {
   return activeFriend() === f ? null : `Press ${COMPANION_IDS.indexOf(f) + 1}: ${MONSTERS[f].name}! · ${COMPANION_IDS.indexOf(f) + 1}で ${MONSTERS[f].name}`;
 }
 
+const deckStance = (friend: CompanionId) => () => vy.inHold ? null : friend;
+const readyOnDeck = (friend: CompanionId) => !vy.inHold && stanceReady(friend);
+
 export async function startStorm() {
   if (!vy.active) setScene();
   vy.flow = 1.2; vy.cut = true; vy.sewn = 1; vy.mastFall = 0; vy.shipPitch = 0; vy.shipRoll = 0; vy.shipSink = 0; vy.lifeboats = 0;
@@ -78,8 +81,9 @@ async function barrels() {
   await ask4Help("leafyHelp", "leafy", "redbeard", ["Help! The barrels!", "たいへん! たるが!"], ["Go near a barrel and press J!", "たるの ちかくで J!"]);
   const phase: Phase = {
     name: "storm-barrels",
+    stance: deckStance("leafy"),
     tool(friend) {
-      if (friend !== "leafy") return false;
+      if (friend !== "leafy" || !readyOnDeck(friend)) return false;
       const b = aim(vy.barrels.filter((x) => !x.tied), (x) => L(x.x, x.z), 7, 1.0, 3.5);
       if (!b) return false;
       const w = L(b.x, b.z);
@@ -122,8 +126,9 @@ async function fires() {
   await ask4Help("bubboHelp", "bubbo", "pepper", ["Fire! Fire!", "かじだ! かじだ!"], ["Face a fire and press J!", "ひの ほうを むいて J!"]);
   const phase: Phase = {
     name: "storm-fires",
+    stance: deckStance("bubbo"),
     tool(friend) {
-      if (friend !== "bubbo") return false;
+      if (friend !== "bubbo" || !readyOnDeck(friend)) return false;
       const f = aim(vy.fires.filter((x) => !x.out && !x.t0), (x) => L(x.x, x.z), 8, 0.9, 3.5);
       if (!f) return false;
       const w = L(f.x, f.z);
@@ -165,24 +170,27 @@ async function torn() {
   await ask4Help("puffHelp", "puff", "redbeard", ["We need wind to sew it!", "ぬうには かぜが ひつよう!"], ["Stand near the big sail. Hold J!", "おおきな ほの ちかくで Jを おしつづけて!"]);
   let sew = 0, lastGust = -10;
   const SEW = 3;
+  const mast = L(SPOT.mainMast.x, SPOT.mainMast.z);
+  const s = SAIL_AIM[1], sail = { ...L(s.x, s.z), y: s.y };
+  const canBlow = () => readyOnDeck("puff") && Math.hypot(rt.player.x - mast.x, rt.player.z - mast.z) < 7;
   const phase: Phase = {
     name: "storm-sail",
+    stance: deckStance("puff"),
+    stanceYaw: () => Math.atan2(sail.x - rt.player.x, sail.z - rt.player.z),
     tool(friend) {
-      const m = L(SPOT.mainMast.x, SPOT.mainMast.z);
-      return friend === "puff" && Math.hypot(rt.player.x - m.x, rt.player.z - m.z) < 7;
+      return friend === "puff" && canBlow();
     },
     tick(dt) {
       weather();
       // Broadside, like the sailing job, so the torn sail is seen filling.
       const p = rt.player;
       shot({ x: p.x + 15, y: DECK_Y + 7.5, z: p.z + 3.5 }, { x: p.x - 1.5, y: DECK_Y + 3.6, z: p.z - 1 });
-      const m = L(SPOT.mainMast.x, SPOT.mainMast.z), s = SAIL_AIM[1], w = L(s.x, s.z);
-      const working = vy.hold && activeFriend() === "puff" && Math.hypot(rt.player.x - m.x, rt.player.z - m.z) < 7;
+      const working = vy.hold && canBlow();
       vy.sails[1] = Math.max(0.1, Math.min(1, vy.sails[1] + (working ? dt * 0.9 : -dt * 0.45)));
-      if (working && rt.time - lastGust > 0.3) { lastGust = rt.time; toolFx("puff", { x: w.x, y: s.y, z: w.z }); }
+      if (working && rt.time - lastGust > 0.3) { lastGust = rt.time; toolFx("puff", sail); }
       if (vy.sails[1] >= 0.9) {
         sew += dt;
-        if (Math.random() < dt * 3) { cheer("tom", "sam"); sparkleAt(m.x + (Math.random() - 0.5) * 2, DECK_Y + 2 + Math.random() * 3, m.z + 1.5); }
+        if (Math.random() < dt * 3) { cheer("tom", "sam"); sparkleAt(mast.x + (Math.random() - 0.5) * 2, DECK_Y + 2 + Math.random() * 3, mast.z + 1.5); }
       }
       if (sew >= SEW && vy.sewn < 1) { vy.sewn = 1; vy.sails[1] = 1; audio.play("correct"); }
       vy.hud = { title: "Sail", ja: "ほ", value: vy.sails[1], band: [0.9, 1], hint: friendHint("puff") ?? `Hold J: keep it full! ${Math.round(Math.min(1, sew / SEW) * 100)}% · Jで いっぱいに` };
@@ -218,8 +226,10 @@ async function spar() {
   });
   const phase: Phase = {
     name: "storm-spar",
+    stance: deckStance("leafy"),
+    stanceYaw: () => vy.spar ? Math.atan2(SHIP.x + vy.spar.x - rt.player.x, SHIP.z + vy.spar.z - rt.player.z) : rt.player.yaw,
     tool(friend) {
-      if (friend !== "leafy" || !vy.spar || vy.spar.lift > 0) return false;
+      if (friend !== "leafy" || !readyOnDeck(friend) || !vy.spar || vy.spar.lift > 0) return false;
       const w = L(vy.spar.x, vy.spar.z);
       if (Math.hypot(rt.player.x - w.x, rt.player.z - w.z) > 6) return false;
       toolFx("leafy", { x: w.x, y: DECK_Y + 0.4, z: w.z });

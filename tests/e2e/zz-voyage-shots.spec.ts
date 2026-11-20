@@ -78,6 +78,172 @@ async function startPowerJob(page: Page, crew: string, from: { x: number; z: num
 const mountedFor = (s: Awaited<ReturnType<typeof state>>, friend: string) =>
   s.act2.stance.friend === friend && s.act2.stance.k >= .99;
 
+async function powerFrame(page: Page, name: string, scale: number) {
+  await hook(page, "timeScale", 0);
+  try {
+    await hook(page, "renderFrames", 2);
+    await snap(page, name);
+  } finally {
+    await hook(page, "timeScale", scale);
+  }
+}
+
+type PowerEffect = { id: number; kind: string; posed: boolean; age: number; life: number };
+const powerEffects = (v: any): PowerEffect[] => v.effects;
+
+async function powerSequence(page: Page, name: string, kind: string, use: () => Promise<void>) {
+  const scale = .08;
+  const previous = powerEffects(await voyage(page)).at(-1)?.id ?? 0;
+  const fresh = (effect: PowerEffect) => effect.id > previous && effect.posed && effect.kind === kind;
+  await hook(page, "timeScale", scale);
+  try {
+    await use();
+    await voyageReady(page, `${name} emitted ${kind} from its stance`, v => powerEffects(v).some(fresh));
+    const id = powerEffects(await voyage(page)).find(fresh)?.id;
+    if (!id) throw new Error(`HARNESS_PRECONDITION_FAILED - ${name} effect is live`);
+    for (const [i, age] of [.06, .17, .28].entries()) {
+      await voyageReady(page, `${name} effect frame ${i + 1}`, v => powerEffects(v).some(fx => fx.id === id && fx.age >= age && fx.age < fx.life));
+      await powerFrame(page, `${name}-effect-0${i + 1}`, scale);
+    }
+  } finally {
+    await hook(page, "timeScale", 1);
+  }
+}
+
+async function contextualE(page: Page, id: string) {
+  await shotReady(page, `can interact with ${id}`, s => s.mode === "explore" && s.focus?.id === id);
+  await page.keyboard.press("KeyE");
+}
+
+async function powerPrompt(page: Page, phrase: string) {
+  await shotReady(page, `ready to answer ${phrase}`, s => Boolean(s.prompt?.buttons && s.prompt.status === "ready" && s.prompt.choices.includes(phrase)));
+  await tap(page, phrase);
+}
+
+for (const [width, height] of [[1366, 768], [1280, 800]] as const) {
+  const size = `${width}x${height}`;
+  test(`Cooking auto-mount and fire at ${size}`, async ({ page }) => {
+    test.skip(ONLY !== "storm-powers");
+    test.setTimeout(120_000);
+    await startPowerJob(page, "pepper", COUNTER_CUSTOMER, "cooking", ["yesICan", "yesICan", "canFire"]);
+    await page.setViewportSize({ width, height });
+    const stove = L(SPOT.stove.x, SPOT.stove.z);
+    await face(page, { x: 0, z: -13.7 }, stove);
+    await shotReady(page, "Ember is ready to light the stove", s => mountedFor(s, "ember") && s.mode === "explore");
+    await page.keyboard.press("KeyJ");
+    await voyageReady(page, "the stove is lit and Pepper has sent the player for an order", v => v.cook.lit && v.hud?.hint?.startsWith("Ask a hungry pirate"));
+
+    const tom = (await voyage(page)).crew.tom;
+    await face(page, { x: SPOT.crew[0].x - 1.45, z: -9.8 }, tom);
+    await contextualE(page, "crew:tom");
+    await powerPrompt(page, "whatDoYouWant");
+    await voyageReady(page, "Tom's order is known", v => v.cook.order?.who === "tom");
+    const food = (await voyage(page)).cook.order.food;
+    const crate = SUPPLY_CRATES.find(c => c.food === food);
+    if (!crate) throw new Error("HARNESS_PRECONDITION_FAILED - the order has a supply crate");
+    await face(page, crateApproach(crate), L(crate.x, crate.z));
+    await contextualE(page, `crate:${food}`);
+    await voyageReady(page, "the ordered food is in hand", v => v.carry?.kind === "food" && v.carry.food === food);
+    await page.keyboard.press("Digit1");
+    await shotReady(page, "Leafy is selected before the pot", s => s.progress.active === "leafy" && s.act2.stance.friend === null);
+    const approach = { x: -.55, z: -15.35 };
+    const start = L(approach.x, approach.z);
+    await face(page, approach, stove);
+    await contextualE(page, "pot");
+
+    const scale = .08;
+    await hook(page, "timeScale", scale);
+    try {
+      await powerPrompt(page, "yesIDo");
+      await voyageReady(page, "the food is in the pot", v => v.cook.pot === food);
+      await shotReady(page, "Ember is selected and the player is walking from the pot", s => {
+        const moved = Math.hypot(s.player.x - start.x, s.player.z - start.z);
+        return s.progress.active === "ember" && s.act2.stance.friend === null && moved > .15 && moved < .85;
+      });
+      await powerFrame(page, `storm-powers-${size}-cooking-mount-01`, scale);
+      await shotReady(page, "the player is hopping onto Ember", s => s.act2.stance.friend === "ember" && s.act2.stance.k >= .25 && s.act2.stance.k < .9);
+      await powerFrame(page, `storm-powers-${size}-cooking-mount-02`, scale);
+      await shotReady(page, "Ember is mounted and the cooking instruction has ended", s => mountedFor(s, "ember") && s.mode === "explore");
+      await voyageReady(page, "the mounted heat prompt is visible", v => v.hud?.hint?.startsWith("Hold J"));
+      await powerFrame(page, `storm-powers-${size}-cooking-mount-03`, scale);
+    } finally {
+      await hook(page, "timeScale", 1);
+    }
+    const p = (await state(page)).player;
+    await hook(page, "look", [p.x + 4.6, DECK_Y + 2.7, p.z + .9], [p.x, DECK_Y + .85, p.z - 1.1]);
+    await shotReady(page, "the lens frames Ember and the stove", s => Math.abs(s.camera.pos.x - (p.x + 4.6)) < .12);
+    try {
+      await powerSequence(page, `storm-powers-${size}-cooking`, "flame", () => page.keyboard.down("KeyJ"));
+    } finally {
+      await page.keyboard.up("KeyJ");
+    }
+  });
+
+  test(`Storm task poses and effects at ${size}`, async ({ page }) => {
+    test.skip(ONLY !== "storm-powers");
+    test.setTimeout(180_000);
+    await boardForShots(page);
+    await page.setViewportSize({ width, height });
+    await hook(page, "voyageJump", "storm");
+    const tasks = [
+      { phase: "storm-barrels", friend: "leafy", phrase: "leafyHelp", kind: "vine", from: { x: 0, z: 5.5 } },
+      { phase: "storm-fires", friend: "bubbo", phrase: "bubboHelp", kind: "bubble", from: { x: 0, z: 4 } },
+      { phase: "storm-sail", friend: "puff", phrase: "puffHelp", kind: "gust", from: { x: 0, z: 5.2 } },
+      { phase: "storm-spar", friend: "leafy", phrase: "whereIsHe", kind: "vine", from: { x: -1.6, z: -9.6 } },
+    ] as const;
+    for (const { phase, friend, phrase, kind, from } of tasks) {
+      await powerPrompt(page, phrase);
+      await voyageReady(page, `${phase} has started`, v => v.phase === phase && Boolean(v.hud));
+      const targets = (v: any): Array<{ x: number; z: number }> =>
+        phase === "storm-barrels" ? v.barrels.filter((b: any) => !b.tied)
+          : phase === "storm-fires" ? v.fires.filter((f: any) => !f.out)
+          : phase === "storm-sail" ? [L(MASTS.main.x + .4, MASTS.main.z + 2)] : v.spar ? [v.spar] : [];
+      const v = await voyage(page);
+      const target = targets(v)[0];
+      if (!target) throw new Error(`HARNESS_PRECONDITION_FAILED - ${phase} has a target`);
+      await face(page, from, target);
+      await powerPosition(page, friend, from);
+      await shotReady(page, `${friend} has finished the ${phase} pose`, s => mountedFor(s, friend));
+
+      if (phase !== "storm-sail") {
+        const p = L(from.x, from.z);
+        const side = target.x < p.x ? 1 : -1, x = p.x + 5.8 * side;
+        await hook(page, "look", [x, DECK_Y + 3.1, p.z + 2.4], [(p.x + target.x) / 2, DECK_Y + 1, (p.z + target.z) / 2]);
+        // The rig can move the lens around the mast or rail. Wait for the rendered lens to settle.
+        let last = { x: NaN, y: NaN, z: NaN };
+        await shotReady(page, `the lens has settled on ${phase}`, s => {
+          const c = s.camera.pos, still = Math.hypot(c.x - last.x, c.y - last.y, c.z - last.z) < .035;
+          last = c;
+          return still;
+        });
+        const current = targets(await voyage(page))[0];
+        if (!current) throw new Error(`HARNESS_PRECONDITION_FAILED - ${phase} target is still available`);
+        await face(page, from, current);
+      }
+      const name = `storm-powers-${size}-${phase}`;
+      await powerFrame(page, `${name}-pose`, 1);
+      if (phase === "storm-sail") {
+        try {
+          await powerSequence(page, name, kind, () => page.keyboard.down("KeyJ"));
+          await voyageReady(page, "the wind has held the torn sail open until it is sewn", next => next.sewn === 1);
+        } finally {
+          await page.keyboard.up("KeyJ");
+        }
+      } else {
+        await powerSequence(page, name, kind, () => page.keyboard.press("KeyJ"));
+        if (phase === "storm-spar") continue;
+        for (let remaining = 2; remaining > 0; remaining--) {
+          await voyageReady(page, `${phase} has ${remaining} targets left`, next => next.phase === phase && targets(next).length === remaining);
+          const next = targets(await voyage(page))[0];
+          if (!next) throw new Error(`HARNESS_PRECONDITION_FAILED - a remaining ${phase} target is available`);
+          await face(page, from, next);
+          await page.keyboard.press("KeyJ");
+        }
+      }
+    }
+  });
+}
+
 async function powerPosition(page: Page, friend: string, local: { x: number; z: number }, hold = false) {
   const at = L(local.x, local.z);
   await shotReady(page, `${friend} is selected at the job position`, s => s.progress.active === friend && s.mode === "explore"

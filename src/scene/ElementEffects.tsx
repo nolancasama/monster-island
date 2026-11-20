@@ -15,7 +15,7 @@ import { createWindFrame, stepWindFrame } from "../game/logic/wind";
 import { inCone } from "../game/logic/elements";
 import { groundY } from "../game/world/island";
 import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
-import { activeFriend, carriedCargoY, stoveBreath } from "../game/voyageSim";
+import { activeFriend, carriedCargoY, voyageBreath } from "../game/voyageSim";
 import { CARGO_SIZE } from "../game/world/pirateShip";
 import { vy } from "../game/voyageRt";
 
@@ -564,7 +564,7 @@ export function ElementEffects() {
         }
       }
       const fire = cb.inferno ?? cb.breath;
-      const galley = stoveBreath();
+      const galley = voyageBreath();
       if (fire) {
         stream.active = true; stream.age = fire.age; stream.inferno = cb.inferno !== null;
       } else if (stream.active) { stream.active = false; stream.stoppedAt = t; }

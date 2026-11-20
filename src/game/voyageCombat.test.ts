@@ -7,15 +7,16 @@ import { region } from "./world/region";
 import { isAttackHeld, pressAttack, releaseAllAttacks, releaseAttack } from "../input/attackInput";
 import { resetVoyageRt, restoreHold, updateHoldView, vy } from "./voyageRt";
 import { hand, isPosedToolFx, L, SAIL_AIM, setPhase, toolFx } from "./voyageSim";
-import { BOARDED, crewWorld, resumeVoyage, setScene, voyageCandidates, VoyageCancelled, voyageInteract, voyageSavePoint } from "./flow/voyage";
+import { BOARDED, crewWorld, resumeVoyage, setScene, voyageAttack, voyageCandidates, VoyageCancelled, voyageInteract, voyageSavePoint } from "./flow/voyage";
 import { itemWorld, startJob } from "./flow/voyageJobs";
-import { choose, nextLine } from "./flow/ask";
+import { startStorm } from "./flow/voyageStorm";
+import { choose, nextLine, say } from "./flow/ask";
 import { switchTo } from "./flow/companion";
 import { run } from "./flow/script";
 import { anchors } from "../scene/anchors";
 import { bubboEmitter } from "../scene/voyageAnchors";
 import { moveCircle, PLAYER_R } from "./world/collision";
-import { COUNTER_CUSTOMER, DECK_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_Y, inShipArea, shipSolidAt, shipWalkable, SPOT } from "./world/pirateShip";
+import { COUNTER_CUSTOMER, COUNTER_SOLID, DECK_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_Y, inShipArea, SHIP, shipSolidAt, shipWalkable, SPOT, STOVE_SOLID, SUPPLY_CRATES, touches } from "./world/pirateShip";
 import { tick } from "./sim";
 import { placePlayer } from "./travel";
 import type { PhraseId } from "./logic/english";
@@ -219,6 +220,9 @@ describe("ship job stances", () => {
     try {
       expect(toolFx(friend, to)).toMatchObject(hand());
       setPhase({ name: "test", stance: () => friend });
+      const standingFx = toolFx(friend, to);
+      expect(isPosedToolFx(standingFx)).toBe(false);
+      expect(standingFx).toMatchObject({ x: emitter.x, y: emitter.y, z: emitter.z });
       frame();
       expect(mounted(friend)).toBe(true);
       const fx = toolFx(friend, to);
@@ -259,6 +263,188 @@ describe("resumed voyage jobs in the frame loop", () => {
     tick(1 / 60);
     updateHoldView(rt.player.x, rt.player.z, inShipArea(rt.player.x, rt.player.z));
   }
+
+  async function advanceUntil(ready: () => boolean) {
+    for (let i = 0; i < 600; i++) {
+      if (ready()) return;
+      const { line, prompt } = getGame();
+      if (line) nextLine();
+      if (prompt?.status === "ready") choose(prompt.sentences[0].id);
+      frame();
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    throw new Error("Voyage did not reach the expected phase");
+  }
+
+  function tapTool() {
+    pressAttack("basic", "key");
+    releaseAttack("basic", "key");
+  }
+
+  function interact(id: string) {
+    const candidate = vy.phase?.candidates?.().find((c) => c.focus.id === id);
+    if (!candidate) throw new Error(`No voyage interaction for ${id}`);
+    vy.phase?.interact?.(candidate.focus);
+  }
+
+  it("walks from the pot, mounts Ember before the heat instruction, and keeps the pose until the dish is ready", async () => {
+    await resume(false);
+    const stove = L(SPOT.stove.x, SPOT.stove.z);
+    const running = startJob("cooking").catch((error: unknown) => {
+      if (!(error instanceof VoyageCancelled)) throw error;
+    });
+    try {
+      await advanceUntil(() => vy.phase?.name === "cooking");
+      placePlayer(stove.x, stove.z + 2.8, stove.x, stove.z);
+      tapTool();
+      await advanceUntil(() => Boolean(vy.phase?.candidates?.().some((c) => c.focus.id === "crew:tom")) && getGame().mode === "explore");
+      interact("crew:tom");
+      await advanceUntil(() => vy.cook.order !== null && getGame().mode === "explore");
+      switchTo("leafy", true);
+      const crate = SUPPLY_CRATES.find((c) => c.food === vy.cook.order?.food)!;
+      interact(`crate:${crate.food}`);
+      frame();
+      expect(cb.stance.friend).toBeNull();
+
+      const bowSide = L(0, -17.8);
+      placePlayer(bowSide.x, bowSide.z, stove.x, stove.z);
+      interact("pot");
+      await advanceUntil(() => vy.cook.pot !== null);
+      expect(getGame().progress.active).toBe("ember");
+      expect(rt.player).toMatchObject(bowSide);
+      expect(cb.stance.friend).toBeNull();
+      expect(vy.hud?.hint).not.toMatch(/^Hold J/);
+
+      let moved = false;
+      for (let i = 0; i < 240 && !getGame().line; i++) {
+        const { x, z } = rt.player;
+        frame();
+        const distance = Math.hypot(rt.player.x - x, rt.player.z - z);
+        moved ||= distance > .01;
+        expect(distance).toBeLessThan(.1);
+        expect(shipWalkable(rt.player.x, rt.player.z, PLAYER_R)).toBe(true);
+        if (cb.stance.k < .99) expect(vy.hud?.hint).not.toMatch(/^Hold J/);
+        await vi.advanceTimersByTimeAsync(20);
+      }
+      expect(moved).toBe(true);
+      expect(getGame().line?.en).toContain("hold J");
+      expect(cb.stance.friend).toBe("ember");
+      expect(cb.stance.k).toBeGreaterThanOrEqual(.99);
+      expect(rt.player).toMatchObject(L(0, STOVE_SOLID.z1 + 1.35));
+      expect(Math.cos(rt.player.yaw)).toBeCloseTo(-1);
+      for (const solid of [STOVE_SOLID, COUNTER_SOLID]) {
+        expect(touches(solid, rt.player.x - SHIP.x, rt.player.z - SHIP.z, playerRadius())).toBe(false);
+      }
+      frame();
+      expect(cb.stance.friend).toBe("ember");
+      nextLine();
+      await advanceUntil(() => getGame().mode === "explore");
+      expect(vy.hud?.hint).toMatch(/^Hold J/);
+      pressAttack("basic", "key");
+      frame();
+      expect(vy.cook.heat).toBeGreaterThan(0);
+      expect(vy.fx.some((fx) => fx.kind === "flame" && isPosedToolFx(fx))).toBe(true);
+
+      // Heat retains the pose even away from the original proximity trigger.
+      const seat = { x: rt.player.x, z: rt.player.z };
+      const outside = L(0, -12);
+      placePlayer(outside.x, outside.z, stove.x, stove.z);
+      const previousHeat = vy.cook.heat;
+      frame();
+      expect(cb.stance.friend).toBe("ember");
+      expect(vy.cook.heat).toBeLessThan(previousHeat);
+      placePlayer(seat.x, seat.z, stove.x, stove.z);
+      for (let i = 0; i < 360 && !vy.cook.dish; i++) {
+        if (vy.cook.heat > .8) releaseAttack("basic", "key");
+        if (vy.cook.heat < .62) pressAttack("basic", "key");
+        frame();
+        expect(cb.stance.friend).toBe("ember");
+      }
+      expect(vy.cook.dish).toBe(crate.food);
+      releaseAttack("basic", "key");
+      frame();
+      expect(cb.stance.friend).toBeNull();
+      await advanceUntil(() => getGame().mode === "explore");
+    } finally {
+      resetVoyageRt();
+      await vi.advanceTimersByTimeAsync(600);
+      await running;
+    }
+  });
+
+  it("gates all four storm tools on their pose and re-takes it after dialogue", async () => {
+    const running = startStorm().catch((error: unknown) => {
+      if (!(error instanceof VoyageCancelled)) throw error;
+    });
+    const tasks = [
+      { name: "storm-barrels", friend: "leafy", kind: "vine", at: L(0, 5.5) },
+      { name: "storm-fires", friend: "bubbo", kind: "bubble", at: L(0, 4) },
+      { name: "storm-sail", friend: "puff", kind: "gust", at: L(0, 5.2) },
+      { name: "storm-spar", friend: "leafy", kind: "vine", at: L(-1.6, -9.6) },
+    ] as const;
+    try {
+      for (const { name, friend, kind, at } of tasks) {
+        await advanceUntil(() => vy.phase?.name === name && getGame().mode === "explore");
+        const phase = vy.phase!;
+        const targets = () => name === "storm-barrels" ? vy.barrels.filter((b) => !b.tied)
+          : name === "storm-fires" ? vy.fires.filter((f) => !f.t0)
+          : name === "storm-sail" ? [SAIL_AIM[1]] : [vy.spar!];
+        const face = (target: { x: number; z: number }) => {
+          const to = L(target.x, target.z);
+          placePlayer(at.x, at.z, to.x, to.z);
+        };
+        face(targets()[0]);
+        expect(getGame().progress.active).toBe(friend);
+        const before = vy.fx.at(-1)?.id ?? 0;
+        pressAttack("basic", "key");
+        frame();
+        expect(cb.stance.friend).toBe(friend);
+        expect(cb.stance.k).toBeLessThan(.99);
+        expect(phase.tool?.(friend)).toBe(false);
+        expect(vy.fx.some((fx) => fx.id > before && fx.kind === kind)).toBe(false);
+        if (name === "storm-sail") expect(vy.sails[1]).toBe(.1);
+        releaseAttack("basic", "key");
+        await advanceUntil(() => cb.stance.friend === friend && cb.stance.k === 1);
+
+        const dialogue = run(() => say("game", "Hold on!"));
+        expect(getGame().line).not.toBeNull();
+        frame();
+        expect(cb.stance.friend).toBeNull();
+        expect(vy.phase).toBe(phase);
+        expect(phase.tool?.(friend)).toBe(false);
+        nextLine();
+        await dialogue;
+        expect(phase.tool?.(friend)).toBe(false);
+        await advanceUntil(() => cb.stance.friend === friend && cb.stance.k === 1);
+        expect(vy.phase).toBe(phase);
+
+        if (name === "storm-sail") {
+          pressAttack("basic", "key");
+          frame();
+          expect(vy.sails[1]).toBeGreaterThan(.1);
+        } else {
+          face(targets()[0]);
+          voyageAttack("basic");
+        }
+        expect(vy.fx.some((fx) => fx.id > before && fx.kind === kind && isPosedToolFx(fx))).toBe(true);
+        if (name === "storm-barrels" || name === "storm-fires") {
+          for (const target of targets()) {
+            face(target);
+            tapTool();
+          }
+        }
+        if (name === "storm-sail") {
+          await advanceUntil(() => vy.sewn >= 1);
+          releaseAttack("basic", "key");
+        }
+      }
+    } finally {
+      releaseAttack("basic", "key");
+      resetVoyageRt();
+      await vi.advanceTimersByTimeAsync(600);
+      await running;
+    }
+  });
 
   it("restores the saved hold floor as soon as the ship is available", async () => {
     await resume(true);

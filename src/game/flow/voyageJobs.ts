@@ -4,16 +4,17 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS, type CompanionId } from "../data/combat";
 import { getGame, toast, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
-import { BUCKET, CARGO_SIZE, DECK_Y, FISH_DECK, FISH_Y, HOLD_Y, SHIP, SPOT, STEER_LANE, SUPPLY_CRATES, onHoldFloor, shipWorld } from "../world/pirateShip";
+import { BUCKET, CARGO_SIZE, DECK_Y, FISH_DECK, FISH_Y, HOLD_Y, SHIP, SPOT, STEER_LANE, STOVE_SOLID, SUPPLY_CRATES, onHoldFloor, shipWalkable, shipWorld } from "../world/pirateShip";
+import { PLAYER_R } from "../world/collision";
 import { SEA_Y } from "../world/island";
 import { CARGO_ITEMS, ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
 import { STEER_APPROACH_SECONDS, makeSteerPath, sampleSteerPath, type SteerFrame, type SteerObstacleKind } from "../logic/steerPath";
 import { giveWearable, wear } from "../logic/wardrobe";
 import { voyageEpoch, vy, type Candidate, type CrewId, type Fish, type Obstacle } from "../voyageRt";
-import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, toolFx, type Phase } from "../voyageSim";
+import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, stanceReady, toolFx, type Phase } from "../voyageSim";
 import { cb } from "../combat";
 import { ask, fastMode, say } from "./ask";
-import { fadeThrough, frameTwo, shot } from "./script";
+import { fadeThrough, follow, frameTwo, shot } from "./script";
 import { closeUp, endCloseUp } from "./closeUp";
 import { switchTo } from "./companion";
 import { crewWorld, ease, guard, lerp, over, placeOnDeck, scene, until } from "./voyage";
@@ -200,9 +201,56 @@ async function fishing() {
 const HUNGRY: CrewId[] = ["tom", "sam", "max"];
 const STOVE = L(SPOT.stove.x, SPOT.stove.z);
 const STOVE_FIRE = { x: STOVE.x, y: DECK_Y + .55, z: STOVE.z + .45 };
+// On the centreline, 1.35 m clear of the stove's aft edge (Ember's footprint is 1.17 m).
+const STOVE_MOUNT = L(SPOT.stove.x, STOVE_SOLID.z1 + 1.35);
+const STOVE_YAW = Math.atan2(STOVE_FIRE.x - STOVE_MOUNT.x, STOVE_FIRE.z - STOVE_MOUNT.z);
 // Wide enough that one hold-and-release usually cooks a dish (≈1.1 s rising and ≈1.5 s cooling in the band).
 const HEAT_BAND: [number, number] = [0.5, 0.9];
 const COOK_SECONDS = 2.5;
+
+function stoveWalk() {
+  const p = rt.player;
+  const start = { x: p.x, z: p.z };
+  const clear = (from: typeof start, to: typeof start) => {
+    const steps = Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / .1);
+    for (let i = 1; i <= steps; i++) {
+      if (!shipWalkable(lerp(from.x, to.x, i / steps), lerp(from.z, to.z, i / steps), PLAYER_R, false)) return false;
+    }
+    return true;
+  };
+  let route = [STOVE_MOUNT];
+  if (!clear(start, STOVE_MOUNT)) {
+    // The pot can also be reached from the bow side. Walk round either side of the stove.
+    const side = STOVE_SOLID.x1 + PLAYER_R + .1;
+    const aroundStove = [-side, side].map((x) => [
+      { x: SHIP.x + x, z: start.z }, { x: SHIP.x + x, z: STOVE_MOUNT.z }, STOVE_MOUNT,
+    ]).find((points) => points.every((to, i) => clear(i === 0 ? start : points[i - 1], to)));
+    if (!aroundStove) return null;
+    route = aroundStove;
+  }
+  const yaw = p.yaw;
+  const turn = Math.atan2(Math.sin(STOVE_YAW - yaw), Math.cos(STOVE_YAW - yaw));
+  let from = start, i = 0, elapsed = 0, turning = 0;
+  return (dt: number) => {
+    const to = route[i];
+    const duration = Math.max(.25, Math.hypot(to.x - from.x, to.z - from.z) / 2.8);
+    elapsed += dt;
+    turning += dt;
+    const k = ease(Math.min(1, elapsed / duration));
+    const x = lerp(from.x, to.x, k), z = lerp(from.z, to.z, k);
+    const distance = Math.hypot(x - p.x, z - p.z);
+    p.x = x; p.z = z;
+    p.yaw = yaw + turn * ease(Math.min(1, turning / .25));
+    p.speed = dt > 0 ? distance / dt : 0;
+    p.step += distance * 2.3;
+    if (elapsed < duration) return false;
+    from = to; i++; elapsed = 0;
+    if (i < route.length) return false;
+    p.yaw = STOVE_YAW;
+    p.speed = 0;
+    return true;
+  };
+}
 
 async function cooking() {
   const menu = (["fish", "meat", "bananas", "apples"] as FoodId[]).sort(() => Math.random() - 0.5).slice(0, 3);
@@ -226,13 +274,17 @@ async function cooking() {
   const setCurrent = (o: { who: CrewId; food: FoodId } | null) => { current = o; cook.order = o; };
   let lastFlame = -10;
   let litUntil = 0;
+  let approach: ReturnType<typeof stoveWalk> = null;
+  let showingHeatInstruction = false;
   const nearStove = (r: number) => Math.hypot(rt.player.x - STOVE.x, rt.player.z - STOVE.z) < r;
+  const heatReady = () => !approach && stanceReady("ember");
   const say2 = (id: CrewId, en: string, ja: string) => scene(async () => { frameTwo(rt.player, crewWorld(id), 0.85); await say(id === "gull" ? "harbor" : id, en, ja); });
 
   const phase: Phase = {
     name: "cooking",
-    stance: () => !vy.inHold && (step === "light" || step === "heat") && nearStove(4.2) ? "ember" : null,
+    stance: () => !vy.inHold && ((step === "light" && nearStove(4.2)) || (step === "heat" && !approach)) ? "ember" : null,
     stanceYaw: () => Math.atan2(STOVE_FIRE.x - rt.player.x, STOVE_FIRE.z - rt.player.z),
+    keepStanceDuringScene: () => showingHeatInstruction,
     candidates() {
       const out: Candidate[] = [];
       if (step === "order") for (const id of HUNGRY) if (!orders.some((o) => o.who === id)) out.push(crewCandidate(id, "Ask"));
@@ -255,8 +307,12 @@ async function cooking() {
         return;
       }
       if (f.id === "pot" && step === "fetch" && vy.carry?.kind === "food") {
+        const walk = stoveWalk();
+        if (!walk) return;
         const food = vy.carry.food;
-        void scene(async () => {
+        guard(scene(async () => {
+          rt.player.frozen = true;
+          rt.player.vx = rt.player.vz = 0;
           frameTwo(rt.player, crewWorld("pepper"), 0.85);
           for (;;) {
             const said = await ask({ kind: "choice", options: ["yesIDo", "noIDont"], tapAlways: true, readQuestion: true, picture: food,
@@ -265,9 +321,18 @@ async function cooking() {
             await say("pepper", `Look! You have ${FOODS[food].word}!`, `みて! ${FOODS[food].ja}を もってるよ!`);
           }
           cook.pot = food; vy.carry = null; cook.heat = 0; cook.done = 0; step = "heat";
+          approach = walk;
+          showingHeatInstruction = true;
+          switchTo("ember");
           audio.play("give");
-          await say("pepper", "Into the pot! Ember, hold J to keep the fire hot!", "おなべに いれて! エンバー、Jを おしつづけて ひを つよく!");
-        });
+          follow();
+          try {
+            await until(heatReady);
+            await say("pepper", "Into the pot! Ember, hold J to keep the fire hot!", "おなべに いれて! エンバー、Jを おしつづけて ひを つよく!");
+          } finally {
+            showingHeatInstruction = false;
+          }
+        }));
         return;
       }
       if (f.id === "pot" && step === "serve" && !vy.carry && cook.dish) {
@@ -317,15 +382,13 @@ async function cooking() {
       }
     },
     tool(friend) {
+      if (step !== "light" || cook.lit) return false;
       if (friend !== "ember") { needFriend("ember"); return false; }
       if (!nearStove(3.6)) return false;
-      lastFlame = rt.time;
       const flame = toolFx("ember", STOVE_FIRE);
-      if (step === "light" && !cook.lit) {
-        cook.lit = true;
-        litUntil = flame.t0 + flame.life;
-        sparkleAt(STOVE.x, DECK_Y + 1.2, STOVE.z);
-      }
+      cook.lit = true;
+      litUntil = flame.t0 + flame.life;
+      sparkleAt(STOVE.x, DECK_Y + 1.2, STOVE.z);
       return true;
     },
     tick(dt) {
@@ -334,7 +397,10 @@ async function cooking() {
         void say2("pepper", "The fire is on! Now ask the crew. What do they want?", "ひが ついた! クルーに なにが ほしいか きいてね!");
       }
       if (step === "heat") {
-        const working = vy.hold && activeFriend() === "ember" && nearStove(4.2);
+        if (approach?.(dt)) approach = null;
+        const ready = heatReady();
+        const inRange = nearStove(4.2);
+        const working = ready && inRange && vy.hold && !showingHeatInstruction;
         cook.heat = working ? Math.min(1, cook.heat + dt * 0.36) : Math.max(0, cook.heat - dt * 0.26);
         if (working && rt.time - lastFlame > 0.3) { lastFlame = rt.time; toolFx("ember", STOVE_FIRE); }
         if (cook.heat >= HEAT_BAND[0] && cook.heat <= HEAT_BAND[1]) cook.done += dt;
@@ -342,8 +408,13 @@ async function cooking() {
           cook.dish = cook.pot; cook.pot = null; step = "serve";
           sparkleAt(STOVE.x, DECK_Y + 1.4, STOVE.z); audio.play("correct");
           void say2("pepper", "It's ready! Take the dish!", "できあがり! おさらを もっていって!");
+          return;
         }
-        vy.hud = { title: "Fire", ja: "ひ", value: cook.heat, band: HEAT_BAND, hint: `Hold J: keep it green! ${Math.round(Math.min(1, cook.done / COOK_SECONDS) * 100)}% · Jで みどりを キープ` };
+        const prompt = activeFriend() !== "ember" ? "Press 4: Ember! · 4で エンバー"
+          : !ready ? "Ember is getting ready… · エンバーが じゅんびちゅう"
+          : !inRange ? "Come closer to the stove · コンロに ちかづこう"
+          : `Hold J: keep it green! ${Math.round(Math.min(1, cook.done / COOK_SECONDS) * 100)}% · Jで みどりを キープ`;
+        vy.hud = { title: "Fire", ja: "ひ", value: cook.heat, band: HEAT_BAND, hint: prompt };
       } else {
         const served = orders.filter((o) => o.served).length;
         const what = step === "light" ? "Ember: J at the stove · コンロで J"

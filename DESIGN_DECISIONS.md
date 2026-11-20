@@ -3120,3 +3120,21 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - The controller can read the live camera profile, player height and focus through `window.__mi.state()`, and cargo slot,
   carry and job state through `window.__mi.voyage()`. The hold shot run captures the hatch, six descent frames, both
   ends of the room, Bill, and the cargo placements at 1366 × 768 and 1280 × 800.
+
+## 2026-11-21 - Ship and raft fixes: Friend powers
+
+- Putting food in the pot selects Ember and walks the player to the galley centreline at local
+  `(0, -14.45)`. The route can go around either side of the stove if the pot is reached from the bow.
+  The stance starts after arrival, and Pepper's heat instruction and the Hold J meter wait for
+  the completed mount. The heat step keeps requesting the stance at any stove distance, with heat
+  input using the original stove range, band and rates. Fetch and serve release Ember.
+- The storm uses the same activity stance for Leafy's barrels and spar, Bubbo's fires, and Puff's
+  torn sail. Each tool waits for the completed pose. Dialogue uses the shared release and return,
+  and the seaborne combat guard disables combat moves and damage. Ember's breath remains available
+  through the same mouth emitter when a ship tool uses fire.
+- When a job can use a tool before the pose settles, it uses the friend's live emitter or its current
+  transform as a fallback. The stove uses the existing combat breath even for the first lighting
+  from a tight spot. The existing rider follows the smoothed seat height.
+- The evidence harness reads `window.__mi.state().act2.stance` and
+  `window.__mi.voyage()` for the phase, cooking pot, HUD and a copy of the live tool effects.
+  `SHOT_ONLY=storm-powers` captures the mount, poses and effects at both requested viewport sizes.
