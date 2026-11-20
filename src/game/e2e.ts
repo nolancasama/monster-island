@@ -1,6 +1,7 @@
 import { placePlayer, goToTarget } from "./travel";
 import { resetVoyageRt, restoreHold, vy } from "./voyageRt";
 import { poseEncounter, pressSpyglass, resumeVoyage, setScene } from "./flow/voyage";
+import { GRAPPLE_THROWERS, grappleGunwale, grappleHand, grapplePosition, grappleSlack } from "./flow/voyageGrapple";
 import { itemWorld } from "./flow/voyageJobs";
 import { cookMarker } from "./voyageSim";
 import { SHIP } from "./world/pirateShip";
@@ -298,10 +299,23 @@ export function installE2eHook(seed: number) {
         barrels: vy.barrels.map((b) => ({ ...w(b), tied: b.tied })), fires: vy.fires.map((f) => ({ ...w(f), out: f.out })),
         spar: vy.spar ? { ...w(vy.spar), lift: vy.spar.lift } : null,
         raft: { on: vy.raft.on, x: vy.raft.x, z: vy.raft.z, built: vy.raft.built, planks: vy.raft.planks.map((p) => ({ x: p.x, z: p.z, state: p.state })) },
-        crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, { ...w(c), visible: c.visible }])),
+        crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, { ...w(c), yaw: c.yaw, visible: c.visible }])),
         items: { barrel: itemWorld("barrel"), bag: itemWorld("bag"), bottle: itemWorld("bottle") },
         /** The capture's reveal: the pirates stand round the huddled party. */
         huddle: Object.values(vy.crew).some((c) => c.menace),
+        cutSails: vy.cutSails,
+        capture: {
+          beat: vy.captureBeat, progress: vy.captureProgress, ropes: vy.ropes, moored: vy.boatMoored, fade: getGame().fade,
+          grapples: vy.grapples ? GRAPPLE_THROWERS.map((id, i) => {
+            const hook = vy.grapples![id];
+            const hand = { x: 0, y: 0, z: 0 }, gunwale = { ...hand }, position = { ...hand };
+            grappleHand(hand, vy.crew[id], hook, vy.shipBob);
+            grappleGunwale(gunwale, rt.voyage, i);
+            grapplePosition(position, hand, gunwale, hook);
+            return { id, phase: hook.phase, progress: hook.progress, pitch: hook.pitch, hand, gunwale, position,
+              slack: grappleSlack(Math.hypot(position.x - hand.x, position.y - hand.y, position.z - hand.z), hook) };
+          }) : [],
+        },
         /** The cooking job's marker (world), over the dish or its pirate. */
         marker: (() => { const m = cookMarker(); return m ? { ...w(m), y: m.y, kind: m.kind, who: m.who ?? null } : null; })(),
       };

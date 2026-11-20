@@ -16,7 +16,7 @@ import { VoyageProps, foodGeo } from "./VoyageProps";
 /** The three gaff sails: mizzen, main, fore (the order of `vy.sails`), each from its boom to its gaff. */
 const SAILS = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ mast: m, h: sailHeight(m) }));
 const tallMat = shipCutMaterial(flatMat, "tall");
-const sailMat = shipCutMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), "sail");
+const sailMat = shipCutMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, forceSinglePass: true }), "sail");
 const lanternGlass = new THREE.MeshLambertMaterial({ color: "#e9a04c", emissive: "#ffb45c", emissiveIntensity: 1.15 });
 /** The break-up tips the bow down about a pivot at the stern. */
 const PIVOT = { y: DECK_Y, z: 12 };
@@ -37,18 +37,22 @@ function CrewMember({ id }: { id: CrewId }) {
     const px = rt.player.x - SHIP.x - vy.shipOffset.x, pz = rt.player.z - SHIP.z - vy.shipOffset.z;
     const atCounter = id === "pepper" && c.x === SPOT.cook.x && c.z === SPOT.cook.z;
     const faceCustomer = atCounter && pz < SPOT.counter.z;
-    const want = faceCustomer ? Math.atan2(COUNTER_CUSTOMER.x - c.x, COUNTER_CUSTOMER.z - c.z)
+    const grapples = vy.grapples;
+    const hook = id === "tom" || id === "sam" || id === "max" ? grapples?.[id] : undefined;
+    const staged = Boolean(hook || (grapples && id === "redbeard"));
+    const want = staged ? c.yaw : faceCustomer ? Math.atan2(COUNTER_CUSTOMER.x - c.x, COUNTER_CUSTOMER.z - c.z)
       : c.menace ? c.yaw : Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
     let d = want - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
-    g.rotation.y += d * 0.1;
+    g.rotation.y = staged ? want : g.rotation.y + d * 0.1;
     // Closing in: a lean toward the party and a slow, heavy sway (posture, never weapons).
     lean.current += ((c.menace ? 0.16 : 0) - lean.current) * 0.08;
     g.rotation.order = "YXZ";
-    g.rotation.x = lean.current;
-    g.rotation.z = lean.current * Math.sin(rt.time * 1.6 + c.x * 3) * 0.35;
+    g.rotation.x = hook ? hook.pitch : lean.current;
+    g.rotation.z = staged ? 0 : lean.current * Math.sin(rt.time * 1.6 + c.x * 3) * 0.35;
     const cheer = rt.time - c.cheer < 1.6 ? Math.abs(Math.sin((rt.time - c.cheer) * 9)) * 0.28 : 0;
-    g.position.set(c.x, (shipFloorY(c.x, c.z, below) ?? DECK_Y) + c.air + cheer + Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02, c.z);
+    const idleBob = staged ? 0 : Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02;
+    g.position.set(c.x, (shipFloorY(c.x, c.z, below) ?? DECK_Y) + c.air + cheer + idleBob, c.z);
     const h = held.current;
     if (h) {
       const food = c.hold === "fish3" ? "fish" : c.hold;
@@ -155,7 +159,7 @@ if (uHoldOpen && vMapUv.x > 0.8 && vMapUv.y < 0.2) discard;
   const hold = useRef<THREE.Group>(null);
   const sailRefs = useRef<Array<THREE.Mesh | null>>([]);
   const dir = useMemo(() => new THREE.Vector3(), []);
-  useFrame((state) => {
+  useFrame((state, dt) => {
     const g = outer.current;
     const cam = state.camera;
     cam.getWorldDirection(dir);
@@ -176,8 +180,18 @@ if (uHoldOpen && vMapUv.x > 0.8 && vMapUv.y < 0.2) discard;
     g.position.set(0, PIVOT.y, PIVOT.z);
     g.rotation.set(vy.shipPitch, 0, vy.shipRoll);
     if (mainMast.current) mainMast.current.rotation.set(0, 0, -vy.mastFall * 1.3);
-    sailRefs.current.forEach((m, i) => {
-      if (!m) return;
+    sailMat.opacity = THREE.MathUtils.damp(sailMat.opacity, vy.cutSails, 13, dt);
+    if (Math.abs(sailMat.opacity - vy.cutSails) < 0.01) sailMat.opacity = vy.cutSails;
+    const fading = sailMat.opacity > 0 && sailMat.opacity < 1;
+    if (sailMat.transparent !== fading) {
+      sailMat.transparent = fading;
+      sailMat.depthWrite = !fading;
+      sailMat.needsUpdate = true;
+    }
+    for (let i = 0; i < sailRefs.current.length; i++) {
+      const m = sailRefs.current[i];
+      if (!m) continue;
+      m.visible = sailMat.opacity > 0;
       const fill = vy.sails[i], slack = 1 - fill;
       // Filling changes the cloth's depth: a slack sail hangs flat from boom to gaff (sagging only
       // a little) and luffs about its mast; a full one bellies out and holds still.
@@ -185,7 +199,7 @@ if (uHoldOpen && vMapUv.x > 0.8 && vMapUv.y < 0.2) discard;
       m.scale.y = 0.95 + 0.05 * fill;
       m.rotation.y = Math.sin(rt.time * 2.3 + i * 1.7) * 0.08 * slack;
       if (i === 1) m.geometry = vy.sewn < 1 ? tornSail : sails[1];
-    });
+    }
   });
   const mm = SPOT.mainMast;
   return (

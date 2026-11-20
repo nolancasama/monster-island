@@ -359,6 +359,144 @@ async function sequence(page: Page, name: string, track: Record<string, unknown[
   track[name] = cams;
 }
 
+type CaptureViz = {
+  beat: string | null;
+  progress: number;
+  fade: number;
+  grapples: { id: string; phase: string; progress: number }[];
+};
+
+async function captureFrame(page: Page, name: string, ready: (capture: CaptureViz) => boolean) {
+  await voyageReady(page, name, (v) => ready(v.capture));
+  await hook(page, "renderFrames", 2);
+  await snap(page, name);
+}
+
+async function pepperCameraFrames(page: Page, name: string, inward: boolean) {
+  await voyageReady(page, name, v => v.capture.beat === (inward ? "pepper-in" : "pepper-out"));
+  const pepper = (await voyage(page)).crew.pepper;
+  const complete = (s: Awaited<ReturnType<typeof state>>) => {
+    const lens = Math.hypot(s.camera.pos.x - pepper.x, s.camera.pos.z - pepper.z);
+    return inward ? lens < 2.05 : lens > 5.5;
+  };
+  const deadline = Date.now() + 15_000;
+  for (let i = 0; ; i++) {
+    const s = await state(page);
+    await page.screenshot({ path: `${DIR}/${name}-${String(i).padStart(2, "0")}.jpg`, type: "jpeg", quality: 70 });
+    if (complete(s)) break;
+    if (Date.now() > deadline) throw new Error(`HARNESS_PRECONDITION_FAILED - ${name} camera endpoint`);
+  }
+}
+
+for (const [w, h] of [[1366, 768], [1280, 800]] as const) {
+  test(`capture hooks, deck wides and Pepper at ${w}x${h}`, async ({ page }) => {
+    test.skip(ONLY !== "capture2");
+    test.setTimeout(900_000);
+    const vp = `${w}x${h}-capture2`, bag: Record<string, number> = { apples: 2, fish: 1 };
+    const frame = (name: string, ready: (capture: CaptureViz) => boolean) => captureFrame(page, `${vp}-${name}`, ready);
+    const samples = async (beat: string, at: number[]) => {
+      for (const k of at) await frame(`${beat}-${Math.round(k * 100)}`, c => c.beat === beat && c.progress >= k);
+    };
+    const advance = () => page.keyboard.press("Space");
+    await page.setViewportSize({ width: w, height: h });
+    await page.addInitScript(v => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, JSON.stringify(save(bag)));
+    await boot(page, "");
+    await chooseMode(page, "tap");
+    await page.getByTestId("btn-continue").click();
+    await shotReady(page, "loaded the departure save", s => s.mode === "explore");
+    await hook(page, "openCloudShip", true);
+    await hook(page, "openPirateVoyage", true);
+    await hook(page, "goTo", "harbor", 1.4);
+    await shotReady(page, "at Gull for departure", s => s.focus?.id === "harbor" && s.mode === "explore");
+    await page.keyboard.press("KeyE");
+
+    let last = "";
+    const deadline = Date.now() + 820_000;
+    for (;;) {
+      const st = await state(page);
+      if (st.mode === "explore" && st.progress.act3.voyage.stage === "captured") break;
+      if (Date.now() > deadline) throw new Error("HARNESS_PRECONDITION_FAILED - capture checkpoint reached");
+      const v = await voyage(page);
+      if (v.spyPrompt && !st.line) {
+        await page.keyboard.press("KeyE");
+        await voyageReady(page, "spyglass input acknowledged", next => next.spyPrompt !== v.spyPrompt);
+        continue;
+      }
+      if (st.line && st.line.en !== last) {
+        last = st.line.en;
+        switch (last) {
+          case "Oh no! The ship is in the way!":
+            await hook(page, "timeScale", 0.14);
+            await advance();
+            await samples("turn", [0.18, 0.48, 0.81]);
+            break;
+          case "Stop! Stop that boat!":
+            await frame("order", c => c.beat === "order");
+            await advance();
+            await samples("step", [0.45]);
+            for (const [i, id] of ["tom", "sam", "max"].entries()) {
+              await frame(`${id}-overhead`, c => c.beat === "throw" && c.grapples.some(g => g.id === id &&
+                g.phase === "raise" && c.progress >= [0.12, 0.35, 0.58][i]));
+              await frame(`${id}-lunge`, c => c.beat === "throw" && c.grapples.some(g => g.id === id && g.phase === "lunge"));
+              await frame(`${id}-flight`, c => c.beat === "throw" && c.grapples[i]?.phase === "flight"
+                && c.grapples[i].progress >= 0.25 && (i === 0 || c.grapples[i - 1].phase === "attached"));
+            }
+            break;
+          case "Ropes, crew! Pull them in!":
+            await frame("landed", c => c.beat === "landed" && c.grapples.length === 3 && c.grapples.every(g => g.phase === "attached"));
+            await advance();
+            await samples("haul", [0.18, 0.5, 0.86]);
+            break;
+          case "Bring them here!":
+            await frame("alongside", c => c.beat === "alongside");
+            await advance();
+            await expect.poll(async () => {
+              const { capture } = await voyage(page);
+              return capture.beat === "reveal" && capture.fade === 0
+                && await page.locator(".fade").evaluate(el => Number(getComputedStyle(el).opacity) < 0.03);
+            }, { timeout: 15_000, intervals: [50], message: "HARNESS_PRECONDITION_FAILED - boarding fade cleared in the reveal" }).toBe(true);
+            await snap(page, `${vp}-reveal`);
+            await samples("encircle", [0.3, 0.78]);
+            await hook(page, "timeScale", 1);
+            break;
+          case "What's that? Monsters!":
+            await frame("monsters-wide", c => c.beat === "monsters-wide");
+            await advance();
+            break;
+          case "Monsters! Delicious!":
+            await advance();
+            await pepperCameraFrames(page, `${vp}-pepper-in`, true);
+            break;
+          case "Monster soup!":
+            await hook(page, "timeScale", 0.25);
+            await advance();
+            await pepperCameraFrames(page, `${vp}-pepper-out`, false);
+            await hook(page, "timeScale", 1);
+            break;
+          default:
+            if (last.endsWith("! Yummy! Thank you!") || last === "No food?! Oh no! We are so hungry!") {
+              await hook(page, "timeScale", 0.35);
+              await advance();
+              await samples("interrogation-wide", [0.8]);
+              await hook(page, "timeScale", 1);
+            } else await advance();
+        }
+      } else if (st.prompt?.buttons && st.prompt.status === "ready") {
+        const c = st.prompt.choices, q = st.prompt.question ?? "";
+        const food = Object.keys(bag).find(f => q.includes(f));
+        const said = st.prompt.kind === "command" ? c.find(id => (PHRASES as any)[id]?.en === st.prompt!.sentences[0]) : undefined;
+        const pick = said ?? (c.includes("yesIDo") ? (food && bag[food] ? "yesIDo" : "noIDont")
+          : c.includes("yesTheyCan") ? "yesTheyCan" : c.includes("iCanSeeAShip") ? "iCanSeeAShip" : c[0]);
+        await tap(page, pick);
+        last = "";
+      } else if (!st.line) last = "";
+      await hook(page, "renderFrames", 2);
+    }
+    expect((await voyage(page)).cutSails).toBe(1);
+    await snap(page, `${vp}-free-roam`);
+  });
+}
+
 for (const [w, h] of [[1366, 768], [1280, 800]] as const) {
   test(`Redbeard close-ups at ${w}x${h} (capture, normal speed)`, async ({ page }) => {
     test.skip(ONLY !== "redbeard");

@@ -5,7 +5,7 @@ import { resetVoyageRt, vy, type CrewId } from "../voyageRt";
 import { COMPANION_IDS } from "../data/combat";
 import { DECK_Y, MASTS, SHIP, SPOT } from "../world/pirateShip";
 import { CLOSE_UP_EASE, FACE_Y, SAIL_SPANS, closeUp, closeUpEase, closeUpFraming, endCloseUp, lensOnDeck, lineClear, type Blocker } from "./closeUp";
-import { HUDDLE_PARTY, HUDDLE_PIRATES, crewHome, huddleUp } from "./voyage";
+import { HUDDLE, HUDDLE_PARTY, HUDDLE_PIRATES, PEPPER_LEAN, crewHome, huddleUp } from "./voyage";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn(), cancelPanic: vi.fn(), stopFlame: vi.fn() } }));
 
@@ -17,10 +17,17 @@ const huddle: Blocker[] = [
 ];
 const finaleCrew: Blocker[] = [[2.4, 8.4], [-2.4, 8.4], [-3.9, 9.6], [3.9, 9.6], [4.5, 6.4], [-4.5, 6.6], [4.8, 4.4]].map(([x, z]) => person({ x, z }, 2.05));
 const finalePlayer = { x: 0, z: 5.6 };
+const pepperBlockers: Blocker[] = [
+  { ...HUDDLE_PARTY.player, r: 0.45, top: 1.75 },
+  { ...HUDDLE_PARTY.gull, r: 0.45, top: 2.05 },
+  ...COMPANION_IDS.map((id) => ({ ...HUDDLE_PARTY[id], r: 0.55, top: 1.45 })),
+  ...Object.entries(HUDDLE_PIRATES).filter(([id]) => id !== "pepper").map(([, p]) => ({ ...p, r: 0.45, top: 2.05 })),
+];
 
-/** The scenes Redbeard is framed in: his spot, the player's, and everyone else on deck. */
+/** Each subject's spot, facing target, and the other people on deck. */
 const SCENES: Array<{ name: string; at: { x: number; z: number }; player: { x: number; z: number }; people: Blocker[] }> = [
   { name: "huddle", at: HUDDLE_PIRATES.redbeard, player: HUDDLE_PARTY.player, people: huddle },
+  { name: "Pepper leans in", at: PEPPER_LEAN, player: HUDDLE, people: pepperBlockers },
   { name: "at the helm, player aft", at: SPOT.captain, player: { x: -1.2, z: 13.6 }, people: [person({ x: -1.2, z: 13.6 })] },
   { name: "at the helm, player forward", at: SPOT.captain, player: { x: -2.2, z: 9.4 }, people: [person({ x: -2.2, z: 9.4 })] },
   { name: "at the helm, player abeam", at: SPOT.captain, player: { x: 0.2, z: 11.2 }, people: [person({ x: 0.2, z: 11.2 })] },
@@ -133,6 +140,21 @@ describe("closeUp / endCloseUp", () => {
     endCloseUp();
     expect(rt.camera.mode).toBe("follow");
     expect(rt.camera.shot).toBeNull();
+  });
+
+  it("frames Pepper's leaned-in face and returns to the wide shot", () => {
+    const before = { pos: { x: SHIP.x + 4.6, y: DECK_Y + 4.35, z: SHIP.z + 9.3 }, target: { x: SHIP.x + HUDDLE.x, y: DECK_Y + 0.8, z: SHIP.z + 5.45 } };
+    Object.assign(vy.crew.pepper, PEPPER_LEAN);
+    rt.camera.mode = "shot";
+    rt.camera.shot = before;
+    rt.camera.pos = { ...before.pos };
+    closeUp("pepper");
+    const { pos, target } = rt.camera.shot!;
+    expect(target.x).toBeCloseTo(SHIP.x + PEPPER_LEAN.x);
+    expect(target.z).toBeCloseTo(SHIP.z + PEPPER_LEAN.z);
+    expect(lineClear({ x: pos.x - SHIP.x, y: pos.y - DECK_Y, z: pos.z - SHIP.z }, { ...PEPPER_LEAN, y: FACE_Y }, pepperBlockers)).toBe(true);
+    endCloseUp();
+    expect(rt.camera.shot).toEqual(before);
   });
 
   it("does not restore a stale camera once a flow has moved on", () => {
