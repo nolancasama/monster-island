@@ -3,7 +3,7 @@ import { banner, getGame, setGame, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
 import { SEA_Y } from "../world/island";
 import { CLOUD_DOCK } from "../world/cloudisle";
-import { setVoyageStage, steer, safeCommand, obstacleSide, type Lane, type SteerCommand } from "../logic/voyage";
+import { RAFT_STEER_STEPS, STEER_COMMANDS, setVoyageStage, steerAttempt, steerCall, type SteerCommand, type SteerStep } from "../logic/voyage";
 import { completeVoyage, travelCloud } from "../logic/act3";
 import { vy, type Phase, type Plank } from "../voyageRt";
 import { activeFriend, aim, setPhase, sparkleAt, toolFx } from "../voyageSim";
@@ -153,31 +153,49 @@ async function gather() {
 
 // ------------------------------------------------------------ lanes: debris ahead of the raft
 
-/** Steer past one thing in the water; a wrong lane is a gentle bump and a retry. */
-async function dodge(i: number, kind: "rock" | "barrel", speakBy: "bubbo" | "puff"): Promise<boolean> {
-  const lane = vy.lane as Lane;
-  const options: Lane[] = lane === 0 ? [-1, 0, 1] : [lane, 0];
-  const at = options[(i * 2 + 1) % options.length];
-  const o = { id: i, kind, lane: at, z: -60, hit: 0 };
-  vy.obstacles = [o];
-  await over(2.2, (k) => { o.z = lerp(-60, -16, k); });
-  const side = obstacleSide(lane, at);
-  const what = kind === "rock" ? "A rock" : "A barrel";
-  const said = (await ask({ kind: "choice", options: ["turnLeft", "goStraight", "turnRight"], tapAlways: true, readQuestion: true,
-    question: { by: speakBy, en: side === "ahead" ? `${what} ahead!` : `${what} on the ${side}!`, ja: side === "ahead" ? "まえに なにか ある!" : side === "left" ? "ひだりに なにか ある!" : "みぎに なにか ある!" },
-    help: "← → ↑ キーでも えらべるよ" })) as SteerCommand | null;
-  const cmd: SteerCommand = said ?? "goStraight";
-  const safe = safeCommand(lane, at, cmd);
-  vy.lane = steer(lane, cmd);
-  await over(1.6, (k) => { o.z = lerp(-16, safe ? 14 : -2, k); });
-  vy.obstacles = [];
-  if (!safe) {
-    audio.play("bump");
-    await say(speakBy, "Bump! Oops! Again!", "ゴツン! もう いちど!");
-    return false;
+/** A wrong tow route bumps the chosen obstacle before the raft retries the call. */
+async function dodge(step: SteerStep, i: number): Promise<boolean> {
+  vy.lane = vy.laneVis = step.start;
+  const obstacles = step.obstacles.map((obstacle, index) => ({ ...obstacle, id: i * 2 + index, z: -60, hit: 0 }));
+  vy.obstacles = obstacles;
+  const phase: Phase = { name: "steer-approach" };
+  setPhase(phase);
+  const moveObstacles = (z: number) => {
+    for (let index = 0; index < obstacles.length; index++) obstacles[index].z = z;
+  };
+  try {
+    await over(2.2, (k) => moveObstacles(lerp(-60, -16, k)));
+    const said = (await ask({ kind: "choice", options: [...STEER_COMMANDS], tapAlways: true, readQuestion: true,
+      question: { by: "bubbo", ...steerCall(step, "A rock") }, help: "← → ↑ キーでも えらべるよ" })) as SteerCommand | null;
+    const { lane, hit, nextLane } = steerAttempt(step, said ?? "goStraight");
+    const contact = hit >= 0 ? obstacles[hit] : null;
+    vy.lane = lane;
+    phase.name = "steer-pass";
+    await over(1.6, (k) => {
+      vy.laneVis = lerp(step.start, lane, ease(Math.min(1, k * 3)));
+      moveObstacles(lerp(-16, contact ? -2 : 14, k));
+    });
+    if (contact) {
+      phase.name = "steer-bump";
+      contact.hit = rt.time;
+      audio.play("bump");
+      await over(0.6, (k) => { contact.z = -2 - Math.sin(k * Math.PI) * 0.5; });
+      phase.name = "steer-retreat";
+      await over(0.6, (k) => moveObstacles(lerp(-2, -10, ease(k))));
+    }
+    vy.lane = vy.laneVis = nextLane;
+    if (!contact) {
+      audio.play("correct");
+      return true;
+    }
+  } finally {
+    if (vy.phase === phase) {
+      setPhase(null);
+      vy.obstacles = [];
+    }
   }
-  audio.play("correct");
-  return true;
+  await say("bubbo", "Bump! Oops! Again!", "ゴツン! もう いちど!");
+  return false;
 }
 
 // ------------------------------------------------------------ 2. Bubbo tows
@@ -195,9 +213,8 @@ async function tow() {
     raftHold();
     const stop = arrowKeys();
     try {
-      const kinds: Array<"rock" | "barrel"> = ["barrel", "rock", "barrel", "rock", "barrel"];
-      for (let i = 0; i < kinds.length; i++) {
-        for (;;) { const ok = await dodge(i, kinds[i], "bubbo"); raftHold(); if (ok) break; }
+      for (const [i, step] of RAFT_STEER_STEPS.entries()) {
+        for (;;) { const ok = await dodge(step, i); raftHold(); if (ok) break; }
       }
     } finally { stop(); }
     vy.flow = 0.2;
@@ -219,20 +236,30 @@ async function sail() {
     await over(1.2, (k) => { vy.raft.sail = k; });
     vy.flow = 0.9; vy.storm = 0.15;
     raftHold();
-    // The island shows ahead; three turns toward it, then stop in the shallows.
-    await over(1.5, (k) => { vy.island = k; });
-    const sides: Array<"left" | "right"> = ["left", "right", "left"];
-    for (const side of sides) {
-      vy.islandSide = side === "left" ? -1 : 1;
-      for (;;) {
-        const said = await ask({ kind: "choice", options: ["turnLeft", "goStraight", "turnRight"], tapAlways: true, readQuestion: true,
-          question: { by: "puff", en: `The island is on the ${side}!`, ja: side === "left" ? "しまは ひだり!" : "しまは みぎ!" }, help: "しまの ほうへ!" });
-        if (said === (side === "left" ? "turnLeft" : "turnRight")) break;
-        await say("puff", `Hmm... the island is on the ${side}!`, side === "left" ? "うーん… しまは ひだりだよ!" : "うーん… しまは みぎだよ!");
+    vy.islandSide = -1;
+    await over(1.5, (k) => { vy.island = k * 0.45; });
+    const approach = [
+      { command: "turnLeft", side: -1, en: "The island is on the left!", ja: "しまは ひだり!", retry: "うーん… しまは ひだりだよ!" },
+      { command: "goStraight", side: 0, en: "The island is straight ahead!", ja: "しまは まっすぐ まえ!", retry: "うーん… しまは まっすぐ まえだよ!" },
+      { command: "turnRight", side: 1, en: "The island is on the right!", ja: "しまは みぎ!", retry: "うーん… しまは みぎだよ!" },
+    ] as const;
+    const stop = arrowKeys();
+    try {
+      for (const { command, side, en, ja, retry } of approach) {
+        if (side === 1) await over(0.8, (k) => { vy.islandSide = ease(k); });
+        for (;;) {
+          const said = await ask({ kind: "choice", options: [...STEER_COMMANDS], tapAlways: true, readQuestion: true,
+            question: { by: "puff", en, ja }, help: "しまの ほうへ!" });
+          if (said === command) break;
+          await say("puff", `Hmm... ${en[0].toLowerCase()}${en.slice(1)}`, retry);
+        }
+        audio.play("whoosh");
+        await over(1.4, (k) => {
+          vy.islandSide = lerp(side, 0, ease(k));
+          if (side === 0) vy.island = lerp(0.45, 1, ease(k));
+        });
       }
-      audio.play("whoosh");
-      await over(1.4, (k) => { vy.islandSide = lerp(vy.islandSide, 0, k); });
-    }
+    } finally { stop(); }
     await say("puff", "Shallow water! Say stop!", "あさい! 「Stop!」と いって!");
     await say1("cmdStop", "「Stop!」と いおう");
     await over(1.2, (k) => { vy.flow = lerp(0.9, 0, k); });

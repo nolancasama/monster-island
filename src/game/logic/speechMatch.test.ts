@@ -8,6 +8,13 @@ const P = (ids: PhraseId[]) => ids.map((id) => PHRASES[id]);
 const LIKE_OPTIONS = P(ISLAND_FOODS.map((f) => LIKE_PHRASE[f]));
 
 describe("English response matching", () => {
+  it("recognises each steering phrase against the same three choices used by ask", () => {
+    const options = P(["turnLeft", "goStraight", "turnRight"]);
+    for (const [heard, id] of [["Turn left!", "turnLeft"], ["Go straight!", "goStraight"], ["Turn right!", "turnRight"]]) {
+      expect(judgeSpeech([heard], options)).toMatchObject({ kind: "match", id });
+      expect(options.filter((option) => matchesPhrase(heard, option)).map((option) => option.id)).toEqual([id]);
+    }
+  });
   it("matches all elemental special words and accent variants without confusing commands", () => {
     const commands = { ember: "cmdBurn", bubbo: "cmdPop", leafy: "cmdStop", puff: "cmdSpin" } as const;
     const options = P(Object.values(commands));

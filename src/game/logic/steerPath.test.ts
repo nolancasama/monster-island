@@ -7,10 +7,9 @@ import {
   SHIP_OBSTACLE_SCALE, STEER_ANSWER_Z, STEER_APPROACH_SECONDS, STEER_CONTACT_GAP, STEER_MESH_RADIUS, STEER_PASS_Z,
   makeSteerPath, sampleSteerPath, steerClearance, steerShoulder,
 } from "./steerPath";
-import { steer, type Lane, type SteerCommand } from "./voyage";
+import { SHIP_STEER_STEPS, STEER_COMMANDS, steer, type Lane } from "./voyage";
 
 const lanes: Lane[] = [-1, 0, 1];
-const commands: SteerCommand[] = ["turnLeft", "goStraight", "turnRight"];
 const kinds = ["rock", "barrel"] as const;
 const boat = boatFootprint(MOORED_POSE);
 const boatMinX = Math.min(...boat.map(([x]) => x - SHIP.x));
@@ -45,16 +44,18 @@ it("uses the fixed boat outline only while Gull is moored", () => {
   expect(steerClearance(x, z, 0, "rock", false)).toBeGreaterThan(0);
   expect(steerClearance(x, z, 0.12, "rock", true)).toBeCloseTo(-BOAT_HALF_BEAM - radius);
   expect(steerClearance(boatMaxX + radius + 1, z, -0.12, "rock", true)).toBeCloseTo(1);
-  expect(makeSteerPath(0, 0, "turnLeft", "rock", false).endX).toBe(STEER_LANE);
+  expect(makeSteerPath({ start: 0, obstacles: [{ lane: 0, kind: "rock" }] }, "turnLeft", false).obstacles[0].endX).toBe(STEER_LANE);
 });
 
-for (const kind of kinds) for (const start of lanes) for (const obstacle of lanes) for (const command of commands) {
+for (const kind of kinds) for (const start of lanes) for (const obstacle of lanes) for (const command of STEER_COMMANDS) {
   const end = steer(start, command);
   const safe = end !== obstacle;
   it(`${kind}, lane ${start} to ${end}, obstacle ${obstacle}, ${command} (${safe ? "safe" : "bump"})`, () => {
-    const path = makeSteerPath(start, obstacle, command, kind, true);
+    const step = { start, obstacles: [{ lane: obstacle, kind }] };
+    const path = makeSteerPath(step, command, true);
+    const { startX, endX } = path.obstacles[0];
     const frame = sampleSteerPath(path, 0);
-    const approach = makeSteerPath(start, obstacle, "goStraight", kind, true);
+    const approach = makeSteerPath(step, "goStraight", true);
     expect(sampleSteerPath(path, STEER_APPROACH_SECONDS).x).toBe(sampleSteerPath(approach, STEER_APPROACH_SECONDS).x);
     const targetX = (obstacle - end) * STEER_LANE;
     const radius = STEER_MESH_RADIUS[kind] * SHIP_OBSTACLE_SCALE + 0.25;
@@ -73,13 +74,13 @@ for (const kind of kinds) for (const start of lanes) for (const obstacle of lane
       // steering camera); the lane rules below are about the lane drift, so test them without it.
       const lane = frame.x - steerShoulder(path, frame.t);
       expect(direction * (lane - lastX)).toBeGreaterThanOrEqual(-1e-9);
-      if (!direction || frame.phase === "steer-approach") expect(lane).toBe(path.startX);
+      if (!direction || frame.phase === "steer-approach") expect(lane).toBe(startX);
       if (!path.safe && (frame.phase === "steer-bump" || frame.phase === "steer-retreat")) {
-        expect(frame.x).toBeCloseTo(path.endX + path.contactX, 9);
+        expect(frame.x).toBeCloseTo(endX + path.contactX, 9);
         if (frame.phase === "steer-bump") expect(frame.clearance).toBeLessThan(0.1);
       }
       if (frame.z >= BOW_Z - 8) {
-        expect(lane).toBeCloseTo(path.endX, 9);
+        expect(lane).toBeCloseTo(endX, 9);
         expect(Math.abs(frame.yaw)).toBe(0);
       }
       turn = Math.max(turn, frame.yaw * direction);
@@ -88,8 +89,8 @@ for (const kind of kinds) for (const start of lanes) for (const obstacle of lane
       lastX = lane;
     }
     expect(path.safe).toBe(safe);
-    if (targetX > 0) expect(path.endX).toBeGreaterThanOrEqual(Math.max(targetX, boatMaxX + radius));
-    else expect(path.endX).toBe(targetX);
+    if (targetX > 0) expect(endX).toBeGreaterThanOrEqual(Math.max(targetX, boatMaxX + radius));
+    else expect(endX).toBe(targetX);
     expect(Math.abs(frame.yaw)).toBe(0);
     expect(Math.abs(frame.roll)).toBe(0);
     expect(turn > 0).toBe(direction !== 0);
@@ -106,21 +107,44 @@ for (const kind of kinds) for (const start of lanes) for (const obstacle of lane
       expect(wobble).toBeGreaterThan(0);
       expect(frame.z).toBeLessThan(path.contactZ - 10);
 
-      // The failed command still changes the logical lane. A fresh attempt starts
-      // at the new relative offset with no turn or wobble from the last sample.
-      const retryLane: Lane = end === 0 ? 1 : 0;
-      const retry = makeSteerPath(end, retryLane, "goStraight", kind, true);
+      // The fresh attempt restores the original obstacle position and neutral pose.
+      expect(path.nextLane).toBe(start);
+      const retry = makeSteerPath(step, "goStraight", true);
       sampleSteerPath(path, path.contactTime + 0.1, frame);
       expect(frame.roll).not.toBe(0);
       expect(sampleSteerPath(retry, 0, frame)).toBe(frame);
       expect(frame).toEqual(sampleSteerPath(retry, 0));
-      expect(frame.x).toBe(retry.startX);
+      expect(frame.x).toBe(startX);
       expect(frame.z).toBe(-110);
       expect(frame.phase).toBe("steer-approach");
       expect(sampleSteerPath(retry, STEER_APPROACH_SECONDS).z).toBe(STEER_ANSWER_Z);
-      for (let i = 0; i <= Math.ceil(retry.duration * 60); i++) {
-        expect(sampleSteerPath(retry, i / 60, frame).clearance).toBeGreaterThan(0);
-      }
     }
   });
 }
+
+it("clears both authored obstacles, or touches only the chosen obstacle", () => {
+  for (const step of SHIP_STEER_STEPS) for (const command of STEER_COMMANDS) for (const moored of [false, true]) {
+    const path = makeSteerPath(step, command, moored);
+    const frames = step.obstacles.map((_, index) => sampleSteerPath(path, 0, undefined, index));
+    for (let i = 0; i <= Math.ceil(path.duration * 60); i++) {
+      for (const [index, frame] of frames.entries()) {
+        sampleSteerPath(path, i / 60, frame, index);
+        expect(frame.clearance).toBeGreaterThan(0);
+      }
+      if (frames.length === 2) expect(Math.abs(frames[0].x - frames[1].x)).toBeGreaterThan(6);
+    }
+    for (const [index, frame] of frames.entries()) {
+      if (path.safe) {
+        expect(frame.z).toBeCloseTo(STEER_PASS_Z);
+      } else {
+        sampleSteerPath(path, path.contactTime, frame, index);
+        expect(frame.phase).toBe("steer-bump");
+        if (step.obstacles[index].lane === steer(step.start, command)) {
+          expect(frame.clearance).toBeCloseTo(STEER_CONTACT_GAP, 6);
+        } else {
+          expect(frame.clearance).toBeGreaterThan(1);
+        }
+      }
+    }
+  }
+});

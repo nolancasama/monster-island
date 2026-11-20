@@ -7,7 +7,7 @@ import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
 import { COUNTER_CUSTOMER, DECK_Y, FISH_LANDING_Z, FISH_Y, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_RAMP, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
-import { CARGO_ITEMS, ITEM_NAME, SLOTS, placePhrase, type CargoItem, type Furniture, type Placement } from "../../src/game/logic/voyage";
+import { CARGO_ITEMS, ITEM_NAME, RAFT_STEER_STEPS, SHIP_STEER_STEPS, SLOTS, STEER_COMMANDS, placePhrase, steerAttempt, steerCall, type CargoItem, type Furniture, type Lane, type Placement } from "../../src/game/logic/voyage";
 
 const TAG = process.env.SHOT_TAG ?? "v1";
 const DIR = `.tmp/shots/voyage/${TAG}`;
@@ -59,6 +59,114 @@ async function face(page: Page, local: { x: number; z: number }, target: { x: nu
   const at = L(local.x, local.z);
   await teleportShip(page, at.x, at.z, Math.atan2(target.x - at.x, target.z - at.z), hold);
 }
+
+async function steeringCommand(page: Page, phrase: "weNeedWood" | "three" | "putItHere" | "canSwim" | "canHelp" | "cmdStop") {
+  await shotReady(page, `the ${phrase} prompt is ready`, s => Boolean(s.prompt?.buttons && s.prompt.status === "ready"
+    && s.prompt.sentences.includes(PHRASES[phrase].en)));
+  await tap(page, phrase);
+}
+
+async function steeringFrame(page: Page, name: string, phase: string, lane: Lane, z: number) {
+  try {
+    await page.waitForFunction(({ phase, lane, z }) => {
+      const api = (window as unknown as { __mi: {
+        voyage(): { phase: string | null; lane: Lane; obstacles: { z: number }[] };
+        timeScale(scale: number): void;
+      } }).__mi;
+      const v = api.voyage();
+      if (v.phase !== phase || v.lane !== lane || !v.obstacles.length || v.obstacles.some(o => o.z < z)) return false;
+      api.timeScale(0);
+      return true;
+    }, { phase, lane, z }, { timeout: 15_000 });
+  } catch (error) {
+    throw new Error(`HARNESS_PRECONDITION_FAILED - ${name} did not reach ${phase} in lane ${lane}`, { cause: error });
+  }
+  await hook(page, "renderFrames", 2);
+  await snap(page, name);
+}
+
+async function captureSteering(page: Page, vessel: "ship" | "raft") {
+  const ship = vessel === "ship";
+  const steps = ship ? SHIP_STEER_STEPS : RAFT_STEER_STEPS;
+  const frames = ship ? [-52, -39, -14, 12] : [-14, -8, 1, 10];
+  for (const [i, step] of steps.entries()) {
+    const name = `steer-${vessel}-${i + 1}`;
+    const call = steerCall(step, ship ? "Rocks" : "A rock");
+    const ready = (s: Awaited<ReturnType<typeof state>>) => Boolean(s.prompt?.buttons && s.prompt.status === "ready"
+      && s.prompt.question === call.en && STEER_COMMANDS.every(command => s.prompt?.choices.includes(command)));
+    const atStart = (v: any) => v.phase === "steer-approach" && v.raft.on === !ship && v.lane === step.start
+      && v.obstacles.length === step.obstacles.length && step.obstacles.every((o, index) => v.obstacles[index].lane === o.lane);
+    await shotReady(page, `${name} call`, ready);
+    await voyageReady(page, `${name} obstacles at the authored start`, atStart);
+    await hook(page, "renderFrames", 2);
+    await snap(page, `${name}-call`);
+    try {
+      if (ship && i === 0) {
+        const promptId = (await state(page)).prompt?.id;
+        const wrong = "turnRight"; // Choose the barrel beside the rocks.
+        await hook(page, "timeScale", 0.035);
+        await tap(page, wrong);
+        await steeringFrame(page, "steer-ship-bump", "steer-bump", steerAttempt(step, wrong).lane, -110);
+        await hook(page, "timeScale", 1);
+        await shotReady(page, `${name} repeated call`, s => ready(s) && s.prompt?.id !== promptId);
+        await voyageReady(page, `${name} retry at the authored start`, atStart);
+      }
+      const safe = STEER_COMMANDS.find(command => steerAttempt(step, command).hit < 0);
+      if (!safe) throw new Error(`HARNESS_PRECONDITION_FAILED - ${name} has no safe steering answer`);
+      const { lane } = steerAttempt(step, safe);
+      await hook(page, "timeScale", 0.035);
+      await tap(page, safe);
+      for (const [index, z] of frames.entries()) {
+        await steeringFrame(page, `${name}-pass-${index + 1}`, "steer-pass", lane, z);
+        await hook(page, "timeScale", 0.035);
+      }
+    } finally {
+      await hook(page, "timeScale", 1);
+    }
+  }
+}
+
+test.describe("ship and raft steering", () => {
+  test.skip(ONLY !== "steer");
+  test.describe.configure({ timeout: 180_000 });
+
+  test("ship steering calls, safe passes and one retry", async ({ page }) => {
+    await startPowerJob(page, "redbeard", { x: SPOT.captain.x + 1, z: 10.3 }, "sails", ["yesICan"]);
+    const stands = [{ x: 0, z: 6 }, { x: 0, z: 6 }, { x: 0, z: -11.6 }];
+    for (const [i, mast] of [MASTS.mizzen, MASTS.main, MASTS.fore].entries()) {
+      await face(page, stands[i], L(mast.x + 0.4, mast.z + 2));
+      await shotReady(page, `Puff is at sail ${i + 1}`, s => s.mode === "explore" && s.progress.active === "puff"
+        && Math.hypot(s.player.x - L(stands[i].x, stands[i].z).x, s.player.z - L(stands[i].x, stands[i].z).z) < 0.1);
+      for (let gust = 0; gust < 3; gust++) {
+        const before = (await voyage(page)).sails[i];
+        if (before >= 0.99) break;
+        await page.keyboard.press("KeyJ");
+        await voyageReady(page, `gust ${gust + 1} reaches sail ${i + 1}`, v => v.sails[i] > before);
+      }
+      await voyageReady(page, `sail ${i + 1} is full`, v => v.sails[i] >= 0.99);
+    }
+    await captureSteering(page, "ship");
+    await steeringCommand(page, "cmdStop");
+  });
+
+  test("raft towing calls and safe passes", async ({ page }) => {
+    await boardForShots(page);
+    await hook(page, "voyageJump", "raft");
+    await steeringCommand(page, "weNeedWood");
+    await steeringCommand(page, "three");
+    for (let i = 0; i < 3; i++) {
+      await voyageReady(page, `raft is ready to gather plank ${i + 1}`, v => v.phase === "raft-planks" && v.raft.built === i);
+      await shotReady(page, "Leafy can pull a plank", s => s.mode === "explore" && s.progress.active === "leafy");
+      await page.keyboard.press("KeyJ");
+      if (i === 0) await steeringCommand(page, "putItHere");
+      await voyageReady(page, `plank ${i + 1} is placed`, v => v.raft.built === i + 1);
+    }
+    await steeringCommand(page, "canSwim");
+    await steeringCommand(page, "canHelp");
+    await captureSteering(page, "raft");
+    await shotReady(page, "Bubbo finished towing", s => s.prompt?.sentences.includes(PHRASES.puffHelp.en) === true);
+  });
+});
 
 async function startPowerJob(page: Page, crew: string, from: { x: number; z: number }, phase: string, prompts: string[], hold = false) {
   await boardForShots(page);

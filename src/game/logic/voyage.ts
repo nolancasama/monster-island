@@ -187,6 +187,32 @@ export function whereChoices(state: CargoState, item: CargoItem): PhraseId[] {
 
 export type Lane = -1 | 0 | 1;
 export type SteerCommand = "turnLeft" | "turnRight" | "goStraight";
+export const STEER_COMMANDS: readonly SteerCommand[] = ["turnLeft", "goStraight", "turnRight"];
+
+export interface SteerObstacle {
+  readonly lane: Lane;
+  readonly kind: "rock" | "barrel";
+}
+
+export interface SteerStep {
+  readonly start: Lane;
+  readonly obstacles: readonly SteerObstacle[];
+}
+
+export const SHIP_STEER_STEPS: readonly SteerStep[] = [
+  { start: 0, obstacles: [{ lane: 0, kind: "rock" }, { lane: 1, kind: "barrel" }] },
+  { start: -1, obstacles: [{ lane: -1, kind: "barrel" }] },
+  { start: 0, obstacles: [{ lane: -1, kind: "rock" }, { lane: 1, kind: "barrel" }] },
+  { start: 0, obstacles: [{ lane: 0, kind: "barrel" }, { lane: -1, kind: "rock" }] },
+];
+
+export const RAFT_STEER_STEPS: readonly SteerStep[] = [
+  { start: 0, obstacles: [{ lane: 0, kind: "barrel" }, { lane: -1, kind: "rock" }] },
+  { start: 1, obstacles: [{ lane: 1, kind: "rock" }] },
+  { start: 0, obstacles: [{ lane: -1, kind: "barrel" }, { lane: 1, kind: "rock" }] },
+  { start: 0, obstacles: [{ lane: 0, kind: "rock" }, { lane: 1, kind: "barrel" }] },
+  { start: -1, obstacles: [{ lane: -1, kind: "barrel" }] },
+];
 
 /** The lane after a command (the edges hold). */
 export function steer(lane: Lane, cmd: SteerCommand): Lane {
@@ -199,5 +225,20 @@ export function obstacleSide(lane: Lane, obstacle: Lane): "left" | "ahead" | "ri
   return obstacle < lane ? "left" : obstacle > lane ? "right" : "ahead";
 }
 
-/** A command is safe when the vessel's next lane is not the obstacle's. */
-export const safeCommand = (lane: Lane, obstacle: Lane, cmd: SteerCommand) => steer(lane, cmd) !== obstacle;
+/** Resolve the move and the lane to restore once its animation finishes. */
+export function steerAttempt(step: SteerStep, command: SteerCommand) {
+  const lane = steer(step.start, command);
+  const hit = step.obstacles.findIndex((obstacle) => obstacle.lane === lane);
+  return { lane, hit, nextLane: hit < 0 ? lane : step.start };
+}
+
+export function steerCall(step: SteerStep, rockName: "Rocks" | "A rock") {
+  const calls = step.obstacles.map(({ lane, kind }) => {
+    const side = obstacleSide(step.start, lane);
+    const en = kind === "rock" ? rockName : "A barrel";
+    const ja = kind === "rock" ? "いわ" : "たる";
+    const where = side === "ahead" ? "まえ" : side === "left" ? "ひだり" : "みぎ";
+    return { en: side === "ahead" ? `${en} ahead!` : `${en} on the ${side}!`, ja: `${where}に ${ja}!` };
+  });
+  return { en: calls.map((call) => call.en).join(" "), ja: calls.map((call) => call.ja).join(" ") };
+}

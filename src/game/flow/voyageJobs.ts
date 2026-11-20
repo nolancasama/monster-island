@@ -7,8 +7,8 @@ import { animate, rt } from "../runtime";
 import { BUCKET, CARGO_SIZE, DECK_Y, FISH_DECK, FISH_Y, HOLD_Y, SHIP, SPOT, STEER_LANE, STOVE_SOLID, SUPPLY_CRATES, onHoldFloor, shipWalkable, shipWorld } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { SEA_Y } from "../world/island";
-import { CARGO_ITEMS, ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
-import { STEER_APPROACH_SECONDS, makeSteerPath, sampleSteerPath, type SteerFrame, type SteerObstacleKind } from "../logic/steerPath";
+import { CARGO_ITEMS, ITEM_NAME, SHIP_STEER_STEPS, STEER_COMMANDS, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, placePhrase, putLine, setVoyageStage, slotFree, steerCall, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Placement, type Prep, type SteerCommand, type SteerStep, type VoyageJob } from "../logic/voyage";
+import { STEER_APPROACH_SECONDS, makeSteerPath, sampleSteerPath, type SteerFrame } from "../logic/steerPath";
 import { giveWearable, wear } from "../logic/wardrobe";
 import { voyageEpoch, vy, type Candidate, type CrewId, type Fish, type Obstacle } from "../voyageRt";
 import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, stanceReady, toolFx, type Phase } from "../voyageSim";
@@ -638,7 +638,6 @@ async function sailing() {
   await steering();
 }
 
-const OBSTACLE_JA = { rock: "いわ", barrel: "たる" };
 const steerFrames = new WeakMap<Obstacle, SteerFrame>();
 export const steeringObstacleFrame = (o: Obstacle): Readonly<SteerFrame> | undefined => steerFrames.get(o);
 
@@ -664,9 +663,8 @@ async function steering() {
     const epoch = voyageEpoch();
     waterEpoch = epoch; waterX = 0; waveStart = vy.flowDist; waveOffset = 0;
     try {
-      const kinds: SteerObstacleKind[] = ["rock", "barrel", "rock", "barrel"];
-      for (let i = 0; i < kinds.length; i++) {
-        for (;;) if (await steerOne(kinds[i], i)) break;
+      for (const [i, step] of SHIP_STEER_STEPS.entries()) {
+        for (;;) if (await steerOne(step, i)) break;
       }
       steerShot();
       await say("redbeard", "We're here! Say: Stop!", "ついたぞ! 「Stop!」と いおう!");
@@ -690,31 +688,37 @@ const steerShot = () => shot(
   { x: L(-11, 0).x, y: DECK_Y + 30, z: L(0, 36).z },
   { x: L(1, 0).x, y: 0, z: L(0, -30).z });
 
-/** One obstacle: the captain calls it, the student steers; a wrong lane is a gentle bump and a retry. */
-async function steerOne(kind: SteerObstacleKind, i: number): Promise<boolean> {
+/** The captain calls each obstacle. A wrong lane is a gentle bump and a retry. */
+async function steerOne(step: SteerStep, i: number): Promise<boolean> {
   steerShot();
-  const lane = vy.lane as Lane;
-  const options: Lane[] = lane === 0 ? [-1, 0, 1] : [lane, 0];
-  const at = options[(i * 2 + 1) % options.length];
+  vy.lane = step.start;
   const boatMoored = vy.boatMoored;
-  let path = makeSteerPath(lane, at, "goStraight", kind, boatMoored);
-  const frame = sampleSteerPath(path, 0);
-  const o: Obstacle = { id: i, kind, lane: at, z: frame.z, hit: 0 };
-  steerFrames.set(o, frame);
-  vy.obstacles = [o];
+  let path = makeSteerPath(step, "goStraight", boatMoored);
+  const frames = step.obstacles.map((_, index) => sampleSteerPath(path, 0, undefined, index));
+  const obstacles = step.obstacles.map((obstacle, index): Obstacle => {
+    const frame = frames[index];
+    const o = { ...obstacle, id: i * 2 + index, z: frame.z, hit: 0 };
+    steerFrames.set(o, frame);
+    return o;
+  });
+  vy.obstacles = obstacles;
+  const frame = frames[0];
   let from = 0, to = STEER_APPROACH_SECONDS, started = rt.time, speed = 1;
   let bumped = false;
   const fast = fastMode();
   const phase: Phase = { name: frame.phase, tick() {
-    sampleSteerPath(path, Math.min(to, from + (rt.time - started) * speed), frame);
+    const t = Math.min(to, from + (rt.time - started) * speed);
+    for (let index = 0; index < obstacles.length; index++) {
+      sampleSteerPath(path, t, frames[index], index);
+      obstacles[index].z = frames[index].z;
+    }
     phase.name = frame.phase;
-    o.z = frame.z; // Also used by the old renderer and the voyage debug hook.
     vy.shipYaw = frame.yaw;
     vy.shipRoll = frame.roll;
-    waterX = -lane * STEER_LANE + frame.driftX;
+    waterX = -step.start * STEER_LANE + frame.driftX;
     if (!path.safe && frame.t >= path.contactTime && !bumped) {
       bumped = true;
-      o.hit = rt.time;
+      obstacles[path.hit].hit = rt.time;
       audio.play("bump");
     }
   } };
@@ -729,17 +733,15 @@ async function steerOne(kind: SteerObstacleKind, i: number): Promise<boolean> {
   setPhase(phase);
   try {
     await play(0, STEER_APPROACH_SECONDS);
-    const side = obstacleSide(lane, at);
-    const word = kind === "rock" ? "Rocks" : "A barrel";
-    const call = side === "ahead" ? `${word} ahead!` : `${word} on the ${side}!`;
-    const ja = side === "ahead" ? `まえに ${OBSTACLE_JA[kind]}!` : side === "left" ? `ひだりに ${OBSTACLE_JA[kind]}!` : `みぎに ${OBSTACLE_JA[kind]}!`;
-    const said = (await ask({ kind: "choice", options: ["turnLeft", "goStraight", "turnRight"], tapAlways: true, readQuestion: true,
-      question: { by: "redbeard", en: call, ja }, help: "ぶつからない ほうへ!" })) as SteerCommand | null;
+    const said = (await ask({ kind: "choice", options: [...STEER_COMMANDS], tapAlways: true, readQuestion: true,
+      question: { by: "redbeard", ...steerCall(step, "Rocks") }, help: "ぶつからない ほうへ!" })) as SteerCommand | null;
     const cmd: SteerCommand = said ?? "goStraight";
-    path = makeSteerPath(lane, at, cmd, kind, boatMoored);
-    vy.lane = steer(lane, cmd);
+    path = makeSteerPath(step, cmd, boatMoored);
+    vy.lane = path.lane;
     audio.play("creak");
     await play(STEER_APPROACH_SECONDS, path.duration);
+    vy.lane = path.nextLane;
+    waterX = -path.nextLane * STEER_LANE;
   } finally {
     if (vy.phase === phase) {
       setPhase(null);
