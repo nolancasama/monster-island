@@ -10,6 +10,7 @@ import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
 import { DECK_Y, HALF_BEAM, HOLD, HOLD_Y, MASTS, SHIP, SPOT, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
 import { PHRASES } from "../../src/game/logic/english";
+import { RAFT_STEER_STEPS, SHIP_STEER_STEPS, STEER_COMMANDS, steerAttempt } from "../../src/game/logic/voyage";
 
 const TAG = process.env.SHOT_TAG;
 const DIR = `.tmp/shots/voyage/${TAG}`;
@@ -87,10 +88,15 @@ async function answer(page: Page, st: MiState) {
   else if (c.includes("yesPlease")) pick = "yesPlease";
   else if (c.includes("turnLeft")) {
     if (q.includes("island is on the left")) pick = "turnLeft";
+    else if (q.includes("island is straight ahead")) pick = "goStraight";
     else if (q.includes("island is on the right")) pick = "turnRight";
     else {
-      const o = v.obstacles[0];
-      pick = !o || o.lane !== v.lane ? "goStraight" : v.lane === 1 ? "turnLeft" : "turnRight";
+      const steps = v.raft.on ? RAFT_STEER_STEPS : SHIP_STEER_STEPS;
+      const step = steps.find(({ start, obstacles }) => v.lane === start && v.obstacles.length === obstacles.length
+        && obstacles.every((o, i) => o.lane === v.obstacles[i].lane));
+      const safe = step && STEER_COMMANDS.find((command) => steerAttempt(step, command).hit < 0);
+      if (!safe) throw new Error(`HARNESS_PRECONDITION_FAILED - no authored steering call for ${q}`);
+      pick = safe;
     }
   } else if (c.includes("onTheTable") && c.length === 2 || c.includes("onTheShelf") && c.length === 2) {
     const t = putTask(v.hud?.title);

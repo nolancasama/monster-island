@@ -1,9 +1,9 @@
 import { MOORED_POSE } from "../flow/voyageEncounter";
 import { BOAT_HALF_BEAM, BOAT_HALF_LENGTH } from "../world/gullBoat";
 import { BOW_Z, SHIP, STERN_Z, STEER_LANE, hullHalf } from "../world/pirateShip";
-import { safeCommand, steer, type Lane, type SteerCommand } from "./voyage";
+import { steerAttempt, type Lane, type SteerCommand, type SteerObstacle, type SteerStep } from "./voyage";
 
-export type SteerObstacleKind = "rock" | "barrel";
+type SteerObstacleKind = SteerObstacle["kind"];
 export const SHIP_OBSTACLE_SCALE = 1.3;
 export const STEER_APPROACH_SECONDS = 2.6;
 export const STEER_ANSWER_Z = -58;
@@ -32,7 +32,7 @@ const starboardPassX = boatX + BOAT_HALF_BEAM * Math.abs(boatCos) + BOAT_HALF_LE
 
 function laneX(relativeLane: number, boatMoored: boolean): number {
   const x = relativeLane * STEER_LANE;
-  return boatMoored && relativeLane > 0 ? Math.max(x, starboardPassX) : x;
+  return boatMoored && relativeLane > 0 ? Math.max(STEER_LANE, starboardPassX) + (relativeLane - 1) * STEER_LANE : x;
 }
 
 const hull: ReadonlyArray<readonly [number, number]> = (() => {
@@ -70,17 +70,24 @@ export function steerClearance(x: number, z: number, yaw: number, kind: SteerObs
 }
 
 export interface SteerPath {
-  readonly kind: SteerObstacleKind;
+  readonly obstacles: readonly SteerTrack[];
   readonly safe: boolean;
+  readonly hit: number;
+  readonly lane: Lane;
+  readonly nextLane: Lane;
   readonly boatMoored: boolean;
-  readonly startX: number;
-  readonly endX: number;
   readonly driftX: number;
   /** Where a wrong answer's obstacle meets the bow, across the ship (0 on a safe pass). */
   readonly contactX: number;
   readonly contactZ: number;
   readonly contactTime: number;
   readonly duration: number;
+}
+
+interface SteerTrack {
+  readonly kind: SteerObstacleKind;
+  readonly startX: number;
+  readonly endX: number;
 }
 
 export interface SteerFrame {
@@ -107,35 +114,38 @@ function shoulderContactZ(x: number, kind: SteerObstacleKind, boatMoored: boolea
   return far;
 }
 
-export function makeSteerPath(start: Lane, obstacle: Lane, command: SteerCommand, kind: SteerObstacleKind, boatMoored: boolean): SteerPath {
-  const safe = safeCommand(start, obstacle, command);
-  const end = steer(start, command);
+export function makeSteerPath(step: SteerStep, command: SteerCommand, boatMoored: boolean): SteerPath {
+  const attempt = steerAttempt(step, command);
+  const safe = attempt.hit < 0;
   // An unsafe choice ends in the obstacle's lane, after yaw and lateral drift have settled,
   // then the obstacle slides onto the bow's port shoulder as it brakes: dead ahead, the bow
   // itself hides it from the steering camera (behind the stern, raised to port).
   const contactX = safe ? 0 : CONTACT_SHOULDER_X;
-  const contactZ = safe ? STEM_Z - paddedRadius(kind) - STEER_CONTACT_GAP : shoulderContactZ(contactX, kind, boatMoored);
+  const contactZ = safe ? STEER_PASS_Z : shoulderContactZ(contactX, step.obstacles[attempt.hit].kind, boatMoored);
   const contactTime = STEER_APPROACH_SECONDS + BRAKE_SECONDS + 2 * (contactZ - BRAKE_Z) / PASS_SPEED;
   return {
-    kind, safe, boatMoored, contactX, contactZ, contactTime,
-    startX: laneX(obstacle - start, boatMoored),
-    endX: laneX(obstacle - end, boatMoored),
-    driftX: (start - end) * STEER_LANE,
+    ...attempt, safe, boatMoored, contactX, contactZ, contactTime,
+    obstacles: step.obstacles.map(({ kind, lane }) => ({
+      kind,
+      startX: laneX(lane - step.start, boatMoored),
+      endX: laneX(lane - attempt.lane, boatMoored),
+    })),
+    driftX: (step.start - attempt.lane) * STEER_LANE,
     duration: safe ? STEER_APPROACH_SECONDS + (STEER_PASS_Z - STEER_ANSWER_Z) / PASS_SPEED
       : contactTime + BUMP_SECONDS + RETREAT_SECONDS,
   };
 }
 
 /** A wrong answer's slide onto the bow shoulder while braking (0 on a safe pass). */
-export function steerShoulder(path: SteerPath, time: number): number {
+export function steerShoulder(path: SteerPath, time: number, index = 0): number {
   const passed = Math.max(0, Math.min(path.duration, time)) - STEER_APPROACH_SECONDS;
-  if (path.safe || passed < BRAKE_SECONDS) return 0;
+  if (path.hit !== index || passed < BRAKE_SECONDS) return 0;
   const settle = clamp01((passed - BRAKE_SECONDS) / (path.contactTime - STEER_APPROACH_SECONDS - BRAKE_SECONDS));
   return path.contactX * settle * settle * (3 - 2 * settle);
 }
 
 /** Sample the fixed ship frame, with +x pointing right in the helm shot. Reuse `out` on animation frames. */
-export function sampleSteerPath(path: SteerPath, time: number, out?: SteerFrame): SteerFrame {
+export function sampleSteerPath(path: SteerPath, time: number, out?: SteerFrame, index = 0): SteerFrame {
   const t = Math.max(0, Math.min(path.duration, time));
   const passed = t - STEER_APPROACH_SECONDS;
   const turn = clamp01(passed / TURN_SECONDS);
@@ -164,8 +174,9 @@ export function sampleSteerPath(path: SteerPath, time: number, out?: SteerFrame)
       }
     }
   }
-  const x = path.startX + (path.endX - path.startX) * shift + steerShoulder(path, t);
-  const clearance = steerClearance(x, z, yaw, path.kind, path.boatMoored);
+  const { startX, endX, kind } = path.obstacles[index];
+  const x = startX + (endX - startX) * shift + steerShoulder(path, t, index);
+  const clearance = steerClearance(x, z, yaw, kind, path.boatMoored);
   if (!out) return { t, phase, x, z, driftX, yaw, roll, clearance };
   out.t = t;
   out.phase = phase;

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { newProgress, type Progress } from "./progress";
 import { decodeSave, encodeSave } from "./save";
 import {
-  CARGO_ITEMS, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, foodChoices, foodOfHave, handOverFood, interrogationFoods, markHatGiven,
-  obstacleSide, placePhrase, putLine, readVoyage, safeCommand, setVoyageStage, slotFree, steer, taskDone, truthfulAnswer, voyageStage, whereChoices,
-  type CargoState, type CargoTask, type Lane, type SteerCommand,
+  CARGO_ITEMS, RAFT_STEER_STEPS, SHIP_STEER_STEPS, STEER_COMMANDS, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, foodChoices, foodOfHave, handOverFood, interrogationFoods, markHatGiven,
+  obstacleSide, placePhrase, putLine, readVoyage, setVoyageStage, slotFree, steer, steerAttempt, steerCall, taskDone, truthfulAnswer, voyageStage, whereChoices,
+  type CargoState, type CargoTask, type Lane,
 } from "./voyage";
 import type { MonsterId } from "../types";
 
@@ -152,14 +152,41 @@ describe("steering in three lanes", () => {
     expect(steer(1, "goStraight")).toBe(1);
   });
 
-  it("the captain's call and a safe answer always exist", () => {
+  it("calls each obstacle relative to the vessel", () => {
     for (const lane of [-1, 0, 1] as Lane[]) for (const obstacle of [-1, 0, 1] as Lane[]) {
-      const side = obstacleSide(lane, obstacle);
-      expect(side).toBe(obstacle < lane ? "left" : obstacle > lane ? "right" : "ahead");
-      const ok = (["turnLeft", "turnRight", "goStraight"] as SteerCommand[]).filter((c) => safeCommand(lane, obstacle, c));
-      expect(ok.length, `${lane} ${obstacle}`).toBeGreaterThan(0);
-      if (side === "ahead") expect(ok).not.toContain("goStraight");
-      else expect(ok).toContain("goStraight");
+      expect(obstacleSide(lane, obstacle)).toBe(obstacle < lane ? "left" : obstacle > lane ? "right" : "ahead");
+    }
+    expect(steerCall(RAFT_STEER_STEPS[0], "A rock")).toEqual({
+      en: "A barrel ahead! A rock on the left!", ja: "まえに たる! ひだりに いわ!",
+    });
+  });
+
+  it.each([
+    { vessel: "ship", steps: SHIP_STEER_STEPS, lanes: [-1, 0, 0, 1], commands: ["turnLeft", "turnRight", "goStraight", "turnRight"] },
+    { vessel: "raft", steps: RAFT_STEER_STEPS, lanes: [1, 0, 0, -1, 0], commands: ["turnRight", "turnLeft", "goStraight", "turnLeft", "turnRight"] },
+  ])("$vessel steps each have one safe command and cover all three commands", ({ steps, lanes, commands }) => {
+    const used = new Set<string>();
+    for (const [index, step] of steps.entries()) {
+      expect(step.start).toBe(index === 0 ? 0 : lanes[index - 1]);
+      const safe = STEER_COMMANDS.filter((command) => steerAttempt(step, command).hit < 0);
+      expect(safe).toEqual([commands[index]]);
+      if (safe[0] === "goStraight") expect(step.start).toBe(0);
+      expect(steerAttempt(step, safe[0]).nextLane).toBe(lanes[index]);
+      used.add(safe[0]);
+    }
+    expect(used).toEqual(new Set(STEER_COMMANDS));
+  });
+
+  it("a bump identifies the chosen obstacle and restores the authored start lane", () => {
+    for (const step of [...SHIP_STEER_STEPS, ...RAFT_STEER_STEPS]) {
+      for (const command of STEER_COMMANDS) {
+        const attempt = steerAttempt(step, command);
+        if (attempt.hit < 0) continue;
+        expect(step.obstacles[attempt.hit].lane).toBe(attempt.lane);
+        expect(attempt.nextLane).toBe(step.start);
+        const retry = { ...step, start: attempt.nextLane };
+        expect(steerCall(retry, "Rocks")).toEqual(steerCall(step, "Rocks"));
+      }
     }
   });
 });

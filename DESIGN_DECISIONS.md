@@ -3104,3 +3104,19 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - **Rejected:** blending every shot change (would change every existing scripted camera); a fixed offset per scene (the
   ship's masts and the huddle make one angle unsafe in some scenes); a narrower FOV instead of moving the lens (flattens
   the face and makes the ship's sway read as shake).
+
+## 2026-11-21 - Ship and raft fixes: Steering
+
+- The ship and Bubbo's tow use authored starts and obstacle lanes. The three
+  choices resolve against all obstacles. At an edge, the outward turn and
+  straight both hold the blocked lane. After a bump, the same call starts again
+  from its authored lane.
+- The ship samples both obstacles on one approach, turn and braking timeline.
+  Only the chosen obstacle slides onto the bow's port shoulder. The two obstacle
+  meshes share geometry and material, and the per-obstacle frames are reused.
+- Puff's island calls go left, straight, then right. The side calls center the
+  island in the raft's view, and the straight call brings it higher into view.
+- The controller's `SHOT_ONLY=steer` run uses the existing read-only
+  `window.__mi.voyage()` fields `phase`, `lane`, `obstacles` and `raft.on`.
+  The raft tow exposes the same approach, pass, bump and retreat phases as the
+  ship. The full voyage test answers the island calls through the prompt text.
