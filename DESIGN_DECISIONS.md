@@ -3059,3 +3059,26 @@ The user's plan "Boat Departure, Pirate Encounter and Ship Interior Fixes", item
 - The raft retains its own obstacle origin, lane spacing, scale and lane easing. The existing read-only
   voyage hook exposes the sailing job's approach, pass, bump and retreat through `voyage().phase`,
   alongside obstacle lanes and distances, ship yaw, and the active lane.
+
+## 2026-11-19 - Voyage polish: friends' powers from their combat stances
+
+- The voyage registers a pose-only activity with the shared stance. The job
+  supplies the friend and the place or action that calls for the pose. Switching
+  friends, leaving the job or ship, and dialogue release it. Leafy keeps the
+  backpack pose while the player chooses a cargo placement. Saves retain the
+  existing voyage checkpoints and rebuild the ship without a job or stance.
+  The player resumes at the saved ship floor height during placement. A friend
+  leaving a stance aboard lands on the occupied ship floor.
+- Ember faces the stove and uses the combat breath sprites from the live mouth
+  anchor. The rider keeps the existing smoothed seat height. The mounted
+  collision circle includes the distance from the rider to the steed's centre,
+  so mounting requires enough room for the whole steed. The stove still accepts
+  J in its original range, including spaces too tight to mount.
+- Leafy's pickup vine starts at a hand, and two live vines support the carried
+  item inside the hold. The backpack pose is exempt from the interior camera's
+  near-lens cull. Bubbo's bubble uses its mouth on the fishing deck. Puff perches
+  for a gust, and the cloth fills as the gust reaches it.
+- The seaborne attack guards keep combat moves and damage disabled. The existing
+  input gate still admits contextual J and touch-hold, which drive the original
+  heat rates and cooking band. The controller can read the shared pose with
+  `window.__mi.state().act2.stance` and the job with `window.__mi.voyage().phase`.

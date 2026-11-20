@@ -1,11 +1,14 @@
-import { addFx, vy, type Candidate, type CrewId, type FxKind, type Phase } from "./voyageRt";
-import { effect, rt } from "./runtime";
+import { addFx, vy, type Candidate, type CrewId, type FxKind, type Phase as VoyagePhase, type VoyageFx } from "./voyageRt";
+import { animate, effect, rt } from "./runtime";
 import { getGame } from "./store";
 import { DECK_Y, HOLD_Y, MASTS, SAIL_FOOT, SHIP, SPOT, sailHeight } from "./world/pirateShip";
 import { SEA_Y } from "./world/island";
 import type { CargoItem, Placement } from "./logic/voyage";
 import type { CompanionId } from "./data/combat";
 import { audio } from "../audio/audio";
+import { mountPose, mounted } from "./combat";
+import { EMBER_MOUTH, PUFF_BEAK } from "../scene/anchors";
+import { BUBBO_MOUTH, voyageEmitter } from "../scene/voyageAnchors";
 
 /**
  * The pirate voyage's free play (docs/PIRATE_VOYAGE.md §3–§5): the running
@@ -16,9 +19,14 @@ import { audio } from "../audio/audio";
  * roughly faces the right way succeeds.
  */
 
-export type { Candidate, Phase };
+export type { Candidate };
+export type Phase = VoyagePhase & {
+  stance?(): CompanionId | null;
+  stanceYaw?(): number;
+  keepStanceDuringScene?(): boolean;
+};
 
-export const currentPhase = () => vy.phase;
+export const currentPhase = (): Phase | null => vy.phase;
 export function setPhase(p: Phase | null) {
   vy.phase = p;
   if (!p) vy.hud = null;
@@ -98,12 +106,45 @@ export function aim<T>(items: T[], at: (t: T) => { x: number; z: number }, range
   return best;
 }
 
-/** A tool's effect from the hand to a world point. */
+const posedEffects = new WeakSet<VoyageFx>();
+export const isPosedToolFx = (fx: VoyageFx) => posedEffects.has(fx);
+
+/** Between pose entry and the first rendered sample, use the same mount transform. */
+function posedSource(friend: CompanionId) {
+  const emitter = voyageEmitter(friend);
+  if (emitter) return emitter;
+  const pose = mountPose(friend);
+  if (!pose) return null;
+  const [x, y, z] = friend === "ember" ? EMBER_MOUTH : friend === "puff" ? PUFF_BEAK : friend === "bubbo" ? BUBBO_MOUTH : LEAFY_HAND_FALLBACK;
+  const s = Math.sin(pose.yaw), c = Math.cos(pose.yaw);
+  return { x: pose.x + (x * c + z * s) * pose.scale, y: pose.y + y * pose.scale, z: pose.z + (z * c - x * s) * pose.scale };
+}
+
+const LEAFY_HAND_FALLBACK = [.38, .65, .03] as const;
+
+/** Travel time also drives the sail's response. */
+export const GUST_TRAVEL = .6;
+
 export function toolFx(friend: CompanionId, to: { x: number; y: number; z: number }) {
-  const kind = TOOL[friend].kind, h = hand();
-  const life = kind === "vine" ? 0.55 : kind === "gust" ? 0.6 : kind === "flame" ? 0.5 : 0.45;
-  addFx(kind, h, to, life, rt.time);
+  const kind = TOOL[friend].kind;
+  const source = activeFriend() === friend && mounted(friend) ? posedSource(friend) : null;
+  const life = kind === "vine" ? 0.55 : kind === "gust" ? GUST_TRAVEL : kind === "flame" ? 0.5 : 0.45;
+  addFx(kind, source ?? hand(), to, life, rt.time);
+  const fx = vy.fx[vy.fx.length - 1];
+  if (source) {
+    posedEffects.add(fx);
+    if (friend === "ember" && rt.monsters.ember.anim?.kind !== "power") animate("ember", "power");
+  }
   audio.play(kind === "bubble" ? "bubble" : kind === "flame" ? "fireball" : kind === "vine" ? "vines" : "wind");
+  return fx;
+}
+
+export function stoveBreath(): VoyageFx | undefined {
+  if (!vy.active || rt.world !== "home" || vy.phase?.name !== "cooking" || activeFriend() !== "ember" || !mounted("ember")) return;
+  for (let i = vy.fx.length - 1; i >= 0; i--) {
+    const fx = vy.fx[i];
+    if (fx.kind === "flame" && isPosedToolFx(fx) && rt.time - fx.t0 <= fx.life) return fx;
+  }
 }
 
 /** Steam and a hiss where water meets fire. */

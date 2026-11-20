@@ -13,6 +13,7 @@ import { cb, companionVisible, mountMotion, mountPose } from "../game/combat";
 import { lumoHidden } from "../game/flow/act2";
 import { EMBER_TAIL_RIDE } from "./poses";
 import { anchors, EMBER_MOUTH, LEAFY_HAND, PUFF_BEAK } from "./anchors";
+import { BUBBO_MOUTH, bubboEmitter } from "./voyageAnchors";
 import { WornItems } from "./Wearables";
 import { vy } from "../game/voyageRt";
 
@@ -123,6 +124,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
     const g = root.current;
     const r = rig.current;
     if (id === "ember") anchors.emberMouthValid = false;
+    if (id === "bubbo") bubboEmitter.valid = false;
     if (id === "puff") anchors.puffBeakValid = false;
     if (id === "leafy") anchors.leafyHandLValid = anchors.leafyHandRValid = false;
     if (!g || !r) return;
@@ -151,9 +153,9 @@ function MonsterBody({ id }: { id: MonsterId }) {
     g.scale.setScalar(0.2 + 0.8 * sm(poof));
     // Act 2: Lumo is in the raiders' cage; a friend in its combat position sits on (or carries) the player.
     // In the hold the lens sits just aft of the stairs: a friend following down them would fill the screen.
-    const atLens = vy.inHold && Math.hypot(m.x - rt.camera.pos.x, m.z - rt.camera.pos.z) < 1.4 && !mountPose(id);
-    g.visible = (ferry || companionVisible(id)) && !(id === "lumo" && lumoHidden()) && !atLens;
     const mount = ferry ? null : mountPose(id);
+    const atLens = vy.inHold && !mount && Math.hypot(m.x - rt.camera.pos.x, m.z - rt.camera.pos.z) < 1.4;
+    g.visible = (ferry || companionVisible(id)) && !(id === "lumo" && lumoHidden()) && !atLens;
     if (mount) {
       g.position.set(mount.x, mount.y, mount.z);
       g.rotation.y = mount.yaw + pose.spin * 0.2;
@@ -163,7 +165,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
     r.scale.set(1 / Math.sqrt(pose.squash), pose.squash, 1 / Math.sqrt(pose.squash));
     r.rotation.x = pose.lean;
     r.rotation.z = walkRock + pose.tilt;
-    // Carrying the rider: the stride, lunges, jolts and leans the rider shares (scene/Characters).
+    // The mount keeps its body motion while Characters smooths the rider's height.
     if (mount && cb.stance.friend === id && (id === "bubbo" || id === "ember")) {
       const mm = mountMotion();
       r.position.y = mm.bob;
@@ -197,7 +199,8 @@ function MonsterBody({ id }: { id: MonsterId }) {
         if (whip.cancelAt !== null) whipLift *= 1 - sm((t - whip.cancelAt) / .1);
         else if (whip.retractAt !== null) whipLift *= 1 - sm((t - whip.retractAt) / .26);
       }
-      const up = Math.max(pose.armsUp, whipLift * .78);
+      const carryingCargo = mount && cb.stance.friend === "leafy" && vy.phase?.name === "cargo" && vy.carry?.kind === "cargo";
+      const up = Math.max(pose.armsUp, whipLift * .78, carryingCargo ? .36 : 0);
       const shakeArms = up > 0.5 && m.anim?.kind === "power" ? Math.sin(t * 24) * 0.3 : 0;
       if (n.armL) {
         n.armL.rotation.z = -armBase - up * 2.3 - shakeArms + pose.cover * 0.6;
@@ -277,6 +280,10 @@ function MonsterBody({ id }: { id: MonsterId }) {
       mouth.current.getWorldPosition(anchors.emberMouth);
       anchors.emberMouthValid = true;
     }
+    if (id === "bubbo" && mouth.current && g.visible && vy.active && mount) {
+      mouth.current.getWorldPosition(bubboEmitter.mouth);
+      bubboEmitter.valid = true;
+    }
     if (id === "puff" && beak.current && g.visible) {
       beak.current.getWorldPosition(anchors.puffBeak);
       anchors.puffBeakValid = getGame().progress.active === "puff";
@@ -297,6 +304,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
     <group ref={root}>
       <group ref={rig}>
         {id === "ember" && <object3D ref={mouth} position={EMBER_MOUTH} />}
+        {id === "bubbo" && <object3D ref={mouth} position={BUBBO_MOUTH} />}
         {id === "puff" && <object3D ref={beak} position={PUFF_BEAK} />}
         {id === "lumo" && (
           <mesh ref={glowRef} position={[0, 1.03, -0.05]}>

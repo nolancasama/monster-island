@@ -5,7 +5,7 @@
 // screenshots to .tmp/shots/voyage/<tag>/.
 import { expect, test, type Page } from "@playwright/test";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./helpers";
+import { boot, chooseMode, hook, state, tap, teleportShip, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
 import { DECK_Y, HALF_BEAM, HOLD, HOLD_Y, MASTS, SHIP, SPOT, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
@@ -41,15 +41,13 @@ let spyInput: "keys" | "touch" = "keys";
 const inHoldBox = (local: { x: number; z: number }) => local.x >= HOLD.x0 && local.x <= HOLD.x1 && local.z >= HOLD.z0 && local.z <= HOLD.z1;
 async function standFacing(page: Page, local: { x: number; z: number }, at: { x: number; z: number }) {
   const s = L(local.x, local.z);
-  await hook(page, "shipFloor", inHoldBox(local));
-  await hook(page, "teleport", s.x, s.z, Math.atan2(at.x - s.x, at.z - s.z), true);
+  await teleportShip(page, s.x, s.z, Math.atan2(at.x - s.x, at.z - s.z), inHoldBox(local));
 }
 /** Stand near a world point (the game snaps to the nearest walkable spot), facing it. */
 async function nearFacing(page: Page, at: { x: number; z: number }, from: { x: number; z: number }, dist = 1.2) {
   const dx = from.x - at.x, dz = from.z - at.z, d = Math.hypot(dx, dz) || 1;
   const x = at.x + (dx / d) * dist, z = at.z + (dz / d) * dist;
-  await hook(page, "shipFloor", inHoldBox({ x: x - SHIP.x, z: z - SHIP.z }));
-  await hook(page, "teleport", x, z, Math.atan2(at.x - x, at.z - z), true);
+  await teleportShip(page, x, z, Math.atan2(at.x - x, at.z - z), inHoldBox({ x: x - SHIP.x, z: z - SHIP.z }));
 }
 async function pressJ(page: Page) { await page.keyboard.press("KeyJ"); await page.waitForTimeout(120); }
 /** Talk to whatever E targets once the focus is this one. */
@@ -119,7 +117,7 @@ async function drive(page: Page, label: string, done: (s: MiState, v: V) => bool
       told = Date.now();
       console.log(`[${label}] ${Math.round((Date.now() - t0) / 1000)}s mode=${s.mode} phase=${v.phase} focus=${s.focus?.id} prompt=${s.prompt ? `${s.prompt.kind}:${s.prompt.status}:${s.prompt.choices.join("/")}` : "-"} line=${s.line?.en ?? "-"} hud=${v.hud?.title ?? "-"} carry=${JSON.stringify(v.carry)} at=${s.player.x.toFixed(1)},${s.player.z.toFixed(1)},${s.player.y.toFixed(2)}`);
     }
-    if (Date.now() - t0 > timeout) throw new Error(`timed out: ${label} ${JSON.stringify({ mode: s.mode, line: s.line, prompt: s.prompt, phase: v.phase, hud: v.hud, player: s.player })}`);
+    if (Date.now() - t0 > timeout) throw new Error(`timed out: ${label} ${JSON.stringify({ mode: s.mode, line: s.line, prompt: s.prompt, phase: v.phase, hud: v.hud, carry: v.carry, cargo: v.cargo, focus: s.focus?.id, stance: s.act2.stance, player: s.player })}`);
     const isWrong = s.prompt?.status === "wrong";
     if (isWrong && !wasWrong && ++wrong > 3) throw new Error(`wrong answers: ${label} ${JSON.stringify({ prompt: s.prompt, phase: v.phase, hud: v.hud })}`);
     wasWrong = isWrong;
@@ -152,6 +150,7 @@ const FURN_AT: Record<string, { x: number; z: number }> = { table: SPOT.table, s
 /** The middle of each sail's cloth (voyageSim's SAIL_AIM): mizzen, main, fore. */
 const SAIL_AT = [MASTS.mizzen, MASTS.main, MASTS.fore].map((m) => ({ x: m.x + 0.4, z: m.z + 2 }));
 const SAIL_STAND = [{ x: 0, z: 6.0 }, { x: 0, z: 6.0 }, { x: 0, z: -11.6 }];
+const STOVE_STAND = { x: 0, z: -13.85 };
 const HUNGRY_STAND: Record<string, { x: number; z: number }> = {
   tom: { x: SPOT.crew[0].x - 1.45, z: -9.8 }, sam: { x: SPOT.crew[1].x - 1.45, z: -11.7 }, max: { x: SPOT.crew[2].x - 1.15, z: -12.3 },
 };
@@ -180,10 +179,10 @@ async function play(page: Page, _s: MiState, v: V) {
     }
     case "cooking": {
       const c = v.cook;
-      if (!c.lit) { await standFacing(page, { x: 0, z: -15.2 }, L(0, -16.5)); await pressJ(page); return; }
+      if (!c.lit) { await standFacing(page, STOVE_STAND, L(SPOT.stove.x, SPOT.stove.z)); await pressJ(page); return; }
       if (c.pot) {
         // Keep Ember's fire in the green band: hold J, let go near the top, hold again.
-        await standFacing(page, { x: 0, z: -15.2 }, L(0, -16.5));
+        await standFacing(page, STOVE_STAND, L(SPOT.stove.x, SPOT.stove.z));
         if (!heatHeld && c.heat < 0.66) { await page.keyboard.down("KeyJ"); heatHeld = true; }
         else if (heatHeld && c.heat > 0.76) { await page.keyboard.up("KeyJ"); heatHeld = false; }
         return;
@@ -261,6 +260,47 @@ async function continueSaved(page: Page) {
   await hook(page, "openPirateVoyage", true);
 }
 
+async function requireVoyageState(page: Page, label: string, ready: (s: MiState, v: V) => boolean) {
+  await expect.poll(async () => ready(await state(page), await voyage(page)), {
+    timeout: 30_000, message: `HARNESS_PRECONDITION_FAILED - ${label}`,
+  }).toBe(true);
+}
+
+async function checkCookingStanceReload(page: Page) {
+  try {
+    await drive(page, "before the stove stance check", (s, v) => s.mode === "explore" && v.phase === "cooking", undefined, 120_000);
+  } catch (error) {
+    throw new Error("HARNESS_PRECONDITION_FAILED - cooking started", { cause: error });
+  }
+  const stove = L(SPOT.stove.x, SPOT.stove.z);
+  const stand = L(STOVE_STAND.x, STOVE_STAND.z);
+  await standFacing(page, STOVE_STAND, stove);
+  await requireVoyageState(page, "Ember is selected and at the stove", s =>
+    s.progress.active === "ember" && Math.hypot(s.player.x - stand.x, s.player.z - stand.z) < .1);
+  await expect.poll(async () => (await state(page)).act2.stance).toEqual({ friend: "ember", k: 1 });
+
+  await page.keyboard.press("Digit1");
+  await requireVoyageState(page, "the switch to Leafy registered", s => s.progress.active === "leafy");
+  await expect.poll(async () => (await state(page)).act2.stance.friend).toBeNull();
+  await page.keyboard.press("Digit4");
+  await requireVoyageState(page, "the switch back to Ember registered", s => s.progress.active === "ember");
+  await expect.poll(async () => (await state(page)).act2.stance).toEqual({ friend: "ember", k: 1 });
+
+  await expect.poll(() => page.evaluate(({ x, z }) => {
+    const saved = JSON.parse(localStorage.getItem("mi.save.v4") ?? "{}");
+    return saved.progress?.act3?.voyage?.stage === "jobs" && saved.progress.active === "ember"
+      && Math.hypot(saved.player.x - x, saved.player.z - z) < .1;
+  }, stand), { timeout: 15_000, message: "HARNESS_PRECONDITION_FAILED - the active cooking job was autosaved at the stove" }).toBe(true);
+  await continueSaved(page);
+  await requireVoyageState(page, "the jobs checkpoint resumed aboard the ship", (s, v) =>
+    s.mode === "explore" && s.progress.act3.voyage.stage === "jobs" && v.active && s.camera.profile === "pirate-ship");
+  expect((await state(page)).act2.stance).toEqual({ friend: null, k: 0 });
+  const resumed = await voyage(page);
+  expect(resumed.phase).toBeNull();
+  expect(resumed.cook.lit).toBe(false);
+  await startJob(page, "cooking");
+}
+
 test.use({ actionTimeout: 15_000 });
 
 test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
@@ -309,6 +349,7 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
   for (const job of order) {
     await drive(page, `before ${job}`, (s, v) => s.mode === "explore" && !v.phase, async () => {}, 120_000);
     await startJob(page, job);
+    if (job === "cooking") await checkCookingStanceReload(page);
     let snapped = false;
     await drive(page, job, (s) => s.progress.act3.voyage.jobs.includes(job), async (s, v) => {
       if (!snapped && v.phase) { snapped = true; await shot(page, `job-${job}`); }
@@ -324,7 +365,8 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
       const bagBefore = JSON.stringify((await state(page)).progress.bag);
       await page.waitForTimeout(5500); // the 5 s autosave holds the deck spot
       await continueSaved(page);
-      st = await waitFor(page, (s) => s.mode === "explore", 60_000, "resumed on the ship");
+      await requireVoyageState(page, "the saved voyage resumed aboard the ship", (s, v) => s.mode === "explore" && v.active);
+      st = await state(page);
       expect(st.progress.act3.voyage.stage).toBe("jobs");
       expect(st.progress.act3.voyage.jobs).toEqual(["cargo"]);
       expect(JSON.stringify(st.progress.bag)).toBe(bagBefore);
@@ -336,7 +378,7 @@ test("the pirate voyage, from the harbour to Cloud Isle", async ({ page }) => {
       // to it with the interior view (the deck cover lies above the same x/z).
       expect(st.progress.act3.voyage.inHold).toBe(true);
       expect(st.player.y).toBeCloseTo(HOLD_Y, 1);
-      expect(st.camera.profile).toBe("pirate-hold");
+      await expect.poll(async () => (await state(page)).camera.profile).toBe("pirate-hold");
     }
   }
 

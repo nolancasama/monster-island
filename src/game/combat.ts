@@ -13,8 +13,9 @@ import { BEACON_ARENA, BEACON_PYLONS, cancelBeaconGust, newBeacon, strikeBeaconP
 import { PLAYER_R, blocked, gatesOf, isWalkable, moveCircle, nearestWalkable, standY, type Gates } from "./world/collision";
 import { breathe, monsterRootY, type MountMotion } from "./ride";
 import { vy } from "./voyageRt";
+import { SHIP, holdLayerAt, inShipArea, shipStandY, shipWalkable } from "./world/pirateShip";
 import { audio } from "../audio/audio";
-import type { FoodId, MonsterId } from "./types";
+import type { FoodId, MonsterId, ObstacleId } from "./types";
 import { debugEnabled } from "./debugAccess";
 import { debugPaused, useDebug } from "./debugState";
 import { blastKnock, bubbleAir, bubbleChain, bubbleProfile, canControl, clearLine, endResistance, fallDamage, fallingAir, forwardTargets, hazardAt, ignite, infernoStep, inCone, oldestTrap, snareDuration, weaponVictims, type Burn, type Control } from "./logic/elements";
@@ -409,7 +410,22 @@ export function inHostileZone(): boolean {
 
 // ------------------------------------------------------------ stance
 
-/** Is this friend in (or hopping into) its combat position? */
+interface ActivityStanceOptions {
+  yaw?(): number | undefined;
+  keepDuringScene?(): boolean;
+}
+
+let activityStance: (() => CompanionId | null) | undefined;
+let activityStanceOptions: ActivityStanceOptions | undefined;
+let usingActivityStance = false;
+
+/** Register a pose-only activity without importing its flow into combat. */
+export function setActivityStance(fn: () => CompanionId | null, options?: ActivityStanceOptions) {
+  activityStance = fn;
+  activityStanceOptions = options;
+}
+
+/** Is this friend in (or hopping into) its shared stance? */
 export function mounted(id: MonsterId): boolean {
   return cb.stance.friend === id && cb.stance.k > 0;
 }
@@ -428,6 +444,8 @@ export function steed(): CompanionId | null {
 
 /** Collision radius of the player (a ridden friend is wider). */
 export function playerRadius(): number {
+  const friend = cb.stance.friend;
+  if (usingActivityStance && (friend === "ember" || friend === "bubbo")) return activityRideRadius(friend);
   const s = steed();
   return s ? Math.max(PLAYER_R, MONSTERS[s].radius) : PLAYER_R;
 }
@@ -442,6 +460,25 @@ export const RIDE_SEAT: Record<"bubbo" | "ember", { back: number; up: number }> 
   bubbo: { back: 0.2, up: 0.82 },
   ember: { back: 0.67, up: 0.95 }
 };
+
+/** The steed's centre is ahead of the player's collision circle. */
+function activityRideRadius(friend: keyof typeof RIDE_SEAT): number {
+  return MONSTERS[friend].radius + RIDE_SEAT[friend].back;
+}
+
+function onStanceShip(x: number, z: number): boolean {
+  return vy.active && rt.world === "home" && inShipArea(x, z);
+}
+
+function stanceFloorY(x: number, z: number, solved: readonly ObstacleId[]): number {
+  if (onStanceShip(x, z)) return shipStandY(x, z, holdLayerAt(x - SHIP.x, z - SHIP.z, vy.inHold));
+  return standY(x, z, solved);
+}
+
+/** An activity may aim the pose independently of the player's movement heading. */
+export function stanceYaw(): number {
+  return (usingActivityStance && cb.stance.friend ? activityStanceOptions?.yaw?.() : undefined) ?? rt.player.yaw;
+}
 
 /** Where a perched friend sits on the player, in the player's frame (x right, z forward). */
 const PERCH: Record<"leafy" | "puff", { x: number; y: number; z: number; scale: number }> = {
@@ -458,7 +495,7 @@ export interface MountPose {
 }
 
 /**
- * Where a friend in (or hopping into) its combat position is drawn. Riders:
+ * Where a friend in (or hopping into) its shared stance is drawn. Riders:
  * the friend stands where the player is and the player sits on it. Perched
  * friends: on the player's backpack or shoulder, smaller. Null when it follows.
  */
@@ -469,8 +506,9 @@ export function mountPose(id: MonsterId): MountPose | null {
   const k = leaving ? s.leaveK : s.k;
   const p = rt.player;
   const m = rt.monsters[id];
-  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
-  const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+  const yaw = leaving ? p.yaw : stanceYaw();
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  const rx = fz, rz = -fx;
   const e = k * k * (3 - 2 * k);
   const solved = getGame().progress.solved;
   if (id === "leafy" || id === "puff") {
@@ -491,32 +529,35 @@ export function mountPose(id: MonsterId): MountPose | null {
       }
     }
     if (id === "puff") y += Math.sin(rt.time * 9) * 0.03;
-    const ground = standY(s.fromX, s.fromZ, solved);
+    const ground = stanceFloorY(s.fromX, s.fromZ, solved);
     // The hop: from where it stood, up in an arc, onto the player.
-    const from = { x: s.fromX, y: ground, z: s.fromZ };
     return {
-      x: from.x + (x - from.x) * e,
-      y: from.y + (y - from.y) * e + Math.sin(e * Math.PI) * 0.6,
-      z: from.z + (z - from.z) * e,
-      yaw: p.yaw,
+      x: s.fromX + (x - s.fromX) * e,
+      y: ground + (y - ground) * e + Math.sin(e * Math.PI) * 0.6,
+      z: s.fromZ + (z - s.fromZ) * e,
+      yaw,
       scale: 1 + (c.scale - 1) * e
     };
   }
   // Riders: the friend stands under the player (its seat is behind its centre).
+  if (usingActivityStance && (vy.inHold || !onStanceShip(p.x, p.z))) return null;
   const seat = RIDE_SEAT[id as "bubbo" | "ember"];
   const x = p.x + fx * seat.back;
   const z = p.z + fz * seat.back;
-  const cx = s.fromX + (x - s.fromX) * e;
-  const cz = s.fromZ + (z - s.fromZ) * e;
+  // The ship fit check covers the rider's circle, including the steed offset.
+  const fromX = usingActivityStance ? p.x : s.fromX;
+  const fromZ = usingActivityStance ? p.z : s.fromZ;
+  const cx = fromX + (x - fromX) * e;
+  const cz = fromZ + (z - fromZ) * e;
   m.x = cx;
   m.z = cz;
-  return { x: cx, y: monsterRootY(m, solved, rt.time), z: cz, yaw: p.yaw, scale: 1 };
+  return { x: cx, y: monsterRootY(m, solved, rt.time), z: cz, yaw, scale: 1 };
 }
 
 /** The rider's turning rate (rad/s, smoothed): the ridden friend leans into turns. */
 let rideTurn = 0, rideYaw = 0;
 function trackRideTurn(dt: number) {
-  const yaw = rt.player.yaw, d = Math.atan2(Math.sin(yaw - rideYaw), Math.cos(yaw - rideYaw));
+  const yaw = stanceYaw(), d = Math.atan2(Math.sin(yaw - rideYaw), Math.cos(yaw - rideYaw));
   rideYaw = yaw;
   if (dt > 0) rideTurn += (Math.max(-12, Math.min(12, d / dt)) - rideTurn) * Math.min(1, dt * 8);
 }
@@ -524,11 +565,8 @@ function trackRideTurn(dt: number) {
 const STILL: MountMotion = { bob: 0, roll: 0, pitch: 0, squash: 1 };
 /**
  * The ridden friend's body motion (scene/Monsters moves its rig by it, and
- * scene/Characters moves the rider with the same values through `seatOffset`, so
- * the two move as one): the stride while running (Bubbo waddles side to side,
- * Ember gallops), breathing, the lunge of its own attacks, a jolt when the rider
- * is hit, and a lean into turns. Render only: gameplay and the camera keep the
- * steady seat (`riderSeatY`).
+ * scene/Characters uses only the smoothed seat height): the stride, breathing,
+ * lunges, hits and turn lean. Gameplay and the camera use `riderSeatY`.
  */
 export function mountMotion(): MountMotion {
   const f = cb.stance.friend;
@@ -572,9 +610,16 @@ function updateStance(dt: number) {
   const g = getGame();
   const s = cb.stance;
   const active = g.progress.active as CompanionId | null;
-  trackRideTurn(dt);
-  // Scenes (conversations, powers, the rope) take the friend off; play puts it back.
-  const want = inHostileZone() && active && !isRunning() && rt.player.climbY === null && !cb.knockedOut ? active : null;
+  const p = rt.player;
+  const running = isRunning();
+  const canPose = p.climbY === null && !cb.knockedOut;
+  const hostile = canPose && !running && !voyageOwnsCombat() && inHostileZone() ? active : null;
+  const activityAllowed = running ? activityStanceOptions?.keepDuringScene?.() : g.mode === "explore" && !g.line;
+  const requested = canPose && activityAllowed && hostile === null ? activityStance?.() ?? null : null;
+  const activity = requested === active ? requested : null;
+  const fits = (activity !== "ember" && activity !== "bubbo") || shipWalkable(p.x, p.z, activityRideRadius(activity));
+  const want = hostile ?? (fits ? activity : null);
+  const wasActivity = usingActivityStance;
   if (s.leaving) {
     s.leaveK = Math.max(0, s.leaveK - dt / MOUNT_TIME);
     if (s.leaveK <= 0) s.leaving = null;
@@ -582,56 +627,67 @@ function updateStance(dt: number) {
   if (s.friend && s.friend !== want) {
     // Off: the friend drops beside the player and follows again.
     const off = s.friend;
-    const sceneOwnsFriend = isRunning();
+    const sceneOwnsFriend = running && (!wasActivity || rt.monsters[off].mode === "talk");
     const perched = off === "leafy" || off === "puff";
     if (s.k > 0.05 && want !== null) {
       s.leaving = off;
       s.leaveK = s.k;
     }
     const m = rt.monsters[off];
-    const p = rt.player;
-    m.x = p.x - Math.sin(p.yaw) * 1.3 - Math.cos(p.yaw) * 0.9;
-    m.z = p.z - Math.cos(p.yaw) * 1.3 + Math.sin(p.yaw) * 0.9;
-    if (COMBAT[off].stance === "ride") {
-      m.x = p.x + Math.cos(p.yaw) * 1.2;
-      m.z = p.z - Math.sin(p.yaw) * 1.2;
-    }
+    const aboard = onStanceShip(p.x, p.z);
+    const sin = Math.sin(p.yaw), cos = Math.cos(p.yaw);
+    const dropX = perched ? p.x - sin * 1.3 - cos * 0.9 : p.x + cos * 1.2;
+    const dropZ = perched ? p.z - cos * 1.3 + sin * 0.9 : p.z - sin * 1.2;
     if (!sceneOwnsFriend) {
       const gates = gatesOf(g.progress);
-      const landing = nearestWalkable(m.x, m.z, MONSTERS[off].radius, gates, MONSTERS[off].can.includes("swim"));
-      m.x = landing.x;
-      m.z = landing.z;
+      const radius = MONSTERS[off].radius;
+      const landing = nearestWalkable(dropX, dropZ, radius, gates, MONSTERS[off].can.includes("swim"), false, aboard ? "ground" : undefined);
+      const sameFloor = !aboard || (inShipArea(landing.x, landing.z)
+        && holdLayerAt(landing.x - SHIP.x, landing.z - SHIP.z, vy.inHold) === vy.inHold
+        && shipWalkable(landing.x, landing.z, radius, vy.inHold));
+      m.x = sameFloor ? landing.x : p.x;
+      m.z = sameFloor ? landing.z : p.z;
       // Combat itself set "script" on mount. Only a running scene may keep
       // ownership; otherwise this friend would stay at the hostile border.
       m.mode = off === active ? "follow" : "party";
       m.target = m.look = null;
       m.air = m.airTarget = 0;
-      if (want === null && perched && s.k > 0.05) {
+      if (want === null && perched && s.k > 0.05 && (!wasActivity || (!running && aboard))) {
         s.fromX = m.x;
         s.fromZ = m.z;
         s.leaving = off;
         s.leaveK = s.k;
       }
-      if (!perched && want === null) {
+      if (!aboard && !wasActivity && !perched && want === null) {
         const ground = nearestWalkable(p.x, p.z, PLAYER_R, gates);
         p.x = ground.x;
         p.z = ground.z;
         p.y = standY(p.x, p.z, g.progress.solved);
       }
-    } else if (m.mode !== "script" && m.mode !== "talk") m.mode = "follow";
+    } else {
+      if (!aboard) { m.x = dropX; m.z = dropZ; }
+      if (m.mode !== "script" && m.mode !== "talk") m.mode = "follow";
+    }
+    if (aboard && !perched && p.floatY === null && p.climbY === null) p.y = stanceFloorY(p.x, p.z, g.progress.solved);
     if (s.k > 0.05) audio.play("mount");
     s.friend = null;
     s.k = 0;
   }
+  usingActivityStance = want !== null && hostile === null;
   if (!s.friend && want) {
     const m = rt.monsters[want];
+    if (s.leaving === want) { s.leaving = null; s.leaveK = 0; }
     s.friend = want;
     s.k = 0;
     s.fromX = m.x;
     s.fromZ = m.z;
+    if (usingActivityStance && (COMBAT[want].stance === "ride" || !inShipArea(m.x, m.z) || !shipWalkable(m.x, m.z, 0, vy.inHold))) {
+      s.fromX = p.x;
+      s.fromZ = p.z;
+    }
     m.mode = "script";
     m.look = null;
-    effect("sparkle", m.x, standY(m.x, m.z, g.progress.solved) + 0.8, m.z);
+    effect("sparkle", s.fromX, stanceFloorY(s.fromX, s.fromZ, g.progress.solved) + 0.8, s.fromZ);
     audio.play("mount");
     audio.voice(want, "excited");
   }
@@ -642,8 +698,9 @@ function updateStance(dt: number) {
     // A rider walks for the player; a friend perched on the player keeps its feet still.
     m.speed = COMBAT[s.friend].stance === "ride" ? rt.player.speed : 0;
     m.step = rt.player.step;
-    m.yaw = rt.player.yaw;
+    m.yaw = stanceYaw();
   }
+  trackRideTurn(dt);
 }
 
 // ------------------------------------------------------------ attacks

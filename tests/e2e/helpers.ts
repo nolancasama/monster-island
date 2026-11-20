@@ -109,6 +109,18 @@ export async function hook(page: Page, name: string, ...args: unknown[]) {
   return page.evaluate(([n, a]) => (window as never as Record<string, Record<string, (...x: unknown[]) => unknown>>).__mi[n as string](...(a as unknown[])), [name, args] as const);
 }
 
+/** Select the floor and place the player before another frame can update the hold view. */
+export async function teleportShip(page: Page, x: number, z: number, yaw: number, below: boolean) {
+  await page.evaluate(({ x, z, yaw, below }) => {
+    const { __mi } = window as unknown as { __mi: {
+      shipFloor(below: boolean): void;
+      teleport(x: number, z: number, yaw: number, snap: boolean): void;
+    } };
+    __mi.shipFloor(below);
+    __mi.teleport(x, z, yaw, true);
+  }, { x, z, yaw, below });
+}
+
 export async function waitFor(page: Page, pred: (s: MiState) => boolean, timeout = 30_000, label = "condition"): Promise<MiState> {
   const t0 = Date.now();
   let s = await state(page);

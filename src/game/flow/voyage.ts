@@ -4,7 +4,7 @@ import { COMPANION_IDS } from "../data/combat";
 import { banner, getGame, setGame, toast, updateProgress, type Focus } from "../store";
 import { animate, rt } from "../runtime";
 import { GULL_BERTH } from "../world/lowland";
-import { DECK_Y, HALF_BEAM, SHIP, SPOT, inShipArea, shipWalkable, shipWorld } from "../world/pirateShip";
+import { DECK_Y, HALF_BEAM, SHIP, SPOT, inShipArea, shipStandY, shipWalkable, shipWorld } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { foodChoices, foodOfHave, handOverFood, interrogationFoods, setVoyageStage, truthfulAnswer, voyageStage, VOYAGE_JOBS, type VoyageJob, type VoyageStage } from "../logic/voyage";
 import type { Progress } from "../logic/progress";
@@ -19,6 +19,7 @@ import { BOAT_CHASE, BOAT_OUT, BOAT_OUT_START, CHASE_SECONDS, MOORED, MOORED_POS
 import { saveNow } from "./story";
 import { audio } from "../../audio/audio";
 import { setVoyageTool } from "../../input/attackInput";
+import { setActivityStance } from "../combat";
 import { JOB_GIVER, JOB_NAMES, startJob } from "./voyageJobs";
 import { startStorm } from "./voyageStorm";
 import { startRaft } from "./voyageRaft";
@@ -492,6 +493,7 @@ export async function resumeVoyage() {
   const keep = inShipArea(p.x, p.z) && shipWalkable(p.x, p.z, PLAYER_R) && stage !== "storm";
   if (!keep) restoreHold(false);
   placeOnDeck(keep ? { x: p.x, z: p.z } : BOARDED);
+  p.y = shipStandY(p.x, p.z, vy.inHold);
   if (vy.inHold) {
     // Friends wait beside the player in the hold, not up on the deck.
     COMPANION_IDS.forEach((id, i) => { const m = rt.monsters[id]; m.x = p.x + (i - 1.5) * 0.7; m.z = p.z + 0.9; });
@@ -550,3 +552,7 @@ export function voyageAttack(slot: "basic" | "special"): boolean {
   return true;
 }
 setVoyageTool(voyageAttack);
+setActivityStance(() => onShip() && vy.sea ? currentPhase()?.stance?.() ?? null : null, {
+  yaw: () => currentPhase()?.stanceYaw?.(),
+  keepDuringScene: () => currentPhase()?.keepStanceDuringScene?.() ?? false,
+});

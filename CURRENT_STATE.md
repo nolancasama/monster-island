@@ -1,20 +1,27 @@
 # Current State
 
-## Voyage visual polish (paused 2026-11-19, not merged): `feature/voyage-polish` (from `main` `0b0a5d5`), worktree `~/Projects/mi-vp`
-The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and Enclosed Cargo Hold". Paused at the user's
-request after wave 1; nothing merged to `main` or deployed. Decisions: the `DESIGN_DECISIONS.md` "2026-11-19 - Voyage polish" entries.
-- **Done (8 of 10), reviewed and committed:** 1 Gull's boat wake + sail (`scene/BoatWake.ts`, `world/gullBoat.ts`); 3 fishing-stair
-  landing; 4 crates spaced along the bulwark; 5 crate labels (one atlas); 6 Pepper behind the counter; 8 enclosed hold
-  (`world/pirateShip.ts` two walking floors via `holdLayerAt`/`setShipHoldOccupancy`, `vy.inHold`, interior camera, save flag
-  `act3.voyage.inHold`); 9 steering (`logic/steerPath.ts`, `scene/VoyageObstacles.tsx`, clears the hull and Gull's moored boat);
-  10 home island fades at sea (`scene/voyageHorizon*.ts`; the sky dome follows the camera at sea).
-- **Verified 2026-11-19 on this Mac:** tsc; unit tests 1191/1193 (the arm64 ground golden only); `pirate-voyage.spec.ts` 2/2
-  (incl. reload inside the hold); renders judged by Claude: `SHOT_ONLY=hold|horizon|steer|boat|boatwake` (`.tmp/shots/`).
-- **Not started:** item 7 (friends' powers from their combat stances) and item 2 (Redbeard close-ups). Ready work orders:
-  `.ai/work-order-stance.json`, `.ai/work-order-redbeard.json` (machine-local); run them one at a time through the router (four
-  Codex runs in parallel stalled for over an hour on 2026-11-19).
-- **Next:** resume item 7, then item 2, then the full e2e suite; merge/deploy only with the user's go-ahead. The slice worktrees
-  `mi-vp-ship`, `mi-vp-boat`, `mi-vp-island`, `mi-vp-steer` are merged and can be removed.
+## Voyage visual polish: `feature/voyage-polish` (from `main` `0b0a5d5`), worktree `~/Projects/mi-vp`
+The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and Enclosed Cargo Hold". Decisions: the
+`DESIGN_DECISIONS.md` "2026-11-19 - Voyage polish" entries.
+- **Wave 1 live (2026-11-20, Pages run 44739397736, bundle `index-DwvjLP-j.js`; `main` fast-forwarded to `ec25a08`):** 1 Gull's
+  boat wake + sail; 3 fishing-stair landing; 4 crates along the bulwark; 5 crate labels; 6 Pepper behind the counter; 8 enclosed
+  hold (`holdLayerAt`/`setShipHoldOccupancy`, `vy.inHold`, interior camera, save flag `act3.voyage.inHold`); 9 steering
+  (`logic/steerPath.ts`); 10 home island fades at sea. Still a debug-menu preview for students.
+- **Item 7 built 2026-11-20, UNCOMMITTED in this worktree (14 files + new `scene/voyageAnchors.ts`), not deployed:** friends' powers from their combat stances. Pose-only
+  `setActivityStance` hook in `game/combat.ts` (registered by `flow/voyage.ts`; each job phase's `stance()`): Ember ridden at
+  the stove breathing from its mouth, Leafy on the back with carry vines in the hold, Bubbo ridden on the fishing platform,
+  Puff perched for gusts. `toolFx` sources from the friend (`scene/voyageAnchors.ts`). Codex built it; Claude fixed a
+  regression (Monsters.tsx had dropped `companionVisible`, which hides Lumo and inactive friends in fights) and the Puff shot.
+  Verified: tsc; unit 1205/1207 (arm64 golden only); `pirate-voyage.spec.ts` 2/2 at low load; `SHOT_ONLY=powers` renders
+  judged (`.tmp/shots/voyage/m1`, `m2`). **Not run:** `combat-feel.spec.ts` and `elements.spec.ts` (stopped by the user
+  2026-11-20): item 7 changes `updateStance`, `playerRadius`, rider yaw and friend visibility used in every normal fight, so
+  run those two before deploying. Puff's gust reads small in the fixed ship camera (the `look` hook is ignored aboard).
+- **Machine load:** macOS XProtect scans push the load to 8-10; then the full voyage spec twice timed out on the last cargo
+  put (passed 3x at low load). Its timeout message now prints carry/cargo/focus/stance; look there if it recurs. Playwright
+  serves the existing `dist` (no rebuild): always `npm run build` first.
+- **Next:** review and commit item 7 (user's call), run the two combat specs; then item 2 (Redbeard close-ups, `.ai/work-order-redbeard.json`; the user said "no codex" on 2026-11-20 for this
+  plan, so Claude builds it), then the full e2e suite; deploy item 7 with the user's go-ahead. Slice worktrees `mi-vp-ship`,
+  `mi-vp-boat`, `mi-vp-island`, `mi-vp-steer` are merged and can be removed.
 
 ## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
 Built by Claude directly. Decisions: `DESIGN_DECISIONS.md` "2026-11-19 — Touch-and-hold on gameplay controls". `game-control` class

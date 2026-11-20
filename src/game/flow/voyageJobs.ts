@@ -4,13 +4,14 @@ import { PIRATES } from "../data/pirates";
 import { COMPANION_IDS, type CompanionId } from "../data/combat";
 import { getGame, toast, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
-import { BUCKET, DECK_Y, FISH_DECK, FISH_Y, SPOT, STEER_LANE, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
+import { BUCKET, DECK_Y, FISH_DECK, FISH_Y, SHIP, SPOT, STEER_LANE, SUPPLY_CRATES, shipWorld } from "../world/pirateShip";
 import { SEA_Y } from "../world/island";
 import { ITEM_NAME, VOYAGE_JOBS, allJobsDone, cargoTasks, finishJob, markHatGiven, obstacleSide, placePhrase, putLine, setVoyageStage, slotFree, steer, taskDone, whereChoices, type CargoItem, type CargoTask, type Furniture, type Lane, type Placement, type Prep, type SteerCommand, type VoyageJob } from "../logic/voyage";
 import { STEER_APPROACH_SECONDS, makeSteerPath, sampleSteerPath, type SteerFrame, type SteerObstacleKind } from "../logic/steerPath";
 import { giveWearable, wear } from "../logic/wardrobe";
-import { voyageEpoch, vy, type Candidate, type CrewId, type Fish, type Obstacle, type Phase } from "../voyageRt";
-import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, toolFx } from "../voyageSim";
+import { voyageEpoch, vy, type Candidate, type CrewId, type Fish, type Obstacle } from "../voyageRt";
+import { L, SAIL_AIM, activeFriend, aim, cargoSpot, setPhase, sparkleAt, toolFx, type Phase } from "../voyageSim";
+import { cb } from "../combat";
 import { ask, fastMode, say } from "./ask";
 import { fadeThrough, frameTwo, shot } from "./script";
 import { switchTo } from "./companion";
@@ -138,6 +139,10 @@ async function fishing() {
   let bootLine = false;
   const phase: Phase = {
     name: "fishing",
+    stance() {
+      const x = rt.player.x - SHIP.x, z = rt.player.z - SHIP.z;
+      return !vy.inHold && x >= FISH_DECK.x0 && x <= FISH_DECK.x1 && z >= FISH_DECK.z0 && z <= FISH_DECK.z1 ? "bubbo" : null;
+    },
     candidates: () => [crewCandidate("finn")],
     interact: (f) => { if (f.id === "crew:finn") void scene(async () => { await say("finn", `${cap(NUM[Math.max(0, n - vy.bucket)])} more, please!`, `あと ${Math.max(0, n - vy.bucket)}ひき!`); }); },
     tool(friend) {
@@ -147,8 +152,8 @@ async function fishing() {
       const fish = aim(vy.fish.filter((f) => f.state === "swim"), (f) => L(f.x, f.z), 9, 0.75, 3.2);
       if (!fish) return false;
       const w = L(fish.x, fish.z);
-      toolFx("bubbo", { x: w.x, y: fish.y + 0.25, z: w.z });
-      fish.state = "caught"; fish.t0 = rt.time + 0.45; fish.ax = fish.x; fish.ay = fish.y; fish.az = fish.z;
+      const bubble = toolFx("bubbo", { x: w.x, y: fish.y + 0.25, z: w.z });
+      fish.state = "caught"; fish.t0 = bubble.t0 + bubble.life; fish.ax = fish.x; fish.ay = fish.y; fish.az = fish.z;
       return true;
     },
     tick(dt) {
@@ -192,7 +197,8 @@ async function fishing() {
 // ------------------------------------------------------------ B. cooking (Ember)
 
 const HUNGRY: CrewId[] = ["tom", "sam", "max"];
-const STOVE = () => L(SPOT.stove.x, SPOT.stove.z);
+const STOVE = L(SPOT.stove.x, SPOT.stove.z);
+const STOVE_FIRE = { x: STOVE.x, y: DECK_Y + .55, z: STOVE.z + .45 };
 // Wide enough that one hold-and-release usually cooks a dish (≈1.1 s rising and ≈1.5 s cooling in the band).
 const HEAT_BAND: [number, number] = [0.5, 0.9];
 const COOK_SECONDS = 2.5;
@@ -218,11 +224,14 @@ async function cooking() {
   let current: { who: CrewId; food: FoodId } | null = null;
   const setCurrent = (o: { who: CrewId; food: FoodId } | null) => { current = o; cook.order = o; };
   let lastFlame = -10;
-  const nearStove = (r: number) => Math.hypot(rt.player.x - STOVE().x, rt.player.z - STOVE().z) < r;
+  let litUntil = 0;
+  const nearStove = (r: number) => Math.hypot(rt.player.x - STOVE.x, rt.player.z - STOVE.z) < r;
   const say2 = (id: CrewId, en: string, ja: string) => scene(async () => { frameTwo(rt.player, crewWorld(id), 0.85); await say(id === "gull" ? "harbor" : id, en, ja); });
 
   const phase: Phase = {
     name: "cooking",
+    stance: () => !vy.inHold && (step === "light" || step === "heat") && nearStove(4.2) ? "ember" : null,
+    stanceYaw: () => Math.atan2(STOVE_FIRE.x - rt.player.x, STOVE_FIRE.z - rt.player.z),
     candidates() {
       const out: Candidate[] = [];
       if (step === "order") for (const id of HUNGRY) if (!orders.some((o) => o.who === id)) out.push(crewCandidate(id, "Ask"));
@@ -309,24 +318,28 @@ async function cooking() {
     tool(friend) {
       if (friend !== "ember") { needFriend("ember"); return false; }
       if (!nearStove(3.6)) return false;
-      const st = STOVE();
-      toolFx("ember", { x: st.x, y: DECK_Y + 0.6, z: st.z });
+      lastFlame = rt.time;
+      const flame = toolFx("ember", STOVE_FIRE);
       if (step === "light" && !cook.lit) {
-        cook.lit = true; step = "order";
-        sparkleAt(st.x, DECK_Y + 1.2, st.z);
-        void say2("pepper", "The fire is on! Now ask the crew. What do they want?", "ひが ついた! クルーに なにが ほしいか きいてね!");
+        cook.lit = true;
+        litUntil = flame.t0 + flame.life;
+        sparkleAt(STOVE.x, DECK_Y + 1.2, STOVE.z);
       }
       return true;
     },
     tick(dt) {
+      if (step === "light" && cook.lit && rt.time >= litUntil) {
+        step = "order";
+        void say2("pepper", "The fire is on! Now ask the crew. What do they want?", "ひが ついた! クルーに なにが ほしいか きいてね!");
+      }
       if (step === "heat") {
         const working = vy.hold && activeFriend() === "ember" && nearStove(4.2);
         cook.heat = working ? Math.min(1, cook.heat + dt * 0.36) : Math.max(0, cook.heat - dt * 0.26);
-        if (working && rt.time - lastFlame > 0.3) { lastFlame = rt.time; const st = STOVE(); toolFx("ember", { x: st.x, y: DECK_Y + 0.5, z: st.z }); }
+        if (working && rt.time - lastFlame > 0.3) { lastFlame = rt.time; toolFx("ember", STOVE_FIRE); }
         if (cook.heat >= HEAT_BAND[0] && cook.heat <= HEAT_BAND[1]) cook.done += dt;
         if (cook.done >= COOK_SECONDS && cook.pot) {
           cook.dish = cook.pot; cook.pot = null; step = "serve";
-          const st = STOVE(); sparkleAt(st.x, DECK_Y + 1.4, st.z); audio.play("correct");
+          sparkleAt(STOVE.x, DECK_Y + 1.4, STOVE.z); audio.play("correct");
           void say2("pepper", "It's ready! Take the dish!", "できあがり! おさらを もっていって!");
         }
         vy.hud = { title: "Fire", ja: "ひ", value: cook.heat, band: HEAT_BAND, hint: `Hold J: keep it green! ${Math.round(Math.min(1, cook.done / COOK_SECONDS) * 100)}% · Jで みどりを キープ` };
@@ -388,12 +401,15 @@ async function cargo() {
 
 async function putTask(task: Extract<CargoTask, { kind: "put" }>) {
   let done = false;
+  let choosingPlacement = false;
   await scene(async () => {
     frameTwo(rt.player, crewWorld("bill"), 0.95);
     await say("bill", putLine(task), jaPut(task));
   });
   const phase: Phase = {
     name: "cargo",
+    stance: () => vy.inHold && !done ? "leafy" : null,
+    keepStanceDuringScene: () => choosingPlacement,
     candidates() {
       const out: Candidate[] = [crewCandidate("bill")];
       if (vy.carry?.kind === "cargo") for (const f of FURNITURE) out.push(placeCandidate(`furn:${f.id}`, "Put it at", f.noun, f.at, 2.2));
@@ -407,10 +423,15 @@ async function putTask(task: Extract<CargoTask, { kind: "put" }>) {
         let prep: Prep = furniture === "box" ? "in" : furniture === "door" ? "by" : "on";
         if (furniture === "table" || furniture === "shelf") {
           const options: PhraseId[] = furniture === "table" ? ["onTheTable", "underTheTable"] : ["onTheShelf", "underTheShelf"];
-          const said = await ask({ kind: "choice", options, tapAlways: true, readQuestion: true,
-            question: { by: "bill", en: `On or under the ${furniture}?`, ja: `${FURN_JA[furniture]}の うえ? した?` }, help: "on (うえ) か under (した) を えらぼう" });
-          if (!said) return;
-          prep = said === options[0] ? "on" : "under";
+          choosingPlacement = true;
+          try {
+            const said = await ask({ kind: "choice", options, tapAlways: true, readQuestion: true,
+              question: { by: "bill", en: `On or under the ${furniture}?`, ja: `${FURN_JA[furniture]}の うえ? した?` }, help: "on (うえ) か under (した) を えらぼう" });
+            if (!said) return;
+            prep = said === options[0] ? "on" : "under";
+          } finally {
+            choosingPlacement = false;
+          }
         }
         const pl: Placement = { furniture, prep };
         if (!slotFree(vy.cargo, item, pl)) { await say("bill", "Something is there! Try another place.", "そこには もう ある! ほかの ばしょに しよう"); return; }
@@ -478,22 +499,41 @@ async function sailing() {
   vy.sails = [0.12, 0.12, 0.12];
   vy.flow = 0.15;
   const full = () => vy.sails.filter((s) => s >= 0.99).length;
+  const gusts: { sail: number; arrival: number }[] = [];
+  const pending = [0, 0, 0];
+  const sails = [0, 1, 2];
+  const sailTargets = SAIL_AIM.map((s) => ({ ...L(s.x, s.z), y: s.y }));
   const phase: Phase = {
     name: "sails",
+    stance: () => !vy.inHold && gusts.length > 0 ? "puff" : null,
     candidates: () => [crewCandidate("redbeard")],
     interact: () => { void scene(async () => { await say("redbeard", `${cap(NUM[3 - full()])} more! Face a sail and press J!`, "ほの ほうを むいて J!"); }); },
     tool(friend) {
       if (friend !== "puff") { needFriend("puff"); return false; }
-      const i = aim([0, 1, 2].filter((k) => vy.sails[k] < 0.99), (k) => L(SAIL_AIM[k].x, SAIL_AIM[k].z), 9, 0.9, 5);
+      const i = aim(sails.filter((k) => vy.sails[k] + pending[k] * .34 < 0.99), (k) => sailTargets[k], 9, 0.9, 5);
       if (i === null) return false;
-      const s = SAIL_AIM[i], w = L(s.x, s.z);
-      toolFx("puff", { x: w.x, y: s.y, z: w.z });
-      vy.sails[i] = Math.min(1, vy.sails[i] + 0.34);
-      if (vy.sails[i] >= 0.99) { vy.sails[i] = 1; sparkleAt(w.x, s.y, w.z); audio.play("whoosh"); }
-      vy.flow = 0.15 + full() * 0.45;
+      pending[i]++;
+      gusts.push({ sail: i, arrival: Infinity });
       return true;
     },
     tick() {
+      const perched = cb.stance.friend === "puff" && cb.stance.k >= .95;
+      for (let i = 0; i < gusts.length;) {
+        const gust = gusts[i], target = sailTargets[gust.sail];
+        if (gust.arrival === Infinity && (perched || activeFriend() !== "puff" || vy.inHold)) {
+          const fx = toolFx("puff", target);
+          gust.arrival = fx.t0 + fx.life;
+        }
+        if (rt.time < gust.arrival) { i++; continue; }
+        gusts.splice(i, 1);
+        pending[gust.sail]--;
+        vy.sails[gust.sail] = Math.min(1, vy.sails[gust.sail] + .34);
+        if (vy.sails[gust.sail] >= .99) {
+          vy.sails[gust.sail] = 1;
+          sparkleAt(target.x, target.y, target.z); audio.play("whoosh");
+        }
+        vy.flow = .15 + full() * .45;
+      }
       // A broadside view while the sails fill (they are edge-on to the stern camera).
       const p = rt.player;
       shot({ x: p.x + 15, y: DECK_Y + 7.5, z: p.z + 3.5 }, { x: p.x - 1.5, y: DECK_Y + 3.2, z: p.z - 1 });

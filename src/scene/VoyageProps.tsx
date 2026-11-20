@@ -12,7 +12,7 @@ import { NPCS } from "../game/data/town";
 import { BUCKET, DECK_Y, FISH_Y, HALF_BEAM, SHIP, SPOT, hullHalf } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { vy, type CrewId } from "../game/voyageRt";
-import { cargoSpot, cookMarker } from "../game/voyageSim";
+import { cargoSpot, cookMarker, isPosedToolFx } from "../game/voyageSim";
 import { rt } from "../game/runtime";
 import type { FoodId } from "../game/types";
 import type { CargoItem } from "../game/logic/voyage";
@@ -390,11 +390,12 @@ function Effects() {
   }), []);
   const refs = useRef<Array<THREE.Mesh | null>>([]);
   const a = useMemo(() => new THREE.Vector3(), []), b = useMemo(() => new THREE.Vector3(), []);
+  const forward = useMemo(() => new THREE.Vector3(0, 0, 1), []);
   useFrame(() => {
     for (let i = 0; i < FX_N; i++) {
       const m = refs.current[i], f = vy.fx[i];
       if (!m) continue;
-      m.visible = Boolean(f) && (vy.sea || vy.raft.on);
+      m.visible = !!f && (vy.sea || vy.raft.on) && !(f.kind === "flame" && isPosedToolFx(f));
       if (!f || !m.visible) continue;
       const k = Math.max(0, Math.min(1, (rt.time - f.t0) / f.life));
       const lx = f.x + (f.tx - f.x) * k, ly = f.y + (f.ty - f.y) * k, lz = f.z + (f.tz - f.z) * k;
@@ -426,7 +427,7 @@ function Effects() {
           m.geometry = ring;
           m.position.set(lx, ly, lz);
           a.set(f.tx - f.x, f.ty - f.y, f.tz - f.z).normalize();
-          m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), a);
+          m.quaternion.setFromUnitVectors(forward, a);
           m.scale.setScalar(0.25 + k * 0.9);
           break;
         }

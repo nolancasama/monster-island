@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { cb, currentCombatZone, type Fx } from "../game/combat";
+import { cb, currentCombatZone, mounted, type Fx } from "../game/combat";
 import { COMBAT, ENEMIES } from "../game/data/combat";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
@@ -15,6 +15,8 @@ import { createWindFrame, stepWindFrame } from "../game/logic/wind";
 import { inCone } from "../game/logic/elements";
 import { groundY } from "../game/world/island";
 import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
+import { activeFriend, stoveBreath } from "../game/voyageSim";
+import { vy } from "../game/voyageRt";
 
 // Shared batches, including a separate translucent steam batch; empty batches submit none.
 // All instance buffers and scratch objects are allocated at mount time.
@@ -541,28 +543,53 @@ export function ElementEffects() {
           }
         }
       }
+      if (vy.active && vy.inHold && rt.world === "home" && vy.phase?.name === "cargo"
+        && vy.carry?.kind === "cargo" && activeFriend() === "leafy" && mounted("leafy")) {
+        const p = rt.player, rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+        const cargoY = p.y + 1.8 + Math.sin(t * 3) * .05;
+        for (let side = -1; side <= 1; side += 2) {
+          const root = side < 0 ? anchors.leafyHandL : anchors.leafyHandR;
+          if (side < 0 ? !anchors.leafyHandLValid : !anchors.leafyHandRValid) continue;
+          for (let i = 0; i < WHIP_POINTS; i++) {
+            const k = i / (WHIP_POINTS - 1), bow = Math.sin(k * Math.PI);
+            const out = side * (.17 * k + .48 * bow);
+            curve[i * 3] = root.x + (p.x - root.x) * k + rx * out;
+            curve[i * 3 + 1] = root.y + (cargoY + .32 - root.y) * k + .12 * bow;
+            curve[i * 3 + 2] = root.z + (p.z - root.z) * k + rz * out;
+          }
+          draw.curve(curve, WHIP_POINTS, pool.vines, .05, .032, root);
+          draw.leaves(curve, WHIP_POINTS);
+        }
+      }
       const fire = cb.inferno ?? cb.breath;
+      const galley = stoveBreath();
       if (fire) {
         stream.active = true; stream.age = fire.age; stream.inferno = cb.inferno !== null;
       } else if (stream.active) { stream.active = false; stream.stoppedAt = t; }
-      const streamFade = fire ? 1 : Math.max(0, 1 - (t - stream.stoppedAt) / .12);
+      const streamFade = galley ? Math.min(1, (galley.life - (t - galley.t0)) / .12)
+        : fire ? 1 : Math.max(0, 1 - (t - stream.stoppedAt) / .12);
       if (streamFade > 0 && anchors.emberMouthValid) {
         fireStreamBase(streamBase);
-        const age = stream.age, yaw = rt.player.yaw, ux = Math.sin(yaw), uz = Math.cos(yaw);
-        const range = (stream.inferno ? COMBAT.ember.special.range : COMBAT.ember.basic.range) * (game.progress.act2.upgrades.includes("ember") ? COMBAT.ember.upgrade.size : 1);
+        const inferno = !galley && stream.inferno;
+        const age = galley ? t : stream.age;
+        const yaw = galley ? Math.atan2(galley.tx - streamBase.x, galley.tz - streamBase.z) : rt.player.yaw;
+        const ux = Math.sin(yaw), uz = Math.cos(yaw);
+        const range = galley ? Math.hypot(galley.tx - streamBase.x, galley.tz - streamBase.z)
+          : (inferno ? COMBAT.ember.special.range : COMBAT.ember.basic.range) * (game.progress.act2.upgrades.includes("ember") ? COMBAT.ember.upgrade.size : 1);
+        const lift = galley ? galley.ty - streamBase.y : (inferno ? .4 : .12) - .35;
         for (let i = 0; i < 24; i++) {
           const p = i === 0 ? 0 : ((i - 1 + age * 24) % 23) / 23;
           const d = p * range, flutter = Math.sin(i * 2.4 + t * 19);
           // Fills the real cone (tan of the half-angle) so what looks hit is hit.
           const side = (i * .618) % 1 * 2 - 1;
-          const spread = (side + flutter * .18) * d * (stream.inferno ? .72 : .36);
-          const size = (stream.inferno ? .5 : .36) + p * (stream.inferno ? 1.5 : 1);
+          const spread = (side + flutter * .18) * d * (galley ? .14 : inferno ? .72 : .36);
+          const size = (inferno ? .5 : .36) + p * (galley ? .38 : inferno ? 1.5 : 1);
           // Additive overlap near the mouth blows out to white: start faint, hold the colour.
           const alpha = .34 + Math.min(1, p * 2.5) * .3 - p * p * .2;
-          draw.sprite(streamBase.x + ux * d + uz * spread, streamBase.y + p * (stream.inferno ? .4 : .12) - p * .35, streamBase.z + uz * d - ux * spread,
-            size, size * (stream.inferno ? 1.6 : 1.3) * (1 + flutter * .08), stream.inferno ? "#1687ff" : i % 3 ? "#f2611a" : "#ffb22e", streamFade * alpha, stream.inferno ? 2 : true);
+          draw.sprite(streamBase.x + ux * d + uz * spread, streamBase.y + p * lift, streamBase.z + uz * d - ux * spread,
+            size, size * (inferno ? 1.6 : 1.3) * (1 + flutter * .08), inferno ? "#1687ff" : i % 3 ? "#f2611a" : "#ffb22e", streamFade * alpha, inferno ? 2 : true);
         }
-        if (stream.inferno) {
+        if (inferno) {
           draw.sprite(streamBase.x, streamBase.y, streamBase.z, .68, .68, "#126dff", .35 * streamFade);
           // Only recent real hits sparkle, so scenery cannot imply damage through a wall.
           for (const e of cb.enemies) {

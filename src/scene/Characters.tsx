@@ -10,7 +10,7 @@ import { smoothMat, shadowMaterial } from "./materials";
 import { KNEE_Y, PLAYER_OUTFIT, armGeometry, bodyGeometry, shinGeometry, thighGeometry } from "./models/people";
 import { CLIMB_PULL } from "../game/world/rope";
 import { HIP_Y, SEATED, SEATED_EMBER, squatAmount, squatPose } from "./poses";
-import { RIDE_SEAT, mountMotion, rideK } from "../game/combat";
+import { RIDE_SEAT, cb, mountMotion, rideK, stanceYaw } from "../game/combat";
 import { riderLift, seatOffset } from "../game/ride";
 import { mapleArmGeometry, mapleBodyGeometry, mapleLegGeometry } from "./models/maple";
 import { foodGeometry } from "./models/props";
@@ -129,15 +129,16 @@ export function Player() {
     const p = rt.player;
     const g = root.current;
     if (!g) return;
+    const mounted = p.riding ? 0 : rideK();
+    const yaw = mounted > 0 ? stanceYaw() : p.yaw;
     g.position.set(p.x, p.y, p.z);
     g.rotation.order = "YXZ";
-    g.rotation.set(0, p.yaw, 0);
-    // Riding a friend in a fight: the friend strides, lunges and leans under a steady rider, who
+    g.rotation.set(0, yaw, 0);
+    // The friend strides, lunges and leans under a steady rider, who
     // only follows the seat's height, smoothed (game/ride.ts riderLift): no shake, tilt or sway.
-    const mounted = p.riding ? 0 : rideK();
-    const friend = getGame().progress.active;
+    const friend = cb.stance.friend;
     if (mounted > 0 && (friend === "bubbo" || friend === "ember")) {
-      const target = seatOffset(mountMotion(), RIDE_SEAT[friend], p.yaw).y * mounted;
+      const target = seatOffset(mountMotion(), RIDE_SEAT[friend], yaw).y * mounted;
       riderY.current = riderLift(riderY.current, target, dt);
       g.position.y += riderY.current;
     } else riderY.current = 0;
@@ -153,8 +154,8 @@ export function Player() {
     const sq = squatPose(c);
     // Hop on, sit astride and hop off Bubbo (0..1).
     // Act 2: riding a friend in a fight (Bubbo astride, Ember piggyback) uses the same blend.
-    const k = p.riding ? p.seat : rideK();
-    const S = !p.riding && getGame().progress.active === "ember" ? SEATED_EMBER : SEATED;
+    const k = p.riding ? p.seat : mounted;
+    const S = !p.riding && friend === "ember" ? SEATED_EMBER : SEATED;
     const walkK = (1 - k) * (1 - c);
     const legSwing = s * 0.7 * walk * walkK;
     const armSwing = action?.kind === "cheer" ? 0 : -s * 0.6 * walk * walkK;
