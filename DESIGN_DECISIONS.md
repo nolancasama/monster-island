@@ -3154,3 +3154,20 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
   `window.__mi.voyage()` fields `phase`, `lane`, `obstacles` and `raft.on`.
   The raft tow exposes the same approach, pass, bump and retreat phases as the
   ship. The full voyage test answers the island calls through the prompt text.
+
+## 2026-11-21 - Ship and raft fixes: Capture cutscenes
+
+- Redbeard turns as the camera moves in for his order. Tom, Sam and Max step from the inner deck to the
+  starboard rail. A held hook and a whole-body windup and lunge use the existing merged pirate mesh.
+  Each hook flies from its release grip to the upper outside edge of Gull's ship-facing gunwale, using
+  the boat's live pose and a different point along the rail. The rope ends at the hook and loses its
+  sag on contact. The haul keeps the same endpoints attached. The fade conceals the transfer to the
+  ship-side mooring anchors, which are rebuilt from the existing save checkpoint.
+- Pepper starts farther out on the huddle's bow side. The existing inward lean leaves a clear close-up
+  along Pepper's line of sight toward the group. The camera pulls out as the friends hide.
+- The interrogation's return shot looks from below the booms. The higher capture reveal, encirclement
+  push and monster reaction use the cloth fade to keep the whole huddle visible. Full and torn sail
+  meshes share the opacity target. Scene cleanup and voyage reset restore the cloth.
+- The controller can read the current beat, progress, hook endpoints, line slack and mooring through
+  `window.__mi.voyage().capture`, with the cloth target at `window.__mi.voyage().cutSails`.
+  `SHOT_ONLY=capture2` records the live scene at both viewport sizes.

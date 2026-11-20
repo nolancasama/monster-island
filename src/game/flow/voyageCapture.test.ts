@@ -4,13 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newProgress } from "../logic/progress";
 import { getGame, setGame } from "../store";
 import { rt } from "../runtime";
+import { DebugScriptCancelled } from "../debugLifecycle";
 import { region } from "../world/region";
 import { COMPANION_IDS } from "../data/combat";
 import { DECK_Y, SHIP, SPOT, shipFloorY, shipWalkable } from "../world/pirateShip";
 import { PLAYER_R } from "../world/collision";
 import { resetVoyageRt, vy, type CrewId } from "../voyageRt";
 import { cookMarker, setPhase } from "../voyageSim";
-import { HUDDLE, HUDDLE_PARTY, HUDDLE_PIRATES, crewHome, huddleUp, setScene } from "./voyage";
+import { HUDDLE, HUDDLE_PARTY, HUDDLE_PIRATES, crewHome, huddleUp, scene, setScene } from "./voyage";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn(), cancelPanic: vi.fn(), stopFlame: vi.fn() } }));
 // Server rendering reads the store's state directly (no React subscription).
@@ -32,6 +33,35 @@ beforeEach(() => {
   resetVoyageRt();
 });
 afterEach(() => { setPhase(null); resetVoyageRt(); });
+
+describe("capture cloth opacity", () => {
+  it("defaults to full opacity for free roam and after a voyage reset", () => {
+    expect(vy.cutSails).toBe(1);
+    vy.cutSails = 0;
+    resetVoyageRt();
+    expect(vy.cutSails).toBe(1);
+    vy.cutSails = 0;
+    setScene();
+    expect(vy.cutSails).toBe(1);
+  });
+
+  it("restores cloth after a completed scene without changing fill or sail damage", async () => {
+    vy.sails = [0.12, 0.72, 1];
+    vy.sewn = 0.4;
+    await scene(async () => { vy.cutSails = 0; });
+    expect(vy.cutSails).toBe(1);
+    expect(vy.sails).toEqual([0.12, 0.72, 1]);
+    expect(vy.sewn).toBe(0.4);
+  });
+
+  it("restores cloth after a cancelled scene", async () => {
+    await scene(async () => {
+      vy.cutSails = 0;
+      throw new DebugScriptCancelled();
+    });
+    expect(vy.cutSails).toBe(1);
+  });
+});
 
 describe("the capture: a fade, then the party huddled and surrounded", () => {
   it("everyone in the huddle stands on open deck, close together but never inside each other", () => {

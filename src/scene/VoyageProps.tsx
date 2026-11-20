@@ -1,5 +1,4 @@
 import { useMemo, useRef } from "react";
-import { BOAT_DECK_Y, BOAT_INNER, BOAT_SCALE } from "../game/world/gullBoat";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -17,6 +16,8 @@ import { rt } from "../game/runtime";
 import type { FoodId } from "../game/types";
 import type { CargoItem } from "../game/logic/voyage";
 import { VoyageObstacles } from "./VoyageObstacles";
+import { PartBuilder } from "./partBuilder";
+import { GRAPPLE_RADIUS, GRAPPLE_THROWERS, grappleGunwale, grappleHand, grapplePosition, grappleRopePoint, grappleSlack } from "../game/flow/voyageGrapple";
 
 /**
  * Everything the voyage's jobs, storm and raft show (docs/PIRATE_VOYAGE.md §3–§5,
@@ -243,31 +244,67 @@ function StormProps() {
   </>;
 }
 
-/** The capture's three ropes, then the mooring lines holding Gull's boat alongside (they reach out as `vy.ropes` grows). */
-const MOORING = [[5.0, -1.1], [6.8, 0.5], [8.6, 1.9]];
+const MOORING = [5.0, 6.8, 8.6];
+
+function grappleGeometry() {
+  const b = new PartBuilder(0), iron = "#444c53";
+  b.boxAt(0.09, 0.08, 0.35, [0, 0.07, 0.17], [0, 0, 0], iron);
+  for (const side of [-1, 1]) {
+    b.boxAt(0.3, 0.075, 0.09, [side * 0.11, 0.11, 0.29], [0, side * 0.58, 0], iron);
+    b.boxAt(0.075, 0.19, 0.09, [side * 0.23, 0.1, 0.39], [0.62, 0, 0], iron);
+  }
+  return b.build();
+}
+
+/** Reuse one low-sided tube per rope, with the same centreline in flight and under tension. */
 function MooringRopes() {
-  const rope = useMemo(() => { const g = new THREE.CylinderGeometry(1, 1, 1, 5); g.translate(0, 0.5, 0); return g; }, []);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#8a6a43" }), []);
+  const shape = useMemo(() => new THREE.CylinderGeometry(GRAPPLE_RADIUS, GRAPPLE_RADIUS, 1, 5, 8, true), []);
+  const ropes = useMemo(() => GRAPPLE_THROWERS.map(() => shape.clone()), [shape]);
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: "#b3986a" }), []);
+  const hook = useMemo(grappleGeometry, []);
   const refs = useRef<Array<THREE.Mesh | null>>([]);
+  const hooks = useRef<Array<THREE.Mesh | null>>([]);
   const a = useMemo(() => new THREE.Vector3(), []), b = useMemo(() => new THREE.Vector3(), []);
+  const landing = useMemo(() => new THREE.Vector3(), []), p = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
-    // Thrown while the boat is still ridden (the capture), then kept while it is moored.
-    const show = onDeck() && (vy.boatMoored || rt.voyage.active) && vy.ropes > 0;
-    MOORING.forEach(([lz, dz], i) => {
-      const m = refs.current[i];
-      if (!m) return;
-      m.visible = show;
-      if (!show) return;
-      const v = rt.voyage, k = Math.min(1, vy.ropes);
-      a.set(shipX(hullHalf(lz) - 0.25), DECK_Y + 0.95, shipZ(lz));
-      // Tied to the boat's gunwale on the ship's side (local +x at its mooring), wherever the boat points.
-      const bx = BOAT_INNER.halfX, bz = -dz * BOAT_SCALE, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
-      b.set(v.x + bx * cy + bz * sy, v.y + BOAT_DECK_Y + 0.3 * BOAT_SCALE + Math.sin(rt.time * 1.5) * 0.03, v.z - bx * sy + bz * cy);
-      b.lerpVectors(a, b, k);
-      span(m, a, b, 0.045);
-    });
+    const v = rt.voyage, show = onDeck() && !vy.inHold && (vy.boatMoored || v.active);
+    const base = shape.attributes.position;
+    for (let i = 0; i < GRAPPLE_THROWERS.length; i++) {
+      const id = GRAPPLE_THROWERS[i], line = refs.current[i], prop = hooks.current[i];
+      if (!line || !prop) continue;
+      const grip = vy.grapples?.[id];
+      prop.visible = show && Boolean(grip);
+      line.visible = show && (grip ? grip.phase === "flight" || grip.phase === "attached" : vy.ropes > 0);
+      if (!prop.visible && !line.visible) continue;
+      grappleGunwale(landing, v, i);
+      if (grip) {
+        const crew = vy.crew[id];
+        grappleHand(a, crew, grip, vy.shipBob);
+        grapplePosition(b, a, landing, grip);
+        prop.position.copy(b);
+        prop.rotation.y = grip.phase === "attached" ? v.yaw - Math.PI / 2 : crew.yaw;
+        prop.rotation.x = grip.phase === "flight" || grip.phase === "attached" ? 0 : grip.pitch;
+      } else {
+        const z = MOORING[i];
+        a.set(shipX(hullHalf(z) + GRAPPLE_RADIUS), DECK_Y + vy.shipBob + 1, shipZ(z));
+        b.copy(landing);
+      }
+      if (!line.visible) continue;
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const horizontal = Math.hypot(dx, dz) || 1;
+      const slack = grip ? grappleSlack(a.distanceTo(b), grip) : 0;
+      const pos = ropes[i].attributes.position;
+      for (let j = 0; j < pos.count; j++) {
+        grappleRopePoint(p, a, b, slack, 0.5 - base.getY(j));
+        pos.setXYZ(j, p.x + base.getX(j) * dz / horizontal, p.y + base.getZ(j), p.z - base.getX(j) * dx / horizontal);
+      }
+      pos.needsUpdate = true;
+    }
   });
-  return <>{MOORING.map((_, i) => <mesh key={i} ref={(el) => { refs.current[i] = el; }} geometry={rope} material={mat} visible={false} />)}</>;
+  return <>{GRAPPLE_THROWERS.map((id, i) => <group key={id}>
+    <mesh ref={(el) => { refs.current[i] = el; }} geometry={ropes[i]} material={mat} visible={false} frustumCulled={false} />
+    <mesh ref={(el) => { hooks.current[i] = el; }} geometry={hook} material={flatMat} visible={false} />
+  </group>)}</>;
 }
 
 /** Two lifeboats rowing away from the wreck with the pirates and Gull. */

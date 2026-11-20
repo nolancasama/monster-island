@@ -6,8 +6,8 @@ import { frameTwo, shot } from "./script";
 import type { Vec2, Vec3 } from "../types";
 
 /**
- * Medium close-ups of a crew member (Captain Redbeard's important lines): face,
- * beard and upper body at a three-quarter angle, the ship behind. The lens is
+ * Medium close-ups of a crew member: face and upper body at a three-quarter
+ * angle, the ship behind. The lens is
  * picked from a few candidate angles and rejected if its line to the face
  * crosses a mast, a sail, the helm, a person or leaves the deck. The rig eases
  * into the close-up and back to the camera that was active before.
@@ -113,13 +113,17 @@ let active: CameraShot | null = null;
 export function closeUp(who: CrewId, opts: { cut?: boolean } = {}) {
   const c = rt.camera;
   if (!saved || c.shot !== active) saved = { mode: c.mode, shot: c.shot ? { pos: { ...c.shot.pos }, target: { ...c.shot.target } } : null };
-  const at = { x: vy.crew[who].x, z: vy.crew[who].z };
+  const crew = vy.crew[who];
+  const at = { x: crew.x, z: crew.z };
   const player = { x: rt.player.x - SHIP.x, z: rt.player.z - SHIP.z };
+  // Pepper addresses the whole huddle in this pose. Frame the face on that axis.
+  const toward = who === "pepper" && crew.menace
+    ? { x: at.x + Math.sin(crew.yaw), z: at.z + Math.cos(crew.yaw) } : player;
   // The camera's side of the subject's line of sight to the player (a positive
   // turn off the facing line has a negative cross product).
   const cx = c.pos.x - SHIP.x - at.x, cz = c.pos.z - SHIP.z - at.z;
-  const side = -Math.sign((player.x - at.x) * cz - (player.z - at.z) * cx) || 1;
-  const local = closeUpFraming(at, player, side, peopleExcept(who));
+  const side = -Math.sign((toward.x - at.x) * cz - (toward.z - at.z) * cx) || 1;
+  const local = closeUpFraming(at, toward, side, peopleExcept(who));
   if (opts.cut) c.snap = true; else c.ease = CLOSE_UP_EASE;
   if (!local) {
     frameTwo(rt.player, { x: SHIP.x + at.x, z: SHIP.z + at.z }, 0.9);

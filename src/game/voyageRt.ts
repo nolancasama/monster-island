@@ -4,6 +4,7 @@ import type { CargoItem, CargoState } from "./logic/voyage";
 import type { CompanionId } from "./data/combat";
 import type { Focus } from "./store";
 import { SHIP, SPOT, holdLayerAt, setShipHoldOccupancy } from "./world/pirateShip";
+import type { Grapple } from "./flow/voyageGrapple";
 
 export type Candidate = { focus: Focus; reach: number };
 /** The running free-play step (a job, a storm emergency, a raft step): it owns E, J and a tick. */
@@ -24,6 +25,8 @@ export interface Phase {
  */
 export type CrewId = PirateId | "gull";
 export interface CrewSpot { x: number; z: number; yaw: number; visible: boolean; cheer: number; air: number; hold: FoodId | "fish3" | null; menace: boolean }
+export type CaptureBeat = "turn" | "order" | "step" | "throw" | "landed" | "haul" | "alongside"
+  | "reveal" | "encircle" | "interrogation-wide" | "monsters-wide" | "pepper-in" | "pepper-out";
 
 export type FxKind = "bubble" | "flame" | "vine" | "gust" | "steam" | "splash" | "sparkle" | "rope";
 export interface VoyageFx { id: number; kind: FxKind; x: number; y: number; z: number; tx: number; ty: number; tz: number; t0: number; life: number }
@@ -74,12 +77,17 @@ const fresh = () => ({
   gullAboard: false,
   /** Gull's boat is tied alongside the ship (drawn at rt.voyage's x/z). */
   boatMoored: false,
-  /** The capture ropes, 0..1. */
+  /** The capture lines are secured (1), or have yet to be thrown (0). */
   ropes: 0,
+  grapples: null as Record<"tom" | "sam" | "max", Grapple> | null,
+  captureBeat: null as CaptureBeat | null,
+  captureProgress: 0,
   /** Rigging between the camera and the player dissolves (off for wide shots). */
   cut: true,
   /** Sail fill 0..1: mizzen, main, fore. */
   sails: [0.12, 0.12, 0.12],
+  /** Cutscene cloth opacity target. Independent of sail fill and damage. */
+  cutSails: 1,
   /** The mainsail is torn (0) or sewn (1); sewing progress while it is held full. */
   sewn: 1,
   /** The mainmast's fall, 0 standing → 1 down. */
