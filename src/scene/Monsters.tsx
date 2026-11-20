@@ -280,7 +280,7 @@ function MonsterBody({ id }: { id: MonsterId }) {
       mouth.current.getWorldPosition(anchors.emberMouth);
       anchors.emberMouthValid = true;
     }
-    if (id === "bubbo" && mouth.current && g.visible && vy.active && mount) {
+    if (id === "bubbo" && mouth.current && g.visible && vy.active) {
       mouth.current.getWorldPosition(bubboEmitter.mouth);
       bubboEmitter.valid = true;
     }

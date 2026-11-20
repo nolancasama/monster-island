@@ -6,7 +6,8 @@ import { SEA_Y } from "./world/island";
 import type { CargoItem, Placement } from "./logic/voyage";
 import type { CompanionId } from "./data/combat";
 import { audio } from "../audio/audio";
-import { mountPose, mounted } from "./combat";
+import { cb, mountPose, mounted } from "./combat";
+import { monsterRootY } from "./ride";
 import { EMBER_MOUTH, PUFF_BEAK } from "../scene/anchors";
 import { BUBBO_MOUTH, voyageEmitter } from "../scene/voyageAnchors";
 
@@ -31,6 +32,8 @@ export function setPhase(p: Phase | null) {
   vy.phase = p;
   if (!p) vy.hud = null;
 }
+
+export const stanceReady = (friend: CompanionId) => activeFriend() === friend && cb.stance.friend === friend && cb.stance.k >= .99;
 
 export const TOOL: Record<CompanionId, { kind: FxKind; name: string; ja: string }> = {
   bubbo: { kind: "bubble", name: "Bubble", ja: "あわ" },
@@ -106,18 +109,22 @@ export function aim<T>(items: T[], at: (t: T) => { x: number; z: number }, range
   return best;
 }
 
-const posedEffects = new WeakSet<VoyageFx>();
-export const isPosedToolFx = (fx: VoyageFx) => posedEffects.has(fx);
+const friendEffects = new WeakMap<VoyageFx, boolean>();
+export const isPosedToolFx = (fx: VoyageFx) => friendEffects.get(fx) === true;
+export const usesVoyageBreath = (fx: VoyageFx) => fx.kind === "flame" && friendEffects.has(fx);
 
-/** Between pose entry and the first rendered sample, use the same mount transform. */
-function posedSource(friend: CompanionId) {
+/** Use the rig's emitter, with a transform from the current pose when the rig hasn't rendered. */
+function friendSource(friend: CompanionId, posed: boolean) {
   const emitter = voyageEmitter(friend);
   if (emitter) return emitter;
-  const pose = mountPose(friend);
-  if (!pose) return null;
+  const pose = posed ? mountPose(friend) : null;
+  const m = rt.monsters[friend];
+  const root = pose ?? m;
+  const height = pose?.y ?? monsterRootY(m, getGame().progress.solved, rt.time);
+  const scale = pose?.scale ?? 1;
   const [x, y, z] = friend === "ember" ? EMBER_MOUTH : friend === "puff" ? PUFF_BEAK : friend === "bubbo" ? BUBBO_MOUTH : LEAFY_HAND_FALLBACK;
-  const s = Math.sin(pose.yaw), c = Math.cos(pose.yaw);
-  return { x: pose.x + (x * c + z * s) * pose.scale, y: pose.y + y * pose.scale, z: pose.z + (z * c - x * s) * pose.scale };
+  const s = Math.sin(root.yaw), c = Math.cos(root.yaw);
+  return { x: root.x + (x * c + z * s) * scale, y: height + y * scale, z: root.z + (z * c - x * s) * scale };
 }
 
 const LEAFY_HAND_FALLBACK = [.38, .65, .03] as const;
@@ -127,23 +134,25 @@ export const GUST_TRAVEL = .6;
 
 export function toolFx(friend: CompanionId, to: { x: number; y: number; z: number }) {
   const kind = TOOL[friend].kind;
-  const source = activeFriend() === friend && mounted(friend) ? posedSource(friend) : null;
+  const posed = activeFriend() === friend && mounted(friend);
+  const shipTool = vy.active && rt.world === "home" && Boolean(currentPhase()?.stance);
+  const source = posed || shipTool ? friendSource(friend, posed) : null;
   const life = kind === "vine" ? 0.55 : kind === "gust" ? GUST_TRAVEL : kind === "flame" ? 0.5 : 0.45;
   addFx(kind, source ?? hand(), to, life, rt.time);
   const fx = vy.fx[vy.fx.length - 1];
   if (source) {
-    posedEffects.add(fx);
+    friendEffects.set(fx, posed);
     if (friend === "ember" && rt.monsters.ember.anim?.kind !== "power") animate("ember", "power");
   }
   audio.play(kind === "bubble" ? "bubble" : kind === "flame" ? "fireball" : kind === "vine" ? "vines" : "wind");
   return fx;
 }
 
-export function stoveBreath(): VoyageFx | undefined {
-  if (!vy.active || rt.world !== "home" || vy.phase?.name !== "cooking" || activeFriend() !== "ember" || !mounted("ember")) return;
+export function voyageBreath(): VoyageFx | undefined {
+  if (!vy.active || rt.world !== "home" || !currentPhase()?.stance || activeFriend() !== "ember") return;
   for (let i = vy.fx.length - 1; i >= 0; i--) {
     const fx = vy.fx[i];
-    if (fx.kind === "flame" && isPosedToolFx(fx) && rt.time - fx.t0 <= fx.life) return fx;
+    if (usesVoyageBreath(fx) && (!isPosedToolFx(fx) || mounted("ember")) && rt.time - fx.t0 <= fx.life) return fx;
   }
 }
 

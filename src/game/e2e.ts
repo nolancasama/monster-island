@@ -2,7 +2,7 @@ import { placePlayer, goToTarget } from "./travel";
 import { resetVoyageRt, restoreHold, vy } from "./voyageRt";
 import { poseEncounter, pressSpyglass, resumeVoyage, setScene } from "./flow/voyage";
 import { itemWorld } from "./flow/voyageJobs";
-import { cookMarker } from "./voyageSim";
+import { cookMarker, isPosedToolFx } from "./voyageSim";
 import { SHIP } from "./world/pirateShip";
 import type { Layer } from "./world/region";
 import { cloudIsleOpen, setE2eCloudIsleShipOpen, setE2ePirateVoyage } from "./release";
@@ -294,6 +294,7 @@ export function installE2eHook(seed: number) {
         ship: { x: SHIP.x + vy.shipOffset.x, z: SHIP.z + vy.shipOffset.z, yaw: vy.shipYaw, sink: vy.shipSink }, sea: vy.sea, storm: vy.storm, flow: vy.flow,
         fish: vy.fish.map((f) => ({ ...w(f), boot: f.boot, state: f.state })), bucket: vy.bucket,
         cargo: vy.cargo, carry: vy.carry, cook: { ...vy.cook }, sails: [...vy.sails], sewn: vy.sewn, lane: vy.lane,
+        effects: vy.fx.map((fx) => ({ ...fx, posed: isPosedToolFx(fx), age: rt.time - fx.t0 })),
         obstacles: vy.obstacles.map((o) => ({ lane: o.lane, z: o.z })),
         barrels: vy.barrels.map((b) => ({ ...w(b), tied: b.tied })), fires: vy.fires.map((f) => ({ ...w(f), out: f.out })),
         spar: vy.spar ? { ...w(vy.spar), lift: vy.spar.lift } : null,
