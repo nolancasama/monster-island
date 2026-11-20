@@ -7,11 +7,12 @@ The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and 
   boat wake + sail; 3 fishing-stair landing; 4 crates along the bulwark; 5 crate labels; 6 Pepper behind the counter; 8 enclosed
   hold (`holdLayerAt`/`setShipHoldOccupancy`, `vy.inHold`, interior camera, save flag `act3.voyage.inHold`); 9 steering
   (`logic/steerPath.ts`); 10 home island fades at sea. Still a debug-menu preview for students.
-- **Item 7 committed 2026-11-21 (`02ea20a`, not pushed or deployed):** friends' powers from their combat stances (pose-only
+- **Items 7 and 2 live 2026-11-21 (Pages run 44824652063, bundle `index-YbI9KO_q.js`; `main` fast-forwarded to `43758a4`), deployed at the user's request before the full e2e suite. Still a debug-menu preview.**
+- **Item 7 (`02ea20a`):** friends' powers from their combat stances (pose-only
   `setActivityStance` in `game/combat.ts`; `toolFx` sources from the friend via `scene/voyageAnchors.ts`). Verified: tsc; unit
   tests; `pirate-voyage.spec.ts` 2/2; `combat-feel.spec.ts` + `elements.spec.ts` 19/19 (2026-11-21); renders `.tmp/shots/voyage/m1`,
   `m2`. Known: Puff's gust reads small in the fixed ship camera.
-- **Item 2 Redbeard close-ups committed 2026-11-21 (not pushed or deployed), built by Claude ("no codex"):** `flow/closeUp.ts`
+- **Item 2 Redbeard close-ups (`43758a4`), built by Claude ("no codex"):** `flow/closeUp.ts`
   (`closeUp`/`endCloseUp`, candidate angles rejected through masts, sails, helm, barrels, people or off deck; `frameTwo`
   fallback) and an eased 0.75 s blend in `CameraRig` via `rt.camera.ease` (close-ups only). Used in the interrogation, the
   monsters scene, "My crew needs help", the sailing intro and the finale's gift. Decision: "Voyage polish: Redbeard close-ups".
@@ -22,8 +23,8 @@ The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and 
   close-up was not rendered (unit-tested framing only); real Chromebook feel.
 - **Machine load:** macOS XProtect scans push the load to 8-10; then the full voyage spec can time out on the last cargo
   put. Playwright serves the existing `dist` (no rebuild): always `npm run build` first.
-- **Next:** the full e2e suite on this branch (`MI_LONG_TIMEOUT=3600000`, ~1.5 h); then the user's go-ahead to push and deploy
-  items 7 and 2 (still a debug-menu preview). Remaining plan items: none besides those listed above. Slice worktrees
+- **Next:** the full e2e suite on this branch (`MI_LONG_TIMEOUT=3600000`, ~1.5 h); then the user plays the voyage on the live site
+  (`?debug=1` → "Pirate voyage (preview)"). Remaining plan items: none besides those listed above. Slice worktrees
   `mi-vp-ship`, `mi-vp-boat`, `mi-vp-island`, `mi-vp-steer` are merged and can be removed.
 
 ## Touch-and-hold on gameplay controls (plan item 11, deployed 2026-11-19): `feature/touch-hold` (from `feature/voyage-encounter` `ced2ab3`)
