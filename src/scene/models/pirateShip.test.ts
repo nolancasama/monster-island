@@ -1,12 +1,68 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, raftGeometry, raftSailGeometry, riggingLines, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
+import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, poseRaftSail, RAFT_MAST, raftGeometry, raftSailGeometry, riggingLines, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
 import { BOW_Z, CARGO_SIZE, DECK_Y, HOLD, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_HEADER_Y, HOLD_PILLAR, HOLD_RAMP, HOLD_SOLIDS, HOLD_STAIRS, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, STERN_STAIRS, holdLayerAt, shipFloorY, shipWalkable, shipWorld, touches } from "../../game/world/pirateShip";
 import { SEA_Y } from "../../game/world/island";
 import { cameraProfileAt } from "../cameraProfiles";
 import { holdFollowPose } from "../holdCamera";
 
 const tris = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
+
+describe("the raft sail", () => {
+  it("hangs from the masthead and stays inside the built raft above rider height", () => {
+    const { rig, cloth } = raftSailGeometry();
+    const deck = raftGeometry();
+    const bowPlank = plankGeometry().rotateY(Math.PI / 2).translate(0, 0, -1.65);
+    deck.computeBoundingBox();
+    bowPlank.computeBoundingBox();
+    rig.computeBoundingBox();
+    expect(rig.boundingBox!.min.y).toBeLessThan(0);
+    expect(rig.boundingBox!.max.y).toBeGreaterThan(RAFT_MAST.head);
+    // The mast foot and shaft sit ahead of the seated player and companions.
+    expect(RAFT_MAST.z + 0.118).toBeLessThan(-0.8);
+
+    const yard = rig.attributes.position;
+    let yardLeft = 0, yardRight = 0;
+    for (let i = 0; i < yard.count; i++) {
+      if (Math.abs(yard.getY(i) - RAFT_MAST.head) > 0.07) continue;
+      yardLeft = Math.min(yardLeft, yard.getX(i));
+      yardRight = Math.max(yardRight, yard.getX(i));
+    }
+    const points = cloth.attributes.position;
+    const scale = new THREE.Vector3();
+    poseRaftSail(scale, 1, 1, Math.PI / (2 * 3.4));
+    let attached = 0;
+    for (let i = 0; i < points.count; i++) {
+      const x = RAFT_MAST.x + points.getX(i) * scale.x;
+      const y = RAFT_MAST.head + points.getY(i) * scale.y;
+      const z = RAFT_MAST.z + points.getZ(i) * scale.z;
+      const overDeck = [deck.boundingBox!, bowPlank.boundingBox!].some(box =>
+        x >= box.min.x && x <= box.max.x && z >= box.min.z && z <= box.max.z);
+      expect(overDeck).toBe(true);
+      expect(y).toBeGreaterThan(2.02);
+      if (y === RAFT_MAST.head) {
+        expect(z).toBe(RAFT_MAST.z);
+        expect(x - RAFT_MAST.x).toBeGreaterThan(yardLeft);
+        expect(x - RAFT_MAST.x).toBeLessThan(yardRight);
+        attached++;
+      }
+    }
+    expect(attached).toBeGreaterThan(0);
+  });
+
+  it("unrolls with sail fill and catches more wind as flow increases", () => {
+    const furled = new THREE.Vector3(), half = new THREE.Vector3(), full = new THREE.Vector3();
+    poseRaftSail(furled, 0, 0.2, 0);
+    poseRaftSail(half, 0.5, 0.2, 0);
+    poseRaftSail(full, 1, 0.2, 0);
+    expect(furled.y).toBeLessThan(half.y);
+    expect(half.y).toBeLessThan(full.y);
+    expect(half.z).toBeLessThan(full.z);
+    poseRaftSail(half, 1, 0.9, 0);
+    expect(half.y).toBe(full.y);
+    expect(half.z).toBeGreaterThan(full.z);
+  });
+});
 
 describe("the pirate ship's budget (docs/PIRATE_VOYAGE.md §8)", () => {
   it("the ship is at most 9k triangles in at most 6 draws", () => {
@@ -19,7 +75,8 @@ describe("the pirate ship's budget (docs/PIRATE_VOYAGE.md §8)", () => {
   });
 
   it("the raft and the wreckage stay under 2k triangles", () => {
-    const parts = [raftGeometry(), ...[0, 1, 2, 3].map(() => plankGeometry()), raftSailGeometry(), lifeboatGeometry(), lifeboatGeometry(), sparGeometry(), floatBarrelGeometry(), rockGeometry()];
+    const { rig, cloth } = raftSailGeometry();
+    const parts = [raftGeometry(), ...[0, 1, 2, 3].map(() => plankGeometry()), rig, cloth, lifeboatGeometry(), lifeboatGeometry(), sparGeometry(), floatBarrelGeometry(), rockGeometry()];
     expect(parts.reduce((n, g) => n + tris(g), 0)).toBeLessThanOrEqual(2000);
   });
 

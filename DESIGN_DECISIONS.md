@@ -3198,3 +3198,16 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
   in the effect's flight and the impact. The test-only `look` override holds the lens while the
   storm authors its wide shot. The harness reads the pose from `window.__mi.state().act2.stance`
   and the effects, fire flags, HUD count, sail fullness and sewing state from `window.__mi.voyage()`.
+
+## 2026-11-21 - Ship and raft fixes: Raft wake and sail
+
+- The raft uses Gull's wake renderer and shared material, with a shorter and narrower profile.
+  It carries old marks aft while the raft stays fixed under the riders. Flow above the idle drift
+  sets the speed, and sail fill adds foam strength. The wake thins during braking and clears at rest.
+  The stern follows the tow's lane motion and Puff's island heading.
+- The finished raft has a fixed bow mast, a lashed yard, and a two-sided sail made of nine mismatched
+  panels. The cloth unrolls from the masthead using the existing sail value. Flow deepens the billow
+  below the yard. The cloth stays above the riders and within the hatch and bow plank footprint.
+- `SHOT_ONLY=raft` captures rest, tow, sail and a mid-turn at 1366 × 768 and 1280 × 800, with the
+  authored raft camera and a side view. It writes to `.tmp/shots/voyage/raft1/` and reads live flow,
+  sail fill, lane and island bearing through `window.__mi.voyage()`.

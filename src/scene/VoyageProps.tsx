@@ -1,11 +1,12 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { flatMat, smoothMat } from "./materials";
 import { foodGeometry } from "./models/props";
 import { npcGeometry } from "./models/lowland";
-import { bootGeometry, cargoGeometry, dishGeometry, fireGeometry, floatBarrelGeometry, islandGeometry, lifeboatGeometry, plankGeometry, raftGeometry, raftSailGeometry, sparGeometry } from "./models/pirateShip";
+import { bootGeometry, cargoGeometry, dishGeometry, fireGeometry, floatBarrelGeometry, islandGeometry, lifeboatGeometry, plankGeometry, poseRaftSail, RAFT_MAST, raftGeometry, raftSailGeometry, sparGeometry } from "./models/pirateShip";
+import { BoatWake, raftWakeIntensity, raftWakeSpeed } from "./BoatWake";
 import { PIRATES } from "../game/data/pirates";
 import { NPCS } from "../game/data/town";
 import { BUCKET, DECK_Y, FISH_Y, HALF_BEAM, SHIP, SPOT, hullHalf } from "../game/world/pirateShip";
@@ -335,15 +336,49 @@ function Lifeboats() {
 // ------------------------------------------------------------ the raft and the island
 
 function Raft() {
-  const hatch = useMemo(raftGeometry, []), plank = useMemo(plankGeometry, []), mast = useMemo(raftSailGeometry, []), island = useMemo(islandGeometry, []);
+  const hatch = useMemo(raftGeometry, []), plank = useMemo(plankGeometry, []), island = useMemo(islandGeometry, []);
+  const sailParts = useMemo(raftSailGeometry, []);
+  const clothMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, forceSinglePass: true }), []);
+  const wake = useMemo(() => new BoatWake(true), []);
+  const motion = useRef({ on: false, time: 0, lane: 0, turn: 0, yaw: Math.PI });
+  useEffect(() => () => {
+    wake.dispose();
+    sailParts.rig.dispose();
+    sailParts.cloth.dispose();
+    clothMat.dispose();
+  }, [wake, sailParts, clothMat]);
   const rope = useMemo(() => { const g = new THREE.CylinderGeometry(1, 1, 1, 5); g.translate(0, 0.5, 0); return g; }, []);
   const ropeMat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#8a6a43" }), []);
-  const root = useRef<THREE.Mesh>(null), planks = useRef<Array<THREE.Mesh | null>>([]), sail = useRef<THREE.Mesh>(null), isle = useRef<THREE.Mesh>(null), tow = useRef<THREE.Mesh>(null);
+  const root = useRef<THREE.Group>(null), planks = useRef<Array<THREE.Mesh | null>>([]), rig = useRef<THREE.Group>(null), sail = useRef<THREE.Mesh>(null), isle = useRef<THREE.Mesh>(null), tow = useRef<THREE.Mesh>(null);
   const a = useMemo(() => new THREE.Vector3(), []), b = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const r = vy.raft, on = r.on, bob = Math.sin(rt.time * 1.4) * 0.04;
     const y = rt.world === "cloud" ? 0.05 : SEA_Y + 0.25 + bob;
     if (root.current) { root.current.visible = on; root.current.position.set(r.x, y, r.z); }
+    const last = motion.current;
+    const afloat = on && vy.sea && rt.world === "home" && r.built >= 3;
+    const elapsed = rt.time - last.time;
+    const dt = last.on && elapsed > 0 && elapsed <= 0.3 ? elapsed : 0;
+    if (!afloat || !last.on || elapsed < 0 || elapsed > 0.3) {
+      wake.clear(rt.time);
+      last.turn = 0;
+    }
+    if (afloat) {
+      if (dt > 0) {
+        const lateral = vy.phase?.name === "steer-pass" ? (vy.laneVis - last.lane) / dt : 0;
+        const turn = THREE.MathUtils.clamp(lateral * 0.15, -0.44, 0.44);
+        last.turn += (turn - last.turn) * (1 - Math.exp(-dt * 12));
+      }
+      const yaw = Math.PI - last.turn - vy.islandSide * 0.3 * r.sail;
+      const speed = raftWakeSpeed(vy.flow);
+      const distance = speed * dt, bearing = (last.yaw + yaw) * 0.5;
+      wake.update(r.x, r.z, yaw, Math.sin(bearing) * distance, Math.cos(bearing) * distance,
+        yaw - last.yaw, dt, raftWakeIntensity(speed, r.sail));
+      last.yaw = yaw;
+    }
+    last.on = afloat;
+    last.time = rt.time;
+    last.lane = vy.laneVis;
     for (let i = 0; i < 4; i++) {
       const m = planks.current[i], p = r.planks[i];
       if (!m) continue;
@@ -353,12 +388,8 @@ function Raft() {
       m.position.set(p.x, p.state === "placed" ? y : SEA_Y + 0.12 + float, p.z);
       m.rotation.set(0, p.yaw, p.state === "float" ? Math.sin(rt.time + i) * 0.05 : 0);
     }
-    if (sail.current) {
-      sail.current.visible = on && r.sail > 0;
-      sail.current.position.set(r.x - 0.2, y, r.z - 0.9);
-      sail.current.scale.set(1, Math.max(0.01, r.sail), 1);
-      sail.current.rotation.set(0, Math.PI + vy.islandSide * 0.3, 0);
-    }
+    if (rig.current) rig.current.visible = r.built >= 3 || r.sail > 0;
+    if (sail.current && on) poseRaftSail(sail.current.scale, r.sail, vy.flow, rt.time);
     if (isle.current) {
       isle.current.visible = on && vy.island > 0 && rt.world === "home";
       isle.current.position.set(r.x + vy.islandSide * 55, SEA_Y - 6 + vy.island * 5, r.z - 175);
@@ -367,13 +398,26 @@ function Raft() {
       // Bubbo's tow rope while he pulls the raft.
       const bub = rt.monsters.bubbo;
       tow.current.visible = on && rt.world === "home" && vy.flow > 0.3 && r.sail === 0 && r.built >= 3;
-      if (tow.current.visible) { a.set(r.x, y + 0.2, r.z - 1.3); b.set(bub.x, SEA_Y + 0.2, bub.z + 0.4); span(tow.current, a, b, 0.04); }
+      if (tow.current.visible) {
+        a.set(r.x, y + 0.2, r.z - 1.3);
+        b.set(bub.x, SEA_Y + 0.2, bub.z + 0.4).sub(a);
+        const length = b.length() || 0.001;
+        tow.current.position.copy(a);
+        tow.current.quaternion.setFromUnitVectors(UP, b.divideScalar(length));
+        tow.current.scale.set(0.04, length, 0.04);
+      }
     }
   });
   return <>
-    <mesh ref={root} geometry={hatch} material={flatMat} visible={false} />
+    <mesh geometry={wake.geometry} material={wake.material} frustumCulled={false} />
+    <group ref={root} visible={false}>
+      <mesh geometry={hatch} material={flatMat} />
+      <group ref={rig} position={[RAFT_MAST.x, 0, RAFT_MAST.z]}>
+        <mesh geometry={sailParts.rig} material={flatMat} />
+        <mesh ref={sail} geometry={sailParts.cloth} material={clothMat} position={[0, RAFT_MAST.head, 0]} />
+      </group>
+    </group>
     {[0, 1, 2, 3].map((i) => <mesh key={i} ref={(el) => { planks.current[i] = el; }} geometry={plank} material={flatMat} visible={false} />)}
-    <mesh ref={sail} geometry={mast} material={flatMat} visible={false} />
     <mesh ref={isle} geometry={island} material={flatMat} visible={false} />
     <mesh ref={tow} geometry={rope} material={ropeMat} visible={false} />
   </>;
