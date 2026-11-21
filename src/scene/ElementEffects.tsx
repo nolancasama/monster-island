@@ -15,7 +15,7 @@ import { createWindFrame, stepWindFrame } from "../game/logic/wind";
 import { inCone } from "../game/logic/elements";
 import { groundY } from "../game/world/island";
 import { SHALLOW_WATER_DEPTH, shallowWaterAt } from "../game/world/groveShallows";
-import { activeFriend, voyageBreath } from "../game/voyageSim";
+import { activeFriend, usesStormCombatVisuals, voyageBreath } from "../game/voyageSim";
 import { vy } from "../game/voyageRt";
 
 // Shared batches, including a separate translucent steam batch; empty batches submit none.
@@ -291,6 +291,26 @@ export function ElementEffects() {
       o.position.set(x, y, z); o.rotation.set(0, 0, 0); o.scale.setScalar(radius);
       pool.bubbles.put(o, color.set("#9eeaff"));
     },
+    wind(x: number, y: number, z: number, yaw: number, pitch: number, length: number,
+      streakRange: number, age: number, time: number, fade: number, attached: boolean, width = 1) {
+      const dx = Math.sin(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = Math.cos(yaw) * Math.cos(pitch);
+      o.position.set(x, y, z);
+      direction.set(-dx, -dy, -dz);
+      o.quaternion.setFromUnitVectors(up, direction);
+      o.translateY(-length / 2); o.scale.set(length * .5 * width, length, length * .23 * width);
+      pool.shells.put(o, color.set("#e4faff"), fade * .6);
+      for (let i = 0; i < 7; i++) {
+        const d = attached
+          ? i === 0 ? 0 : streakRange * (((i - 1) / 6 + age * 2) % 1)
+          : streakRange * ((i / 7 + age * 2) % 1);
+        o.position.set(x + dx * d, y + dy * d, z + dz * d);
+        o.rotation.set(0, yaw, 0);
+        o.rotateX(-pitch);
+        o.rotateZ(time * 9 + i);
+        o.scale.set((.15 + d * .42) * width, (.1 + d * .18) * width, 1);
+        pool.streaks.put(o, color.set("#e4faff"), fade);
+      }
+    },
     limb(x: number, y: number, z: number, rx: number, rz: number, length: number, width: number, tint: string) {
       o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.scale.set(width, length / 3, width);
       o.updateMatrix(); o.matrix.premultiply(bodyFrame.matrixWorld);
@@ -337,7 +357,7 @@ export function ElementEffects() {
         draw.sprite(droplet.x, droplet.y, droplet.z, fall ? .5 : .24, fall ? .5 : .34, "#e8fbff", alpha);
       }
     }
-  }), [bodyFrame, camera, color, direction, droplet, forward, o, pool]);
+  }), [bodyFrame, camera, color, direction, droplet, forward, o, pool, up]);
 
   useFrame(() => {
     const t = rt.time, game = getGame(), zone = currentCombatZone();
@@ -352,6 +372,20 @@ export function ElementEffects() {
     gustFrameState.beak.x = anchors.puffBeak.x;
     gustFrameState.beak.y = anchors.puffBeak.y;
     gustFrameState.beak.z = anchors.puffBeak.z;
+    if (vy.sea) for (const f of vy.fx) {
+      if (!usesStormCombatVisuals(f)) continue;
+      const age = t - f.t0, k = age / f.life;
+      if (k < 0 || k >= 1) continue;
+      const dx = f.tx - f.x, dy = f.ty - f.y, dz = f.tz - f.z;
+      if (f.kind === "bubble") {
+        draw.bubble(f.x + dx * k, f.y + dy * k, f.z + dz * k, COMBAT.bubbo.basic.radius);
+      } else {
+        const length = Math.hypot(dx, dy, dz) * k;
+        const yaw = Math.atan2(dx, dz), pitch = Math.atan2(dy, Math.hypot(dx, dz));
+        // Widen the combat wind across its axis so the streaks read from the storm's wide shot.
+        draw.wind(f.x, f.y, f.z, yaw, pitch, length, length, age, t, Math.min(1, (1 - k) * 5), true, 1.6);
+      }
+    }
     if (active) {
       // Environmental fire uses the same instanced flame sprites as Ember.
       // Read the backing runtime records to avoid allocating semantic snapshots per frame.
@@ -658,17 +692,7 @@ export function ElementEffects() {
             gustFrameState.attached = wind.attached; gustFrameState.yaw = yaw; gustFrameState.length = len;
             gustFrameState.root.x = x; gustFrameState.root.y = y; gustFrameState.root.z = z;
           }
-          o.position.set(x, y, z);
-          direction.set(-Math.sin(yaw), 0, -Math.cos(yaw));
-          o.quaternion.setFromUnitVectors(up, direction);
-          o.translateY(-len / 2); o.scale.set(len * .5, len, len * .23);
-          pool.shells.put(o, color.set("#e4faff"), fade * .6);
-          for (let i = 0; i < 7; i++) {
-            const d = f.kind === "blast" ? i === 0 ? 0 : len * (((i - 1) / 6 + age * 2) % 1) : f.size * ((i / 7 + age * 2) % 1);
-            o.position.set(x + Math.sin(yaw) * d, y, z + Math.cos(yaw) * d);
-            o.rotation.set(0, yaw, t * 9 + i); o.scale.set(.15 + d * .42, .1 + d * .18, 1);
-            pool.streaks.put(o, color.set("#e4faff"), fade);
-          }
+          draw.wind(x, y, z, yaw, 0, len, f.kind === "blast" ? len : f.size, age, t, fade, f.kind === "blast");
         } else if (f.kind === "bomb" || f.kind === "trap" || f.kind === "splashKo") {
           if (f.kind === "bomb") draw.ring(f.x, f.y, f.z, .3 + f.size * k, "#9eeaff", 1 - k);
           draw.splash(f.x, f.y, f.z, f.id, age, fade, f.kind === "splashKo");

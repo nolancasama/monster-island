@@ -14,7 +14,7 @@ import { objective } from "./logic/progress";
 import { PLAYER_R, moveCircle, gatesOf, standY } from "./world/collision";
 import { GATE_PILLARS, MAPLE, groundY } from "./world/island";
 import { LIVE_MONSTERS } from "./data/monsters";
-import { cameraRef } from "../scene/CameraRig";
+import { cameraRef, setEvidenceLens } from "../scene/CameraRig";
 import { lowlandView } from "../scene/Lowland";
 import { caveView } from "../scene/Cave";
 import { dprState, perf } from "../scene/GameScene";
@@ -162,11 +162,17 @@ export function installE2eHook(seed: number) {
       restoreHold(below);
     },
     /** Pin the camera (screenshots). */
-    look(pos: [number, number, number], at: [number, number, number]) {
+    look(pos: [number, number, number], at: [number, number, number], evidence = false) {
+      const lens = { pos: { x: pos[0], y: pos[1], z: pos[2] }, target: { x: at[0], y: at[1], z: at[2] } };
+      if (evidence) {
+        setEvidenceLens(lens);
+        return;
+      }
       rt.camera.mode = "shot";
-      rt.camera.shot = { pos: { x: pos[0], y: pos[1], z: pos[2] }, target: { x: at[0], y: at[1], z: at[2] } };
+      rt.camera.shot = lens;
       rt.camera.snap = true;
     },
+    clearEvidenceLens() { setEvidenceLens(null); },
     follow() {
       rt.camera.mode = "follow";
       rt.camera.shot = null;

@@ -132,8 +132,8 @@ async function fires() {
       const f = aim(vy.fires.filter((x) => !x.out && !x.t0), (x) => L(x.x, x.z), 8, 0.9, 3.5);
       if (!f) return false;
       const w = L(f.x, f.z);
-      toolFx("bubbo", { x: w.x, y: DECK_Y + 0.4, z: w.z });
-      f.t0 = rt.time + 0.45;
+      const water = toolFx("bubbo", { x: w.x, y: DECK_Y + 0.4, z: w.z });
+      f.t0 = water.t0 + water.life;
       return true;
     },
     tick() {
@@ -168,7 +168,7 @@ async function torn() {
     await say("redbeard", "The sail!", "ほが!");
   });
   await ask4Help("puffHelp", "puff", "redbeard", ["We need wind to sew it!", "ぬうには かぜが ひつよう!"], ["Stand near the big sail. Hold J!", "おおきな ほの ちかくで Jを おしつづけて!"]);
-  let sew = 0, lastGust = -10;
+  let sew = 0, lastGust = -Infinity, firstArrival = Infinity;
   const SEW = 3;
   const mast = L(SPOT.mainMast.x, SPOT.mainMast.z);
   const s = SAIL_AIM[1], sail = { ...L(s.x, s.z), y: s.y };
@@ -186,8 +186,16 @@ async function torn() {
       const p = rt.player;
       shot({ x: p.x + 15, y: DECK_Y + 7.5, z: p.z + 3.5 }, { x: p.x - 1.5, y: DECK_Y + 3.6, z: p.z - 1 });
       const working = vy.hold && canBlow();
-      vy.sails[1] = Math.max(0.1, Math.min(1, vy.sails[1] + (working ? dt * 0.9 : -dt * 0.45)));
-      if (working && rt.time - lastGust > 0.3) { lastGust = rt.time; toolFx("puff", sail); }
+      if (!working) {
+        lastGust = -Infinity;
+        firstArrival = Infinity;
+      } else if (rt.time - lastGust > 0.3) {
+        const gust = toolFx("puff", sail);
+        lastGust = gust.t0;
+        firstArrival = Math.min(firstArrival, gust.t0 + gust.life);
+      }
+      const filling = rt.time >= firstArrival;
+      vy.sails[1] = Math.max(0.1, Math.min(1, vy.sails[1] + (filling ? dt * 0.9 : -dt * 0.45)));
       if (vy.sails[1] >= 0.9) {
         sew += dt;
         if (Math.random() < dt * 3) { cheer("tom", "sam"); sparkleAt(mast.x + (Math.random() - 0.5) * 2, DECK_Y + 2 + Math.random() * 3, mast.z + 1.5); }

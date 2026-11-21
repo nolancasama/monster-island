@@ -110,8 +110,10 @@ export function aim<T>(items: T[], at: (t: T) => { x: number; z: number }, range
 }
 
 const friendEffects = new WeakMap<VoyageFx, boolean>();
+const stormEffects = new WeakSet<VoyageFx>();
 export const isPosedToolFx = (fx: VoyageFx) => friendEffects.get(fx) === true;
 export const usesVoyageBreath = (fx: VoyageFx) => fx.kind === "flame" && friendEffects.has(fx);
+export const usesStormCombatVisuals = (fx: VoyageFx) => stormEffects.has(fx);
 
 /** Use the rig's emitter, with a transform from the current pose when the rig hasn't rendered. */
 function friendSource(friend: CompanionId, posed: boolean) {
@@ -135,11 +137,15 @@ export const GUST_TRAVEL = .6;
 export function toolFx(friend: CompanionId, to: { x: number; y: number; z: number }) {
   const kind = TOOL[friend].kind;
   const posed = activeFriend() === friend && mounted(friend);
-  const shipTool = vy.active && rt.world === "home" && Boolean(currentPhase()?.stance);
+  const phase = currentPhase();
+  const shipTool = vy.active && rt.world === "home" && Boolean(phase?.stance);
   const source = posed || shipTool ? friendSource(friend, posed) : null;
   const life = kind === "vine" ? 0.55 : kind === "gust" ? GUST_TRAVEL : kind === "flame" ? 0.5 : 0.45;
   addFx(kind, source ?? hand(), to, life, rt.time);
   const fx = vy.fx[vy.fx.length - 1];
+  if ((kind === "bubble" && phase?.name === "storm-fires") || (kind === "gust" && phase?.name === "storm-sail")) {
+    stormEffects.add(fx);
+  }
   if (source) {
     friendEffects.set(fx, posed);
     if (friend === "ember" && rt.monsters.ember.anim?.kind !== "power") animate("ember", "power");

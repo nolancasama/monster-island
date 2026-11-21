@@ -87,7 +87,7 @@ async function powerFrame(page: Page, name: string, scale: number) {
   }
 }
 
-type PowerEffect = { id: number; kind: string; posed: boolean; age: number; life: number };
+type PowerEffect = { id: number; kind: string; posed: boolean; age: number; life: number; tx: number; tz: number };
 const powerEffects = (v: any): PowerEffect[] => v.effects;
 
 async function powerSequence(page: Page, name: string, kind: string, use: () => Promise<void>) {
@@ -105,6 +105,65 @@ async function powerSequence(page: Page, name: string, kind: string, use: () => 
       await powerFrame(page, `${name}-effect-0${i + 1}`, scale);
     }
   } finally {
+    await hook(page, "timeScale", 1);
+  }
+}
+
+async function stormTravelSequence(page: Page, name: string, kind: "bubble" | "gust", target: { x: number; z: number }) {
+  const scale = .08, fire = kind === "bubble";
+  const p = (await state(page)).player;
+  const lens = [p.x + (fire ? -2.4 : 6.4), DECK_Y + (fire ? 2.55 : 2.7), p.z + (fire ? 4.4 : -4.1)];
+  const at = [(p.x + target.x) / 2, DECK_Y + (fire ? .85 : 3.45), (p.z + target.z) / 2];
+  const nearTarget = (point: { x: number; z: number }) => Math.hypot(point.x - target.x, point.z - target.z) < .1;
+  const targetFire = (v: any) => v.fires.find(nearTarget);
+  const pending = (v: any) => fire ? targetFire(v)?.out === false && v.hud?.count?.[0] === 0
+    : v.sails[1] === .1 && v.sewn === 0;
+  const previous = powerEffects(await voyage(page)).at(-1)?.id ?? 0;
+  const fired = (fx: PowerEffect) => fx.id > previous && fx.posed && fx.kind === kind && nearTarget({ x: fx.tx, z: fx.tz });
+
+  async function capture(suffix: string, resume: number) {
+    await hook(page, "timeScale", 0);
+    try {
+      await hook(page, "renderFrames", 2);
+      await snap(page, `${name}-${suffix}`);
+      await hook(page, "look", lens, at, true);
+      await shotReady(page, `${name} close lens is on the tool and target`, s => {
+        const { pos, target: aim } = s.camera;
+        return Math.hypot(pos.x - lens[0], pos.y - lens[1], pos.z - lens[2]) < .1
+          && Math.hypot(aim.x - at[0], aim.y - at[1], aim.z - at[2]) < .1;
+      });
+      await snap(page, `${name}-close-${suffix}`);
+    } finally {
+      await hook(page, "clearEvidenceLens");
+      await hook(page, "timeScale", resume);
+    }
+  }
+
+  try {
+    await voyageReady(page, `${name} target is ready for the posed tool`, pending);
+    await capture("pose", scale);
+    if (fire) await page.keyboard.press("KeyJ");
+    else await page.keyboard.down("KeyJ");
+    await voyageReady(page, `${name} emitted ${kind} toward the target from its stance`, v => powerEffects(v).some(fired));
+    const id = powerEffects(await voyage(page)).find(fired)?.id;
+    if (!id) throw new Error(`HARNESS_PRECONDITION_FAILED - ${name} launched effect is live`);
+    for (const [i, progress] of [.12, .45, .78].entries()) {
+      await voyageReady(page, `${name} effect frame ${i + 1} is in flight`, v => pending(v)
+        && powerEffects(v).some(fx => fx.id === id && fx.age >= progress * fx.life && fx.age < fx.life));
+      await capture(`effect-0${i + 1}`, scale);
+    }
+    if (fire) {
+      await voyageReady(page, `${name} target is out and steaming with one fire counted`, v => targetFire(v)?.out
+        && v.hud?.count?.[0] === 1 && powerEffects(v).some(fx => fx.id > id && fx.kind === "steam"
+          && fx.age >= .12 && fx.age < fx.life && nearTarget({ x: fx.tx, z: fx.tz })));
+      await capture("extinguished", 1);
+    } else {
+      await voyageReady(page, `${name} sail has caught the wind and filled`, v => v.sails[1] >= .9 && v.sewn === 0);
+      await capture("filled", 1);
+      await voyageReady(page, "the wind has held the torn sail open until it is sewn", v => v.sewn === 1);
+    }
+  } finally {
+    if (!fire) await page.keyboard.up("KeyJ");
     await hook(page, "timeScale", 1);
   }
 }
@@ -220,24 +279,20 @@ for (const [width, height] of [[1366, 768], [1280, 800]] as const) {
         await face(page, from, current);
       }
       const name = `storm-powers-${size}-${phase}`;
-      await powerFrame(page, `${name}-pose`, 1);
-      if (phase === "storm-sail") {
-        try {
-          await powerSequence(page, name, kind, () => page.keyboard.down("KeyJ"));
-          await voyageReady(page, "the wind has held the torn sail open until it is sewn", next => next.sewn === 1);
-        } finally {
-          await page.keyboard.up("KeyJ");
-        }
+      if (kind === "bubble" || kind === "gust") {
+        await shotReady(page, `${friend} is posed and the wide ${phase} shot is active`, s => mountedFor(s, friend) && s.camera.mode === "shot");
+        await stormTravelSequence(page, name, kind, target);
       } else {
+        await powerFrame(page, `${name}-pose`, 1);
         await powerSequence(page, name, kind, () => page.keyboard.press("KeyJ"));
-        if (phase === "storm-spar") continue;
-        for (let remaining = 2; remaining > 0; remaining--) {
-          await voyageReady(page, `${phase} has ${remaining} targets left`, next => next.phase === phase && targets(next).length === remaining);
-          const next = targets(await voyage(page))[0];
-          if (!next) throw new Error(`HARNESS_PRECONDITION_FAILED - a remaining ${phase} target is available`);
-          await face(page, from, next);
-          await page.keyboard.press("KeyJ");
-        }
+      }
+      if (phase === "storm-spar" || phase === "storm-sail") continue;
+      for (let remaining = 2; remaining > 0; remaining--) {
+        await voyageReady(page, `${phase} has ${remaining} targets left`, next => next.phase === phase && targets(next).length === remaining);
+        const next = targets(await voyage(page))[0];
+        if (!next) throw new Error(`HARNESS_PRECONDITION_FAILED - a remaining ${phase} target is available`);
+        await face(page, from, next);
+        await page.keyboard.press("KeyJ");
       }
     }
   });
