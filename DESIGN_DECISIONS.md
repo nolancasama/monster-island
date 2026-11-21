@@ -3171,3 +3171,17 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - The controller can read the current beat, progress, hook endpoints, line slack and mooring through
   `window.__mi.voyage().capture`, with the cloth target at `window.__mi.voyage().cutSails`.
   `SHOT_ONLY=capture2` records the live scene at both viewport sizes.
+
+## 2026-11-21 - Ship and raft fixes: Hatch seams and stair follow camera
+
+- The ship's base mesh includes the hold shell so the deck view looks down exposed treads into the closed room.
+  The coaming, header, shaft lining, and backing below both landings overlap their adjoining geometry. The treads
+  darken with depth. The voyage water plane is masked within the room and shaft during the upright ship's deck
+  view, where it would otherwise cross the lower treads. Furnishings and the lantern still draw in the interior view.
+- The follow lens tracks a point upslope at the player's ship-local x. It blends in on the deck approach and moves
+  into the room past the bottom landing. The same lens and forward heading span both sides of `HOLD_PORTAL`, so
+  follow traversal no longer needs a fade. The existing `window.__mi.state()` exposes the camera profile, position,
+  target, and player position for the controller.
+- The descent capture keeps the clock positive with ArrowUp held. At zero delta, the movement tick divides by zero
+  while updating velocity, and the follow camera receives a non-finite position. The hold shot run also captures
+  the normal deck follow view at all four sides of the hatch.

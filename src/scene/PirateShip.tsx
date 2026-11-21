@@ -6,7 +6,7 @@ import { npcGeometry } from "./models/lowland";
 import { pirateShipGeometries, sailGeometry, supplySignAtlas } from "./models/pirateShip";
 import { PIRATES } from "../game/data/pirates";
 import { NPCS } from "../game/data/town";
-import { COUNTER_CUSTOMER, DECK_Y, HOLD_LANTERN, MASTS, SAIL_FOOT, SHIP, SPOT, hullHalf, sailHeight, shipFloorY } from "../game/world/pirateShip";
+import { COUNTER_CUSTOMER, DECK_Y, HOLD, HOLD_LANTERN, HOLD_RAMP, MASTS, SAIL_FOOT, SHIP, SPOT, hullHalf, inShipArea, sailHeight, shipFloorY } from "../game/world/pirateShip";
 import { SEA_Y } from "../game/world/island";
 import { CREW_IDS, vy, type CrewId } from "../game/voyageRt";
 import { rt } from "../game/runtime";
@@ -82,13 +82,41 @@ function VoyageSea() {
     g.rotateX(-Math.PI / 2);
     return g;
   }, []);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#1e74b4", flatShading: true }), []);
+  const dryHold = useMemo(() => ({ value: false }), []);
+  const holdPose = useMemo(() => ({ value: new THREE.Vector4() }), []);
+  const mat = useMemo(() => {
+    const material = new THREE.MeshLambertMaterial({ color: "#1e74b4", flatShading: true });
+    const inFootprint = ({ x0, x1, z0, z1 }: typeof HOLD) =>
+      `p.x >= ${x0.toFixed(3)} && p.x <= ${x1.toFixed(3)} && p.y >= ${z0.toFixed(3)} && p.y <= ${z1.toFixed(3)}`;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uDryHold = dryHold;
+      shader.uniforms.uHoldPose = holdPose;
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec2 vWaterXZ;")
+        .replace("#include <project_vertex>", "#include <project_vertex>\nvWaterXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying vec2 vWaterXZ;\nuniform bool uDryHold;\nuniform vec4 uHoldPose;")
+        .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
+if (uDryHold) {
+  vec2 d = vWaterXZ - uHoldPose.xy;
+  vec2 p = vec2(dot(d, vec2(uHoldPose.z, -uHoldPose.w)), dot(d, uHoldPose.wz));
+  if ((${inFootprint(HOLD)}) || (${inFootprint(HOLD_RAMP)})) discard;
+}
+`);
+    };
+    return material;
+  }, [dryHold, holdPose]);
   const fair = useMemo(() => new THREE.Color("#1f78b8"), []), stormy = useMemo(() => new THREE.Color("#2c4452"), []);
   useFrame(() => {
     const m = ref.current;
     if (!m) return;
     m.visible = vy.sea && rt.world === "home" && !vy.inHold;
     if (!m.visible) return;
+    // The sea plane extends through the hull. Keep the room and exposed
+    // lower treads dry in the deck view while the ship is upright.
+    dryHold.value = vy.active && !rt.voyage.active && !vy.raft.on && vy.storm === 0
+      && inShipArea(rt.player.x, rt.player.z);
+    if (dryHold.value) holdPose.value.set(SHIP.x + vy.shipOffset.x, SHIP.z + vy.shipOffset.z, Math.cos(vy.shipYaw), Math.sin(vy.shipYaw));
     // Centred on what the camera looks at, snapped to the grid so the facets never swim.
     const cx = Math.round(rt.camera.target.x / STEP) * STEP, cz = Math.round(rt.camera.target.z / STEP) * STEP;
     m.position.set(cx, 0, cz);
@@ -135,24 +163,11 @@ function Wake() {
 /** Captain Redbeard's ship and crew, drawn only while the voyage needs them. */
 export function PirateShip() {
   const ship = useMemo(pirateShipGeometries, []);
-  const hatchOpen = useMemo(() => ({ value: false }), []);
   const deckMat = useMemo(() => {
     const material = flatMat.clone();
     material.map = supplySignAtlas();
-    // The hatch shade uses a reserved white atlas sample, so the exterior
-    // base and the four coloured signs can stay in one draw.
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.uHoldOpen = hatchOpen;
-      shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\nuniform bool uHoldOpen;")
-        .replace("#include <map_fragment>", `
-#ifdef USE_MAP
-if (uHoldOpen && vMapUv.x > 0.8 && vMapUv.y < 0.2) discard;
-#endif
-#include <map_fragment>`);
-    };
     return material;
-  }, [hatchOpen]);
+  }, []);
   const sails = useMemo(() => SAILS.map((s) => sailGeometry(s.h)), []);
   const tornSail = useMemo(() => sailGeometry(SAILS[1].h, true), []);
   const yawed = useRef<THREE.Group>(null), outer = useRef<THREE.Group>(null), mainMast = useRef<THREE.Group>(null);
@@ -173,7 +188,6 @@ if (uHoldOpen && vMapUv.x > 0.8 && vMapUv.y < 0.2) discard;
     y.visible = vy.active && rt.world === "home" && Math.hypot(c.x - SHIP.x - vy.shipOffset.x, c.z - SHIP.z - vy.shipOffset.z) < 300;
     if (!y.visible) return;
     if (hold.current) hold.current.visible = vy.inHold;
-    hatchOpen.value = vy.inHold;
     // Heading about the ship's origin (its interception), then the storm's pitch and roll about the stern pivot.
     y.position.set(SHIP.x + vy.shipOffset.x, vy.shipBob - vy.shipSink, SHIP.z + vy.shipOffset.z);
     y.rotation.set(0, vy.shipYaw, 0);

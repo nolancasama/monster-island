@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { SEA_Y } from "../../game/world/island";
-import { BOW_Z, BULWARK_THICKNESS, BUCKET, CANNONS, CARGO_SIZE, COUNTER_SIZE, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_BARRELS, HOLD_BOX, HOLD_CEILING_Y, HOLD_DOOR, HOLD_HATCH_GUARDS, HOLD_HEADER_Y, HOLD_LANTERN, HOLD_PILLAR, HOLD_PORTAL, HOLD_RAMP, HOLD_SHELF, HOLD_STAIRS, HOLD_TABLE, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, SUPPLY_SIZE, hullHalf, type Box } from "../../game/world/pirateShip";
+import { BOW_Z, BULWARK_THICKNESS, BUCKET, CANNONS, CARGO_SIZE, COUNTER_SIZE, CROWS_NEST_Y, DECK_BARRELS, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HALF_BEAM, HOLD, HOLD_BARRELS, HOLD_BOX, HOLD_CEILING_Y, HOLD_DOOR, HOLD_HATCH_GUARDS, HOLD_HEADER_Y, HOLD_LANTERN, HOLD_PILLAR, HOLD_RAMP, HOLD_SHELF, HOLD_STAIRS, HOLD_TABLE, HOLD_Y, MASTS, MESS, SAIL_FOOT, SPOT, STERN_RAMP, STERN_STAIRS, STERN_Z, SUPPLY_CRATES, SUPPLY_SIZE, hullHalf, type Box } from "../../game/world/pirateShip";
 
 /**
  * Captain Redbeard's ship (docs/PIRATE_VOYAGE.md §2, §8) in LOCAL coordinates
@@ -16,6 +16,8 @@ import { BOW_Z, BULWARK_THICKNESS, BUCKET, CANNONS, CARGO_SIZE, COUNTER_SIZE, CR
 const WOOD = "#6b4a30", DARK = "#4a2f1e", PLANK = "#b88a52", PLANK2 = "#a97d48", HOLDWOOD = "#8d6540", RED = "#b8322a", GOLD = "#e0b23a", IRON = "#3c3f44", SPAR = "#7a5532";
 const HULL_BOTTOM = SEA_Y - 1.4, LOWER_HULL_THICKNESS = 0.35;
 const FISH_PLATFORM_DEPTH = 0.2;
+const HOLD_JOIN = 0.025;
+const SHAFT_WOOD = "#503522";
 const stemZ = (inset: number) => BOW_Z - 1.4 + inset * 1.5;
 
 /** The hull outline (starboard stern → bow → port stern), with a pointed bow. */
@@ -122,12 +124,14 @@ function staircase(b: PartBuilder, ramp: Box, stairs: typeof HOLD_STAIRS, omitLa
 
 function holdCompanionway(b: PartBuilder) {
   const hr = HOLD_RAMP, width = hr.x1 - hr.x0, x = (hr.x0 + hr.x1) / 2;
-  const shaftWood = "#503522";
-  // Each tread and riser owns a single face. The walls cover the stair edges.
+  const treadColor = new THREE.Color(), unlit = new THREE.Color("#2c1e15");
+  // The tread and riser faces run into the shaft lining. Darken the steps
+  // farther from the deck so the open staircase reads as a descent.
   let lastY = HOLD_Y;
   for (const [i, { z0, z1, y }] of HOLD_STAIRS.steps.entries()) {
-    b.add(new THREE.PlaneGeometry(width, z1 - z0), i % 2 ? PLANK2 : PLANK, [x, y, (z0 + z1) / 2], [-Math.PI / 2, 0, 0]);
-    if (y > lastY) b.add(new THREE.PlaneGeometry(width, y - lastY), DARK, [x, (lastY + y) / 2, z0], [0, Math.PI, 0]);
+    treadColor.set(i % 2 ? PLANK2 : PLANK).lerp(unlit, 0.82 * (DECK_Y - y) / (DECK_Y - HOLD_Y));
+    b.add(new THREE.PlaneGeometry(width + 2 * HOLD_JOIN, z1 - z0), treadColor, [x, y, (z0 + z1) / 2], [-Math.PI / 2, 0, 0]);
+    if (y > lastY) b.add(new THREE.PlaneGeometry(width + 2 * HOLD_JOIN, y - lastY), DARK, [x, (lastY + y) / 2, z0], [0, Math.PI, 0]);
     lastY = y;
   }
   // The collar continues down to the floor along both sides. The cap under
@@ -135,11 +139,15 @@ function holdCompanionway(b: PartBuilder) {
   const [port, starboard, front] = HOLD_HATCH_GUARDS;
   const collarY = DECK_Y + 0.13;
   for (const side of [port, starboard]) {
-    b.box(side.x1 - side.x0, collarY - HOLD_Y, side.z1 - side.z0, (side.x0 + side.x1) / 2,
-      HOLD_Y, (side.z0 + side.z1) / 2, shaftWood);
+    b.box(side.x1 - side.x0, collarY - HOLD_Y + HOLD_JOIN, side.z1 - side.z0 + HOLD_JOIN,
+      (side.x0 + side.x1) / 2, HOLD_Y - HOLD_JOIN, (side.z0 + side.z1 + HOLD_JOIN) / 2, SHAFT_WOOD);
   }
-  b.box(width, collarY - HOLD_HEADER_Y, front.z1 - front.z0, x, HOLD_HEADER_Y, (front.z0 + front.z1) / 2, shaftWood);
-  b.box(width, DECK_Y - HOLD_Y, 0.16, x, HOLD_Y, hr.z1 + 0.08, shaftWood);
+  b.box(width + 2 * HOLD_JOIN, collarY - HOLD_HEADER_Y - HOLD_JOIN, front.z1 - front.z0 - HOLD_JOIN,
+    x, HOLD_HEADER_Y, (front.z0 + front.z1 + HOLD_JOIN) / 2, SHAFT_WOOD);
+  // The deck and top tread share the walking surface. The backing below it
+  // laps under both sides of that joint.
+  b.box(width + 2 * HOLD_JOIN, DECK_Y - HOLD_Y - HOLD_JOIN, 0.16 + HOLD_JOIN,
+    x, HOLD_Y - HOLD_JOIN, hr.z1 + (0.16 - HOLD_JOIN) / 2, SHAFT_WOOD);
 
   // The end rail fits between the side rails, which share their corner posts.
   const rail = 0.09, y = DECK_Y + 0.86, z = (front.z0 + front.z1) / 2;
@@ -151,7 +159,31 @@ function holdCompanionway(b: PartBuilder) {
       b.box(0.1, y - collarY, 0.1, railX, collarY, postZ, WOOD);
     }
   }
-  b.box(0.1, y - collarY, 0.1, x, collarY, z, WOOD);
+  b.box(0.1, y - collarY + HOLD_JOIN, 0.1, x, collarY - HOLD_JOIN, z, WOOD);
+}
+
+/** Keep the room closed even while its furnishings and lantern are hidden from the deck view. */
+function holdShell(b: PartBuilder) {
+  const h = HOLD, hr = HOLD_RAMP, wall = 0.16;
+  const width = h.x1 - h.x0, length = h.z1 - h.z0, midZ = (h.z0 + h.z1) / 2;
+  const room: Array<[number, number]> = [
+    [h.x0 - HOLD_JOIN, h.z0 - HOLD_JOIN], [h.x1 + HOLD_JOIN, h.z0 - HOLD_JOIN],
+    [h.x1 + HOLD_JOIN, h.z1 + HOLD_JOIN], [h.x0 - HOLD_JOIN, h.z1 + HOLD_JOIN],
+  ];
+  floor(b, room, HOLD_CEILING_Y, "#94704e", [], true);
+  // The floor meets the bottom tread along its front edge. Its underside
+  // continues into the shaft below the visible floor and treads.
+  b.box(width + 2 * HOLD_JOIN, 0.1, length + HOLD_JOIN, 0, HOLD_Y - 0.1, midZ - HOLD_JOIN / 2, HOLDWOOD);
+  b.box(hr.x1 - hr.x0 + 2 * HOLD_JOIN, 0.06, hr.z1 - h.z1 + 2 * HOLD_JOIN,
+    (hr.x0 + hr.x1) / 2, HOLD_Y - 0.08, (h.z1 + hr.z1) / 2, SHAFT_WOOD);
+  const wallH = DECK_Y - HOLD_Y + 0.02;
+  const bottom = HOLD_Y - 0.06;
+  b.box(width + 2 * wall - 2 * HOLD_JOIN, wallH, wall, 0, bottom, h.z0 - wall / 2, WOOD);
+  const [port, starboard] = HOLD_HATCH_GUARDS;
+  for (const [a, c] of [[h.x0 - wall + HOLD_JOIN, port.x0 + HOLD_JOIN], [starboard.x1 - HOLD_JOIN, h.x1 + wall - HOLD_JOIN]]) {
+    b.box(c - a, wallH, wall + HOLD_JOIN, (a + c) / 2, bottom, h.z1 + (wall - HOLD_JOIN) / 2, WOOD);
+  }
+  for (const x of [h.x0 - wall / 2, h.x1 + wall / 2]) b.box(wall, wallH, length + 2 * HOLD_JOIN, x, bottom, midZ, WOOD);
 }
 
 const SIGN_ATLAS = { width: 512, height: 1024, row: 192, inset: 5, whiteV: 0.125 };
@@ -229,7 +261,8 @@ export function pirateShipGeometries(): ShipGeometries {
   const sternNotch = (edge: number): Array<[number, number]> =>
     [[sr.x0, edge], [sr.x0, sr.z0], [sr.x1, sr.z0], [sr.x1, edge]];
   const holdOpening: Array<[number, number]> = [
-    [hr.x0, hr.z0], [hr.x1, hr.z0], [hr.x1, hr.z1], [hr.x0, hr.z1],
+    [hr.x0 - HOLD_JOIN, hr.z0 - HOLD_JOIN], [hr.x1 + HOLD_JOIN, hr.z0 - HOLD_JOIN],
+    [hr.x1 + HOLD_JOIN, hr.z1], [hr.x0 - HOLD_JOIN, hr.z1],
   ];
   floor(b, [...inner, ...sternNotch(STERN_Z)], DECK_Y, PLANK, [holdOpening.reverse()]);
   const atOpening = (x: number, z: number) => [hr, sr].some(
@@ -350,16 +383,15 @@ export function pirateShipGeometries(): ShipGeometries {
   }
   // Barrels against the bulwarks (clear of every walking line).
   for (const { x, z } of DECK_BARRELS) { b.cyl(0.3, 0.3, 0.8, x, DECK_Y, z, "#8a5a32", 8); b.cyl(0.31, 0.31, 0.06, x, DECK_Y + 0.55, z, IRON, 8); }
-  const untextured = b.vertexCount;
+  const signsStart = b.vertexCount;
   supplySigns(b);
-  // Reserve a second white atlas sample for the shade drawn over the unlit stairs.
-  const shade = new THREE.PlaneGeometry(hr.x1 - hr.x0, DECK_Y - HOLD_Y);
-  const shadeUV = shade.attributes.uv;
-  for (let i = 0; i < shadeUV.count; i++) shadeUV.setXY(i, 0.875, SIGN_ATLAS.whiteV);
-  b.add(shade, "#211611", [(hr.x0 + hr.x1) / 2, (HOLD_Y + DECK_Y) / 2, HOLD_PORTAL.enterZ - 0.12]);
+  const signsEnd = b.vertexCount;
+  holdShell(b);
   const base = b.build(), tall = t.build(), main = m.build();
   const uv = base.attributes.uv;
-  for (let i = 0; i < untextured; i++) uv.setXY(i, 0.5, SIGN_ATLAS.whiteV);
+  for (let i = 0; i < uv.count; i++) {
+    if (i < signsStart || i >= signsEnd) uv.setXY(i, 0.5, SIGN_ATLAS.whiteV);
+  }
   for (const g of [base, tall, main]) g.computeVertexNormals();
   return { base, tall, main, hold: holdGeometry(), lantern: holdLanternGeometry() };
 }
@@ -367,17 +399,6 @@ export function pirateShipGeometries(): ShipGeometries {
 function holdGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0), h = HOLD;
   const width = h.x1 - h.x0, length = h.z1 - h.z0, midZ = (h.z0 + h.z1) / 2;
-  const room: Array<[number, number]> = [[h.x0, h.z0], [h.x1, h.z0], [h.x1, h.z1], [h.x0, h.z1]];
-  floor(b, room, HOLD_Y, HOLDWOOD);
-  floor(b, room, HOLD_CEILING_Y, "#94704e", [], true);
-  const wallH = DECK_Y - HOLD_Y;
-  const wall = 0.16;
-  b.box(width + 2 * wall, wallH, wall, 0, HOLD_Y, h.z0 - wall / 2, WOOD);
-  const [port, starboard] = HOLD_HATCH_GUARDS;
-  for (const [a, c] of [[h.x0 - wall, port.x0], [starboard.x1, h.x1 + wall]]) {
-    b.box(c - a, wallH, wall, (a + c) / 2, HOLD_Y, h.z1 + wall / 2, WOOD);
-  }
-  for (const x of [h.x0 - wall / 2, h.x1 + wall / 2]) b.box(wall, wallH, length, x, HOLD_Y, midZ, WOOD);
   // Plank seams on the floor and ceiling, and visible ribs along the room.
   for (let x = h.x0 + 0.45; x < h.x1; x += 0.6) {
     b.box(0.023, 0.009, length - 0.02, x, HOLD_Y + 0.001, midZ, DARK);

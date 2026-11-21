@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, raftGeometry, raftSailGeometry, riggingLines, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
-import { BOW_Z, CARGO_SIZE, DECK_Y, HOLD_CEILING_Y, HOLD_HEADER_Y, HOLD_PORTAL, HOLD_RAMP, HOLD_STAIRS, HOLD_Y, MASTS, SPOT, STERN_RAMP, STERN_STAIRS, shipWalkable, shipWorld } from "../../game/world/pirateShip";
+import { BOW_Z, CARGO_SIZE, DECK_Y, HOLD, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_HEADER_Y, HOLD_PILLAR, HOLD_RAMP, HOLD_SOLIDS, HOLD_STAIRS, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, STERN_STAIRS, holdLayerAt, shipFloorY, shipWalkable, shipWorld, touches } from "../../game/world/pirateShip";
 import { SEA_Y } from "../../game/world/island";
+import { cameraProfileAt } from "../cameraProfiles";
+import { holdFollowPose } from "../holdCamera";
 
 const tris = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 
@@ -129,7 +131,83 @@ describe("pirate ship attachments and stair geometry", () => {
       expect(ray.intersectObject(mesh)[0]?.point.z).toBeCloseTo(z0, 5);
     }
     ray.set(new THREE.Vector3(x, HOLD_Y + 1.88, 0.15), new THREE.Vector3(0, 0, -1));
-    expect(ray.intersectObject(mesh)[0]?.point.z).toBeCloseTo(HOLD_PORTAL.enterZ - 0.12, 5);
+    expect(ray.intersectObject(mesh)[0]?.point.z).toBeCloseTo(HOLD.z0, 5);
+    wood.dispose();
+  });
+
+  it("shows wood or treads through the deck opening from all four sides", () => {
+    const { base } = pirateShipGeometries();
+    const wood = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(base, wood), ray = new THREE.Raycaster();
+    const { x0, x1, z0, z1 } = HOLD_RAMP;
+    const x = HOLD_ENTRY.x, z = (z0 + z1) / 2;
+    const lenses = [
+      new THREE.Vector3(x + 1.2, DECK_Y + 3.8, z1 + 2.5), // hatch-from-deck
+      new THREE.Vector3(x, DECK_Y + 4.1, z0 - 2),
+      new THREE.Vector3(x0 - 2.1, DECK_Y + 4.1, z),
+      new THREE.Vector3(x1 + 2.1, DECK_Y + 4.1, z),
+    ];
+    const direction = new THREE.Vector3();
+    for (const lens of lenses) {
+      for (let i = 0; i <= 10; i++) {
+        for (let j = 0; j <= 20; j++) {
+          // Include the seams along the lip and coaming at each end.
+          const px = THREE.MathUtils.lerp(x0 - 0.01, x1 + 0.01, i / 10);
+          const pz = THREE.MathUtils.lerp(z0 - 0.01, z1 + 0.01, j / 20);
+          ray.set(lens, direction.set(px, DECK_Y, pz).sub(lens).normalize());
+          expect(ray.intersectObject(mesh).length, `clear through the hatch at ${px}, ${pz}`).toBeGreaterThan(0);
+        }
+      }
+    }
+    wood.dispose();
+  });
+
+  it("keeps the follow lens and its sight line clear all the way down the hold stairs", () => {
+    const { base, hold } = pirateShipGeometries();
+    const wood = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const deckMesh = new THREE.Mesh(base, wood);
+    const roomMeshes = [deckMesh, new THREE.Mesh(hold, wood)];
+    const lens = new THREE.Vector3(), target = new THREE.Vector3(), direction = new THREE.Vector3();
+    const feet = new THREE.Vector3(), ray = new THREE.Raycaster();
+    const profile = cameraProfileAt({ ...shipWorld(HOLD_ENTRY), y: DECK_Y, climbing: false, cloud: false });
+    expect(profile.id).toBe("pirate-ship");
+    for (const x of [HOLD_ENTRY.x - 0.26, HOLD_ENTRY.x, HOLD_ENTRY.x + 0.26]) {
+      let inside = false;
+      for (let i = 0; i <= 120; i++) {
+        const z = THREE.MathUtils.lerp(HOLD_RAMP.z1 + 0.6, HOLD_RAMP.z0 - 0.58, i / 120);
+        inside = holdLayerAt(x, z, inside);
+        const y = shipFloorY(x, z, inside)!;
+        const player = { ...shipWorld({ x, z }), y };
+        expect(holdFollowPose(player, inside, profile, lens, target)).not.toBeNull();
+        // ArrowUp is the horizontal direction from the rendered lens to target.
+        expect(lens.x).toBeCloseTo(target.x, 6);
+        expect(target.z).toBeLessThan(lens.z - 0.5);
+
+        lens.x -= SHIP.x;
+        lens.z -= SHIP.z;
+        target.x -= SHIP.x;
+        target.z -= SHIP.z;
+        if (lens.y < DECK_Y) {
+          const bounds = lens.z >= HOLD_RAMP.z0 ? HOLD_RAMP : HOLD;
+          expect(lens.x).toBeGreaterThan(bounds.x0 + 0.1);
+          expect(lens.x).toBeLessThan(bounds.x1 - 0.1);
+          expect(lens.z).toBeGreaterThan(bounds.z0 - 0.1);
+          expect(lens.z).toBeLessThan(bounds.z1);
+          if (bounds === HOLD) expect(lens.y).toBeLessThan(HOLD_CEILING_Y - 0.1);
+          expect(HOLD_SOLIDS.some(box => touches(box, lens.x, lens.z, 0))).toBe(false);
+          expect(Math.hypot(lens.x - HOLD_PILLAR.x, lens.z - HOLD_PILLAR.z)).toBeGreaterThan(HOLD_PILLAR.r);
+        }
+        expect(lens.y).toBeGreaterThan(HOLD_STAIRS.floorY(lens.z) + 0.15);
+        feet.set(x, y + 0.12, z);
+        for (const point of [feet, target]) {
+          direction.subVectors(point, lens);
+          ray.far = direction.length() - 0.001;
+          ray.set(lens, direction.normalize());
+          expect(ray.intersectObjects(inside ? roomMeshes : [deckMesh]), `sight line at x=${x}, z=${z}`).toHaveLength(0);
+        }
+      }
+      expect(inside).toBe(true);
+    }
     wood.dispose();
   });
 });
