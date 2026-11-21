@@ -269,12 +269,31 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 800
     }
 
     const entry = { x: HOLD_ENTRY.x, z: HOLD_RAMP.z1 + 0.6 };
+    const hatch = { x: entry.x, z: (HOLD_RAMP.z0 + HOLD_RAMP.z1) / 2 };
+    const deckSides = [
+      ["aft", entry],
+      ["forward", { x: hatch.x, z: HOLD_RAMP.z0 - 1.1 }],
+      ["port", { x: HOLD_RAMP.x0 - 0.95, z: hatch.z }],
+      ["starboard", { x: HOLD_RAMP.x1 + 0.95, z: hatch.z }],
+    ] as const;
+    await hook(page, "follow");
+    for (const [side, stand] of deckSides) {
+      const at = L(stand.x, stand.z);
+      await face(page, stand, L(hatch.x, hatch.z), false);
+      await shotReady(page, `deck follow view from the ${side} side of the hatch`, s => s.camera.mode === "follow"
+        && s.camera.profile === "pirate-ship" && Math.abs(s.player.y - DECK_Y) < 0.03
+        && Math.hypot(s.player.x - at.x, s.player.z - at.z) < 0.08
+        && Math.abs(s.camera.target.x - s.player.x) < 0.06 && s.camera.pos.z > s.player.z);
+      await hook(page, "renderFrames", 2);
+      await detail(`hatch-follow-${side}`);
+    }
     await face(page, entry, L(entry.x, HOLD_RAMP.z0), false);
     await shotReady(page, "on deck at the hatch", s => Math.abs(s.player.y - DECK_Y) < 0.03 && s.camera.profile === "pirate-ship"
       && Math.hypot(s.player.x - L(entry.x, entry.z).x, s.player.z - L(entry.x, entry.z).z) < 0.08);
     await look("hatch-from-deck", [SHIP.x + entry.x + 1.2, DECK_Y + 3.8, SHIP.z + entry.z + 1.9], [SHIP.x + entry.x, DECK_Y - 0.8, SHIP.z + 0.45]);
     await hook(page, "follow");
-    await shotReady(page, "follow view lined up for descent", s => s.camera.mode === "follow" && Math.abs(s.camera.pos.x - s.player.x) < 0.06);
+    await shotReady(page, "follow view lined up for descent", s => s.camera.mode === "follow"
+      && Math.abs(s.camera.pos.x - s.player.x) < 0.06 && s.camera.pos.z > s.player.z && Math.abs(s.camera.yaw) < 0.05);
     const upper = HOLD_RAMP.z1;
     const descent = [upper - 0.39, upper - 0.98, upper - 1.56, upper - 2.18, HOLD_PORTAL.enterZ - 0.16, HOLD_RAMP.z0 + 0.12];
     await hook(page, "timeScale", 0.18);
@@ -283,10 +302,16 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 800
       for (const [i, z] of descent.entries()) {
         const profile = z > HOLD_PORTAL.enterZ ? "pirate-ship" : "pirate-hold";
         const name = `down-0${i + 1}`;
-        await shotReady(page, name, s => s.player.z <= SHIP.z + z && s.player.z >= SHIP.z + z - 0.22 && s.camera.profile === profile);
-        await hook(page, "timeScale", 0);
-        if (i === 4) await page.waitForFunction(() => !document.querySelector(".voyage-flash")?.getAnimations().some(a => a.playState === "running"),
-          undefined, { timeout: 3000 }).catch(error => { throw new Error("HARNESS_PRECONDITION_FAILED - hold camera fade cleared", { cause: error }); });
+        await shotReady(page, `${name} at the expected stair depth`, s => s.player.z <= SHIP.z + z
+          && s.player.z >= SHIP.z + z - 0.22 && s.camera.profile === profile);
+        // A zero delta while walking corrupts the movement velocity. Keep
+        // ArrowUp down and advance the clock slowly through the capture.
+        await hook(page, "timeScale", 0.005);
+        await shotReady(page, `${name} following the player down the stairs`, s => s.camera.mode === "follow"
+          && Math.abs(s.camera.target.x - s.player.x) < 0.06 && Math.abs(s.camera.target.z - s.player.z) < 0.06
+          && Math.abs(s.camera.target.y - s.player.y - 0.92) < 0.06
+          && s.camera.pos.z > s.player.z && Number.isFinite(s.camera.pos.y) && Math.abs(s.camera.yaw) < 0.05);
+        await hook(page, "renderFrames", 2);
         await detail(name);
         await hook(page, "timeScale", 0.18);
       }

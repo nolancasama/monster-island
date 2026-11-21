@@ -15,8 +15,9 @@ import { MONSTERS } from "../game/data/monsters";
 import { updateOccluderFade } from "./materials";
 import { voyageRoll } from "./voyageWeather";
 import { updateHoldView, vy } from "../game/voyageRt";
-import { HOLD, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_HEADER_Y, HOLD_RAMP, HOLD_Y, SHIP, inShipArea } from "../game/world/pirateShip";
+import { HOLD, HOLD_CEILING_Y, HOLD_Y, SHIP, inShipArea } from "../game/world/pirateShip";
 import { closeUpEase } from "../game/flow/closeUp";
+import { holdFollowPose } from "./holdCamera";
 
 /** The live camera, for projecting world labels to the screen. */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -69,7 +70,8 @@ export function CameraRig() {
     const aboard = vy.active && rt.world === "home" && !rt.voyage.active && inShipArea(p.x, p.z);
     if (!updateHoldView(p.x, p.z, aboard)) return;
     holdFade.current?.cancel();
-    if (aboard && !rt.camera.snap) {
+    // The follow lens stays on the same path across the floor hand-off.
+    if (aboard && rt.camera.mode === "shot" && !rt.camera.snap) {
       holdFade.current = document.querySelector(".voyage-flash")?.animate([
         { opacity: 1, backgroundColor: "#170f0a" },
         { opacity: 0, backgroundColor: "#170f0a" },
@@ -147,6 +149,10 @@ export function CameraRig() {
       framing.current.yaw = c.snap ? target.yaw : c.yaw + d * (1 - Math.exp(-dt * 3));
     }
     c.profile = inside ? "pirate-hold" : ferryBank ? "grove-stream-ferry" : selected.id;
+    const holdFollow = (inside || g.screen === "game" && selected.id === "pirate-ship" && vy.active && !rt.voyage.active) && !ferryBank && !rope
+      && (c.mode === "follow" || inside && !c.shot)
+      ? holdFollowPose(p, inside, framing.current, want.current, wantLook.current)
+      : null;
     if (rope && !wasRope) {
       ropeAge.current = 0;
       ropeOffset.set(pos.current.x - p.x, pos.current.y - p.y, pos.current.z - p.z);
@@ -183,34 +189,22 @@ export function CameraRig() {
       const horizontal = selected.dist * Math.cos(selected.pitch);
       want.current.set(p.x + Math.sin(selected.yaw) * horizontal, p.y + 1.1 + selected.dist * Math.sin(selected.pitch), p.z + Math.cos(selected.yaw) * horizontal);
       wantLook.current.set(p.x, p.y + 1.1, p.z);
-    } else if (inside) {
-      const shot = c.mode === "shot" ? c.shot : null;
-      const clamp = THREE.MathUtils.clamp;
-      const eyeY = HOLD_CEILING_Y - 0.26;
-      const aftWall = SHIP.z + HOLD.z1 - 0.3;
-      const shaftX = SHIP.x + HOLD_ENTRY.x;
-      // Follow through the doorway while lined up with the stairs. As the
-      // player enters the room or turns aside, bring the lens inside the wall.
-      const shaft = shot ? 0 : (1 - THREE.MathUtils.smoothstep(SHIP.z + HOLD.z1 - p.z, 0, 1.65))
-        * (1 - THREE.MathUtils.smoothstep(Math.abs(p.x - shaftX), 0.41, 0.62));
-      const followZ = p.z + 4.1;
-      const roomZ = clamp(shot?.pos.z ?? followZ, SHIP.z + HOLD.z0 + 0.3, aftWall);
-      const stairZ = Math.min(followZ, SHIP.z + HOLD_RAMP.z1 - 0.65);
-      const roomX = shot?.pos.x ?? p.x + (SHIP.x - p.x) * (1 - THREE.MathUtils.smoothstep(roomZ - p.z, 0.25, 1.5)) * 0.35;
-      const z = THREE.MathUtils.lerp(roomZ, stairZ, shaft);
-      const inShaft = z > aftWall;
-      want.current.set(
-        clamp(THREE.MathUtils.lerp(roomX, shaftX, shaft), SHIP.x + (inShaft ? HOLD_RAMP.x0 : HOLD.x0) + 0.3,
-          SHIP.x + (inShaft ? HOLD_RAMP.x1 : HOLD.x1) - 0.3),
-        shot ? clamp(shot.pos.y, HOLD_Y + 1.3, eyeY) : THREE.MathUtils.lerp(eyeY, HOLD_HEADER_Y - 0.08, shaft),
-        z,
-      );
-      wantLook.current.set(shot?.target.x ?? p.x, Math.min(shot?.target.y ?? p.y + 0.92, HOLD_CEILING_Y - 0.14), shot?.target.z ?? p.z);
-      // A scripted cargo close-up can be pinned close to a wall. Aim from the aisle.
-      if (shot && want.current.distanceTo(wantLook.current) < 1.4) {
-        want.current.x = wantLook.current.x + (wantLook.current.x > SHIP.x ? -1.8 : 1.8);
+    } else if (inside || holdFollow !== null) {
+      if (c.mode === "shot" && c.shot) {
+        const shot = c.shot;
+        const clamp = THREE.MathUtils.clamp;
+        want.current.set(
+          clamp(shot.pos.x, SHIP.x + HOLD.x0 + 0.3, SHIP.x + HOLD.x1 - 0.3),
+          clamp(shot.pos.y, HOLD_Y + 1.3, HOLD_CEILING_Y - 0.26),
+          clamp(shot.pos.z, SHIP.z + HOLD.z0 + 0.3, SHIP.z + HOLD.z1 - 0.3),
+        );
+        wantLook.current.set(shot.target.x, Math.min(shot.target.y, HOLD_CEILING_Y - 0.14), shot.target.z);
+        // A scripted cargo close-up can be pinned close to a wall. Aim from the aisle.
+        if (want.current.distanceTo(wantLook.current) < 1.4) {
+          want.current.x = wantLook.current.x + (wantLook.current.x > SHIP.x ? -1.8 : 1.8);
+        }
       }
-      c.framing = shot ? "shot" : "fixed";
+      c.framing = c.mode === "shot" && c.shot ? "shot" : "fixed";
       c.yaw = Math.atan2(want.current.x - wantLook.current.x, want.current.z - wantLook.current.z);
       c.pitch = Math.atan2(want.current.y - wantLook.current.y, Math.hypot(want.current.x - wantLook.current.x, want.current.z - wantLook.current.z));
       c.dist = want.current.distanceTo(wantLook.current);
@@ -297,9 +291,9 @@ export function CameraRig() {
       c.ease = 0;
     }
     // A cut, the hold, a rope or the ferry take over from a close-up blend.
-    if (c.snap || inside || rope || ferryBank) easeAge.current = easeDur.current;
+    if (c.snap || inside || holdFollow !== null || rope || ferryBank) easeAge.current = easeDur.current;
     const easing = ready.current && easeAge.current < easeDur.current;
-    if (!easing && (inside || !ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank)) {
+    if (!easing && (inside || holdFollow !== null || !ready.current || rt.voyage.active || c.snap && !rope && !leavingRope && !ferryBank)) {
       pos.current.copy(want.current);
       look.current.copy(wantLook.current);
       ready.current = true;
@@ -354,7 +348,8 @@ export function CameraRig() {
     const cam = camera as THREE.PerspectiveCamera;
     // The mountain's real beacon and the nearby player need a taller sky view
     // than the lowland. Physical follow offsets remain exactly the same.
-    const lensFov = inside ? 72 : ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
+    const lensFov = holdFollow !== null ? THREE.MathUtils.lerp(selected.fov ?? 55, 72, holdFollow)
+      : inside ? 72 : ferryBank ? GROVE_FERRY_SHOT.fov : cloud || c.framing === "fixed" || lowland ? selected.fov ?? 55 : rt.voyage.active ? 65 : 55;
     // Gull's spyglass narrows the lens toward SPYGLASS_FOV (eased, so the zoom starts and lands gently).
     const spy = vy.spyglass * vy.spyglass * (3 - 2 * vy.spyglass);
     const fov = spy > 0 ? lensFov + (SPYGLASS_FOV - lensFov) * spy : lensFov;
