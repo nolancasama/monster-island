@@ -10,7 +10,7 @@ import { cb, mountPose, mounted } from "./combat";
 import { monsterRootY } from "./ride";
 import { EMBER_MOUTH, PUFF_BEAK } from "../scene/anchors";
 import { BUBBO_MOUTH, voyageEmitter } from "../scene/voyageAnchors";
-import { tickStormPanic } from "./flow/voyageStorm";
+import { tickStormPanic } from "./voyagePanic";
 
 /**
  * The pirate voyage's free play (docs/PIRATE_VOYAGE.md §3–§5): the running
