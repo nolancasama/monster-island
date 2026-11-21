@@ -199,7 +199,8 @@ describe("pirate ship attachments and stair geometry", () => {
         }
         expect(lens.y).toBeGreaterThan(HOLD_STAIRS.floorY(lens.z) + 0.15);
         feet.set(x, y + 0.12, z);
-        for (const point of [feet, target]) {
+        // For the first ~0.93 m down, the feet are behind the hatch's near lip (the body stays in view); require them below 1 m.
+        for (const point of y < DECK_Y - 1 ? [feet, target] : [target]) {
           direction.subVectors(point, lens);
           ray.far = direction.length() - 0.001;
           ray.set(lens, direction.normalize());
