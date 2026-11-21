@@ -5,7 +5,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { boot, chooseMode, hook, state, tap, teleportShip, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
-import { COUNTER_CUSTOMER, DECK_Y, FISH_LANDING_Z, FISH_Y, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_RAMP, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES, crateApproach } from "../../src/game/world/pirateShip";
+import { CANNONS, COUNTER_CUSTOMER, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_RAMP, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES, crateApproach, hullHalf } from "../../src/game/world/pirateShip";
+import { PLAYER_R } from "../../src/game/world/collision";
 import { PHRASES } from "../../src/game/logic/english";
 import { CARGO_ITEMS, ITEM_NAME, RAFT_STEER_STEPS, SHIP_STEER_STEPS, SLOTS, STEER_COMMANDS, placePhrase, steerAttempt, steerCall, type CargoItem, type Furniture, type Lane, type Placement } from "../../src/game/logic/voyage";
 
@@ -544,6 +545,79 @@ test("fishing stairs and galley polish", async ({ page }) => {
   await shotReady(page, "Cook Pepper within reach across the counter", s => s.focus?.id === "crew:pepper");
   await snap(page, "galley-pepper-counter");
 });
+
+for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }]) {
+  const size = `${viewport.width}x${viewport.height}`;
+  test(`fishing platform and cannon ports at ${size}`, async ({ page }) => {
+    test.skip(ONLY !== "exterior");
+    test.setTimeout(120_000);
+    await boardForShots(page, viewport);
+    const exterior = (name: string) => snap(page, `exterior-${size}-${name}`);
+    type Point = [number, number, number];
+    async function look(name: string, from: Point, at: Point) {
+      const lens = [SHIP.x + from[0], from[1], SHIP.z + from[2]];
+      const target = [SHIP.x + at[0], at[1], SHIP.z + at[2]];
+      await hook(page, "look", lens, target);
+      await shotReady(page, `${name} camera`, s => s.camera.mode === "shot"
+        && Math.hypot(s.camera.pos.x - lens[0], s.camera.pos.y - lens[1], s.camera.pos.z - lens[2]) < 0.06
+        && Math.hypot(s.camera.target.x - target[0], s.camera.target.y - target[1], s.camera.target.z - target[2]) < 0.06);
+      await hook(page, "renderFrames", 2);
+    }
+
+    await look("fishing from deck", [3.65, DECK_Y + 2.2, 12.4], [0.4, FISH_Y + 0.25, 16.7]);
+    await exterior("fishing-from-deck");
+    await look("fishing from sea", [-5.2, FISH_Y + 2.1, 24], [0.4, FISH_Y + 0.6, 16.3]);
+    await exterior("fishing-from-sea");
+
+    const { x0, x1, z0, z1 } = FISH_DECK;
+    for (const { name, x, z, dx, dz } of [
+      { name: "port", x: x0, z: 17.22, dx: -1, dz: 0 },
+      { name: "starboard", x: x1, z: 17.22, dx: 1, dz: 0 },
+      { name: "aft", x: 1, z: z1, dx: 0, dz: 1 },
+      { name: "forward", x: 1, z: z0, dx: 0, dz: -1 },
+    ]) {
+      const start = L(x - dx * 1.45, z - dz * 1.45), edge = L(x, z);
+      const gap = (p: { x: number; z: number }) => dx * (edge.x - p.x) + dz * (edge.z - p.z);
+      await teleportShip(page, start.x, start.z, Math.atan2(dx, dz), false);
+      await shotReady(page, `free to walk towards the ${name} edge`, s => s.mode === "explore" && !s.player.frozen
+        && !s.player.riding && !s.player.falling && Math.abs(s.player.y - FISH_Y) < 0.03
+        && Math.hypot(s.player.x - start.x, s.player.z - start.z) < 0.05);
+      const setback = dz === 1 ? 2.4 : 4.1;
+      await look(`${name} edge`, [x - dx * setback, FISH_Y + 2.65, z - dz * setback], [x, FISH_Y + 0.2, z]);
+      await hook(page, "timeScale", 0.25);
+      await page.keyboard.down("ArrowUp");
+      try {
+        await shotReady(page, `walking towards the ${name} edge`, s => gap(s.player) < 1.18);
+        await hook(page, "timeScale", 0.02);
+        await exterior(`edge-${name}-approach`);
+        await hook(page, "timeScale", 0.25);
+        const startTime = (await state(page)).time;
+        await shotReady(page, `movement time elapsed at the ${name} edge`, s => s.time >= startTime + 0.75);
+        const atEdge = await state(page);
+        expect(gap(atEdge.player), `${name} edge holds the player's full footprint`).toBeGreaterThanOrEqual(PLAYER_R - 0.001);
+        expect(gap(atEdge.player), `player can walk up to the ${name} edge`).toBeLessThan(PLAYER_R + 0.065);
+        expect(atEdge.player.y).toBeCloseTo(FISH_Y, 2);
+        await exterior(`edge-${name}-blocked`);
+      } finally {
+        await page.keyboard.up("ArrowUp");
+        await hook(page, "timeScale", 1);
+      }
+    }
+
+    const midship = L(2.1, 3.4);
+    await teleportShip(page, midship.x, midship.z, Math.PI, false);
+    await shotReady(page, "standing on the main deck for the cannon views", s => Math.abs(s.player.y - DECK_Y) < 0.03
+      && Math.hypot(s.player.x - midship.x, s.player.z - midship.z) < 0.05);
+    for (const { z, side } of CANNONS) {
+      const wall = hullHalf(z), name = `port-${side < 0 ? "port" : "starboard"}-${z < 0 ? "forward" : z < 1 ? "middle" : "aft"}`;
+      const target: Point = [side * wall, DECK_Y + 0.45, z];
+      await look(`${name} from hull`, [side * (wall + 3.2), DECK_Y + 0.62, z + 1.05], target);
+      await exterior(`${name}-from-hull`);
+      await look(`${name} from deck`, [side * (wall - 2.6), DECK_Y + 1.42, z + 1.35], target);
+      await exterior(`${name}-from-deck`);
+    }
+  });
+}
 
 const CARGO_STANDS: Record<Furniture, { x: number; z: number }> = {
   table: { x: SPOT.table.x - 1.9, z: SPOT.table.z },

@@ -35,6 +35,10 @@ function hullRing(b: PartBuilder, y0: number, y1: number, color: string, outer =
   const g = new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false, curveSegments: 1 });
   g.rotateX(-Math.PI / 2);
   b.add(g, color, [0, y0, 0]);
+  hullTransom(b, y0, y1, color, outer);
+}
+
+function hullTransom(b: PartBuilder, y0: number, y1: number, color: string, outer: number) {
   const half = hullHalf(STERN_Z) - outer;
   const transom = (x0: number, x1: number, top: number) =>
     b.box(x1 - x0, top - y0, 0.2, (x0 + x1) / 2, y0, STERN_Z + 0.1, color);
@@ -42,6 +46,57 @@ function hullRing(b: PartBuilder, y0: number, y1: number, color: string, outer =
   transom(STERN_RAMP.x1, half, y1);
   const landingBase = FISH_Y - FISH_PLATFORM_DEPTH - 0.01;
   if (y0 < landingBase) transom(STERN_RAMP.x0, STERN_RAMP.x1, Math.min(y1, landingBase));
+}
+
+const CANNON_BARREL = { radius: 0.15, length: 1.1, offset: 0.35, y: DECK_Y + 0.45 };
+const PORT_HALF = CANNON_BARREL.radius + 0.08;
+const PORT_FRAME = 0.09, PORT_TRIM = 0.045;
+
+function portRectangle(z: number, half: number) {
+  const y = CANNON_BARREL.y;
+  return [new THREE.Vector2(z - half, y - half), new THREE.Vector2(z + half, y - half),
+    new THREE.Vector2(z + half, y + half), new THREE.Vector2(z - half, y + half)];
+}
+
+/** The stripe and gold cap close the bottom and top of these planking faces. */
+function bulwark(b: PartBuilder, y0: number, y1: number) {
+  for (const inset of [0, BULWARK_THICKNESS]) {
+    // These stations are the corners of the same piecewise-linear hull outline.
+    const stations = [STERN_Z, 13, -13, BOW_Z];
+    const half = (z: number) => Math.max(0.05, hullHalf(z) - inset);
+    const edge: Array<[number, number]> = [
+      ...stations.map((z): [number, number] => [half(z), z]),
+      [0, stemZ(inset)],
+      ...stations.reverse().map((z): [number, number] => [-half(z), z]),
+    ];
+    if (inset) edge.reverse();
+    for (let i = 1; i < edge.length; i++) {
+      const [x, z] = edge[i - 1];
+      const dx = edge[i][0] - x, dz = edge[i][1] - z, length = Math.hypot(dx, dz);
+      const face = new THREE.Shape([
+        new THREE.Vector2(0, y0), new THREE.Vector2(length, y0),
+        new THREE.Vector2(length, y1), new THREE.Vector2(0, y1),
+      ]);
+      if (dx === 0) {
+        for (const cannon of CANNONS) {
+          if (cannon.side === Math.sign(x) && cannon.z > Math.min(z, z + dz) && cannon.z < Math.max(z, z + dz)) {
+            face.holes.push(new THREE.Path(portRectangle(Math.abs(cannon.z - z), PORT_HALF + PORT_FRAME)));
+          }
+        }
+      }
+      b.add(new THREE.ShapeGeometry(face), WOOD, [x, 0, z], [0, Math.atan2(-dz, dx), 0], [1, 1, 1], { vary: false });
+    }
+  }
+  hullTransom(b, y0, y1, WOOD, 0);
+
+  // Each frame lines the opening through the wall, with a raised rim on both faces.
+  for (const { z, side } of CANNONS) {
+    const profile = new THREE.Shape(portRectangle(z, PORT_HALF + PORT_FRAME));
+    profile.holes.push(new THREE.Path(portRectangle(z, PORT_HALF)));
+    const frame = new THREE.ExtrudeGeometry(profile, { depth: BULWARK_THICKNESS + 2 * PORT_TRIM, bevelEnabled: false });
+    const startX = side * hullHalf(z) + (side < 0 ? BULWARK_THICKNESS : 0) + PORT_TRIM;
+    b.add(frame, PLANK, [startX, 0, 0], [0, -Math.PI / 2, 0]);
+  }
 }
 
 /** A flat horizontal shape at height y from local (x, z) points. */
@@ -253,7 +308,7 @@ export function pirateShipGeometries(): ShipGeometries {
   // Hull: dark lower hull, a red stripe, wooden bulwarks with a gold cap.
   hullRing(b, HULL_BOTTOM, DECK_Y - 0.45, DARK, 0, LOWER_HULL_THICKNESS);
   hullRing(b, DECK_Y - 0.45, DECK_Y - 0.15, RED, -0.02, 0.37);
-  hullRing(b, DECK_Y - 0.15, DECK_Y + 0.85, WOOD, 0, BULWARK_THICKNESS);
+  bulwark(b, DECK_Y - 0.15, DECK_Y + 0.85);
   hullRing(b, DECK_Y + 0.85, DECK_Y + 0.95, GOLD, -0.03, 0.36);
   // The deck covers the hold from bow to stern, with a single guarded hatch.
   const inner = outline(BULWARK_THICKNESS).map((v): [number, number] => [v.x, -v.y]);
@@ -287,13 +342,6 @@ export function pirateShipGeometries(): ShipGeometries {
   ], DECK_Y + 0.004, "#a3784a");
 
   holdCompanionway(b);
-  const railLine = (x0: number, z0: number, x1: number, z1: number, y: number, endY = y) => {
-    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.1));
-    const postFoot = endY === y ? 0 : 0.25;
-    b.boxAt(Math.abs(x1 - x0) + 0.08, 0.08, Math.hypot(z1 - z0, endY - y) + 0.08,
-      [(x0 + x1) / 2, (y + endY) / 2 + 0.9, (z0 + z1) / 2], [-Math.atan2(endY - y, len), 0, 0], GOLD);
-    for (let i = 0; i <= n; i++) b.box(0.08, 0.9 + postFoot, 0.08, x0 + (x1 - x0) * i / n, y + (endY - y) * i / n - postFoot, z0 + (z1 - z0) * i / n, WOOD);
-  };
 
   // Open galley: stove and chimney, pot, supplies and a serving counter.
   const st = SPOT.stove;
@@ -334,7 +382,8 @@ export function pirateShipGeometries(): ShipGeometries {
   // Cannons along both rails, the helm, lanterns and stern windows.
   for (const { x, z, side: s } of CANNONS) {
     b.box(0.6, 0.3, 0.7, x, DECK_Y, z, "#5a3c26");
-    b.cylAt(0.15, 1.1, [x + s * 0.35, DECK_Y + 0.45, z], [0, 0, Math.PI / 2], IRON, 8);
+    const { radius, length, offset, y } = CANNON_BARREL;
+    b.cylAt(radius, length, [x + s * offset, y, z], [0, 0, Math.PI / 2], IRON, 8);
   }
   const hm = SPOT.helm;
   b.cyl(0.12, 0.16, 1.0, hm.x, DECK_Y, hm.z, "#5a3c26", 8);
@@ -349,10 +398,7 @@ export function pirateShipGeometries(): ShipGeometries {
 
   // The stern stairs down to the fishing deck, and the fishing deck itself.
   staircase(b, sr, STERN_STAIRS, true);
-  for (const x of [sr.x0 - 0.15, sr.x1 + 0.15]) {
-    railLine(x, sr.z0, x, sr.z1, DECK_Y, FISH_Y);
-  }
-  const fishDeckEnd = FISH_DECK.z1 + 0.25, left = FISH_DECK.x0 - 0.2, right = FISH_DECK.x1 + 0.2;
+  const { x0: left, x1: right, z1: fishDeckEnd } = FISH_DECK;
   const platform = new THREE.Shape([
     [left, fishDeckEnd], [right, fishDeckEnd], [right, FISH_DECK.z0], [sr.x1, FISH_DECK.z0],
     [sr.x1, FISH_LANDING_Z], [sr.x0, FISH_LANDING_Z], [sr.x0, FISH_DECK.z0], [left, FISH_DECK.z0],
@@ -360,11 +406,9 @@ export function pirateShipGeometries(): ShipGeometries {
   const fishingDeck = new THREE.ExtrudeGeometry(platform, { depth: FISH_PLATFORM_DEPTH, bevelEnabled: false });
   fishingDeck.rotateX(-Math.PI / 2);
   b.add(fishingDeck, PLANK, [0, FISH_Y - FISH_PLATFORM_DEPTH, 0]);
-  const fx = FISH_DECK.x1 + 0.1, fr = FISH_DECK.x1 + 0.15;
-  for (const [x, z] of [[-fx, 18.1], [fx, 18.1], [-fx, 15.6], [fx, 15.6]]) b.cyl(0.12, 0.12, 2.0, x, SEA_Y - 1.4, z, DARK, 6);
-  railLine(-fr, 18.15, fr, 18.15, FISH_Y);
-  railLine(-fr, 15.5, -fr, 18.15, FISH_Y);
-  railLine(fr, 15.5, fr, 18.15, FISH_Y);
+  for (const x of [left + 0.15, right - 0.15]) {
+    for (const z of [FISH_DECK.z0 + 0.2, fishDeckEnd - 0.15]) b.cyl(0.12, 0.12, 2.0, x, SEA_Y - 1.4, z, DARK, 6);
+  }
   // The fish bucket and a coiled net.
   const bk = BUCKET;
   b.cyl(0.32, 0.26, 0.5, bk.x, FISH_Y, bk.z, "#8a5a32", 10);

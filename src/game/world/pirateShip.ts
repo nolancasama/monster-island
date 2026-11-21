@@ -184,9 +184,7 @@ export const STOVE_SOLID = around(SPOT.stove, 0.7, -17.2, -15.8);
 /** Solid bands and furniture (local boxes). */
 export const SHIP_SOLIDS: Box[] = [
   ...HOLD_HATCH_GUARDS,
-  // The stern ramp's rails and the transom either side of it.
-  { x0: SR.x0 - 0.3, x1: SR.x0, z0: SR.z0, z1: SR.z1 },
-  { x0: SR.x1, x1: SR.x1 + 0.3, z0: SR.z0, z1: SR.z1 },
+  // The transom either side of the stern stairs.
   { x0: -HALF_BEAM, x1: SR.x0, z0: STERN_Z, z1: SR.z1 },
   { x0: SR.x1, x1: HALF_BEAM, z0: STERN_Z, z1: SR.z1 },
   // Galley fittings: the stove, supplies and counter.
