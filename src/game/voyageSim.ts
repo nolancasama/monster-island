@@ -10,6 +10,7 @@ import { cb, mountPose, mounted } from "./combat";
 import { monsterRootY } from "./ride";
 import { EMBER_MOUTH, PUFF_BEAK } from "../scene/anchors";
 import { BUBBO_MOUTH, voyageEmitter } from "../scene/voyageAnchors";
+import { tickStormPanic } from "./flow/voyageStorm";
 
 /**
  * The pirate voyage's free play (docs/PIRATE_VOYAGE.md §3–§5): the running
@@ -193,6 +194,7 @@ export function voyageTick(dt: number, holdJ: boolean) {
   vy.laneVis += (vy.lane - vy.laneVis) * Math.min(1, dt * 1.4);
   vy.shipBob = vy.active ? Math.sin(rt.time * 0.9) * 0.04 * (1 + vy.storm * 3) : 0;
   vy.phase?.tick?.(dt);
+  tickStormPanic(dt);
 }
 
 /** The voyage's active friend (null before the party exists). */

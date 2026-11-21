@@ -1,15 +1,15 @@
 import { COMPANION_IDS, type CompanionId } from "../data/combat";
 import { MONSTERS } from "../data/monsters";
-import { setGame, updateProgress } from "../store";
+import { getGame, setGame, updateProgress } from "../store";
 import { animate, rt } from "../runtime";
 import { DECK_Y, SHIP, SPOT, shipWorld } from "../world/pirateShip";
 import { setVoyageStage } from "../logic/voyage";
-import { vy, type CrewId } from "../voyageRt";
+import { CREW_IDS, voyageEpoch, vy, type CrewId, type StormAction } from "../voyageRt";
 import { L, SAIL_AIM, activeFriend, aim, setPhase, sparkleAt, stanceReady, steamAt, toolFx, type Phase } from "../voyageSim";
 import { ask, say, wait } from "./ask";
 import { shot } from "./script";
 import { switchTo } from "./companion";
-import { ease, lerp, over, placeOnDeck, scene, setScene, until } from "./voyage";
+import { ease, lerp, over, placeOnDeck, scene, setScene, until, VoyageCancelled } from "./voyage";
 import { cheer } from "./voyageJobs";
 import { startRaft } from "./voyageRaft";
 import { saveNow } from "./story";
@@ -24,6 +24,85 @@ import type { PhraseId } from "../logic/english";
 
 const say1 = (id: PhraseId, help: string) => ask({ kind: "command", options: [id], tapAlways: true, readSentence: true, help });
 let nextBolt = 0;
+
+type DeckPoint = { x: number; z: number };
+interface EmergencyRoute {
+  start: DeckPoint;
+  path: readonly DeckPoint[];
+  yaw: number;
+  action: StormAction;
+}
+
+// The routes keep the middle of the deck and its approaches to the loose barrels, the mast
+// and the fallen spar open for the player.
+export const EMERGENCY_ROUTES: Record<Exclude<CrewId, "gull">, EmergencyRoute> = {
+  tom: { start: SPOT.crew[0], path: [{ x: 2.25, z: -8.25 }, { x: 5.45, z: -8.25 }], yaw: Math.PI / 2, action: "haul" },
+  sam: { start: SPOT.crew[1], path: [{ x: 1.7, z: -7.0 }, { x: 5.45, z: -6.85 }], yaw: Math.PI / 2, action: "haul" },
+  max: { start: SPOT.crew[2], path: [{ x: 4.55, z: -13.35 }, { x: 4.55, z: -15.45 }, { x: 2.2, z: -18.1 }], yaw: Math.PI, action: "brace" },
+  bill: { start: SPOT.bill, path: [{ x: -1.85, z: 0.75 }], yaw: -Math.PI / 2, action: "brace" },
+  finn: { start: SPOT.finn, path: [{ x: -3.3, z: 17.35 }], yaw: -0.6, action: "haul" },
+  pepper: { start: SPOT.cook, path: [{ x: 1.35, z: -16.5 }], yaw: -Math.PI / 2, action: "brace" },
+  redbeard: { start: SPOT.captain, path: [{ x: -0.95, z: 11.65 }], yaw: Math.PI, action: "direct" },
+};
+const RUN_SPEED = 4.2;
+
+function startPanic() {
+  vy.panic = { wide: rt.camera.shot, elapsed: 0, paused: false, brace: 0, openingFlash: vy.flash };
+  for (const id of CREW_IDS) {
+    if (id === "gull") continue;
+    vy.crew[id].panic = { action: EMERGENCY_ROUTES[id].action, next: 0 };
+  }
+}
+
+/** Simulate in ship space so the renderer, dialogue and the harness see the same crew positions. */
+export function tickStormPanic(dt: number) {
+  const panic = vy.panic;
+  if (!panic) return;
+  const g = getGame();
+  const wide = panic.wide, shot = rt.camera.shot;
+  // Returning from a close-up can restore a copy of the original wide lens.
+  const openingWide = wide && shot && rt.camera.mode === "shot"
+    && wide.pos.x === shot.pos.x && wide.pos.y === shot.pos.y && wide.pos.z === shot.pos.z
+    && wide.target.x === shot.target.x && wide.target.y === shot.target.y && wide.target.z === shot.target.z;
+  panic.paused = Boolean(g.line || g.prompt || g.journalOpen || g.settingsOpen
+    || (!openingWide && (g.mode !== "explore" || rt.camera.mode !== "follow")));
+  const age = rt.time - vy.flash;
+  panic.brace = vy.flash !== panic.openingFlash && age >= 0 && age < 0.65 ? Math.sin(age * Math.PI / 0.65) : 0;
+  if (panic.paused || dt <= 0) return;
+
+  panic.elapsed += dt;
+  for (let i = 0; i < CREW_IDS.length; i++) {
+    const id = CREW_IDS[i];
+    if (id === "gull") continue;
+    const c = vy.crew[id], route = EMERGENCY_ROUTES[id];
+    if (!c.panic) continue;
+    let stride = RUN_SPEED * dt * (1 - 0.7 * panic.brace);
+    while (c.panic.next !== null && stride > 0) {
+      const target = route.path[c.panic.next];
+      const dx = target.x - c.x, dz = target.z - c.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > stride) {
+        c.yaw = Math.atan2(dx, dz);
+        c.x += dx * stride / distance;
+        c.z += dz * stride / distance;
+        break;
+      }
+      c.x = target.x;
+      c.z = target.z;
+      stride -= distance;
+      c.panic.next++;
+      if (c.panic.next === route.path.length) {
+        c.panic.next = null;
+        c.yaw = route.yaw;
+      }
+    }
+  }
+}
+
+function stopPanic() {
+  vy.panic = null;
+  for (const id of CREW_IDS) vy.crew[id].panic = null;
+}
 
 /** Lightning now and then while the storm blows (no draw calls: a flash and a rumble). */
 function weather() {
@@ -53,9 +132,19 @@ const readyOnDeck = (friend: CompanionId) => !vy.inHold && stanceReady(friend);
 
 export async function startStorm() {
   if (!vy.active) setScene();
+  const epoch = voyageEpoch();
+  stopPanic();
+  nextBolt = rt.time;
   vy.flow = 1.2; vy.cut = true; vy.sewn = 1; vy.mastFall = 0; vy.shipPitch = 0; vy.shipRoll = 0; vy.shipSink = 0; vy.lifeboats = 0;
   vy.barrels = []; vy.fires = []; vy.spar = null;
-  for (const id of Object.keys(vy.crew) as CrewId[]) vy.crew[id].visible = true;
+  for (const id of CREW_IDS) {
+    const c = vy.crew[id];
+    c.visible = true;
+    if (id === "gull") continue;
+    const { x, z } = EMERGENCY_ROUTES[id].start;
+    c.x = x;
+    c.z = z;
+  }
   audio.startMusic("danger");
   await scene(async () => {
     rt.player.frozen = true;
@@ -64,17 +153,23 @@ export async function startStorm() {
     await over(3, (k) => { vy.storm = lerp(from, 1, ease(k)); if (k > 0.5) weather(); });
     vy.storm = 1;
     await say("redbeard", "A storm! Hold on, crew!", "あらしだ! みんな つかまれ!");
+    if (epoch !== voyageEpoch()) throw new VoyageCancelled();
+    startPanic();
+    await until(() => CREW_IDS.every(id => vy.crew[id].panic?.next == null));
+    if (vy.panic) vy.panic.wide = null;
   });
+  if (epoch !== voyageEpoch()) throw new VoyageCancelled();
   await barrels();
   await fires();
   await torn();
   await spar();
+  stopPanic();
   await breakUp();
 }
 
 // ------------------------------------------------------------ 1. barrels (Leafy)
 
-const BARREL_LANES = [{ z: 1.6, x0: -1.35, x1: 4.8 }, { z: 4.6, x0: -4.95, x1: 4.95 }, { z: 6.4, x0: -4.95, x1: 4.95 }];
+export const BARREL_LANES = [{ z: 1.6, x0: -1.35, x1: 4.8 }, { z: 4.6, x0: -4.95, x1: 4.95 }, { z: 6.4, x0: -4.95, x1: 4.95 }];
 
 async function barrels() {
   vy.barrels = BARREL_LANES.map((l, i) => ({ x: lerp(l.x0, l.x1, 0.3 + i * 0.2), z: l.z, vx: (i % 2 ? -1 : 1) * (1.4 + i * 0.3), tied: false, t0: 0 }));
@@ -112,11 +207,13 @@ async function barrels() {
 
 // ------------------------------------------------------------ 2. fires (Bubbo)
 
+export const STORM_FIRES = [[-3.9, 5.2], [3.75, 8.6], [2.4, 0.6]] as const;
+
 async function fires() {
   await scene(async () => {
     rt.player.frozen = true;
     shot({ x: L(11.5, 0).x, y: DECK_Y + 11, z: L(0, 17).z }, { x: L(0, 0).x, y: DECK_Y, z: L(0, 3).z });
-    for (const [x, z] of [[-3.9, 5.2], [3.75, 8.6], [2.4, 0.6]]) {
+    for (const [x, z] of STORM_FIRES) {
       vy.flash = rt.time; audio.play("rumble");
       vy.fires.push({ x, z, out: false, t0: 0 });
       audio.play("crackle");
@@ -160,6 +257,7 @@ async function torn() {
   vy.sewn = 0; vy.sails[1] = 0.1;
   vy.flash = rt.time; audio.play("snap");
   // Two pirates come to sew.
+  vy.crew.tom.panic = vy.crew.sam.panic = null;
   vy.crew.tom.x = -0.6; vy.crew.tom.z = 4.2; vy.crew.sam.x = 3.0; vy.crew.sam.z = 4.5;
   await scene(async () => {
     rt.player.frozen = true;
@@ -215,14 +313,16 @@ async function torn() {
 
 // ------------------------------------------------------------ 4. the fallen spar (Leafy)
 
-const PINNED = { x: -2.7, z: -11.4 };
+export const PINNED = { x: -2.7, z: -11.4 };
+export const FALLEN_SPAR = { x: PINNED.x + 0.2, z: PINNED.z + 0.3 };
 
 async function spar() {
+  vy.crew.max.panic = null;
   vy.crew.max.x = PINNED.x; vy.crew.max.z = PINNED.z; vy.crew.max.yaw = 0.4;
   await scene(async () => {
     rt.player.frozen = true;
     vy.flash = rt.time; audio.play("snap");
-    vy.spar = { x: PINNED.x + 0.2, z: PINNED.z + 0.3, lift: 0 };
+    vy.spar = { ...FALLEN_SPAR, lift: 0 };
     audio.play("thud");
     await say("max", "Help me!", "たすけて!");
     await say1("whereIsHe", "「Where is he?」と きこう");

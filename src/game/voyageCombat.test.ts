@@ -5,11 +5,15 @@ import { getGame, setGame } from "./store";
 import { rt } from "./runtime";
 import { region } from "./world/region";
 import { isAttackHeld, pressAttack, releaseAllAttacks, releaseAttack } from "../input/attackInput";
-import { resetVoyageRt, restoreHold, updateHoldView, vy } from "./voyageRt";
+import { CREW_IDS, resetVoyageRt, restoreHold, updateHoldView, vy } from "./voyageRt";
 import { hand, isPosedToolFx, L, SAIL_AIM, setPhase, toolFx, usesStormCombatVisuals } from "./voyageSim";
 import { BOARDED, crewWorld, resumeVoyage, setScene, voyageAttack, voyageCandidates, VoyageCancelled, voyageInteract, voyageSavePoint } from "./flow/voyage";
 import { itemWorld, startJob } from "./flow/voyageJobs";
 import { startStorm } from "./flow/voyageStorm";
+import { closeUp, endCloseUp } from "./flow/closeUp";
+import { continueGame } from "./flow/story";
+import { encodeSave, writeSave } from "./logic/save";
+import { setVoyageStage } from "./logic/voyage";
 import { choose, nextLine, say } from "./flow/ask";
 import { switchTo } from "./flow/companion";
 import { run } from "./flow/script";
@@ -21,8 +25,8 @@ import { tick } from "./sim";
 import { placePlayer } from "./travel";
 import type { PhraseId } from "./logic/english";
 
-vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn(), cancelPanic: vi.fn(), stopFlame: vi.fn(), setListening: vi.fn(), setNearness: vi.fn() } }));
-vi.mock("../audio/tts", () => ({ tts: { speak: vi.fn(async () => {}), cancel: vi.fn() } }));
+vi.mock("../audio/audio", () => ({ audio: { play: vi.fn(), voice: vi.fn(), startMusic: vi.fn(), cancelPanic: vi.fn(), stopFlame: vi.fn(), setListening: vi.fn(), setNearness: vi.fn(), unlock: vi.fn(), setVolumes: vi.fn(), startAmbience: vi.fn() } }));
+vi.mock("../audio/tts", () => ({ tts: { speak: vi.fn(async () => {}), cancel: vi.fn(), setRate: vi.fn() } }));
 
 /** Aboard the pirate ship (docs/PIRATE_VOYAGE.md): J is the job tool, never ordinary combat. */
 beforeEach(() => {
@@ -369,6 +373,73 @@ describe("resumed voyage jobs in the frame loop", () => {
       resetVoyageRt();
       await vi.advanceTimersByTimeAsync(600);
       await running;
+    }
+  });
+
+  it("holds the storm run through dialogue and close-ups, then discards it on reset", async () => {
+    const running = startStorm().catch((error: unknown) => {
+      if (!(error instanceof VoyageCancelled)) throw error;
+    });
+    try {
+      await advanceUntil(() => getGame().line?.en === "A storm! Hold on, crew!");
+      frame();
+      expect(vy.panic).toBeNull();
+      nextLine();
+      await advanceUntil(() => (vy.panic?.elapsed ?? 0) > .1);
+      const tom = vy.crew.tom;
+      const at = { x: tom.x, z: tom.z, next: tom.panic?.next };
+      const line = say("redbeard", "Hold on!");
+      frame();
+      expect(vy.panic?.paused).toBe(true);
+      expect({ x: tom.x, z: tom.z, next: tom.panic?.next }).toEqual(at);
+      nextLine();
+      await line;
+
+      closeUp("tom");
+      frame();
+      expect(vy.panic?.paused).toBe(true);
+      expect({ x: tom.x, z: tom.z, next: tom.panic?.next }).toEqual(at);
+      endCloseUp();
+      frame();
+      expect(vy.panic?.paused).toBe(false);
+      expect(tom.z).toBeGreaterThan(at.z);
+    } finally {
+      resetVoyageRt();
+      await vi.advanceTimersByTimeAsync(600);
+      await running;
+    }
+    expect(vy.panic).toBeNull();
+    expect(CREW_IDS.every(id => vy.crew[id].panic === null)).toBe(true);
+  });
+
+  it("restarts panic from the opening order when loading a storm checkpoint", async () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
+    const progress = setVoyageStage({ ...getGame().progress, metMaple: true }, "storm");
+    progress.endings = 3;
+    progress.monsters.ember.invited = true;
+    progress.monsters.lumo = { ...progress.monsters.lumo, discovered: true, friend: true };
+    progress.solved = ["fallenPalm", "river", "bridge", "cliff", "lava", "cave", "gateLeaf", "gateDrop", "gateWing", "gateFlame"];
+    progress.act2.portFound = true;
+    writeSave(encodeSave(progress, { ...BOARDED, yaw: Math.PI }, 10));
+    const { settings } = getGame();
+    setGame({ settings: { ...settings, mic: false } });
+    vy.panic = { wide: null, elapsed: 8, paused: true, brace: 1, openingFlash: 0 };
+    vy.crew.tom.panic = { next: null, action: "haul" };
+    vy.crew.tom.x = 5.45;
+    try {
+      await continueGame();
+      expect(getGame().progress.act3.voyage.stage).toBe("storm");
+      expect(vy.panic).toBeNull();
+      expect(CREW_IDS.every(id => vy.crew[id].panic === null)).toBe(true);
+      expect(vy.crew.tom).toMatchObject(SPOT.crew[0]);
+      await advanceUntil(() => vy.panic !== null);
+      expect(vy.panic).toMatchObject({ paused: false, brace: 0 });
+      expect(vy.crew.tom.panic?.next).toBe(0);
+    } finally {
+      resetVoyageRt();
+      await vi.advanceTimersByTimeAsync(600);
+      setGame({ settings });
     }
   });
 

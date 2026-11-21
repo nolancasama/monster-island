@@ -306,7 +306,11 @@ export function installE2eHook(seed: number) {
         barrels: vy.barrels.map((b) => ({ ...w(b), tied: b.tied })), fires: vy.fires.map((f) => ({ ...w(f), out: f.out })),
         spar: vy.spar ? { ...w(vy.spar), lift: vy.spar.lift } : null,
         raft: { on: vy.raft.on, x: vy.raft.x, z: vy.raft.z, built: vy.raft.built, planks: vy.raft.planks.map((p) => ({ x: p.x, z: p.z, state: p.state })) },
-        crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, { ...w(c), yaw: c.yaw, visible: c.visible }])),
+        crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, {
+          ...w(c), yaw: c.yaw, visible: c.visible,
+          panic: c.panic ? { motion: c.panic.next === null ? "station" : "running", action: c.panic.action } : null,
+        }])),
+        panic: vy.panic ? { elapsed: vy.panic.elapsed, paused: vy.panic.paused, brace: vy.panic.brace } : null,
         items: { barrel: itemWorld("barrel"), bag: itemWorld("bag"), bottle: itemWorld("bottle") },
         /** The capture's reveal: the pirates stand round the huddled party. */
         huddle: Object.values(vy.crew).some((c) => c.menace),

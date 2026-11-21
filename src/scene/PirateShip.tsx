@@ -32,27 +32,62 @@ function CrewMember({ id }: { id: CrewId }) {
     const below = id === "bill" && c.x === SPOT.bill.x && c.z === SPOT.bill.z;
     g.visible = c.visible && below === vy.inHold;
     if (!g.visible) return;
-    // Face the player when close (local frame), as the town's keepers do; round the captured
-    // party, face in toward the huddle.
-    const px = rt.player.x - SHIP.x - vy.shipOffset.x, pz = rt.player.z - SHIP.z - vy.shipOffset.z;
-    const atCounter = id === "pepper" && c.x === SPOT.cook.x && c.z === SPOT.cook.z;
-    const faceCustomer = atCounter && pz < SPOT.counter.z;
-    const grapples = vy.grapples;
-    const hook = id === "tom" || id === "sam" || id === "max" ? grapples?.[id] : undefined;
-    const staged = Boolean(hook || (grapples && id === "redbeard"));
-    const want = staged ? c.yaw : faceCustomer ? Math.atan2(COUNTER_CUSTOMER.x - c.x, COUNTER_CUSTOMER.z - c.z)
-      : c.menace ? c.yaw : Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
-    let d = want - g.rotation.y;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    g.rotation.y = staged ? want : g.rotation.y + d * 0.1;
-    // Closing in: a lean toward the party and a slow, heavy sway (posture, never weapons).
-    lean.current += ((c.menace ? 0.16 : 0) - lean.current) * 0.08;
-    g.rotation.order = "YXZ";
-    g.rotation.x = hook ? hook.pitch : lean.current;
-    g.rotation.z = staged ? 0 : lean.current * Math.sin(rt.time * 1.6 + c.x * 3) * 0.35;
-    const cheer = rt.time - c.cheer < 1.6 ? Math.abs(Math.sin((rt.time - c.cheer) * 9)) * 0.28 : 0;
-    const idleBob = staged ? 0 : Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02;
-    g.position.set(c.x, (shipFloorY(c.x, c.z, below) ?? DECK_Y) + c.air + cheer + idleBob, c.z);
+    const panic = vy.panic, assignment = c.panic;
+    if (panic && assignment) {
+      const t = rt.time + c.x * 0.17;
+      let pitch: number, sway: number, bob = 0, turn = 0;
+      if (panic.paused) {
+        pitch = 0.09;
+        sway = Math.sin(t * 2) * 0.035;
+      } else if (assignment.next !== null) {
+        const stride = t * 19;
+        pitch = 0.27 + Math.sin(stride) * 0.08;
+        sway = Math.sin(stride * 0.5) * 0.15;
+        bob = Math.abs(Math.sin(stride * 0.5)) * 0.23;
+        turn = Math.sin(t * 8) * 0.13;
+      } else if (assignment.action === "haul") {
+        const pull = Math.sin(t * 6);
+        pitch = -0.07 + pull * 0.24;
+        sway = Math.cos(t * 6) * 0.09;
+        bob = Math.max(0, -pull) * 0.09;
+      } else if (assignment.action === "direct") {
+        const call = Math.sin(t * 5);
+        turn = call * 0.62;
+        pitch = 0.17 + Math.abs(call) * 0.14;
+        sway = -call * 0.27;
+        bob = Math.abs(call) * 0.12;
+      } else {
+        pitch = 0.17 + Math.sin(t * 5.5) * 0.10;
+        sway = Math.cos(t * 5.5) * 0.12;
+      }
+      // A wave interrupts the current gesture with a short forward brace and sideways stagger.
+      const brace = panic.brace;
+      g.rotation.set(pitch * (1 - brace) + 0.49 * brace, c.yaw + turn * (1 - brace),
+        sway * (1 - brace) + 0.31 * brace * Math.cos(t * 3), "YXZ");
+      g.position.set(c.x, (shipFloorY(c.x, c.z, false) ?? DECK_Y) + bob * (1 - brace), c.z);
+    } else {
+      // Face the player when close (local frame), as the town's keepers do; round the captured
+      // party, face in toward the huddle.
+      const px = rt.player.x - SHIP.x - vy.shipOffset.x, pz = rt.player.z - SHIP.z - vy.shipOffset.z;
+      const atCounter = id === "pepper" && c.x === SPOT.cook.x && c.z === SPOT.cook.z;
+      const faceCustomer = atCounter && pz < SPOT.counter.z;
+      const grapples = vy.grapples;
+      const hook = id === "tom" || id === "sam" || id === "max" ? grapples?.[id] : undefined;
+      const staged = Boolean(hook || (grapples && id === "redbeard"));
+      const want = staged ? c.yaw : faceCustomer ? Math.atan2(COUNTER_CUSTOMER.x - c.x, COUNTER_CUSTOMER.z - c.z)
+        : c.menace ? c.yaw : Math.hypot(px - c.x, pz - c.z) < 5 && c.air === 0 ? Math.atan2(px - c.x, pz - c.z) : c.yaw;
+      let d = want - g.rotation.y;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      g.rotation.y = staged ? want : g.rotation.y + d * 0.1;
+      // Closing in: a lean toward the party and a slow, heavy sway (posture, never weapons).
+      lean.current += ((c.menace ? 0.16 : 0) - lean.current) * 0.08;
+      g.rotation.order = "YXZ";
+      g.rotation.x = hook ? hook.pitch : lean.current;
+      g.rotation.z = staged ? 0 : lean.current * Math.sin(rt.time * 1.6 + c.x * 3) * 0.35;
+      const cheer = rt.time - c.cheer < 1.6 ? Math.abs(Math.sin((rt.time - c.cheer) * 9)) * 0.28 : 0;
+      const idleBob = staged ? 0 : Math.abs(Math.sin(rt.time * 1.7 + c.x)) * 0.02;
+      g.position.set(c.x, (shipFloorY(c.x, c.z, below) ?? DECK_Y) + c.air + cheer + idleBob, c.z);
+    }
     const h = held.current;
     if (h) {
       const food = c.hold === "fish3" ? "fish" : c.hold;

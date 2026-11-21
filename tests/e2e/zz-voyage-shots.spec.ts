@@ -288,6 +288,59 @@ async function powerPrompt(page: Page, phrase: string) {
   await tap(page, phrase);
 }
 
+test("Storm crew runs, stations and wave brace at 1366x768", async ({ page }) => {
+  test.skip(ONLY !== "panic");
+  test.setTimeout(120_000);
+  await boardForShots(page, { width: 1366, height: 768 });
+  await hook(page, "look", [SHIP.x + 28, DECK_Y + 14, SHIP.z - 5], [SHIP.x, DECK_Y + 1, SHIP.z - .5], true);
+  const frame = async (name: string, elapsed: number, beat: "running" | "station" | "brace") => {
+    try {
+      await page.waitForFunction(({ elapsed, beat }) => {
+        const api = (window as unknown as { __mi: {
+          voyage(): {
+            phase: string | null;
+            panic: { elapsed: number; paused: boolean; brace: number } | null;
+            crew: Record<string, { panic: { motion: string } | null }>;
+          };
+          timeScale(scale: number): void;
+        } }).__mi;
+        const v = api.voyage();
+        if (!v.panic || v.panic.paused || v.panic.elapsed < elapsed) return false;
+        const crew = Object.values(v.crew).filter(c => c.panic);
+        if (crew.length !== 7) return false;
+        if (beat === "running") {
+          if (!crew.some(c => c.panic?.motion === "running")) return false;
+        } else {
+          if (v.phase !== "storm-barrels" || !crew.every(c => c.panic?.motion === "station")) return false;
+          if (beat === "brace" ? v.panic.brace < .7 : v.panic.brace > 0) return false;
+        }
+        api.timeScale(0);
+        return true;
+      }, { elapsed, beat }, { timeout: 25_000 });
+    } catch (error) {
+      throw new Error(`HARNESS_PRECONDITION_FAILED - storm crew ${name}`, { cause: error });
+    }
+    await hook(page, "renderFrames", 2);
+    await snap(page, `panic-${name}`);
+  };
+  try {
+    await hook(page, "timeScale", .35);
+    await hook(page, "voyageJump", "storm");
+    for (const [index, elapsed] of [.18, .67, 1.35].entries()) {
+      await frame(`run-0${index + 1}`, elapsed, "running");
+      await hook(page, "timeScale", .35);
+    }
+    await hook(page, "timeScale", 1);
+    await powerPrompt(page, "leafyHelp");
+    await frame("stations", 0, "station");
+    await hook(page, "timeScale", .8);
+    await frame("big-wave-brace", 0, "brace");
+  } finally {
+    await hook(page, "timeScale", 1);
+    await hook(page, "clearEvidenceLens");
+  }
+});
+
 for (const [width, height] of [[1366, 768], [1280, 800]] as const) {
   const size = `${width}x${height}`;
   test(`Cooking auto-mount and fire at ${size}`, async ({ page }) => {
