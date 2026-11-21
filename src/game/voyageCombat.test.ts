@@ -6,7 +6,7 @@ import { rt } from "./runtime";
 import { region } from "./world/region";
 import { isAttackHeld, pressAttack, releaseAllAttacks, releaseAttack } from "../input/attackInput";
 import { resetVoyageRt, restoreHold, updateHoldView, vy } from "./voyageRt";
-import { hand, isPosedToolFx, L, SAIL_AIM, setPhase, toolFx } from "./voyageSim";
+import { hand, isPosedToolFx, L, SAIL_AIM, setPhase, toolFx, usesStormCombatVisuals } from "./voyageSim";
 import { BOARDED, crewWorld, resumeVoyage, setScene, voyageAttack, voyageCandidates, VoyageCancelled, voyageInteract, voyageSavePoint } from "./flow/voyage";
 import { itemWorld, startJob } from "./flow/voyageJobs";
 import { startStorm } from "./flow/voyageStorm";
@@ -421,12 +421,29 @@ describe("resumed voyage jobs in the frame loop", () => {
         if (name === "storm-sail") {
           pressAttack("basic", "key");
           frame();
-          expect(vy.sails[1]).toBeGreaterThan(.1);
+          expect(vy.sails[1]).toBe(.1);
         } else {
           face(targets()[0]);
           voyageAttack("basic");
         }
-        expect(vy.fx.some((fx) => fx.id > before && fx.kind === kind && isPosedToolFx(fx))).toBe(true);
+        const fx = vy.fx.find((fx) => fx.id > before && fx.kind === kind && isPosedToolFx(fx));
+        if (!fx) throw new Error(`${name} did not emit its posed ${kind}`);
+        if (name === "storm-fires" || name === "storm-sail") {
+          expect(usesStormCombatVisuals(fx)).toBe(true);
+          const arrival = fx.t0 + fx.life;
+          while (rt.time + 1 / 60 < arrival) {
+            frame();
+            if (name === "storm-fires") expect(vy.hud?.count).toEqual([0, 3]);
+            else expect(vy.sails[1]).toBe(.1);
+          }
+          frame();
+          if (name === "storm-fires") {
+            expect(vy.hud?.count).toEqual([1, 3]);
+            expect(vy.fx).toContainEqual(expect.objectContaining({ kind: "steam", x: fx.tx, z: fx.tz }));
+          } else {
+            expect(vy.sails[1]).toBeGreaterThan(.1);
+          }
+        }
         if (name === "storm-barrels" || name === "storm-fires") {
           for (const target of targets()) {
             face(target);

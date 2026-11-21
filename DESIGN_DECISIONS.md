@@ -3185,3 +3185,16 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - The descent capture keeps the clock positive with ArrowUp held. At zero delta, the movement tick divides by zero
   while updating velocity, and the follow camera receives a non-finite position. The hold shot run also captures
   the normal deck follow view at all four sides of the hatch.
+
+## 2026-11-21 - Ship and raft fixes: Storm fire and sail evidence
+
+- Bubbo's storm shot uses the combat Bubble Trap material and radius from the live mouth
+  position to the aimed fire. Its arrival sets the fire out, increments the HUD count, and
+  triggers the existing steam and hiss. The fire keeps its original aim rules and travel time.
+- Puff's beam of wind uses the combat Wind Blast shell and streaks. The effect grows from the
+  perched beak toward the cloth and is 1.6 times as wide for the storm shot. The first gust must
+  arrive before the hold raises sail fullness. The existing fill, decay and sewing rates apply.
+- The evidence harness pairs the wide view with a side lens for the completed pose, three points
+  in the effect's flight and the impact. The test-only `look` override holds the lens while the
+  storm authors its wide shot. The harness reads the pose from `window.__mi.state().act2.stance`
+  and the effects, fire flags, HUD count, sail fullness and sewing state from `window.__mi.voyage()`.

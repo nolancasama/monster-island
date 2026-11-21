@@ -22,6 +22,13 @@ import { holdFollowPose } from "./holdCamera";
 /** The live camera, for projecting world labels to the screen. */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
 
+// The evidence hook can hold a lens while the storm sim continues to author its wide shot.
+let evidenceLens: typeof rt.camera.shot = null;
+export function setEvidenceLens(lens: typeof rt.camera.shot) {
+  evidenceLens = lens;
+  rt.camera.snap = true;
+}
+
 /** Height (px) of the prompt / dialogue stack at the bottom of the screen, kept by the UI. */
 export const bottomPanel = { height: 0 };
 
@@ -208,6 +215,10 @@ export function CameraRig() {
       c.yaw = Math.atan2(want.current.x - wantLook.current.x, want.current.z - wantLook.current.z);
       c.pitch = Math.atan2(want.current.y - wantLook.current.y, Math.hypot(want.current.x - wantLook.current.x, want.current.z - wantLook.current.z));
       c.dist = want.current.distanceTo(wantLook.current);
+    } else if (evidenceLens) {
+      c.framing = "shot";
+      want.current.set(evidenceLens.pos.x, evidenceLens.pos.y, evidenceLens.pos.z);
+      wantLook.current.set(evidenceLens.target.x, evidenceLens.target.y, evidenceLens.target.z);
     } else if (c.mode === "shot" && c.shot && !leavingRope) {
       c.framing = "shot";
       want.current.set(c.shot.pos.x, c.shot.pos.y, c.shot.pos.z);
