@@ -1,54 +1,34 @@
 # Current State
 
-## Pirate ship and raft: 17 fixes — IN PROGRESS, paused by the user 2026-11-21 (tests stopped)
-Branch `feature/ship-raft-fixes` (from `main` `1073ea0`), worktree `~/Projects/mi-vp`. Not pushed, not merged, not
-deployed: merging/deploying needs the user's approval. Frozen spec with Claude's accept/modify decisions:
-`docs/SHIP_RAFT_FIXES.md`. Decisions as built: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" entries.
-Built by Codex via the router (one slice per worktree), reviewed and judged from renders by Claude.
+## Pirate ship and raft: 17 fixes — all built and verified; wave 1 LIVE, wave 2 awaiting the user's deploy approval
+Branch `feature/ship-raft-fixes` (pushed), worktree `~/Projects/mi-vp`. Frozen spec: `docs/SHIP_RAFT_FIXES.md`.
+Decisions: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" and "2026-11-22 - … wave-2 corrections".
 
-**Wave 1 — merged into `feature/ship-raft-fixes` and accepted** (HEAD includes slice merges, two Codex corrections
-and Claude's test fix):
-- **15 Steering** (`sr/steer`): root cause was obstacles only in the current lane or lane 0 + edge clamping, so
-  "Turn left" was always safe. Now authored steps (`SHIP_STEER_STEPS`, `RAFT_STEER_STEPS` in `logic/voyage.ts`), one or
-  two obstacles, exactly one safe command; ship L,R,S,R; raft R,L,S,L,R; island left/straight/right. Renders `w1/steer-*`.
-- **9, 10, 11 Cutscenes** (`sr/cut`): Tom/Sam/Max throw hooks (body animation + held hook), ballistic hooks, ropes
-  pay out and go taut, haul; Pepper close-up for "Monster soup!" (`closeUp("pepper")`); `vy.cutSails` cloth fade in
-  wide capture shots, reset by scene end/reset/load. Renders `w1/1366x768-capture2-*`, `w1b/c8-monster-soup.png`.
-  Known: the new `SHOT_ONLY=capture2` harness times out at `interrogation-wide-80` / "boarding fade cleared"
-  (over-strict progress waits); the older `SHOT_ONLY=capture` and `redbeard` harnesses pass on the merged build.
-- **1, 5, 13 Powers** (`sr/power` + correction): cooking walks to a mount spot, auto-selects Ember, waits for the
-  full mount before "Hold J"; storm tasks use the shared combat stance (Leafy barrels/spar, Bubbo fires with the
-  full-size combat bubble + steam, Puff perched with combat wind, widened 1.6x). E2e-only evidence lens
-  (`setEvidenceLens` in CameraRig, set only by the `look(…, true)` hook). Renders `w2/storm-powers-*`.
-- **2, 3, 4, 6, 7 Hold** (`sr/hold` + correction): 11.8 × 12 m hold, floor `SEA_Y - 1.1`, fore-mast pillar, one
-  shelf, ~2× cargo, Bill hold-only, exposed treads (no dark panel), sea plane masked in the shaft, descent follow
-  camera `scene/holdCamera.ts`. Renders `w2/hold-*` (no sky in the hatch, clear descent, room, cargo). Claude relaxed
-  one Codex test: feet sight line required only >1 m below deck (measured: hidden by the hatch lip for 0.93 m).
-- **Verified on HEAD:** tsc; build; unit 1252 + the hold test fix (only the 2 known arm64 `layers-ground` golden
-  failures); `pirate-voyage.spec.ts` 2/2 (full voyage incl. cooking, new hold, both steerings, storm, raft).
-  **Not run:** `combat-feel.spec.ts`, `elements.spec.ts` (the powers slice touched `combat.ts`/ElementEffects),
-  the full e2e suite.
+**Wave 1 live 2026-11-22** (user: "push uncommitted code to live"): `main` fast-forwarded to `37cd20c`, Pages run
+44957016299, bundle `index-CG54csYw.js`. Still a debug-menu preview (`?debug=1` → "Pirate voyage (preview)").
+- 15 steering (authored steps, one safe command); 9–11 cutscenes (hook throws, Pepper close-up, `vy.cutSails`);
+  1, 5, 13 powers (combat stances, cooking mount); 2–4, 6, 7 hold (11.8 × 12 m, Bill hold-only, descent camera).
+- Known: `SHOT_ONLY=capture2` harness times out at `interrogation-wide-80` (over-strict waits); `capture`/`redbeard` pass.
 
-**Wave 2 — Codex finished (SUCCESS, typecheck only), committed UNREVIEWED on slice branches, NOT merged:**
-- `sr/ext` `524ddcb` (worktree `~/Projects/mi-sr-ext`): 8 fishing railings removed, 12 framed cannon ports. `SHOT_ONLY=exterior`.
-- `sr/panic` `da8c731` (`~/Projects/mi-sr-panic`): 14 storm crew panic paths/stations. `SHOT_ONLY=panic`.
-- `sr/raft` `5ff27b6` (`~/Projects/mi-sr-raft`): 16 raft wake (BoatWake reuse), 17 patched raft sail. `SHOT_ONLY=raft`.
-- All three branched from `2970df9` (before Claude's test-fix commit); expect DESIGN_DECISIONS/import-line conflicts
-  on merge (resolve as unions, as for wave 1).
+**Wave 2 merged into `feature/ship-raft-fixes` at `e7cf1f4`, NOT deployed:**
+- 8 fishing railings removed (floor edge clamp only); 12 framed cannon ports (carriages narrowed to clear the ports).
+- 14 storm crew panic: six pirates run authored routes to rail stations, brace on big waves; Bill stays in the hold
+  (Claude's decision — his hold-to-deck route made him pop up through the deck). Logic in `game/voyagePanic.ts`
+  (moved out of `flow/voyageStorm.ts`: `voyageSim` → flow import made `L` undefined at load, 15 test files failed).
+- 16 raft wake (`BoatWake(true)`), 17 patched raft sail (`raftSailGeometry`/`poseRaftSail`, billow reduced to stay over the raft).
+- **Verified 2026-11-22 on e7cf1f4:** tsc; build; unit 1268/1270 (only the 2 arm64 `layers-ground` goldens);
+  `pirate-voyage` + `combat-feel` + `elements` e2e 21/21; renders judged by Claude `.tmp/shots/voyage/x1`
+  (exterior, panic at 1366×768 and 1280×800 for exterior) and `raft1` (rest/tow/sail/turn, both sizes).
+- **Not run:** the full e2e suite; real Chromebook.
 
 **Next:**
-1. Review each wave-2 diff; run its unit tests in its worktree; merge into `feature/ship-raft-fixes`.
-2. `npm run build`, then judge renders: `SHOT_TAG=x1 SHOT_ONLY=exterior`, `SHOT_ONLY=panic`, `SHOT_ONLY=raft`
-   (`tests/e2e/zz-voyage-shots.spec.ts`), at 1366×768 and 1280×800. One Playwright run at a time (port 4176).
-3. `pirate-voyage.spec.ts`, `combat-feel.spec.ts`, `elements.spec.ts`; ideally the full suite (`MI_LONG_TIMEOUT=3600000`).
-4. Completion report per issue (changes, tests, visual result, limits); then the user decides merge/deploy.
-- Noticed, not addressed: long green lashing lines from secured barrels run across the storm deck; the ship steering
+1. User decides: deploy wave 2 (fast-forward `main` to `feature/ship-raft-fixes` and push).
+2. Optional: full e2e suite (`MI_LONG_TIMEOUT=3600000`, ~1.5 h).
+- Noticed, not addressed: long green lashing lines from secured barrels across the storm deck; the ship steering
   camera is distant, so obstacles read small (pre-existing camera).
 
 ## Codex / Delegated Work (this plan)
-None in flight. Wave-2 output is committed on `sr/ext`, `sr/panic`, `sr/raft` and is unreviewed: never merge it
-without review and renders. Wave-1 slice worktrees `mi-sr-hold`, `mi-sr-power`, `mi-sr-steer`, `mi-sr-cut` are merged
-and removable. Codex cannot run vitest or a browser here: the controller runs tests and judges all renders.
+None in flight. All slice worktrees (`mi-sr-*`) are merged and removable.
 
 ## Voyage visual polish: `feature/voyage-polish` (from `main` `0b0a5d5`), worktree `~/Projects/mi-vp`
 The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and Enclosed Cargo Hold". Decisions: the
