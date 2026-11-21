@@ -64,7 +64,7 @@ export async function startStorm() {
   for (const id of CREW_IDS) {
     const c = vy.crew[id];
     c.visible = true;
-    if (id === "gull") continue;
+    if (id === "gull" || id === "bill") continue;
     const { x, z } = EMERGENCY_ROUTES[id].start;
     c.x = x;
     c.z = z;

@@ -3236,3 +3236,11 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - `SHOT_ONLY=raft` captures rest, tow, sail and a mid-turn at 1366 × 768 and 1280 × 800, with the
   authored raft camera and a side view. It writes to `.tmp/shots/voyage/raft1/` and reads live flow,
   sail fill, lane and island bearing through `window.__mi.voyage()`.
+
+## 2026-11-22 - Ship and raft fixes: wave-2 corrections
+
+- Bill stays in the hold during deck panic. A route from the hold to the deck was rejected because it
+  made him pop up through the deck.
+- The cannon carriages end farther inboard, clearing the lower part of all six framed ports.
+- The raft sail's billow is shallower so the cloth stays above the hatch at full wind and clears
+  the gap between the hatch and bow plank.

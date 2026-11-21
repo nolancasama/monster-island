@@ -8,6 +8,10 @@ const hazards = [SAIL_AIM[1], FALLEN_SPAR, PINNED, ...STORM_FIRES.map(([x, z]) =
 const TASK_CLEARANCE = 0.9;
 
 describe("storm panic staging", () => {
+  it("keeps Bill out of the deck emergency routes", () => {
+    expect(EMERGENCY_ROUTES).not.toHaveProperty("bill");
+  });
+
   it.each(Object.entries(EMERGENCY_ROUTES))("keeps %s's whole run and station on open deck, away from the task targets", (_id, route) => {
     let from = route.start;
     for (const to of route.path) {

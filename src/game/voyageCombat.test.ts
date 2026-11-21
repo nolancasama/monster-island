@@ -377,6 +377,9 @@ describe("resumed voyage jobs in the frame loop", () => {
   });
 
   it("holds the storm run through dialogue and close-ups, then discards it on reset", async () => {
+    const bill = vy.crew.bill;
+    const billAt = { x: SPOT.bill.x + 0.2, z: SPOT.bill.z };
+    Object.assign(bill, billAt);
     const running = startStorm().catch((error: unknown) => {
       if (!(error instanceof VoyageCancelled)) throw error;
     });
@@ -384,8 +387,10 @@ describe("resumed voyage jobs in the frame loop", () => {
       await advanceUntil(() => getGame().line?.en === "A storm! Hold on, crew!");
       frame();
       expect(vy.panic).toBeNull();
+      expect(bill).toMatchObject({ ...billAt, panic: null });
       nextLine();
       await advanceUntil(() => (vy.panic?.elapsed ?? 0) > .1);
+      expect(bill).toMatchObject({ ...billAt, panic: null });
       const tom = vy.crew.tom;
       const at = { x: tom.x, z: tom.z, next: tom.panic?.next };
       const line = say("redbeard", "Hold on!");
@@ -436,6 +441,7 @@ describe("resumed voyage jobs in the frame loop", () => {
       await advanceUntil(() => vy.panic !== null);
       expect(vy.panic).toMatchObject({ paused: false, brace: 0 });
       expect(vy.crew.tom.panic?.next).toBe(0);
+      expect(vy.crew.bill).toMatchObject({ ...SPOT.bill, panic: null });
     } finally {
       resetVoyageRt();
       await vi.advanceTimersByTimeAsync(600);

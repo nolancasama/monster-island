@@ -19,11 +19,10 @@ interface EmergencyRoute {
 
 // The routes keep the middle of the deck and its approaches to the loose barrels, the mast
 // and the fallen spar open for the player.
-export const EMERGENCY_ROUTES: Record<Exclude<CrewId, "gull">, EmergencyRoute> = {
+export const EMERGENCY_ROUTES: Record<Exclude<CrewId, "gull" | "bill">, EmergencyRoute> = {
   tom: { start: SPOT.crew[0], path: [{ x: 2.25, z: -8.25 }, { x: 5.45, z: -8.25 }], yaw: Math.PI / 2, action: "haul" },
   sam: { start: SPOT.crew[1], path: [{ x: 1.7, z: -7.0 }, { x: 5.45, z: -6.85 }], yaw: Math.PI / 2, action: "haul" },
   max: { start: SPOT.crew[2], path: [{ x: 4.55, z: -13.35 }, { x: 4.55, z: -15.45 }, { x: 2.2, z: -18.1 }], yaw: Math.PI, action: "brace" },
-  bill: { start: SPOT.bill, path: [{ x: -1.85, z: 0.75 }], yaw: -Math.PI / 2, action: "brace" },
   finn: { start: SPOT.finn, path: [{ x: -3.3, z: 17.35 }], yaw: -0.6, action: "haul" },
   pepper: { start: SPOT.cook, path: [{ x: 1.35, z: -16.5 }], yaw: -Math.PI / 2, action: "brace" },
   redbeard: { start: SPOT.captain, path: [{ x: -0.95, z: 11.65 }], yaw: Math.PI, action: "direct" },
@@ -33,7 +32,7 @@ const RUN_SPEED = 4.2;
 export function startPanic() {
   vy.panic = { wide: rt.camera.shot, elapsed: 0, paused: false, brace: 0, openingFlash: vy.flash };
   for (const id of CREW_IDS) {
-    if (id === "gull") continue;
+    if (id === "gull" || id === "bill") continue;
     vy.crew[id].panic = { action: EMERGENCY_ROUTES[id].action, next: 0 };
   }
 }
@@ -57,7 +56,7 @@ export function tickStormPanic(dt: number) {
   panic.elapsed += dt;
   for (let i = 0; i < CREW_IDS.length; i++) {
     const id = CREW_IDS[i];
-    if (id === "gull") continue;
+    if (id === "gull" || id === "bill") continue;
     const c = vy.crew[id], route = EMERGENCY_ROUTES[id];
     if (!c.panic) continue;
     let stride = RUN_SPEED * dt * (1 - 0.7 * panic.brace);

@@ -381,7 +381,8 @@ export function pirateShipGeometries(): ShipGeometries {
 
   // Cannons along both rails, the helm, lanterns and stern windows.
   for (const { x, z, side: s } of CANNONS) {
-    b.box(0.6, 0.3, 0.7, x, DECK_Y, z, "#5a3c26");
+    // Keep the carriage's deck-side edge and recess its outboard end behind the port.
+    b.box(0.42, 0.3, 0.7, x - s * 0.09, DECK_Y, z, "#5a3c26");
     const { radius, length, offset, y } = CANNON_BARREL;
     b.cylAt(radius, length, [x + s * offset, y, z], [0, 0, Math.PI / 2], IRON, 8);
   }
@@ -663,7 +664,8 @@ export function raftSailGeometry() {
         const across = Math.sin(Math.PI * u);
         const x = (u - 0.5) * (2.12 - 0.24 * v) + 0.06 * across * Math.sin(v * 8);
         const y = -v * (1.96 + 0.09 * Math.sin(u * 12));
-        const z = -0.33 * across * Math.sin(Math.PI * v);
+        // At peak wind the cloth must stop short of the gap ahead of the hatch.
+        const z = -0.18 * across * Math.sin(Math.PI * v);
         p.setXYZ(i, x, y, z);
       }
       panel.computeVertexNormals();
