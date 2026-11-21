@@ -5,6 +5,7 @@ import type { CompanionId } from "./data/combat";
 import type { Focus } from "./store";
 import { SHIP, SPOT, holdLayerAt, setShipHoldOccupancy } from "./world/pirateShip";
 import type { Grapple } from "./flow/voyageGrapple";
+import type { CameraShot } from "./runtime";
 
 export type Candidate = { focus: Focus; reach: number };
 /** The running free-play step (a job, a storm emergency, a raft step): it owns E, J and a tick. */
@@ -24,7 +25,11 @@ export interface Phase {
  * while it approaches); effects are in world coordinates.
  */
 export type CrewId = PirateId | "gull";
-export interface CrewSpot { x: number; z: number; yaw: number; visible: boolean; cheer: number; air: number; hold: FoodId | "fish3" | null; menace: boolean }
+export type StormAction = "haul" | "brace" | "direct";
+export interface CrewSpot {
+  x: number; z: number; yaw: number; visible: boolean; cheer: number; air: number; hold: FoodId | "fish3" | null; menace: boolean;
+  panic: { action: StormAction; next: number | null } | null;
+}
 export type CaptureBeat = "turn" | "order" | "step" | "throw" | "landed" | "haul" | "alongside"
   | "reveal" | "encircle" | "interrogation-wide" | "monsters-wide" | "pepper-in" | "pepper-out";
 
@@ -42,7 +47,7 @@ export interface Plank { x: number; z: number; yaw: number; state: "float" | "pu
 export interface VoyageHudState { title: string; ja: string; value?: number; band?: [number, number]; count?: [number, number]; hint?: string }
 
 const home = (): Record<CrewId, CrewSpot> => {
-  const s = (p: { x: number; z: number }, yaw: number): CrewSpot => ({ x: p.x, z: p.z, yaw, visible: true, cheer: -10, air: 0, hold: null, menace: false });
+  const s = (p: { x: number; z: number }, yaw: number): CrewSpot => ({ x: p.x, z: p.z, yaw, visible: true, cheer: -10, air: 0, hold: null, menace: false, panic: null });
   return {
     redbeard: s(SPOT.captain, 0), gull: s(SPOT.gull, 0.3), pepper: s(SPOT.cook, 0), bill: s(SPOT.bill, 0), finn: s(SPOT.finn, 0.4),
     tom: s(SPOT.crew[0], -Math.PI / 2), sam: s(SPOT.crew[1], -Math.PI / 2), max: s(SPOT.crew[2], Math.PI),
@@ -95,6 +100,7 @@ const fresh = () => ({
   /** Lifeboats rowing away, 0..1 (hidden at 0). */
   lifeboats: 0,
   crew: home(),
+  panic: null as { wide: CameraShot | null; elapsed: number; paused: boolean; brace: number; openingFlash: number } | null,
   /** J is held on the ship (Ember's heat, Puff's sail). */
   hold: false,
   fx: [] as VoyageFx[],

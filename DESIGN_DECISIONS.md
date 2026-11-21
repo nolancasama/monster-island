@@ -3198,3 +3198,16 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
   in the effect's flight and the impact. The test-only `look` override holds the lens while the
   storm authors its wide shot. The harness reads the pose from `window.__mi.state().act2.stance`
   and the effects, fire flags, HUD count, sail fullness and sewing state from `window.__mi.voyage()`.
+
+## 2026-11-21 - Ship and raft fixes: Storm crew panic
+
+- After Redbeard's storm order, the seven pirates run from their home positions to authored deck stations.
+  The opening wide shot holds until they arrive, leaving the task deck open when the player takes control.
+  Tom and Sam yield to the sail repair staging, Max yields to the fallen spar staging, and panic ends before
+  the break-up. Gull keeps his existing story role.
+- The merged pirate meshes use forward lean and bob on the run, with hauling, bracing and directing poses
+  at the stations. An existing storm flash cues a brief full-body brace. Dialogue and close-ups hold the
+  crew's positions. Loading the storm checkpoint restarts the opening order and rebuilds the live poses.
+- `window.__mi.voyage().panic` exposes pause, elapsed time and brace strength, and each `crew[id].panic`
+  reports running or station motion and the assigned action. `SHOT_ONLY=panic` samples three running
+  frames, the stations and the wave brace at 1366 × 768.
