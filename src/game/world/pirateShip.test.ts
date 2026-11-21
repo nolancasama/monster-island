@@ -49,7 +49,7 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
   it.each([
     { name: "hold", ramp: HOLD_RAMP, stairs: HOLD_STAIRS, y0: HOLD_Y, y1: DECK_Y },
     { name: "stern", ramp: STERN_RAMP, stairs: STERN_STAIRS, y0: DECK_Y, y1: FISH_Y },
-  ])("keeps the $name stairs walkable with flat landings and guarded sides", ({ ramp, stairs, y0, y1 }) => {
+  ])("keeps the $name stairs walkable with flat landings", ({ ramp, stairs, y0, y1 }) => {
     const x = (ramp.x0 + ramp.x1) / 2;
     const hold = ramp === HOLD_RAMP;
     const below = (z: number) => hold && z < HOLD_PORTAL.enterZ;
@@ -72,7 +72,32 @@ describe("the pirate ship's decks (docs/PIRATE_VOYAGE.md §2)", () => {
     for (const { z0, z1, y } of stairs.steps) {
       // Height is monotonic between tread edges, so these bound the error.
       for (const z of [z0, z1]) expect(Math.abs(shipFloorY(x, z)! - y)).toBeLessThanOrEqual(0.06 + 1e-9);
-      for (const edge of [ramp.x0, ramp.x1]) expect(walk({ x: edge, z: (z0 + z1) / 2 }, PLAYER_R, below((z0 + z1) / 2))).toBe(false);
+      if (hold) {
+        const z = (z0 + z1) / 2;
+        for (const edge of [ramp.x0, ramp.x1]) expect(walk({ x: edge, z }, PLAYER_R, below(z))).toBe(false);
+      }
+    }
+  });
+
+  it("uses the fishing floor edges and keeps only the bucket solid on the platform", () => {
+    const { x0, x1, z0, z1 } = FISH_DECK;
+    const openEdges = [
+      { x: x0, z: 17, dx: -1, dz: 0 }, { x: x1, z: 17, dx: 1, dz: 0 },
+      { x: 1, z: z0, dx: 0, dz: -1 }, { x: 1, z: z1, dx: 0, dz: 1 },
+    ];
+    for (const { x, z, dx, dz } of openEdges) {
+      const at = (gap: number) => ({ x: x - dx * gap, z: z - dz * gap });
+      expect(walk(at(0.001), 0)).toBe(true);
+      expect(walk(at(-0.001), 0)).toBe(false);
+      expect(walk(at(PLAYER_R + 0.001), PLAYER_R)).toBe(true);
+      expect(walk(at(PLAYER_R - 0.001), PLAYER_R)).toBe(false);
+    }
+    const platformSolids = SHIP_SOLIDS.filter(b => b.x0 < x1 && b.x1 > x0 && b.z0 < z1 && b.z1 > z0);
+    expect(platformSolids).toHaveLength(1);
+    expect(touches(platformSolids[0], BUCKET.x, BUCKET.z, 0)).toBe(true);
+    for (const x of [STERN_RAMP.x0, STERN_RAMP.x1]) {
+      expect(walk({ x, z: 13 }, PLAYER_R)).toBe(true);
+      expect(walk({ x, z: 15.2 }, PLAYER_R)).toBe(false);
     }
   });
 

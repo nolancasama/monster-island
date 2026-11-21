@@ -3198,3 +3198,15 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
   in the effect's flight and the impact. The test-only `look` override holds the lens while the
   storm authors its wide shot. The harness reads the pose from `window.__mi.state().act2.stance`
   and the effects, fire flags, HUD count, sail fullness and sewing state from `window.__mi.voyage()`.
+
+## 2026-11-21 - Ship and raft fixes: Exterior
+
+- The stern stairs and fishing platform have open sides. The floor boundary checks the player's full footprint.
+  The platform's visible edges align with that floor boundary, and its support pilings sit underneath it.
+  The transom still guards the stair opening at the stern wall, and the bucket keeps its collision.
+- The six rectangular cannon ports follow the existing barrel centers, with 8 cm of clearance beyond the
+  barrel radius on each side. Wooden frames line the openings through the bulwark and stand proud on both faces.
+  The straight and tapered planking faces follow the existing hull outline between the stripe and cap.
+- `SHOT_ONLY=exterior` captures the platform from deck and sea, two walking frames at every platform edge, and
+  both faces of all six ports at 1366 × 768 and 1280 × 800. The harness uses the existing read-only player
+  position, height, camera, and clock from `window.__mi.state()`.

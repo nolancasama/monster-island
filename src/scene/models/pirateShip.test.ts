@@ -1,12 +1,54 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { cargoGeometry, floatBarrelGeometry, lifeboatGeometry, pirateShipGeometries, plankGeometry, raftGeometry, raftSailGeometry, riggingLines, rockGeometry, sailGeometry, sparGeometry } from "./pirateShip";
-import { BOW_Z, CARGO_SIZE, DECK_Y, HOLD, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_HEADER_Y, HOLD_PILLAR, HOLD_RAMP, HOLD_SOLIDS, HOLD_STAIRS, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, STERN_STAIRS, holdLayerAt, shipFloorY, shipWalkable, shipWorld, touches } from "../../game/world/pirateShip";
+import { BOW_Z, BULWARK_THICKNESS, CANNONS, CARGO_SIZE, DECK_Y, HOLD, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_HEADER_Y, HOLD_PILLAR, HOLD_RAMP, HOLD_SOLIDS, HOLD_STAIRS, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, STERN_STAIRS, holdLayerAt, hullHalf, shipFloorY, shipWalkable, shipWorld, touches } from "../../game/world/pirateShip";
 import { SEA_Y } from "../../game/world/island";
 import { cameraProfileAt } from "../cameraProfiles";
 import { holdFollowPose } from "../holdCamera";
 
 const tris = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
+
+it("cuts a clear barrel crossing with a raised wooden frame on both faces of every cannon port", () => {
+  const { base } = pirateShipGeometries();
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(base, material), ray = new THREE.Raycaster();
+  for (const { x, z, side } of CANNONS) {
+    const outer = hullHalf(z), inner = outer - BULWARK_THICKNESS;
+    const y = DECK_Y + 0.45;
+    ray.set(new THREE.Vector3(side * (outer + 0.5), y + 0.02, z + 0.04), new THREE.Vector3(-side, 0, 0));
+    const barrel = ray.intersectObject(mesh).map(hit => hit.point.x * side);
+    expect(barrel[0]).toBeCloseTo(Math.abs(x) + 0.9, 5);
+    expect(barrel[1]).toBeCloseTo(Math.abs(x) - 0.2, 5);
+
+    const throughWall = (dy: number, dz: number) => {
+      ray.set(new THREE.Vector3(side * (outer + 0.1), y + dy, z + dz), new THREE.Vector3(-side, 0, 0));
+      ray.far = BULWARK_THICKNESS + 0.2;
+      const hits = ray.intersectObject(mesh);
+      ray.far = Infinity;
+      return hits.map(hit => hit.point.x * side);
+    };
+    // At least 4 cm beyond the barrel's envelope, including all four corners.
+    for (const offset of [-0.19, 0.19]) {
+      for (const cross of [-0.19, 0.013, 0.19]) {
+        expect(throughWall(offset, cross)).toHaveLength(0);
+        expect(throughWall(cross, offset)).toHaveLength(0);
+      }
+    }
+    for (const offset of [-0.27, 0.27]) {
+      for (const hits of [throughWall(offset, 0.013), throughWall(0.013, offset)]) {
+        expect(hits).toHaveLength(2);
+        expect(hits[0]).toBeGreaterThan(outer);
+        expect(hits[1]).toBeLessThan(inner);
+      }
+    }
+    const planking = throughWall(0.013, 0.42);
+    expect(planking).toHaveLength(2);
+    expect(planking[0]).toBeCloseTo(outer, 5);
+    expect(planking[1]).toBeCloseTo(inner, 5);
+  }
+  base.dispose();
+  material.dispose();
+});
 
 describe("the pirate ship's budget (docs/PIRATE_VOYAGE.md §8)", () => {
   it("the ship is at most 9k triangles in at most 6 draws", () => {
