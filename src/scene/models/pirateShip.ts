@@ -628,11 +628,56 @@ export function plankGeometry(): THREE.BufferGeometry {
   b.box(0.06, 0.02, 2.4, 0.2, 0.0, 0, "#8d6540");
   return b.build();
 }
-export function raftSailGeometry(): THREE.BufferGeometry {
-  const b = new PartBuilder(0);
-  b.cyl(0.06, 0.07, 3.2, 0, 0, 0, SPAR, 6);
-  b.add(new THREE.PlaneGeometry(1.8, 2.0, 1, 1), "#f2e8d0", [0, 2.0, 0.05], [0, 0, 0]);
-  return b.build();
+export const RAFT_MAST = { x: -0.14, z: -1, head: 4.1 };
+
+/** The rig is in mast-foot space. The cloth hangs from its own origin on the yard. */
+export function raftSailGeometry() {
+  const rig = new PartBuilder(0);
+  const head = RAFT_MAST.head, rope = "#c7a474";
+  rig.cyl(0.065, 0.11, head + 0.14, 0, -0.08, 0, SPAR, 7);
+  rig.cylAt(0.065, 2.26, [0, head, 0], [0, 0, Math.PI / 2], WOOD, 6);
+  for (const y of [0.065, 0.112, head - 0.085, head - 0.042]) {
+    rig.cyl(y < 1 ? 0.118 : 0.087, y < 1 ? 0.118 : 0.087, 0.028, 0, y, 0, rope, 7);
+  }
+  for (const x of [-0.98, -0.088, 0.088, 0.98]) {
+    rig.cylAt(0.078, 0.036, [x, head, 0], [0, 0, Math.PI / 2], rope, 6);
+  }
+  for (const angle of [-0.62, 0.62]) {
+    rig.boxAt(0.19, 0.029, 0.021, [0, head - 0.035, 0.079], [0, 0, angle], rope);
+  }
+
+  const cloth = new PartBuilder(0);
+  const patches = [
+    ["#e9c594", "#f4e1b4", "#c36044"],
+    ["#f3d7a8", "#b6543e", "#f0ca98"],
+    ["#7c9a86", "#e9c69c", "#e8b16f"],
+  ];
+  const columns = [0, 0.31, 0.66, 1], rows = [0, 0.29, 0.64, 1];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      const panel = new THREE.PlaneGeometry(1, 1, 2, 2);
+      const p = panel.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const u = THREE.MathUtils.lerp(columns[col], columns[col + 1], p.getX(i) + 0.5);
+        const v = THREE.MathUtils.lerp(rows[row], rows[row + 1], 0.5 - p.getY(i));
+        const across = Math.sin(Math.PI * u);
+        const x = (u - 0.5) * (2.12 - 0.24 * v) + 0.06 * across * Math.sin(v * 8);
+        const y = -v * (1.96 + 0.09 * Math.sin(u * 12));
+        const z = -0.33 * across * Math.sin(Math.PI * v);
+        p.setXYZ(i, x, y, z);
+      }
+      panel.computeVertexNormals();
+      cloth.add(panel, patches[row][col], [0, 0, 0], [0, 0, 0], [1, 1, 1], { flatAo: true });
+    }
+  }
+  return { rig: rig.build(), cloth: cloth.build() };
+}
+
+/** Unroll from the yard, with wind pressure and a little flutter below the fixed head. */
+export function poseRaftSail(scale: THREE.Vector3, sail: number, flow: number, time: number) {
+  const fill = THREE.MathUtils.clamp(sail, 0, 1);
+  const wind = THREE.MathUtils.clamp(flow, 0, 1);
+  scale.set(1, 0.055 + 0.945 * fill, 0.04 + fill * (0.4 + 0.55 * wind + 0.09 * Math.sin(time * 3.4)));
 }
 
 /** A far island silhouette for the raft's horizon (≈ 80 m wide). */

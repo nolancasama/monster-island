@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { vy } from "../game/voyageRt";
-import { BOAT_HALF_BEAM, BOAT_HALF_LENGTH } from "../game/world/gullBoat";
+import { BOAT_HALF_BEAM, BOAT_HALF_LENGTH, boatWakeIntensity } from "../game/world/gullBoat";
 import { SEA_Y } from "../game/world/island";
 import { seaHeight } from "./PirateShip";
 import { voyageStorm } from "./voyageWeather";
@@ -11,8 +11,19 @@ const SAMPLE_STEP = 0.06;
 const SAMPLE_COUNT = 40;
 const LIFETIME = SAMPLE_STEP * (SAMPLE_COUNT - 1);
 const MAX_ROWS = 256;
-// The underwater hull tapers in from the gunwale.
-const STERN_AT_WATERLINE = BOAT_HALF_LENGTH * 0.73;
+const GULL_WAKE = { stern: BOAT_HALF_LENGTH * 0.73, beam: BOAT_HALF_BEAM, scale: 1, life: LIFETIME };
+const RAFT_WAKE = { stern: 1.22, beam: 2.05, scale: 0.72, life: 1.55 };
+const wakeMaterial = new THREE.MeshBasicMaterial({
+  color: "#effaff", vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  forceSinglePass: true,
+});
+
+/** The first 0.2 of flow is the idle sea drifting past the hatch. */
+export const raftWakeSpeed = (flow: number) => Math.max(0, (flow - 0.2) * 4);
+
+export function raftWakeIntensity(speed: number, sail: number) {
+  return boatWakeIntensity(speed, false) * (0.57 + 0.23 * THREE.MathUtils.clamp(sail, 0, 1));
+}
 
 interface SternSample {
   x: number;
@@ -28,10 +39,7 @@ const sternSample = (): SternSample => ({ x: 0, z: 0, sin: 0, cos: 1, time: 0, s
 /** Widens and fades world-space stern marks, plus shorter streaks and ripples from the hull. */
 export class BoatWake {
   readonly geometry = new THREE.BufferGeometry();
-  readonly material = new THREE.MeshBasicMaterial({
-    color: "#effaff", vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    forceSinglePass: true,
-  });
+  readonly material = wakeMaterial;
 
   private readonly positions = new THREE.BufferAttribute(new Float32Array(MAX_ROWS * 9), 3).setUsage(THREE.DynamicDrawUsage);
   private readonly colors = new THREE.BufferAttribute(new Float32Array(MAX_ROWS * 12).fill(1), 4).setUsage(THREE.DynamicDrawUsage);
@@ -52,8 +60,11 @@ export class BoatWake {
   private gridX = 0;
   private gridZ = 0;
   private gridStep = 10;
+  private opacity = 1;
+  private readonly profile: typeof GULL_WAKE;
 
-  constructor() {
+  constructor(private readonly raft = false) {
+    this.profile = raft ? RAFT_WAKE : GULL_WAKE;
     this.geometry.setAttribute("position", this.positions);
     this.geometry.setAttribute("color", this.colors);
     this.geometry.setIndex(this.indices);
@@ -62,7 +73,6 @@ export class BoatWake {
 
   dispose() {
     this.geometry.dispose();
-    this.material.dispose();
   }
 
   clear(time: number) {
@@ -74,7 +84,18 @@ export class BoatWake {
 
   update(x: number, z: number, yaw: number, dx: number, dz: number, dyaw: number, dt: number, strength: number) {
     const time = rt.time;
+    if (this.raft && strength === 0) {
+      this.clear(time);
+      return;
+    }
+    this.opacity = this.raft ? Math.min(1, strength / 0.14) : 1;
     if (dt > 0) {
+      // The raft is camera-anchored. Carry its previous marks aft through the moving water.
+      if (this.raft) for (let i = 0; i < this.count; i++) {
+        const sample = this.sampleAt(i);
+        sample.x -= dx;
+        sample.z -= dz;
+      }
       while (this.nextTime <= time) {
         const remaining = (time - this.nextTime) / dt;
         this.writeSample(this.history[this.next], x - dx * remaining, z - dz * remaining,
@@ -85,7 +106,7 @@ export class BoatWake {
       }
     }
     this.writeSample(this.tip, x, z, yaw, time, strength);
-    if (strength > 0) this.wakeUntil = time + LIFETIME;
+    if (strength > 0) this.wakeUntil = time + this.profile.life;
     this.time = time;
     this.onVoyageSea = vy.sea && rt.world === "home";
     this.onCloudSea = rt.world === "cloud" || (rt.voyage.active && !vy.sea);
@@ -130,34 +151,37 @@ export class BoatWake {
   private writeSample(sample: SternSample, x: number, z: number, yaw: number, time: number, strength: number) {
     sample.sin = Math.sin(yaw);
     sample.cos = Math.cos(yaw);
-    sample.x = x - sample.sin * STERN_AT_WATERLINE;
-    sample.z = z - sample.cos * STERN_AT_WATERLINE;
+    sample.x = x - sample.sin * this.profile.stern;
+    sample.z = z - sample.cos * this.profile.stern;
     sample.time = time;
     sample.strength = strength;
   }
 
   private armRow(sample: SternSample, side: number) {
     const age = this.time - sample.time;
-    const fade = Math.max(0, 1 - age / LIFETIME);
-    const outward = side * (0.7 + age * (0.7 + sample.strength * 1.4));
-    const aft = 0.12 + age * 0.45;
+    const { life, scale } = this.profile;
+    const fade = Math.max(0, 1 - age / life);
+    if (this.raft && !fade) return;
+    const outward = side * scale * (0.7 + age * (0.7 + sample.strength * 1.4));
+    const aft = scale * (0.12 + age * 0.45);
     const x = sample.x + sample.cos * outward - sample.sin * aft;
     const z = sample.z - sample.sin * outward - sample.cos * aft;
     const churn = 0.81 + 0.19 * Math.sin(sample.time * 31 + side);
     const width = 0.12 + sample.strength * (0.36 + age * 0.07);
-    this.row(x, z, sample.cos, -sample.sin, width, 0.84 * sample.strength * fade * churn);
+    this.row(x, z, sample.cos, -sample.sin, width * scale, 0.84 * sample.strength * fade * churn);
   }
 
   private foam(sample: SternSample, side: number) {
     const age = this.time - sample.time;
     const fade = Math.max(0, 1 - age / 1.05);
     if (!fade) return;
-    const outward = side * (BOAT_HALF_BEAM * 0.81 + age * 0.78);
-    const forward = STERN_AT_WATERLINE + 0.65 * Math.sin(sample.time * 17 + side) - age * 1.35;
+    const { beam, stern, scale } = this.profile;
+    const outward = side * (beam * 0.81 + age * 0.78 * scale);
+    const forward = stern + scale * (0.65 * Math.sin(sample.time * 17 + side) - age * 1.35);
     const x = sample.x + sample.cos * outward + sample.sin * forward;
     const z = sample.z - sample.sin * outward + sample.cos * forward;
-    const length = 0.28 + sample.strength * 0.72;
-    const width = 0.08 + sample.strength * 0.14;
+    const length = scale * (0.28 + sample.strength * 0.72);
+    const width = scale * (0.08 + sample.strength * 0.14);
     this.firstRow = this.rows;
     this.row(x - sample.sin * length, z - sample.cos * length, sample.cos, -sample.sin, width * 0.28, 0);
     this.row(x, z, sample.cos, -sample.sin, width, 0.76 * sample.strength * fade);
@@ -168,9 +192,10 @@ export class BoatWake {
     const age = this.time - sample.time;
     const fade = Math.max(0, 1 - age / 1.4);
     if (!fade) return;
-    const x = sample.x + sample.sin * (STERN_AT_WATERLINE - 0.7);
-    const z = sample.z + sample.cos * (STERN_AT_WATERLINE - 0.7);
-    const radius = BOAT_HALF_BEAM * 0.85 + age * (0.72 + sample.strength);
+    const { beam, stern, scale } = this.profile;
+    const x = sample.x + sample.sin * (stern - 0.7 * scale);
+    const z = sample.z + sample.cos * (stern - 0.7 * scale);
+    const radius = beam * 0.85 + age * scale * (0.72 + sample.strength);
     this.firstRow = this.rows;
     for (let i = -4; i <= 4; i++) {
       const angle = i * 0.18;
@@ -179,7 +204,7 @@ export class BoatWake {
       const nx = sample.cos * across + sample.sin * along;
       const nz = -sample.sin * across + sample.cos * along;
       const alpha = (0.12 + 0.29 * sample.strength) * fade * (1 - Math.abs(i) / 4) * Math.min(1, age * 8);
-      this.row(x + nx * radius, z + nz * radius, nx, nz, 0.075 + age * 0.055, alpha);
+      this.row(x + nx * radius, z + nz * radius, nx, nz, scale * (0.075 + age * 0.055), alpha * scale);
     }
   }
 
@@ -190,7 +215,7 @@ export class BoatWake {
       const px = x + i * width * nx;
       const pz = z + i * width * nz;
       this.positions.setXYZ(vertex + i + 1, px, this.surface(px, pz) + 0.055, pz);
-      this.colors.setW(vertex + i + 1, i === 0 ? alpha : 0);
+      this.colors.setW(vertex + i + 1, i === 0 ? alpha * this.opacity : 0);
     }
     if (this.rows > this.firstRow) {
       for (let i = vertex - 3; i < vertex - 1; i++) {

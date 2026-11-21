@@ -305,7 +305,11 @@ export function installE2eHook(seed: number) {
         obstacles: vy.obstacles.map((o) => ({ lane: o.lane, z: o.z })),
         barrels: vy.barrels.map((b) => ({ ...w(b), tied: b.tied })), fires: vy.fires.map((f) => ({ ...w(f), out: f.out })),
         spar: vy.spar ? { ...w(vy.spar), lift: vy.spar.lift } : null,
-        raft: { on: vy.raft.on, x: vy.raft.x, z: vy.raft.z, built: vy.raft.built, planks: vy.raft.planks.map((p) => ({ x: p.x, z: p.z, state: p.state })) },
+        raft: {
+          on: vy.raft.on, x: vy.raft.x, z: vy.raft.z, built: vy.raft.built, sail: vy.raft.sail,
+          laneVis: vy.laneVis, islandSide: vy.islandSide,
+          planks: vy.raft.planks.map((p) => ({ x: p.x, z: p.z, state: p.state })),
+        },
         crew: Object.fromEntries(Object.entries(vy.crew).map(([id, c]) => [id, {
           ...w(c), yaw: c.yaw, visible: c.visible,
           panic: c.panic ? { motion: c.panic.next === null ? "station" : "running", action: c.panic.action } : null,
