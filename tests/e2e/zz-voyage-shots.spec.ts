@@ -387,7 +387,8 @@ test("Storm crew runs, stations and wave brace at 1366x768", async ({ page }) =>
         const v = api.voyage();
         if (!v.panic || v.panic.paused || v.panic.elapsed < elapsed) return false;
         const crew = Object.values(v.crew).filter(c => c.panic);
-        if (crew.length !== 7) return false;
+        // Bill stays in the hold during the storm.
+        if (crew.length !== 6) return false;
         if (beat === "running") {
           if (!crew.some(c => c.panic?.motion === "running")) return false;
         } else {
