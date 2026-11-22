@@ -13,8 +13,14 @@ Diagnosis (Codex, read-only): four separate causes, none in Port Town or the voy
 - `camera.spec.ts` now captures `pirate-ship` from the voyage; `zz-steer-shots.spec.ts` deleted.
 - **Verified:** tsc; build; unit 1270/1272 (only the 2 arm64 `layers-ground` goldens); the 8 failing e2e tests pass;
   Pippa and Upper Canopy 10/10 each; canopy-entrance render judged by Claude. **Not run:** the full e2e suite.
-- **Next:** full e2e suite (`MI_LONG_TIMEOUT=3600000`, ~1.5 h); remove merged worktrees (`mi-sr-*`, `mi-vp-*`, `mi-ve-*`,
-  `mi-kit`, `mi-wall`, `mi-veg`).
+- **Deployed 2026-11-22:** `main` = `2a16b39`, Pages run 44987746730, bundle `index-C23pbdUd.js`.
+- **Next:** full e2e suite on `2a16b39` (started 2026-11-22, log `mi-vp/.tmp/full-e2e-2a16b39.log`).
+
+## Worktrees (cleaned 2026-11-22)
+Only three remain: `~/Projects/monster-island` (on `main`), `~/Projects/mi-vp` (this branch) and `~/Projects/mi-combat`
+(`feature/elemental-combat`, NOT merged: `2130cca` "Cloud Isle landmark: rock horn above low fog" — candidate answer to
+the open dock-landmark decision; review before discarding). All other worktrees were merged and removed, with their
+local branches. Older sections below that name removed worktrees are historical.
 
 ## Pirate ship and raft: 17 fixes — DONE and LIVE (2026-11-22)
 Branch `feature/ship-raft-fixes` (pushed), worktree `~/Projects/mi-vp`. Frozen spec: `docs/SHIP_RAFT_FIXES.md`.
@@ -54,7 +60,7 @@ Decisions: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" and "20
   camera is distant, so obstacles read small (pre-existing camera).
 
 ## Codex / Delegated Work (this plan)
-None in flight. All slice worktrees (`mi-sr-*`) are merged and removable.
+None in flight. Slice worktrees merged and removed 2026-11-22.
 
 ## Voyage visual polish: `feature/voyage-polish` (from `main` `0b0a5d5`), worktree `~/Projects/mi-vp`
 The user's 10-item plan "Pirate Voyage Visual Polish, Monster Interactions, and Enclosed Cargo Hold". Decisions: the
