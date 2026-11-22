@@ -3244,3 +3244,14 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - The cannon carriages end farther inboard, clearing the lower part of all six framed ports.
 - The raft sail's billow is shallower so the cloth stays above the hatch at full wind and clears
   the gap between the hatch and bow plank.
+
+## 2026-11-22 - Pin lowland vegetation to the pre-7d7a366 layout
+
+- Opening the approach grass beside the Canopy entrance rope changed the shared random sequence for
+  decorative vegetation and pushed three render views over budget. Generate and thin vegetation using
+  the walk shapes and walkability from the previous layout, then remove spots within the existing
+  placement clearance of the new walkable grass. Compared with `39b0cbc`, this removes four trees,
+  two tree ferns and seven ground ferns, leaving 46 trees, 39 tree ferns, 75 ground ferns and 104 reeds.
+- Keep the historical random sequence. Shape-derived seeds would reroll the layout, and preserving it
+  with separate streams would require storing the historical random state for each shape.
+  Rejected raising the render budgets, which would leave the unintended vegetation and triangle increase in place.

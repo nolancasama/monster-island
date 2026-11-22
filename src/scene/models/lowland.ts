@@ -44,6 +44,7 @@ import {
   RUIN_PILLARS,
   RIGHT_ARM_ROOTS,
   RIGHT_ARM_TREES,
+  ROPE_APPROACH_GRASS,
   SHRINE,
   SHRINE_STATUES,
   STREAMS,
@@ -54,6 +55,7 @@ import {
   lowlandDeckY,
   lowlandY,
   lowlandWalkable,
+  lowlandWalkableBeforeRopeGrass,
   inMesa,
   nearestOnTrail,
   streamY,
@@ -456,8 +458,8 @@ export interface Spot {
 }
 
 /**
- * Vegetation along the walkable land, never on it: sampled round each walk
- * shape at a distance and kept only where nobody can walk.
+ * Vegetation sampled along the edges of the original lowland walk shapes,
+ * with additional authored trees and wetland reeds.
  */
 export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[]; reeds: Spot[] } {
   const rand = makeRng(2024);
@@ -466,6 +468,7 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
     fernTrees: Spot[] = [],
     reeds: Spot[] = [];
   const open = { cleared: STAGES, solved: ["groveLilies", "canopyVines", "canopyRope"] as const };
+  const walkProbes = (pad: number) => [[0, 0], [pad, 0], [-pad, 0], [0, pad], [0, -pad]];
   const off = (x: number, z: number, pad: number) => {
     if (nearestOnTrail(GROVE_STREAM.pts, x, z).d < GROVE_STREAM.w + pad) return false;
     // Nothing grows on the sanctuary's shelf or against the cliff (it would poke up beside the garden).
@@ -478,19 +481,14 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
       if (sh.kind === "disc") return Math.hypot(x - sh.x, z - sh.z) < sh.r + margin;
       return nearestOnTrail(sh.pts, x, z).d < sh.w + margin;
     })) return false;
-    for (const [dx, dz] of [
-      [0, 0],
-      [pad, 0],
-      [-pad, 0],
-      [0, pad],
-      [0, -pad],
-    ])
-      if (lowlandWalkable(x + dx, z + dz, open, 0)) return false;
+    if (walkProbes(pad).some(([dx, dz]) => lowlandWalkableBeforeRopeGrass(x + dx, z + dz, open))) return false;
     return groundY(x, z) > SEA_Y + 0.3 && Math.hypot(x - POND.x, z - POND.z) > POND.r + 0.5;
   };
   const town = (x: number, z: number) => x > PORT.x0 - 6 && x < PORT.x1 + 6 && z < PORT.z1 + 4;
   for (const id of ZONE_ORDER) {
     for (const sh of ZONES[id].walk) {
+      // Keep the order and random consumption of the pre-7d7a366 layout.
+      if (ROPE_APPROACH_GRASS.some(grass => grass === sh)) continue;
       const pts: Array<[number, number, number]> = [];
       if (sh.kind === "trail") {
         for (let i = 1; i < sh.pts.length; i++) {
@@ -573,7 +571,20 @@ export function lowlandSpots(): { trees: Spot[]; ferns: Spot[]; fernTrees: Spot[
   for (const t of trees) if (kept.every((k) => Math.hypot(k.x - t.x, k.z - t.z) > 5 * Math.max(k.s, t.s))) kept.push(t);
   for (const t of GIANT_TREES) if (!inMesa(t.x, t.z) && !canopyTrunk(t.x, t.z)) kept.push({ x: t.x, z: t.z, s: t.r / 0.95,
     sy: RIGHT_ARM_TREES.some(tree => tree === t) ? t.h / 11.2 : undefined, r: t.x * 0.7, tint: 1 });
-  return { trees: kept, ferns, fernTrees, reeds };
+  // Filter after emission and thinning so that removing a spot cannot reroll
+  // another plant or let a previously thinned tree back in.
+  const clearOfRopeGrass = (spots: Spot[], pad: number) => spots.filter(({ x, z }) =>
+    !walkProbes(pad).some(([dx, dz]) => {
+      const px = x + dx, pz = z + dz;
+      return ROPE_APPROACH_GRASS.some(sh => px >= sh.x0 && px <= sh.x1 && pz >= sh.z0 && pz <= sh.z1)
+        && lowlandWalkable(px, pz, open, 0);
+    }));
+  return {
+    trees: clearOfRopeGrass(kept, 2.6),
+    ferns: clearOfRopeGrass(ferns, 0.7),
+    fernTrees: clearOfRopeGrass(fernTrees, 2.6),
+    reeds: clearOfRopeGrass(reeds, 0.7),
+  };
 }
 
 // ------------------------------------------------------------------ the cliff, ruins, the grove, the canopy
