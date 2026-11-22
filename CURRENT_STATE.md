@@ -1,6 +1,6 @@
 # Current State
 
-## Pirate ship and raft: 17 fixes — all built and verified; wave 1 LIVE, wave 2 awaiting the user's deploy approval
+## Pirate ship and raft: 17 fixes — DONE and LIVE (2026-11-22)
 Branch `feature/ship-raft-fixes` (pushed), worktree `~/Projects/mi-vp`. Frozen spec: `docs/SHIP_RAFT_FIXES.md`.
 Decisions: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" and "2026-11-22 - … wave-2 corrections".
 
@@ -21,9 +21,19 @@ Decisions: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" and "20
   (exterior, panic at 1366×768 and 1280×800 for exterior) and `raft1` (rest/tow/sail/turn, both sizes).
 - **Not run:** the full e2e suite; real Chromebook.
 
+**Wave 2 live 2026-11-22** (user approved): `main` = `1565427`, Pages run 44960052379, bundle `index-CNlkSBx8.js`.
+
+**Full e2e suite 2026-11-22 on `1565427`: 121 passed, 9 failed, 61 skipped (1.4 h).** None caused by the ship/raft work:
+- 8 fail identically on the pre-today build `1073ea0` (run in `mi-accept`): `act2.spec.ts:271` (town lesson),
+  `expansion.spec.ts:155` ×2 (grove/canopy exit unlock), `port-town-extras.spec.ts:36` (Pippa), `vertical-expansion.spec.ts:250`
+  (lands on `cliff-rope`, expects `upper-canopy`), and the triangle budget: `camera.spec.ts:230` (sanctuary-garden 142,575 etc.)
+  and `combat-polish.spec.ts:47` ×2 (forest-seed-dodge 140,063) — all over 140k. Since when is unknown.
+- `zz-steer-shots.spec.ts:144` is an old evidence harness expecting the pre-wave-1 steering rule (turnRight from lane -1); obsolete.
+
 **Next:**
-1. User decides: deploy wave 2 (fast-forward `main` to `feature/ship-raft-fixes` and push).
-2. Optional: full e2e suite (`MI_LONG_TIMEOUT=3600000`, ~1.5 h).
+1. Investigate the 8 pre-existing e2e failures (separate from this plan; likely one cause for the 4 timeouts — bisect `main`).
+2. Triangle budget: lowland/forest views at 140–148k vs 140k.
+3. Delete or update `zz-steer-shots.spec.ts` for the authored steering steps.
 - Noticed, not addressed: long green lashing lines from secured barrels across the storm deck; the ship steering
   camera is distant, so obstacles read small (pre-existing camera).
 
