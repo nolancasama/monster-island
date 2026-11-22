@@ -497,6 +497,15 @@ export const CANOPY_ROPE_CUTS = [rect(91.8, 111.2, -200.62, -200.38), rect(91.8,
 
 /** True when a circle of radius m fits the lowland's open land (solid scenery is checked separately). */
 export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number): boolean {
+  return walkable(x, z, g, m, true);
+}
+
+/** The walkable footprint used to reproduce the vegetation layout before the rope grass was opened. */
+export function lowlandWalkableBeforeRopeGrass(x: number, z: number, g: LowlandGates): boolean {
+  return walkable(x, z, g, 0, false);
+}
+
+function walkable(x: number, z: number, g: LowlandGates, m: number, includeRopeGrass: boolean): boolean {
   if (z > CLIFF_FOOT_Z - m) return false;
   if (inMesa(x, z, 1.5 + m)) return false;
   const solved = g.solved;
@@ -526,7 +535,9 @@ export function lowlandWalkable(x: number, z: number, g: LowlandGates, m: number
     // tile, so an authored seam cannot become an invisible collision crack.
     if (m === 0 || CIRCLE_PROBES.every(([dx, dz]) => canopyUnion(x + dx * m, z + dz * m))) return true;
   }
-  for (const id of ZONE_ORDER) for (const sh of ZONES[id].walk) if (inWalk(sh, x, z, m)) return true;
+  for (const id of ZONE_ORDER) for (const sh of ZONES[id].walk) {
+    if (inWalk(sh, x, z, m) && (includeRopeGrass || !ROPE_APPROACH_GRASS.some(grass => grass === sh))) return true;
+  }
   return false;
 }
 const LOWLAND_HAZARDS = [...CANOPY_VOIDS, ...HOME_PONDS];
