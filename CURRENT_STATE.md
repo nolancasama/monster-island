@@ -1,5 +1,21 @@
 # Current State
 
+## Pre-existing e2e failures fixed (2026-11-22): `fix/e2e-preexisting`, deployed to `main`
+Diagnosis (Codex, read-only): four separate causes, none in Port Town or the voyage.
+- **Enemy lookups** (act2:271, expansion:155 ×2): the e2e snapshot drops retired enemies (`game/e2e.ts`), so `enemies[id]`
+  pointed at the wrong enemy. Specs now use `enemyById` (`tests/e2e/helpers.ts`); the snapshot is unchanged.
+- **Pippa** (port-town-extras): `fast=1` skipped the reply after 30 ms; the test now runs without fast mode.
+- **Upper Canopy camera** (vertical-expansion:250): sampled before the render frame; now waits for `upper-canopy` settled.
+- **Triangle budgets** (camera:230, combat-polish:47 ×2): real regression from `7d7a366` — the rope grass shapes shifted
+  the shared vegetation RNG and rerolled the forest (+~2.5k triangles). `lowlandSpots()` now reproduces the pre-7d7a366
+  sequence and removes only plants on the rope grass (46 trees, 39 tree ferns, 75 ferns, 104 reeds; test
+  `scene/models/lowland-vegetation.test.ts`). Decision: "2026-11-22 - Pin lowland vegetation…".
+- `camera.spec.ts` now captures `pirate-ship` from the voyage; `zz-steer-shots.spec.ts` deleted.
+- **Verified:** tsc; build; unit 1270/1272 (only the 2 arm64 `layers-ground` goldens); the 8 failing e2e tests pass;
+  Pippa and Upper Canopy 10/10 each; canopy-entrance render judged by Claude. **Not run:** the full e2e suite.
+- **Next:** full e2e suite (`MI_LONG_TIMEOUT=3600000`, ~1.5 h); remove merged worktrees (`mi-sr-*`, `mi-vp-*`, `mi-ve-*`,
+  `mi-kit`, `mi-wall`, `mi-veg`).
+
 ## Pirate ship and raft: 17 fixes — DONE and LIVE (2026-11-22)
 Branch `feature/ship-raft-fixes` (pushed), worktree `~/Projects/mi-vp`. Frozen spec: `docs/SHIP_RAFT_FIXES.md`.
 Decisions: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" and "2026-11-22 - … wave-2 corrections".
@@ -31,7 +47,7 @@ Decisions: `DESIGN_DECISIONS.md` "2026-11-21 - Ship and raft fixes: …" and "20
 - `zz-steer-shots.spec.ts:144` is an old evidence harness expecting the pre-wave-1 steering rule (turnRight from lane -1); obsolete.
 
 **Next:**
-1. Investigate the 8 pre-existing e2e failures (separate from this plan; likely one cause for the 4 timeouts — bisect `main`).
+1. (Done 2026-11-22 — see the top section.)
 2. Triangle budget: lowland/forest views at 140–148k vs 140k.
 3. Delete or update `zz-steer-shots.spec.ts` for the authored steering steps.
 - Noticed, not addressed: long green lashing lines from secured barrels across the storm deck; the ship steering
