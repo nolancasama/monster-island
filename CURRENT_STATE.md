@@ -14,7 +14,9 @@ Diagnosis (Codex, read-only): four separate causes, none in Port Town or the voy
 - **Verified:** tsc; build; unit 1270/1272 (only the 2 arm64 `layers-ground` goldens); the 8 failing e2e tests pass;
   Pippa and Upper Canopy 10/10 each; canopy-entrance render judged by Claude. **Not run:** the full e2e suite.
 - **Deployed 2026-11-22:** `main` = `2a16b39`, Pages run 44987746730, bundle `index-C23pbdUd.js`.
-- **Next:** full e2e suite on `2a16b39` (started 2026-11-22, log `mi-vp/.tmp/full-e2e-2a16b39.log`).
+- **Full e2e suite on `2a16b39` (2026-11-22): 127 passed, 2 failed, 61 skipped (1.6 h).** Both failures pass when rerun
+  alone (3/3): `pirate-voyage.spec.ts:311` (last cargo put, the known load timeout; load ~11) and `water-ropes.spec.ts:102`
+  (exit-rope safe landing). Treat both as load-sensitive. Log `mi-vp/.tmp/full-e2e-2a16b39.log`.
 
 ## Worktrees (cleaned 2026-11-22)
 Only three remain: `~/Projects/monster-island` (on `main`), `~/Projects/mi-vp` (this branch) and `~/Projects/mi-combat`
