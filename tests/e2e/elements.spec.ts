@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, chooseMode, hook, state, waitFor, type MiState } from "./helpers";
+import { boot, chooseMode, enemyById, hook, state, waitFor, type MiState } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { COMBAT, type CompanionId } from "../../src/game/data/combat";
 import { ENEMY_SPAWNS } from "../../src/game/world/lowland";
@@ -70,7 +70,7 @@ for (const friend of ["ember", "bubbo", "leafy", "puff"] as const) {
     }, 10_000, `${friend} J enemy effect`);
     expect(basic.act2.mp[friend]).toBe(100);
     if (friend === "ember") {
-      expect(basic.act2.enemies[1].panic).not.toBeNull();
+      expect(enemyById(basic, 1).panic).not.toBeNull();
       await page.keyboard.up("KeyJ");
       await waitFor(page, s => s.act2.breath === null, 2000, "release stops fire");
     }
@@ -81,9 +81,9 @@ for (const friend of ["ember", "bubbo", "leafy", "puff"] as const) {
     const launch = await state(page);
     expect(launch.act2.mp[friend]).toBe(100 - COMBAT[friend].special.cost);
     await hook(page, "timeScale", .2);
-    await waitFor(page, s => friend === "ember" ? s.act2.enemies[1].burning && s.act2.inferno !== null
+    await waitFor(page, s => friend === "ember" ? enemyById(s, 1).burning && s.act2.inferno !== null
       : friend === "bubbo" ? s.act2.bombChain !== null
-      : friend === "leafy" ? s.act2.enemies[1].control === "snared"
+      : friend === "leafy" ? enemyById(s, 1).control === "snared"
       : Boolean(s.act2.cyclone?.carried.includes(1)), 10_000, `${friend} K special effect`);
     expect(errors).toEqual([]);
   });

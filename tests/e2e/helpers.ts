@@ -58,7 +58,7 @@ export interface MiState {
   gate: number;
   starGlow: number;
   finale: "idle" | "rise" | "maple" | "complete";
-  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; mode: string; profile: string; yaw: number };
+  camera: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; mode: string; profile: string; yaw: number; settled: boolean };
   lowland: { visible: boolean };
   perf: { calls: number; triangles: number; fps: number };
   playTime: number;
@@ -104,6 +104,13 @@ export async function boot(page: Page, query = "fast=1"): Promise<string[]> {
 }
 
 export const state = (page: Page): Promise<MiState> => page.evaluate(() => (window as never as { __mi: { state(): MiState } }).__mi.state());
+
+/** Find a persistent spawn ID in the snapshot, which omits retired enemies. */
+export function enemyById(s: MiState, id: number) {
+  const enemy = s.act2.enemies.find(e => e.i === id);
+  if (!enemy) throw new Error(`Enemy spawn ${id} is missing from the snapshot`);
+  return enemy;
+}
 
 export async function hook(page: Page, name: string, ...args: unknown[]) {
   return page.evaluate(([n, a]) => (window as never as Record<string, Record<string, (...x: unknown[]) => unknown>>).__mi[n as string](...(a as unknown[])), [name, args] as const);

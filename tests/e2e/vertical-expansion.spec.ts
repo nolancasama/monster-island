@@ -254,7 +254,8 @@ test("Upper Canopy: climb the rope, fall from an unstable leaf to a checkpoint, 
   await page.keyboard.press("KeyE");
   const top = await waitFor(page, s => s.mode === "explore" && !s.player.climbing && s.player.layer === "high", 40_000, "on the leaves");
   expect(top.player.y).toBeGreaterThan(19);
-  expect(top.camera.profile).toBe("upper-canopy");
+  await hook(page, "renderFrames", 1);
+  await waitFor(page, s => s.camera.profile === "upper-canopy" && s.camera.settled, 60_000, "upper-canopy camera settled");
   await shots(page, "upper-top");
   await hook(page, "teleport", 104.4, -226.2, Math.PI, true, "high");
   await hook(page, "renderFrames", 10);

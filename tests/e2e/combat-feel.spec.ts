@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { boot, chooseMode, enemyById, hook, state, waitFor } from "./helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import type { CompanionId } from "../../src/game/data/combat";
 import { ENEMY_SPAWNS } from "../../src/game/world/lowland";
@@ -53,13 +53,13 @@ test("left mouse holds fire and releases at once, with keyboard parity", async (
   await waitFor(page, s => (s.act2.breath?.age ?? 0) > .3, 20_000, "fire keeps going while held");
   await page.mouse.up({ button: "left" });
   await waitFor(page, s => s.act2.breath === null, 3000, "release stops fire");
-  const hp = (await state(page)).act2.enemies[1].hp;
+  const hp = enemyById(await state(page), 1).hp;
   await page.waitForTimeout(600);
   await page.keyboard.down("KeyJ");
   await waitFor(page, s => s.act2.breath !== null, 10_000, "J breathes");
   await page.keyboard.up("KeyJ");
   await waitFor(page, s => s.act2.breath === null, 3000, "J release stops fire");
-  expect((await state(page)).act2.enemies[1].hp).toBeLessThan(hp);
+  expect(enemyById(await state(page), 1).hp).toBeLessThan(hp);
   expect(errors).toEqual([]);
 });
 
@@ -129,8 +129,8 @@ test("burning panic: stream, attached flames, 2-3 s, in bounds", async ({ page }
   await hook(page, "timeScale", 0);
   await page.screenshot({ path: `${SHOTS}/01-stream.png` });
   await hook(page, "timeScale", .25);
-  const lit = await waitFor(page, s => s.act2.enemies[1].panic !== null, 20_000, "ignites");
-  const panic = lit.act2.enemies[1].panic!;
+  const lit = await waitFor(page, s => enemyById(s, 1).panic !== null, 20_000, "ignites");
+  const panic = enemyById(lit, 1).panic!;
   expect(panic.until - panic.t0).toBeCloseTo(2.5, 5);
   await page.keyboard.up("KeyJ");
   await waitFor(page, s => s.time > panic.t0 + .5, 20_000, "panic running");
@@ -138,9 +138,9 @@ test("burning panic: stream, attached flames, 2-3 s, in bounds", async ({ page }
   await page.screenshot({ path: `${SHOTS}/02-panic.png` });
   await hook(page, "timeScale", .25);
   const during = await waitFor(page, s => s.time > panic.t0 + 1, 20_000, "floor time");
-  expect(during.act2.enemies[1].hp).toBeGreaterThan(0);
-  expect(during.act2.enemies[1].zone).toBe("forest1");
-  const done = await waitFor(page, s => ["ko", "gone"].includes(s.act2.enemies[1].state) || s.act2.enemies[1].panic === null, 30_000, "panic ends or KO");
+  expect(enemyById(during, 1).hp).toBeGreaterThan(0);
+  expect(enemyById(during, 1).zone).toBe("forest1");
+  const done = await waitFor(page, s => ["ko", "gone"].includes(enemyById(s, 1).state) || enemyById(s, 1).panic === null, 30_000, "panic ends or KO");
   expect(done.time - panic.t0).toBeLessThan(3.2);
   expect(errors).toEqual([]);
 });
@@ -208,13 +208,13 @@ test("whip phases, swing and Root Snare render", async ({ page }) => {
     await page.screenshot({ path: `${SHOTS}/${name}.png` });
   }
   await hook(page, "timeScale", .05);
-  await waitFor(page, s => s.act2.enemies[1].control === "grabbed" && s.time >= t0 + .35, 60_000, "swinging");
+  await waitFor(page, s => enemyById(s, 1).control === "grabbed" && s.time >= t0 + .35, 60_000, "swinging");
   await hook(page, "timeScale", 0);
   await page.screenshot({ path: `${SHOTS}/06-whip-swing.png` });
   await faceEnemy(page, "leafy");
   await page.keyboard.press("KeyK");
   await hook(page, "timeScale", .05);
-  await waitFor(page, s => s.act2.enemies[1].control === "snared", 30_000, "snared");
+  await waitFor(page, s => enemyById(s, 1).control === "snared", 30_000, "snared");
   const snared = (await state(page)).time;
   await waitFor(page, s => s.time >= snared + .4, 60_000, "roots grown");
   await hook(page, "timeScale", 0);
@@ -227,10 +227,10 @@ test("Double Grab draws two strands", async ({ page }) => {
   await hook(page, "timeScale", 0);
   await hook(page, "combatFixture", { enemies: [{ i: 1, x: 73.6, z: -174, state: "recover", timer: 10 }, { i: 0, x: 76.4, z: -174, state: "recover", timer: 10 }] });
   await hook(page, "teleport", 75, -171, Math.PI);
-  await waitFor(page, s => s.act2.enemies[1].hp === 20 && s.act2.enemies[0].hp === 20, 30_000, "two fresh enemies");
+  await waitFor(page, s => enemyById(s, 1).hp === 20 && enemyById(s, 0).hp === 20, 30_000, "two fresh enemies");
   await hook(page, "timeScale", .05);
   await page.keyboard.press("KeyJ");
-  await waitFor(page, s => s.act2.enemies[0].control === "grabbed" && s.act2.enemies[1].control === "grabbed", 60_000, "both grabbed");
+  await waitFor(page, s => enemyById(s, 0).control === "grabbed" && enemyById(s, 1).control === "grabbed", 60_000, "both grabbed");
   const grabbed = (await state(page)).time;
   await waitFor(page, s => s.time >= grabbed + .1, 60_000, "mid pull");
   await hook(page, "timeScale", 0);

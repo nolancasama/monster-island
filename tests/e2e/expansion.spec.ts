@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
+import { boot, chooseMode, enemyById, hook, state, tap, waitFor } from "./helpers";
 import { CANOPY_ROPES, CLIFF_ROPE, ENEMY_SPAWNS, FOREST_ARMS, STAGE_EXITS } from "../../src/game/world/lowland";
 import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";
 
@@ -65,7 +65,7 @@ async function start(page: Page, cleared: string[] = []) {
 async function defeat(page: Page, i: number) {
   // Real-time presses: the whip's cooldown and slow software rendering both eat attempts.
   for (let n = 0; n < 40; n++) {
-    const e = (await state(page)).act2.enemies[i];
+    const e = enemyById(await state(page), i);
     if (["ko", "gone"].includes(e.state)) return;
     // A bank can cut the straight line from one side, so later attempts walk around it.
     if (n > 8) {
@@ -123,9 +123,9 @@ test("first forest clear, active-only companions, retreat, re-entry and save per
   await waitFor(page, (s) => s.act2.stance.friend === "leafy" && s.act2.stance.k > 0.99);
   // No automatic damage while standing close to a required enemy.
   await hook(page, "nearEnemy", 0, 2);
-  const hp = (await state(page)).act2.enemies[0].hp;
+  const hp = enemyById(await state(page), 0).hp;
   await page.waitForTimeout(1200);
-  expect((await state(page)).act2.enemies[0].hp).toBe(hp);
+  expect(enemyById(await state(page), 0).hp).toBe(hp);
   await hook(page, "teleport", 75.5, -155);
   await hook(page, "moveTo", 75.5, -154.4);
   expect((await state(page)).player.z).toBeGreaterThan(-155);

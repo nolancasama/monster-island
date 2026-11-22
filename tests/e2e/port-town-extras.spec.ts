@@ -19,31 +19,29 @@ function save(x: number, z: number) {
   return JSON.stringify({ v: 4, progress: p, player: { x, z, yaw: Math.PI }, seconds: 3000 });
 }
 
-async function enter(page: Page, x: number, z: number) {
+async function enter(page: Page, x: number, z: number, query = "fast=1") {
   await page.addInitScript((v) => { if (!localStorage.getItem("mi.save.v4")) localStorage.setItem("mi.save.v4", v); }, save(x, z));
-  const errors = await boot(page, "fast=1");
+  const errors = await boot(page, query);
   await chooseMode(page, "tap");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.mode === "explore", 90_000, "loaded");
   return errors;
 }
 
-/** Advance lines until a prompt or exploring. */
-async function untilPromptOrExplore(page: Page) {
-  return waitFor(page, (s) => Boolean(s.prompt?.buttons && s.prompt.status === "ready") || (s.mode === "explore" && !s.line), 30_000, "prompt or explore");
-}
-
 test("Pippa asks whether you like apples, answers both replies, and can be asked again", async ({ page }) => {
-  const errors = await enter(page, 56.6, -303.5);
+  // Keep each dialogue line visible until the test advances it.
+  const errors = await enter(page, 56.6, -303.5, "");
   await hook(page, "teleport", PIPPA.x + 0.3, PIPPA.z - 1.6, 0, true);
   await waitFor(page, (s) => s.focus?.id === "pippa", 15_000, "focus on Pippa");
   for (const [answer, reply] of [["yesIDo", "Me too! Apples are yummy!"], ["noIDont", "Oh, okay! I like apples. They're sweet!"]] as const) {
     await page.keyboard.press("KeyE");
-    const s = await untilPromptOrExplore(page);
+    await page.getByTestId("next").click();
+    const s = await waitFor(page, x => Boolean(x.prompt?.buttons && x.prompt.status === "ready"), 30_000, "Pippa's question");
     expect(s.prompt?.choices).toEqual(expect.arrayContaining(["yesIDo", "noIDont"]));
     expect(s.prompt?.question).toBe("Do you like apples?");
     await tap(page, answer);
-    await waitFor(page, (x) => x.line?.en === reply, 15_000, `reply to ${answer}`);
+    await expect(page.getByTestId("line")).toHaveText(reply, { timeout: 15_000 });
+    await page.getByTestId("next").click();
     await waitFor(page, (x) => x.mode === "explore" && x.focus?.id === "pippa", 30_000, "back to exploring");
   }
   expect(errors).toEqual([]);

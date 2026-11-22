@@ -271,7 +271,8 @@ test("Every camera profile has matched visual evidence and stays within the rend
       expect.soft(s.perf.triangles, `${name}: enclosed tunnel triangles remain about 40k`).toBeLessThanOrEqual(46000);
     }
   };
-  for (const size of [{ width: 1366, height: 768 }, { width: 1280, height: 800 }]) {
+  const sizes = [{ width: 1366, height: 768 }, { width: 1280, height: 800 }];
+  for (const size of sizes) {
     await page.setViewportSize(size);
     for (const sample of HOME) {
       const [x, z] = sample.shot ?? [sample.x, sample.z];
@@ -374,6 +375,21 @@ test("Every camera profile has matched visual evidence and stays within the rend
     await hook(page, "timeScale", 1);
     await hook(page, "setAct3", { world: "home" });
   }
+
+  // Resume the voyage once all land views are captured.
+  await hook(page, "setAct3", { voyageDone: false });
+  await hook(page, "set", { mode: "explore" });
+  await hook(page, "openCloudShip", true);
+  await hook(page, "openPirateVoyage", true);
+  await hook(page, "voyageJump", "jobs");
+  await hook(page, "renderFrames", 1);
+  await waitFor(page, s => s.progress.act3.voyage.stage === "jobs" && s.camera.profile === "pirate-ship" && s.camera.settled,
+    60_000, "pirate-ship camera settled");
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    await capture("pirate-ship");
+  }
+
   const covered = new Set(views.map(v => v.camera.profile));
   // Pure fallbacks: no walkable ground point resolves to "lowland" any more (probed on a 1 m grid,
   // 2026-11-08), and "layer-default" only frames layer areas that lack their own profile (none do).

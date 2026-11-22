@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { boot, chooseMode, enemyById, hook, state, waitFor } from "./helpers";
 import { CLIFF_ROPE, ENEMY_SPAWNS } from "../../src/game/world/lowland";
 
 /**
@@ -87,7 +87,7 @@ async function descend(page: Page) {
 async function defeat(page: Page, i: number) {
   for (let n = 0; n < 60; n++) {
     const s = await state(page);
-    const e = s.act2.enemies[i];
+    const e = enemyById(s, i);
     if (e.state === "ko" || e.state === "gone") return;
     await hook(page, "nearEnemy", i, 1.8);
     await hook(page, "setHp", 100);
@@ -149,9 +149,9 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
   await hook(page, "nearEnemy", 0, 2.4);
   await page.waitForTimeout(3000);
   s = await state(page);
-  expect(s.act2.enemies[0].hp).toBe(20);
+  expect(enemyById(s, 0).hp).toBe(20);
   expect(s.act2.projectiles.filter(shot => !shot.hostile)).toHaveLength(0);
-  expect(s.act2.enemies[0].state).not.toBe("idle");
+  expect(enemyById(s, 0).state).not.toBe("idle");
 
   // J: Vine Grab knocks it out; its coins come to the player.
   await defeat(page, 0);
@@ -161,13 +161,13 @@ test("the cliff rope, the forest tutorial: manual attacks, coins, MP, riding, th
 
   // K: Root Snare spends 30 MP and hurts the enemy it catches.
   await hook(page, "nearEnemy", 3, 4);
-  await waitFor(page, (x) => x.act2.stance.friend === "leafy" && x.act2.stance.k > .99 && x.act2.mp.leafy === 100 && x.act2.enemies[3].hp === 44,
+  await waitFor(page, (x) => x.act2.stance.friend === "leafy" && x.act2.stance.k > .99 && x.act2.mp.leafy === 100 && enemyById(x, 3).hp === 44,
     5_000, "HARNESS_PRECONDITION_FAILED: Leafy ready with full MP and live snare target");
   await hook(page, "timeScale", 0);
   await page.keyboard.press("KeyK");
   s = await waitFor(page, (x) => x.act2.mp.leafy < 100, 3_000, "MP spent");
   expect(s.act2.mp.leafy).toBe(70);
-  expect(s.act2.enemies[3].hp).toBeLessThan(44);
+  expect(enemyById(s, 3).hp).toBeLessThan(44);
   await hook(page, "timeScale", 1);
   // Each friend keeps its own MP.
   expect(s.act2.mp.bubbo).toBe(100);
@@ -229,19 +229,19 @@ test("enemies return only after a real absence; both routes' puzzles; the town i
 
   // Knock out the first enemy, step out and straight back: still gone. After 12 s away: back.
   await defeat(page, 0);
-  await waitFor(page, (x) => x.act2.enemies[0].state === "gone", 5_000, "enemy gone");
+  await waitFor(page, (x) => enemyById(x, 0).state === "gone", 5_000, "enemy gone");
   await hook(page, "teleport", CLIFF_ROPE.top.x, CLIFF_ROPE.top.z, Math.PI);
   await waitFor(page, (x) => x.act2.zone === null, 5_000, "on the cliff ledge");
   await hook(page, "teleport", CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, Math.PI);
   let s = await waitFor(page, (x) => x.act2.zone === "forest1", 5_000, "back in the forest");
-  expect(s.act2.enemies[0].state).toBe("gone");
+  expect(enemyById(s, 0).state).toBe("gone");
   await hook(page, "teleport", CLIFF_ROPE.top.x, CLIFF_ROPE.top.z, Math.PI);
   // 12 s of play away (the clock is play time, which a slow software renderer stretches).
   const away = (await waitFor(page, (x) => x.act2.zone === null, 5_000, "away on the cliff ledge")).playTime;
   await waitFor(page, (x) => x.playTime > away + 12.5, 60_000, "12 s of play away");
   await hook(page, "teleport", CLIFF_ROPE.foot.x, CLIFF_ROPE.foot.z, Math.PI);
-  s = await waitFor(page, (x) => x.act2.zone === "forest1" && x.act2.enemies[0].state === "idle", 5_000, "respawned");
-  expect(s.act2.enemies[0].hp).toBe(20);
+  s = await waitFor(page, (x) => x.act2.zone === "forest1" && enemyById(x, 0).state === "idle", 5_000, "respawned");
+  expect(enemyById(s, 0).hp).toBe(20);
 
   // The canopy: Leafy's vines over the first gap, Puff's rope bridge over the second.
   for (const [key, id, target, question] of [[1, "leafy", "canopyVines", "canHelp"], [3, "puff", "canopyRope", "canFly"], [2, "bubbo", "groveLilies", "canSwim"]] as const) {
@@ -340,11 +340,11 @@ test("the town in English: buying (then quick buying), a combo lesson, the cloth
   await waitFor(page, (x) => x.act2.zone === "coast" && x.act2.stance.friend === "leafy" && x.act2.stance.k > 0.99, 10_000, "Leafy in position on the coast");
   const coastEnemy = (await state(page)).act2.enemies.find(e => e.zone === "coast")!.i;
   await hook(page, "nearEnemy", coastEnemy, 1.8);
-  const target = await waitFor(page, (x) => x.act2.enemies[coastEnemy].hp > 0 && x.progress.act2.upgrades.includes("leafy") && x.act2.stance.friend === "leafy" && x.act2.stance.k > .99,
+  const target = await waitFor(page, (x) => enemyById(x, coastEnemy).hp > 0 && x.progress.act2.upgrades.includes("leafy") && x.act2.stance.friend === "leafy" && x.act2.stance.k > .99,
     5_000, "HARNESS_PRECONDITION_FAILED: upgraded Leafy ready with a live target");
   await page.keyboard.press("KeyJ");
-  s = await waitFor(page, (x) => x.act2.enemies[coastEnemy].hp < target.act2.enemies[coastEnemy].hp, 5_000, "hit");
-  expect(target.act2.enemies[coastEnemy].hp - s.act2.enemies[coastEnemy].hp).toBeGreaterThanOrEqual(8);
+  s = await waitFor(page, (x) => enemyById(x, coastEnemy).hp < enemyById(target, coastEnemy).hp, 5_000, "hit");
+  expect(enemyById(target, coastEnemy).hp - enemyById(s, coastEnemy).hp).toBeGreaterThanOrEqual(8);
   expect(errors).toEqual([]);
 });
 
@@ -389,7 +389,7 @@ test("touch: big attack buttons fight, the special button spends MP, the eat but
   await page.getByTestId("btn-basic").dispatchEvent("pointerdown");
   await page.waitForTimeout(200);
   await page.getByTestId("btn-basic").dispatchEvent("pointerup");
-  let s = await waitFor(page, (x) => x.act2.enemies[1].hp < 20, 5_000, "hit by touch");
+  let s = await waitFor(page, (x) => enemyById(x, 1).hp < 20, 5_000, "hit by touch");
   // A grabbed enemy finishes its full swing before another attack can start.
   await waitFor(page, (x) => !(x.act2 as unknown as { swings: Array<{ control: string | null }> }).swings.some(w => w.control === "grabbed"), 15_000, "swing ends");
   await hook(page, "nearEnemy", 1, 3);
