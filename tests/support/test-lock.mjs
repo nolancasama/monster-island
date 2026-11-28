@@ -10,7 +10,16 @@ if (separator < 0 || !args[separator + 1] || args.slice(0, separator).some(a => 
   console.error('Usage: node tests/support/test-lock.mjs [--swiftshader] -- <command string>');
   process.exit(2);
 }
-const command = args.slice(separator + 1).join(' ');
+// The first argument is the command string itself. Arguments npm appends after it
+// (`npm run e2e -- -g "a test name"`) arrive unquoted, so re-quote any that a shell
+// would split or interpret (spaces, |, &, quotes...).
+const quoteArg = arg => {
+  if (/^[\w@%+=:,./\\-]+$/.test(arg)) return arg;
+  return process.platform === 'win32'
+    ? `"${arg.replace(/"/g, '\\"')}"`
+    : `"${arg.replace(/(["\\$`])/g, '\\$1')}"`;
+};
+const command = [args[separator + 1], ...args.slice(separator + 2).map(quoteArg)].join(' ');
 const projectRoot = process.cwd();
 const root = path.resolve(process.env.AGENT_TEST_LOCK_DIR || path.join(process.env.LOCALAPPDATA || os.homedir(), 'agent-test-lock'));
 const holderPath = path.join(root, 'holder');

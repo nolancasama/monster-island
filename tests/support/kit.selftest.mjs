@@ -122,6 +122,24 @@ test('nested calls skip acquisition even with a live holder', async t => {
   assert.equal(await fs.readFile(path.join(lock, 'holder'), 'utf8'), record);
 });
 
+test('arguments appended after the command keep spaces and shell characters', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-kit-args-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const script = path.join(root, 'argv.mjs');
+  await fs.writeFile(script, 'console.log("ARGV=" + JSON.stringify(process.argv.slice(2)));');
+  const extra = ['plain/file.spec.ts:7', 'contradicting answers|permission denied', 'say "hi" & go'];
+  const proc = spawn(process.execPath, [wrapper, '--', `"${process.execPath}" "${script}"`, ...extra],
+    { cwd: root, env: { ...process.env, TEST_LOCK_HELD: '1' } });
+  let output = '';
+  proc.stdout.on('data', data => { output += data; });
+  proc.stderr.on('data', data => { output += data; });
+  const code = await new Promise(resolve => proc.once('close', resolve));
+  assert.equal(code, 0, output);
+  const line = output.split(/\r?\n/).find(l => l.startsWith('ARGV='));
+  assert.ok(line, output);
+  assert.deepEqual(JSON.parse(line.slice(5)), extra);
+});
+
 test('unwritable lock directory warns and runs unlocked', async t => {
   const { root, launch } = await fixture(t);
   const blocked = path.join(root, 'file-not-directory');
