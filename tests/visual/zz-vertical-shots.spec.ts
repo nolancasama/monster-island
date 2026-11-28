@@ -1,7 +1,7 @@
 // Controller evidence only (not part of the suite): SHOT_TAG=before|after npx playwright test zz-vertical-shots
 import { test, type Page } from "@playwright/test";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor } from "../e2e/helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import type { CompanionId } from "../../src/game/data/combat";
 import type { StageId } from "../../src/game/world/lowland";

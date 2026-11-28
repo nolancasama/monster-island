@@ -1,5 +1,18 @@
 # Current State
 
+## Testing workflow (2026-11-28)
+
+- Browser tests follow the machine-wide workflow: GPU by default, machine-wide test lock,
+  identity-checked port 4176 (worktrees 4276), tiers. Scripts and test map: `AGENTS.md`.
+  Decision: DESIGN_DECISIONS "2026-11-28: Machine-wide testing workflow".
+- `npm run e2e` is now **functional only** (129 tests). The eight `zz-*-shots` suites moved to
+  `tests/visual/` (`npm run e2e:visual`); perf scenes in `tests/perf/` without CPU throttling.
+- `npm run shots` (`scripts/shots.mjs`) still forces SwiftShader. Switching it to the GPU needs
+  a re-capture and review of its evidence.
+- Accepted 2026-11-28: `npm run e2e` passed **129/129 in 46.4 min** (2,790 s), 1 worker, avg machine
+  CPU 42.6%, renderer ANGLE NVIDIA GeForce GTX 1080 D3D11. The previous full run on SwiftShader
+  (2026-11-22, functional + skipped visual) took 1.6 h with 2 load flakes. Desktop benchmark, not a Chromebook figure.
+
 ## Pre-existing e2e failures fixed (2026-11-22): `fix/e2e-preexisting`, deployed to `main`
 Diagnosis (Codex, read-only): four separate causes, none in Port Town or the voyage.
 - **Enemy lookups** (act2:271, expansion:155 ×2): the e2e snapshot drops retired enemies (`game/e2e.ts`), so `enemies[id]`

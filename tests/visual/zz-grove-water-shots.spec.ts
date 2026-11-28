@@ -1,6 +1,6 @@
 // Controller evidence only: SHOT_TAG=after npx playwright test zz-grove-water-shots
 import { expect, test, type Page } from "@playwright/test";
-import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor } from "../e2e/helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { CAVE_MOUTHS, GROVE_CROSSING, GROVE_DOOR, lowlandY } from "../../src/game/world/lowland";
 import { GROVE_STREAM_FERRY } from "../../src/game/world/groveStream";

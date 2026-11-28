@@ -3,7 +3,7 @@
 // interception (stepped frame by frame), the rigging, the open galley and both staircases.
 import { test, type Page } from "@playwright/test";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor, type MiState } from "../e2e/helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { GULL_BERTH, STAGES } from "../../src/game/world/lowland";
 import { DECK_Y, HOLD_RAMP, SHIP, STERN_RAMP } from "../../src/game/world/pirateShip";

@@ -3255,3 +3255,26 @@ Plan item 2, built by Claude directly on 2026-11-21 (the user said "no codex" fo
 - Keep the historical random sequence. Shape-derived seeds would reroll the layout, and preserving it
   with separate streams would require storing the historical random state for each shape.
   Rejected raising the render budgets, which would leave the unintended vegetation and triangle increase in place.
+
+## 2026-11-28: Machine-wide testing workflow (GPU default, test lock, tiers)
+
+- Follows `~/.claude/testing/TESTING_WORKFLOW.md` with the shared kit in `tests/support/`
+  (copied unchanged): machine-wide FIFO test lock (the build runs inside it), server
+  identity check (`WRONG_SERVER`), WebGL renderer log, run records in `.tmp/test-runs.jsonl`.
+  It replaces this morning's pilot (`tests/renderer-setup.ts`, `chromebook`/`chromebook-perf`
+  projects, argv-sniffing project selection).
+- Functional tests use new headless Chromium on the GPU at 1366 × 768, DPR 1.
+  `npm run e2e:compat` (`CB_SWIFTSHADER=1`) is the explicit SwiftShader fallback.
+- Tiers: functional `tests/e2e/`, visual `tests/visual/` (the eight `zz-*-shots` suites,
+  which only capture evidence; about half of a GPU run's time), perf `tests/perf/`,
+  soak `tests/soak/`. Budget assertions stay in functional (`act3`, `combat-polish`,
+  `expansion`). Port 4176, worktrees 4276.
+- Perf scenes report frame time, long tasks, heap, draw calls and triangles as a
+  **desktop benchmark**; draw calls above 150 and triangles above 150k fail. Only
+  measurements on school hardware are Chromebook FPS numbers.
+- `PW_WORKERS=2` is eligible (benchmark: 500 s → 355 s, −21% CPU work, identical results).
+- Accepted: functional tier 129/129 in 46.4 min on the GTX 1080 (1 worker, avg machine CPU 42.6%).
+- Rejected: SwiftShader as a Chromebook proxy (6.9 vs 101 FPS on the same scene; it does not
+  represent the Intel UHD GPU). Rejected: CPU throttling as a Chromebook simulation. It
+  slows the CPU but leaves the GTX 1080 in place, so the resulting FPS is neither the
+  desktop nor the Chromebook figure.

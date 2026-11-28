@@ -2,7 +2,7 @@
 // The pirate voyage (docs/PIRATE_VOYAGE.md): the ship, its decks and crew.
 import { expect, test, type Page } from "@playwright/test";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { boot, chooseMode, hook, state, tap, teleportShip, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, teleportShip, waitFor } from "../e2e/helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import { STAGES } from "../../src/game/world/lowland";
 import { CANNONS, COUNTER_CUSTOMER, DECK_Y, FISH_DECK, FISH_LANDING_Z, FISH_Y, HOLD_CEILING_Y, HOLD_ENTRY, HOLD_PORTAL, HOLD_RAMP, HOLD_Y, MASTS, SHIP, SPOT, STERN_RAMP, SUPPLY_CRATES, crateApproach, hullHalf } from "../../src/game/world/pirateShip";

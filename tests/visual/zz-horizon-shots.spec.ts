@@ -5,7 +5,7 @@ import { newProgress } from "../../src/game/logic/progress";
 import { BOAT_DECK_Y, BOAT_SCALE } from "../../src/game/world/gullBoat";
 import { GULL_BERTH, STAGES } from "../../src/game/world/lowland";
 import { SHIP, SPOT } from "../../src/game/world/pirateShip";
-import { boot, chooseMode, hook, state, tap, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, tap, waitFor } from "../e2e/helpers";
 
 const tag = process.env.SHOT_TAG;
 const dir = `.tmp/shots/horizon/${tag}`;

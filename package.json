@@ -6,12 +6,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build": "tsc --noEmit --allowImportingTsExtensions -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit --allowImportingTsExtensions -p tsconfig.json",
     "test": "vitest run",
-    "e2e": "npm run build && playwright test",
-    "shots": "node scripts/shots.mjs"
+    "e2e": "node tests/support/test-lock.mjs -- \"npm run build && playwright test --project=functional\"",
+    "e2e:visual": "node tests/support/test-lock.mjs -- \"npm run build && playwright test --project=visual --pass-with-no-tests\"",
+    "e2e:perf": "node tests/support/test-lock.mjs -- \"npm run build && playwright test --project=perf --pass-with-no-tests\"",
+    "e2e:full": "node tests/support/test-lock.mjs -- \"npm run build && playwright test --pass-with-no-tests\"",
+    "e2e:compat": "node tests/support/test-lock.mjs --swiftshader -- \"npm run build && playwright test --project=functional\"",
+    "test:kit": "node --test tests/support/kit.selftest.mjs",
+    "shots": "node tests/support/test-lock.mjs -- \"npm run build && node scripts/shots.mjs\""
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.1",

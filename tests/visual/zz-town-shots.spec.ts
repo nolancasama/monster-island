@@ -2,7 +2,7 @@
 // Port Town revamp (docs/PORT_TOWN_REVAMP.md §9): town, palisade, worn items, panels, combo feedback.
 import { test, type Page } from "@playwright/test";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { boot, chooseMode, hook, state, waitFor } from "./helpers";
+import { boot, chooseMode, hook, state, waitFor } from "../e2e/helpers";
 import { newProgress } from "../../src/game/logic/progress";
 import type { CompanionId } from "../../src/game/data/combat";
 import { STAGES } from "../../src/game/world/lowland";
